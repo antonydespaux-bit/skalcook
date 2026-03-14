@@ -1,65 +1,128 @@
-import Image from "next/image";
+'use client'
+import { useState } from 'react'
+import { supabase } from '../lib/supabase'
+import { useRouter } from 'next/navigation'
+import { theme, Logo } from '../lib/theme.jsx'
 
-export default function Home() {
+export default function LoginPage() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const router = useRouter()
+  const c = theme.couleurs
+
+  const handleLogin = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) {
+      setError('Email ou mot de passe incorrect')
+      setLoading(false)
+    } else {
+      router.push('/fiches')
+    }
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.js file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: c.fond
+    }}>
+      <div style={{
+        background: c.principal,
+        borderRadius: '20px',
+        padding: '48px 40px',
+        width: '100%',
+        maxWidth: '400px',
+        border: `0.5px solid ${c.accent}`
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: '36px' }}>
+          <Logo height={50} couleur="white" />
+          <div style={{
+            width: '40px', height: '1px',
+            background: c.accent,
+            margin: '20px auto 16px'
+          }} />
+          <p style={{ fontSize: '12px', color: c.accent, letterSpacing: '3px', textTransform: 'uppercase' }}>
+            Espace cuisine
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        <form onSubmit={handleLogin}>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ fontSize: '11px', color: c.accent, fontWeight: '500', display: 'block', marginBottom: '8px', letterSpacing: '2px', textTransform: 'uppercase' }}>
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="votre@email.com"
+              required
+              style={{
+                width: '100%', padding: '12px 14px',
+                borderRadius: '8px',
+                border: `0.5px solid ${c.accent}40`,
+                background: 'rgba(255,255,255,0.05)',
+                color: 'white',
+                fontSize: '14px', outline: 'none'
+              }}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          </div>
+
+          <div style={{ marginBottom: '28px' }}>
+            <label style={{ fontSize: '11px', color: c.accent, fontWeight: '500', display: 'block', marginBottom: '8px', letterSpacing: '2px', textTransform: 'uppercase' }}>
+              Mot de passe
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              style={{
+                width: '100%', padding: '12px 14px',
+                borderRadius: '8px',
+                border: `0.5px solid ${c.accent}40`,
+                background: 'rgba(255,255,255,0.05)',
+                color: 'white',
+                fontSize: '14px', outline: 'none'
+              }}
+            />
+          </div>
+
+          {error && (
+            <div style={{
+              background: '#FCEBEB', color: '#A32D2D',
+              borderRadius: '8px', padding: '10px 14px',
+              fontSize: '13px', marginBottom: '16px'
+            }}>
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%', padding: '14px',
+              background: loading ? c.texteMuted : c.accent,
+              color: c.principal,
+              border: 'none', borderRadius: '8px',
+              fontSize: '13px', fontWeight: '600',
+              letterSpacing: '2px', textTransform: 'uppercase',
+              cursor: loading ? 'not-allowed' : 'pointer'
+            }}
           >
-            Documentation
-          </a>
-        </div>
-      </main>
+            {loading ? 'Connexion...' : 'Se connecter'}
+          </button>
+        </form>
+      </div>
     </div>
-  );
+  )
 }
