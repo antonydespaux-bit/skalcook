@@ -9,6 +9,7 @@ export default function FichesPage() {
   const [loading, setLoading] = useState(true)
   const [recherche, setRecherche] = useState('')
   const [categorie, setCategorie] = useState('toutes')
+  const [saison, setSaison] = useState('toutes')
   const router = useRouter()
   const c = theme.couleurs
 
@@ -40,7 +41,8 @@ export default function FichesPage() {
   const fichesFiltrees = fiches.filter(f => {
     const matchRecherche = f.nom.toLowerCase().includes(recherche.toLowerCase())
     const matchCategorie = categorie === 'toutes' || f.categorie === categorie
-    return matchRecherche && matchCategorie
+    const matchSaison = saison === 'toutes' || f.saison === saison
+    return matchRecherche && matchCategorie && matchSaison
   })
 
   const categories = ['toutes', ...new Set(fiches.map(f => f.categorie).filter(Boolean))]
@@ -58,31 +60,36 @@ export default function FichesPage() {
         height: '56px'
       }}>
         <Logo height={30} couleur="white" />
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           <button onClick={() => router.push('/fiches/nouvelle')} style={{
             background: c.accent, color: c.principal, border: 'none',
-            borderRadius: '8px', padding: '8px 16px', fontSize: '13px',
+            borderRadius: '8px', padding: '8px 14px', fontSize: '13px',
             fontWeight: '600', cursor: 'pointer'
           }}>+ Nouvelle fiche</button>
           <button onClick={() => router.push('/menus')} style={{
-  background: 'transparent', color: 'rgba(255,255,255,0.7)',
-  border: '0.5px solid rgba(255,255,255,0.2)',
-  borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer'
-}}>Menus</button>
+            background: 'transparent', color: 'rgba(255,255,255,0.7)',
+            border: '0.5px solid rgba(255,255,255,0.2)',
+            borderRadius: '8px', padding: '8px 14px', fontSize: '13px', cursor: 'pointer'
+          }}>Menus</button>
+          <button onClick={() => router.push('/recap')} style={{
+            background: 'transparent', color: 'rgba(255,255,255,0.7)',
+            border: '0.5px solid rgba(255,255,255,0.2)',
+            borderRadius: '8px', padding: '8px 14px', fontSize: '13px', cursor: 'pointer'
+          }}>Récap</button>
           <button onClick={() => router.push('/sous-fiches')} style={{
             background: 'transparent', color: 'rgba(255,255,255,0.7)',
             border: '0.5px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer'
+            borderRadius: '8px', padding: '8px 14px', fontSize: '13px', cursor: 'pointer'
           }}>Sous-fiches</button>
           <button onClick={() => router.push('/ingredients')} style={{
             background: 'transparent', color: 'rgba(255,255,255,0.7)',
             border: '0.5px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer'
+            borderRadius: '8px', padding: '8px 14px', fontSize: '13px', cursor: 'pointer'
           }}>Ingrédients</button>
           <button onClick={handleLogout} style={{
             background: 'transparent', color: 'rgba(255,255,255,0.7)',
             border: '0.5px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer'
+            borderRadius: '8px', padding: '8px 14px', fontSize: '13px', cursor: 'pointer'
           }}>Déconnexion</button>
         </div>
       </div>
@@ -95,8 +102,8 @@ export default function FichesPage() {
         }}>
           {[
             { label: 'Fiches totales', value: fiches.length },
-            { label: 'Plats', value: fiches.filter(f => f.categorie === 'Plat').length },
-            { label: 'Desserts', value: fiches.filter(f => f.categorie === 'Dessert').length },
+            { label: 'Plats', value: fiches.filter(f => f.categorie === 'Plats').length },
+            { label: 'Desserts', value: fiches.filter(f => f.categorie === 'Desserts').length },
           ].map((stat, i) => (
             <div key={i} style={{
               background: 'white', borderRadius: '10px', padding: '16px',
@@ -139,6 +146,20 @@ export default function FichesPage() {
               <option key={c} value={c}>
                 {c === 'toutes' ? 'Toutes les catégories' : c}
               </option>
+            ))}
+          </select>
+          <select
+            value={saison}
+            onChange={(e) => setSaison(e.target.value)}
+            style={{
+              padding: '10px 14px', borderRadius: '8px',
+              border: `0.5px solid ${c.bordure}`, fontSize: '14px',
+              background: 'white', outline: 'none', cursor: 'pointer', color: c.texte
+            }}
+          >
+            <option value="toutes">Toutes les saisons</option>
+            {theme.saisons.map(s => (
+              <option key={s} value={s}>{s}</option>
             ))}
           </select>
         </div>
@@ -204,8 +225,13 @@ export default function FichesPage() {
                     </span>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: c.texteMuted }}>
-                  {fiche.nb_portions && <span>{fiche.nb_portions} portions</span>}
+                <div style={{ display: 'flex', gap: '12px', fontSize: '13px', color: c.texteMuted, flexWrap: 'wrap' }}>
+                  {fiche.saison && (
+                    <span style={{ fontSize: '11px' }}>{fiche.saison}</span>
+                  )}
+                  {fiche.nb_portions && (
+                    <span>{fiche.nb_portions} portions</span>
+                  )}
                   {fiche.prix_ttc && (
                     <span style={{ fontWeight: '500', color: c.texte }}>
                       {Number(fiche.prix_ttc).toFixed(2)} €
