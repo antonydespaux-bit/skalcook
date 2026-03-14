@@ -66,7 +66,7 @@ export default function MenusPage() {
         display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', height: '56px'
       }}>
-        <Logo height={30} couleur="white" />
+        <Logo height={30} couleur="white" onClick={() => router.push('/fiches')} />
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={() => router.push('/fiches')} style={{
             background: 'transparent', color: 'rgba(255,255,255,0.7)',
