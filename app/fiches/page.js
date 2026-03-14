@@ -86,6 +86,11 @@ export default function FichesPage() {
             border: '0.5px solid rgba(255,255,255,0.2)',
             borderRadius: '8px', padding: '8px 14px', fontSize: '13px', cursor: 'pointer'
           }}>Ingrédients</button>
+          <button onClick={() => router.push('/archives')} style={{
+            background: 'transparent', color: 'rgba(255,255,255,0.7)',
+             border: '0.5px solid rgba(255,255,255,0.2)',
+              borderRadius: '8px', padding: '8px 14px', fontSize: '13px', cursor: 'pointer'
+          }}>Archives</button>
           <button onClick={() => router.push('/parametres')} style={{
           background: 'transparent', color: 'rgba(255,255,255,0.7)',
           border: '0.5px solid rgba(255,255,255,0.2)',
