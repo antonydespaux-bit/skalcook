@@ -95,6 +95,7 @@ export default function ModifierFiche() {
       .from('ingredients')
       .select('*')
       .order('nom')
+      .limit(5000)
     setListeIngredients(liste || [])
     setLoading(false)
   }

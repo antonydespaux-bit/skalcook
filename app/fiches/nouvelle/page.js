@@ -65,6 +65,7 @@ export default function NouvelleFiche() {
       .from('ingredients')
       .select('*')
       .order('nom')
+      .limit(5000)
     setListeIngredients(data || [])
   }
 
