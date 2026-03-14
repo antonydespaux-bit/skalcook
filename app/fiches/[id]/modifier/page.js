@@ -4,6 +4,7 @@ import { supabase, getParametres } from '../../../../lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import { theme, Logo } from '../../../../lib/theme.jsx'
 import { useIsMobile } from '../../../../lib/useIsMobile'
+import IngredientSearch from '../../../../components/IngredientSearch'
 
 const ALLERGENES = [
   { id: 'arachides', label: 'Arachides', emoji: '🥜' },
@@ -246,28 +247,21 @@ export default function ModifierFiche() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Logo height={28} couleur="white" onClick={() => router.push('/fiches')} />
-          <button
-            onClick={() => router.push(`/fiches/${params_route.id}`)}
-            style={{
-              background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
-              borderRadius: '8px', padding: '6px 10px',
-              fontSize: '13px', cursor: 'pointer', color: 'rgba(255,255,255,0.7)'
-            }}
-          >← Retour</button>
+          <button onClick={() => router.push(`/fiches/${params_route.id}`)} style={{
+            background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
+            borderRadius: '8px', padding: '6px 10px',
+            fontSize: '13px', cursor: 'pointer', color: 'rgba(255,255,255,0.7)'
+          }}>← Retour</button>
           {!isMobile && (
             <span style={{ fontSize: '14px', fontWeight: '500', color: 'white' }}>Modifier — {nom}</span>
           )}
         </div>
-        <button
-          onClick={handleSubmit}
-          disabled={saving}
-          style={{
-            background: saving ? c.texteMuted : c.accent,
-            color: c.principal, border: 'none', borderRadius: '8px',
-            padding: '8px 16px', fontSize: '13px', fontWeight: '600',
-            cursor: saving ? 'not-allowed' : 'pointer'
-          }}
-        >
+        <button onClick={handleSubmit} disabled={saving} style={{
+          background: saving ? c.texteMuted : c.accent,
+          color: c.principal, border: 'none', borderRadius: '8px',
+          padding: '8px 16px', fontSize: '13px', fontWeight: '600',
+          cursor: saving ? 'not-allowed' : 'pointer'
+        }}>
           {saving ? '...' : 'Enregistrer'}
         </button>
       </div>
@@ -296,12 +290,7 @@ export default function ModifierFiche() {
                   style={{ width: isMobile ? '100px' : '160px', height: isMobile ? '80px' : '120px', objectFit: 'cover', borderRadius: '8px', border: `0.5px solid ${c.bordure}` }}
                 />
                 <button onClick={supprimerPhoto}
-                  style={{
-                    position: 'absolute', top: '-8px', right: '-8px',
-                    background: '#A32D2D', color: 'white', border: 'none',
-                    borderRadius: '50%', width: '20px', height: '20px',
-                    fontSize: '12px', cursor: 'pointer'
-                  }}
+                  style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#A32D2D', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', fontSize: '12px', cursor: 'pointer' }}
                 >×</button>
               </div>
             ) : (
@@ -320,15 +309,9 @@ export default function ModifierFiche() {
                 {photoPreview ? 'Changer la photo' : 'Ajouter une photo'}
               </label>
               <input type="file" accept="image/*" onChange={handlePhoto}
-                style={{
-                  width: '100%', padding: '10px 12px',
-                  border: `0.5px solid ${c.accent}`, borderRadius: '8px',
-                  fontSize: '13px', background: c.accentClair, cursor: 'pointer', color: c.texte
-                }}
+                style={{ width: '100%', padding: '10px 12px', border: `0.5px solid ${c.accent}`, borderRadius: '8px', fontSize: '13px', background: c.accentClair, cursor: 'pointer', color: c.texte }}
               />
-              <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '6px' }}>
-                JPG, PNG, WEBP — Max 5MB
-              </div>
+              <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '6px' }}>JPG, PNG, WEBP — Max 5MB</div>
             </div>
           </div>
         </div>
@@ -409,59 +392,41 @@ export default function ModifierFiche() {
 
           {isMobile ? (
             <>
-              {ingredients.map((ing, index) => {
-                const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
-                return (
-                  <div key={index} style={{
-                    background: c.fond, borderRadius: '8px', padding: '12px',
-                    marginBottom: '8px', border: `0.5px solid ${c.bordure}`
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500' }}>Ingrédient {index + 1}</span>
-                      <button onClick={() => supprimerIngredient(index)}
-                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#aaa', fontSize: '16px' }}
-                      >×</button>
-                    </div>
-                    <select value={ing.ingredient_id}
-                      onChange={e => modifierIngredient(index, 'ingredient_id', e.target.value)}
-                      style={{
-                        width: '100%', padding: '10px', borderRadius: '8px',
-                        border: `0.5px solid ${ingData?.est_sous_fiche ? '#AFA9EC' : c.bordure}`,
-                        fontSize: '14px', background: ingData?.est_sous_fiche ? '#EEEDFE' : 'white',
-                        outline: 'none', color: c.texte, marginBottom: '8px'
-                      }}
-                    >
-                      <option value="">-- Choisir un ingrédient --</option>
-                      {listeIngredients.filter(i => !i.est_sous_fiche).map(i => (
-                        <option key={i.id} value={i.id}>{i.nom}</option>
-                      ))}
-                      {listeIngredients.some(i => i.est_sous_fiche) && (
-                        <>
-                          <option disabled>── Sous-fiches ──</option>
-                          {listeIngredients.filter(i => i.est_sous_fiche).map(i => (
-                            <option key={i.id} value={i.id}>[SF] {i.nom}</option>
-                          ))}
-                        </>
-                      )}
-                    </select>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                      <input type="number" value={ing.quantite} step="0.01"
-                        onChange={e => modifierIngredient(index, 'quantite', e.target.value)}
-                        placeholder="Quantité"
-                        style={{ padding: '10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
-                      />
-                      <select value={ing.unite}
-                        onChange={e => modifierIngredient(index, 'unite', e.target.value)}
-                        style={{ padding: '10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: 'white', outline: 'none', color: c.texte }}
-                      >
-                        {['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce', 'portions'].map(u => (
-                          <option key={u}>{u}</option>
-                        ))}
-                      </select>
-                    </div>
+              {ingredients.map((ing, index) => (
+                <div key={index} style={{
+                  background: c.fond, borderRadius: '8px', padding: '12px',
+                  marginBottom: '8px', border: `0.5px solid ${c.bordure}`
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500' }}>Ingrédient {index + 1}</span>
+                    <button onClick={() => supprimerIngredient(index)}
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#aaa', fontSize: '16px' }}
+                    >×</button>
                   </div>
-                )
-              })}
+                  <div style={{ marginBottom: '8px' }}>
+                    <IngredientSearch
+                      ingredients={listeIngredients}
+                      value={ing.ingredient_id}
+                      onChange={val => modifierIngredient(index, 'ingredient_id', val)}
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <input type="number" value={ing.quantite} step="0.01"
+                      onChange={e => modifierIngredient(index, 'quantite', e.target.value)}
+                      placeholder="Quantité"
+                      style={{ padding: '10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
+                    />
+                    <select value={ing.unite}
+                      onChange={e => modifierIngredient(index, 'unite', e.target.value)}
+                      style={{ padding: '10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: 'white', outline: 'none', color: c.texte }}
+                    >
+                      {['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce', 'portions'].map(u => (
+                        <option key={u}>{u}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ))}
             </>
           ) : (
             <>
@@ -470,50 +435,30 @@ export default function ModifierFiche() {
                   <div key={i} style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>{h}</div>
                 ))}
               </div>
-              {ingredients.map((ing, index) => {
-                const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
-                return (
-                  <div key={index} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto', gap: '8px', marginBottom: '8px' }}>
-                    <select value={ing.ingredient_id}
-                      onChange={e => modifierIngredient(index, 'ingredient_id', e.target.value)}
-                      style={{
-                        padding: '8px 10px', borderRadius: '8px',
-                        border: `0.5px solid ${ingData?.est_sous_fiche ? '#AFA9EC' : c.bordure}`,
-                        fontSize: '13px', background: ingData?.est_sous_fiche ? '#EEEDFE' : 'white',
-                        outline: 'none', color: c.texte, width: '100%', minWidth: 0
-                      }}
-                    >
-                      <option value="">-- Choisir --</option>
-                      {listeIngredients.filter(i => !i.est_sous_fiche).map(i => (
-                        <option key={i.id} value={i.id}>{i.nom}</option>
-                      ))}
-                      {listeIngredients.some(i => i.est_sous_fiche) && (
-                        <>
-                          <option disabled>── Sous-fiches ──</option>
-                          {listeIngredients.filter(i => i.est_sous_fiche).map(i => (
-                            <option key={i.id} value={i.id}>[SF] {i.nom}</option>
-                          ))}
-                        </>
-                      )}
-                    </select>
-                    <input type="number" value={ing.quantite} step="0.01"
-                      onChange={e => modifierIngredient(index, 'quantite', e.target.value)}
-                      style={{ padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, width: '100%', minWidth: 0 }}
-                    />
-                    <select value={ing.unite}
-                      onChange={e => modifierIngredient(index, 'unite', e.target.value)}
-                      style={{ padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: 'white', outline: 'none', color: c.texte, width: '100%', minWidth: 0 }}
-                    >
-                      {['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce', 'portions'].map(u => (
-                        <option key={u}>{u}</option>
-                      ))}
-                    </select>
-                    <button onClick={() => supprimerIngredient(index)}
-                      style={{ background: 'transparent', border: `0.5px solid ${c.bordure}`, borderRadius: '8px', width: '36px', height: '36px', cursor: 'pointer', color: '#aaa', fontSize: '16px', flexShrink: 0 }}
-                    >×</button>
-                  </div>
-                )
-              })}
+              {ingredients.map((ing, index) => (
+                <div key={index} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto', gap: '8px', marginBottom: '8px' }}>
+                  <IngredientSearch
+                    ingredients={listeIngredients}
+                    value={ing.ingredient_id}
+                    onChange={val => modifierIngredient(index, 'ingredient_id', val)}
+                  />
+                  <input type="number" value={ing.quantite} step="0.01"
+                    onChange={e => modifierIngredient(index, 'quantite', e.target.value)}
+                    style={{ padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, width: '100%', minWidth: 0 }}
+                  />
+                  <select value={ing.unite}
+                    onChange={e => modifierIngredient(index, 'unite', e.target.value)}
+                    style={{ padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: 'white', outline: 'none', color: c.texte, width: '100%', minWidth: 0 }}
+                  >
+                    {['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce', 'portions'].map(u => (
+                      <option key={u}>{u}</option>
+                    ))}
+                  </select>
+                  <button onClick={() => supprimerIngredient(index)}
+                    style={{ background: 'transparent', border: `0.5px solid ${c.bordure}`, borderRadius: '8px', width: '36px', height: '36px', cursor: 'pointer', color: '#aaa', fontSize: '16px', flexShrink: 0 }}
+                  >×</button>
+                </div>
+              ))}
             </>
           )}
 

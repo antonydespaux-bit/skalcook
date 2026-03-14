@@ -1,19 +1,24 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
+import { theme, Logo } from '../../lib/theme.jsx'
+import { useIsMobile } from '../../lib/useIsMobile'
 
 export default function IngredientsPage() {
   const [ingredients, setIngredients] = useState([])
   const [loading, setLoading] = useState(true)
   const [recherche, setRecherche] = useState('')
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState(null)
-  const [nom, setNom] = useState('')
-  const [prixKg, setPrixKg] = useState('')
-  const [unite, setUnite] = useState('kg')
+  const [selection, setSelection] = useState([])
+  const [supprimant, setSupprimant] = useState(false)
+  const [nouveauNom, setNouveauNom] = useState('')
+  const [nouveauPrix, setNouveauPrix] = useState('')
+  const [nouvelleUnite, setNouvelleUnite] = useState('kg')
+  const [ajoutVisible, setAjoutVisible] = useState(false)
   const [saving, setSaving] = useState(false)
   const router = useRouter()
+  const c = theme.couleurs
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     checkUser()
@@ -29,278 +34,217 @@ export default function IngredientsPage() {
     const { data } = await supabase
       .from('ingredients')
       .select('*')
+      .eq('est_sous_fiche', false)
       .order('nom')
     setIngredients(data || [])
+    setSelection([])
     setLoading(false)
-  }
-
-  const resetForm = () => {
-    setNom('')
-    setPrixKg('')
-    setUnite('kg')
-    setEditingId(null)
-    setShowForm(false)
-  }
-
-  const handleEdit = (ing) => {
-    setNom(ing.nom)
-    setPrixKg(ing.prix_kg || '')
-    setUnite(ing.unite || 'kg')
-    setEditingId(ing.id)
-    setShowForm(true)
-  }
-
-  const handleSubmit = async () => {
-    if (!nom) return
-    setSaving(true)
-
-    if (editingId) {
-      await supabase
-        .from('ingredients')
-        .update({ nom, prix_kg: prixKg ? parseFloat(prixKg) : null, unite })
-        .eq('id', editingId)
-    } else {
-      await supabase
-        .from('ingredients')
-        .insert([{ nom, prix_kg: prixKg ? parseFloat(prixKg) : null, unite }])
-    }
-
-    await loadIngredients()
-    resetForm()
-    setSaving(false)
-  }
-
-  const handleDelete = async (id) => {
-    if (!confirm('Supprimer cet ingrédient ?')) return
-    await supabase.from('ingredients').delete().eq('id', id)
-    await loadIngredients()
   }
 
   const ingredientsFiltres = ingredients.filter(i =>
     i.nom.toLowerCase().includes(recherche.toLowerCase())
   )
 
-  return (
-    <div style={{ minHeight: '100vh', background: '#f5f5f0' }}>
+  const toggleSelection = (id) => {
+    setSelection(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    )
+  }
 
-      {/* Barre du haut */}
+  const toggleTout = () => {
+    if (selection.length === ingredientsFiltres.length) {
+      setSelection([])
+    } else {
+      setSelection(ingredientsFiltres.map(i => i.id))
+    }
+  }
+
+  const supprimerSelection = async () => {
+    if (!confirm(`Supprimer ${selection.length} ingrédient${selection.length > 1 ? 's' : ''} ? Cette action est irréversible.`)) return
+    setSupprimant(true)
+    await supabase.from('ingredients').delete().in('id', selection)
+    await loadIngredients()
+    setSupprimant(false)
+  }
+
+  const ajouterIngredient = async () => {
+    if (!nouveauNom) return
+    setSaving(true)
+    await supabase.from('ingredients').insert([{
+      nom: nouveauNom.trim(),
+      prix_kg: nouveauPrix ? parseFloat(nouveauPrix.replace(',', '.')) : null,
+      unite: nouvelleUnite
+    }])
+    setNouveauNom('')
+    setNouveauPrix('')
+    setNouvelleUnite('kg')
+    setAjoutVisible(false)
+    await loadIngredients()
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: c.fond }}>
+
       <div style={{
-        background: 'white',
-        borderBottom: '0.5px solid #e0e0d8',
-        padding: '0 24px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        height: '56px'
+        background: c.principal, borderBottom: `0.5px solid ${c.accent}40`,
+        padding: '0 16px', display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', height: '56px',
+        position: 'sticky', top: 0, zIndex: 100
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button
-            onClick={() => router.push('/fiches')}
-            style={{
-              background: 'transparent', border: '0.5px solid #ddd',
-              borderRadius: '8px', padding: '6px 12px',
-              fontSize: '13px', cursor: 'pointer', color: '#666'
-            }}
-          >
-            ← Retour
-          </button>
-          <span style={{ fontSize: '15px', fontWeight: '500' }}>Gestion des ingrédients</span>
+        <Logo height={28} couleur="white" onClick={() => router.push('/fiches')} />
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {selection.length > 0 && (
+            <button onClick={supprimerSelection} disabled={supprimant} style={{
+              background: '#A32D2D', color: 'white', border: 'none',
+              borderRadius: '8px', padding: '8px 12px', fontSize: '13px',
+              fontWeight: '600', cursor: 'pointer'
+            }}>
+              {supprimant ? '...' : `Supprimer ${selection.length}`}
+            </button>
+          )}
+          <button onClick={() => router.push('/import')} style={{
+            background: 'transparent', color: 'rgba(255,255,255,0.7)',
+            border: '0.5px solid rgba(255,255,255,0.2)',
+            borderRadius: '8px', padding: '8px 12px', fontSize: '13px', cursor: 'pointer'
+          }}>{isMobile ? '📥' : 'Importer Excel'}</button>
+          <button onClick={() => setAjoutVisible(!ajoutVisible)} style={{
+            background: c.accent, color: c.principal, border: 'none',
+            borderRadius: '8px', padding: '8px 12px', fontSize: '13px',
+            fontWeight: '600', cursor: 'pointer'
+          }}>+ {!isMobile && 'Nouvel ingrédient'}</button>
+          <button onClick={() => router.push('/fiches')} style={{
+            background: 'transparent', color: 'rgba(255,255,255,0.7)',
+            border: '0.5px solid rgba(255,255,255,0.2)',
+            borderRadius: '8px', padding: '8px 12px', fontSize: '13px', cursor: 'pointer'
+          }}>← {!isMobile && 'Retour'}</button>
         </div>
-        <button
-          onClick={() => { resetForm(); setShowForm(true) }}
-          style={{
-            background: '#1D9E75', color: 'white', border: 'none',
-            borderRadius: '8px', padding: '8px 16px',
-            fontSize: '13px', fontWeight: '500', cursor: 'pointer'
-          }}
-        >
-          <button
-  onClick={() => router.push('/import')}
-  style={{
-    background: 'transparent',
-    color: '#666',
-    border: '0.5px solid #ddd',
-    borderRadius: '8px',
-    padding: '8px 16px',
-    fontSize: '13px',
-    cursor: 'pointer'
-  }}
->
-  Importer Excel
-</button>
-          + Nouvel ingrédient
-        </button>
       </div>
 
-      <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
+      <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '1000px', margin: '0 auto' }}>
 
-        {/* Formulaire ajout/modification */}
-        {showForm && (
+        {/* Formulaire ajout */}
+        {ajoutVisible && (
           <div style={{
-            background: 'white', borderRadius: '12px', padding: '24px',
-            border: '0.5px solid #1D9E75', marginBottom: '20px'
+            background: 'white', borderRadius: '12px', padding: '20px',
+            border: `0.5px solid ${c.accent}`, marginBottom: '16px'
           }}>
-            <div style={{ fontSize: '13px', fontWeight: '500', marginBottom: '16px' }}>
-              {editingId ? 'Modifier l\'ingrédient' : 'Nouvel ingrédient'}
+            <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>
+              Nouvel ingrédient
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr 1fr auto', gap: '10px', alignItems: 'flex-end' }}>
               <div>
-                <label style={{ fontSize: '12px', color: '#666', fontWeight: '500', display: 'block', marginBottom: '6px' }}>
-                  Nom *
-                </label>
-                <input
-                  type="text"
-                  value={nom}
-                  onChange={e => setNom(e.target.value)}
-                  placeholder="Ex : Beurre"
-                  style={{
-                    width: '100%', padding: '10px 12px', borderRadius: '8px',
-                    border: '0.5px solid #ddd', fontSize: '14px', outline: 'none'
-                  }}
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom *</label>
+                <input type="text" value={nouveauNom} onChange={e => setNouveauNom(e.target.value)}
+                  placeholder="Ex : Beurre doux"
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
                 />
               </div>
               <div>
-                <label style={{ fontSize: '12px', color: '#666', fontWeight: '500', display: 'block', marginBottom: '6px' }}>
-                  Prix / unité (€)
-                </label>
-                <input
-                  type="number"
-                  value={prixKg}
-                  onChange={e => setPrixKg(e.target.value)}
-                  placeholder="Ex : 8.50"
-                  step="0.01"
-                  style={{
-                    width: '100%', padding: '10px 12px', borderRadius: '8px',
-                    border: '0.5px solid #ddd', fontSize: '14px', outline: 'none'
-                  }}
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix HT (€)</label>
+                <input type="text" value={nouveauPrix} onChange={e => setNouveauPrix(e.target.value)}
+                  placeholder="Ex : 4.50"
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
                 />
               </div>
               <div>
-                <label style={{ fontSize: '12px', color: '#666', fontWeight: '500', display: 'block', marginBottom: '6px' }}>
-                  Unité
-                </label>
-                <select
-                  value={unite}
-                  onChange={e => setUnite(e.target.value)}
-                  style={{
-                    width: '100%', padding: '10px 12px', borderRadius: '8px',
-                    border: '0.5px solid #ddd', fontSize: '14px', background: 'white', outline: 'none'
-                  }}
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Unité</label>
+                <select value={nouvelleUnite} onChange={e => setNouvelleUnite(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: 'white', outline: 'none', color: c.texte }}
                 >
-                  {['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce'].map(u => (
-                    <option key={u}>{u}</option>
-                  ))}
+                  {['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce'].map(u => <option key={u}>{u}</option>)}
                 </select>
               </div>
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                onClick={handleSubmit}
-                disabled={saving}
-                style={{
-                  background: saving ? '#aaa' : '#1D9E75', color: 'white',
-                  border: 'none', borderRadius: '8px', padding: '8px 20px',
-                  fontSize: '13px', fontWeight: '500', cursor: saving ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {saving ? 'Enregistrement...' : editingId ? 'Modifier' : 'Ajouter'}
-              </button>
-              <button
-                onClick={resetForm}
-                style={{
-                  background: 'transparent', color: '#666',
-                  border: '0.5px solid #ddd', borderRadius: '8px',
-                  padding: '8px 16px', fontSize: '13px', cursor: 'pointer'
-                }}
-              >
-                Annuler
+              <button onClick={ajouterIngredient} disabled={saving || !nouveauNom} style={{
+                padding: '10px 20px', background: saving || !nouveauNom ? c.texteMuted : c.accent,
+                color: c.principal, border: 'none', borderRadius: '8px',
+                fontSize: '13px', fontWeight: '600', cursor: saving || !nouveauNom ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap'
+              }}>
+                {saving ? '...' : 'Ajouter'}
               </button>
             </div>
           </div>
         )}
 
-        {/* Recherche */}
-        <input
-          type="text"
-          placeholder="Rechercher un ingrédient..."
-          value={recherche}
-          onChange={e => setRecherche(e.target.value)}
-          style={{
-            width: '100%', padding: '10px 14px', borderRadius: '8px',
-            border: '0.5px solid #ddd', fontSize: '14px',
-            background: 'white', outline: 'none', marginBottom: '16px'
-          }}
-        />
-
-        {/* Liste */}
-        <div style={{
-          background: 'white', borderRadius: '12px',
-          border: '0.5px solid #e0e0d8', overflow: 'hidden'
-        }}>
-          {loading ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#888', fontSize: '14px' }}>
-              Chargement...
-            </div>
-          ) : ingredientsFiltres.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#888', fontSize: '14px' }}>
-              {ingredients.length === 0 ? 'Aucun ingrédient pour le moment' : 'Aucun résultat'}
-            </div>
-          ) : (
-            <>
-              <div style={{
-                display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto',
-                gap: '8px', padding: '12px 16px',
-                borderBottom: '0.5px solid #e0e0d8',
-                fontSize: '11px', color: '#888', fontWeight: '500', textTransform: 'uppercase'
-              }}>
-                <span>Nom</span><span>Prix / unité</span><span>Unité</span><span></span>
-              </div>
-              {ingredientsFiltres.map((ing, i) => (
-                <div
-                  key={ing.id}
-                  style={{
-                    display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto',
-                    gap: '8px', padding: '12px 16px', alignItems: 'center',
-                    borderBottom: i < ingredientsFiltres.length - 1 ? '0.5px solid #f0f0e8' : 'none'
-                  }}
-                >
-                  <span style={{ fontSize: '14px', fontWeight: '500' }}>{ing.nom}</span>
-                  <span style={{ fontSize: '14px', color: '#444' }}>
-                    {ing.prix_kg ? `${Number(ing.prix_kg).toFixed(2)} €` : '—'}
-                  </span>
-                  <span style={{ fontSize: '13px', color: '#888' }}>{ing.unite || '—'}</span>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <button
-                      onClick={() => handleEdit(ing)}
-                      style={{
-                        background: 'transparent', border: '0.5px solid #ddd',
-                        borderRadius: '6px', padding: '4px 10px',
-                        fontSize: '12px', cursor: 'pointer', color: '#666'
-                      }}
-                    >
-                      Modifier
-                    </button>
-                    <button
-                      onClick={() => handleDelete(ing.id)}
-                      style={{
-                        background: 'transparent', border: '0.5px solid #ddd',
-                        borderRadius: '6px', padding: '4px 10px',
-                        fontSize: '12px', cursor: 'pointer', color: '#A32D2D'
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
+        {/* Barre de recherche et stats */}
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            type="text"
+            placeholder="Rechercher un ingrédient..."
+            value={recherche}
+            onChange={e => setRecherche(e.target.value)}
+            style={{
+              flex: 1, minWidth: '200px', padding: '10px 14px',
+              borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
+              fontSize: '14px', background: 'white', outline: 'none', color: c.texte
+            }}
+          />
+          <span style={{ fontSize: '12px', color: c.texteMuted, whiteSpace: 'nowrap' }}>
+            {ingredientsFiltres.length} ingrédient{ingredientsFiltres.length > 1 ? 's' : ''}
+            {selection.length > 0 && ` — ${selection.length} sélectionné${selection.length > 1 ? 's' : ''}`}
+          </span>
         </div>
 
-        {/* Compteur */}
-        {ingredients.length > 0 && (
-          <div style={{ textAlign: 'center', marginTop: '12px', fontSize: '12px', color: '#aaa' }}>
-            {ingredients.length} ingrédient{ingredients.length > 1 ? 's' : ''} au total
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '60px', color: c.texteMuted }}>Chargement...</div>
+        ) : (
+          <div style={{
+            background: 'white', borderRadius: '12px',
+            border: `0.5px solid ${c.bordure}`, overflow: 'hidden'
+          }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ background: c.principal }}>
+                  <th style={{ padding: '10px 16px', width: '40px' }}>
+                    <input
+                      type="checkbox"
+                      checked={selection.length === ingredientsFiltres.length && ingredientsFiltres.length > 0}
+                      onChange={toggleTout}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: c.accent }}
+                    />
+                  </th>
+                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase' }}>Nom</th>
+                  {!isMobile && <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase' }}>Prix HT</th>}
+                  {!isMobile && <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase' }}>Unité</th>}
+                  {isMobile && <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase' }}>Prix / Unité</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {ingredientsFiltres.map((ing, i) => (
+                  <tr
+                    key={ing.id}
+                    style={{
+                      borderBottom: i < ingredientsFiltres.length - 1 ? `0.5px solid ${c.bordure}` : 'none',
+                      background: selection.includes(ing.id) ? c.accentClair : 'white'
+                    }}
+                  >
+                    <td style={{ padding: '10px 16px' }}>
+                      <input
+                        type="checkbox"
+                        checked={selection.includes(ing.id)}
+                        onChange={() => toggleSelection(ing.id)}
+                        style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: c.accent }}
+                      />
+                    </td>
+                    <td style={{ padding: '10px 16px', fontWeight: '500', color: c.texte }}>{ing.nom}</td>
+                    {!isMobile && (
+                      <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texte }}>
+                        {ing.prix_kg ? `${Number(ing.prix_kg).toFixed(2)} €` : '—'}
+                      </td>
+                    )}
+                    {!isMobile && (
+                      <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texteMuted }}>{ing.unite || '—'}</td>
+                    )}
+                    {isMobile && (
+                      <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texte }}>
+                        {ing.prix_kg ? `${Number(ing.prix_kg).toFixed(2)} €` : '—'} / {ing.unite || '—'}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
