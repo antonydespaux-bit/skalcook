@@ -242,7 +242,7 @@ export default function RecapPage() {
         padding: '0 24px', display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', height: '56px'
       }}>
-        <Logo height={30} couleur="white" />
+        <Logo height={30} couleur="white" onClick={() => router.push('/fiches')} />
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <button onClick={exportExcel} style={{
             background: c.vert, color: 'white', border: 'none',
