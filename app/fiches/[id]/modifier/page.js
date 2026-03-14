@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase, getParametres } from '../../../../lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import { theme, Logo } from '../../../../lib/theme.jsx'
+import { useIsMobile } from '../../../../lib/useIsMobile'
 
 const ALLERGENES = [
   { id: 'arachides', label: 'Arachides', emoji: '🥜' },
@@ -38,6 +39,7 @@ export default function ModifierFiche() {
   const params_route = useParams()
   const c = theme.couleurs
   const categories = [...theme.categories, 'Sous-fiche']
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     checkUser()
@@ -175,7 +177,6 @@ export default function ModifierFiche() {
 
     const cout = calculerCout()
     const coutPortion = nbPortions ? (cout / parseFloat(nbPortions)) : null
-
     let photoUrl = photoExistante
 
     if (photo) {
@@ -184,7 +185,6 @@ export default function ModifierFiche() {
       const { error: errPhoto } = await supabase.storage
         .from('fiches-photos')
         .upload(path, photo, { upsert: true })
-
       if (!errPhoto) {
         const { data: urlData } = supabase.storage
           .from('fiches-photos')
@@ -196,13 +196,10 @@ export default function ModifierFiche() {
     await supabase
       .from('fiches')
       .update({
-        nom,
-        categorie,
+        nom, categorie,
         nb_portions: nbPortions ? parseInt(nbPortions) : null,
         prix_ttc: prixTTC ? parseFloat(prixTTC) : null,
-        description,
-        saison,
-        allergenes,
+        description, saison, allergenes,
         photo_url: photoUrl,
         cout_portion: coutPortion,
         updated_at: new Date().toISOString()
@@ -243,21 +240,23 @@ export default function ModifierFiche() {
 
       <div style={{
         background: c.principal, borderBottom: `0.5px solid ${c.accent}40`,
-        padding: '0 24px', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', height: '56px'
+        padding: '0 16px', display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', height: '56px',
+        position: 'sticky', top: 0, zIndex: 100
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Logo height={30} couleur="white" onClick={() => router.push('/fiches')} />
-          <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px' }}>|</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Logo height={28} couleur="white" onClick={() => router.push('/fiches')} />
           <button
             onClick={() => router.push(`/fiches/${params_route.id}`)}
             style={{
               background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
-              borderRadius: '8px', padding: '6px 12px',
+              borderRadius: '8px', padding: '6px 10px',
               fontSize: '13px', cursor: 'pointer', color: 'rgba(255,255,255,0.7)'
             }}
           >← Retour</button>
-          <span style={{ fontSize: '15px', fontWeight: '500', color: 'white' }}>Modifier — {nom}</span>
+          {!isMobile && (
+            <span style={{ fontSize: '14px', fontWeight: '500', color: 'white' }}>Modifier — {nom}</span>
+          )}
         </div>
         <button
           onClick={handleSubmit}
@@ -265,78 +264,70 @@ export default function ModifierFiche() {
           style={{
             background: saving ? c.texteMuted : c.accent,
             color: c.principal, border: 'none', borderRadius: '8px',
-            padding: '8px 20px', fontSize: '13px', fontWeight: '600',
+            padding: '8px 16px', fontSize: '13px', fontWeight: '600',
             cursor: saving ? 'not-allowed' : 'pointer'
           }}
         >
-          {saving ? 'Enregistrement...' : 'Enregistrer les modifications'}
+          {saving ? '...' : 'Enregistrer'}
         </button>
       </div>
 
-      <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
+      <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '800px', margin: '0 auto' }}>
 
         {error && (
           <div style={{
             background: '#FCEBEB', color: '#A32D2D', borderRadius: '8px',
-            padding: '12px 16px', fontSize: '13px', marginBottom: '20px'
+            padding: '12px 16px', fontSize: '13px', marginBottom: '16px'
           }}>{error}</div>
         )}
 
         {/* Photo */}
         <div style={{
-          background: 'white', borderRadius: '12px', padding: '24px',
-          border: `0.5px solid ${c.bordure}`, marginBottom: '16px'
+          background: 'white', borderRadius: '12px', padding: isMobile ? '16px' : '24px',
+          border: `0.5px solid ${c.bordure}`, marginBottom: '12px'
         }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
+          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>
             Photo du plat
           </div>
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
             {photoPreview ? (
-              <div style={{ position: 'relative' }}>
-                <img
-                  src={photoPreview}
-                  alt="Aperçu"
-                  style={{ width: '160px', height: '120px', objectFit: 'cover', borderRadius: '8px', border: `0.5px solid ${c.bordure}` }}
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <img src={photoPreview} alt="Aperçu"
+                  style={{ width: isMobile ? '100px' : '160px', height: isMobile ? '80px' : '120px', objectFit: 'cover', borderRadius: '8px', border: `0.5px solid ${c.bordure}` }}
                 />
-                <button
-                  onClick={supprimerPhoto}
+                <button onClick={supprimerPhoto}
                   style={{
                     position: 'absolute', top: '-8px', right: '-8px',
                     background: '#A32D2D', color: 'white', border: 'none',
                     borderRadius: '50%', width: '20px', height: '20px',
-                    fontSize: '12px', cursor: 'pointer', display: 'flex',
-                    alignItems: 'center', justifyContent: 'center'
+                    fontSize: '12px', cursor: 'pointer'
                   }}
                 >×</button>
               </div>
             ) : (
               <div style={{
-                width: '160px', height: '120px', borderRadius: '8px',
-                border: `1px dashed ${c.bordure}`, display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-                background: c.fond, flexDirection: 'column', gap: '6px'
+                width: isMobile ? '100px' : '160px', height: isMobile ? '80px' : '120px',
+                borderRadius: '8px', border: `1px dashed ${c.bordure}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: c.fond, flexDirection: 'column', gap: '4px', flexShrink: 0
               }}>
-                <span style={{ fontSize: '24px' }}>📷</span>
-                <span style={{ fontSize: '11px', color: c.texteMuted }}>Aucune photo</span>
+                <span style={{ fontSize: '20px' }}>📷</span>
+                <span style={{ fontSize: '10px', color: c.texteMuted }}>Aucune photo</span>
               </div>
             )}
             <div style={{ flex: 1 }}>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '8px' }}>
                 {photoPreview ? 'Changer la photo' : 'Ajouter une photo'}
               </label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handlePhoto}
+              <input type="file" accept="image/*" onChange={handlePhoto}
                 style={{
                   width: '100%', padding: '10px 12px',
-                  border: `0.5px solid ${c.accent}`,
-                  borderRadius: '8px', fontSize: '13px',
-                  background: c.accentClair, cursor: 'pointer', color: c.texte
+                  border: `0.5px solid ${c.accent}`, borderRadius: '8px',
+                  fontSize: '13px', background: c.accentClair, cursor: 'pointer', color: c.texte
                 }}
               />
               <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '6px' }}>
-                Formats acceptés : JPG, PNG, WEBP — Max 5MB
+                JPG, PNG, WEBP — Max 5MB
               </div>
             </div>
           </div>
@@ -344,64 +335,64 @@ export default function ModifierFiche() {
 
         {/* Informations générales */}
         <div style={{
-          background: 'white', borderRadius: '12px', padding: '24px',
-          border: `0.5px solid ${c.bordure}`, marginBottom: '16px'
+          background: 'white', borderRadius: '12px', padding: isMobile ? '16px' : '24px',
+          border: `0.5px solid ${c.bordure}`, marginBottom: '12px'
         }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
+          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>
             Informations générales
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div style={{ gridColumn: '1 / -1' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom *</label>
-              <input
-                type="text" value={nom} onChange={e => setNom(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
+              <input type="text" value={nom} onChange={e => setNom(e.target.value)}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
               />
             </div>
-            <div>
-              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Catégorie</label>
-              <select value={categorie} onChange={e => setCategorie(e.target.value)} style={{
-                width: '100%', padding: '10px 12px', borderRadius: '8px',
-                border: `0.5px solid ${c.bordure}`, fontSize: '14px',
-                background: 'white', outline: 'none', color: c.texte
-              }}>
-                {categories.map(cat => <option key={cat}>{cat}</option>)}
-              </select>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Catégorie</label>
+                <select value={categorie} onChange={e => setCategorie(e.target.value)} style={{
+                  width: '100%', padding: '12px', borderRadius: '8px',
+                  border: `0.5px solid ${c.bordure}`, fontSize: '14px',
+                  background: 'white', outline: 'none', color: c.texte
+                }}>
+                  {categories.map(cat => <option key={cat}>{cat}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Saison</label>
+                <select value={saison} onChange={e => setSaison(e.target.value)} style={{
+                  width: '100%', padding: '12px', borderRadius: '8px',
+                  border: `0.5px solid ${c.bordure}`, fontSize: '14px',
+                  background: 'white', outline: 'none', color: c.texte
+                }}>
+                  {theme.saisons.map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nombre de portions</label>
+                <input type="number" value={nbPortions} onChange={e => setNbPortions(e.target.value)}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix TTC (€)</label>
+                <input type="number" value={prixTTC} onChange={e => setPrixTTC(e.target.value)} step="0.01"
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
+                />
+                {prixIndic && (
+                  <div style={{ fontSize: '11px', color: c.vert, marginTop: '4px' }}>
+                    Indicatif ({seuilVert}%) : <strong>{prixIndic} €</strong>
+                  </div>
+                )}
+              </div>
             </div>
             <div>
-              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Saison</label>
-              <select value={saison} onChange={e => setSaison(e.target.value)} style={{
-                width: '100%', padding: '10px 12px', borderRadius: '8px',
-                border: `0.5px solid ${c.bordure}`, fontSize: '14px',
-                background: 'white', outline: 'none', color: c.texte
-              }}>
-                {theme.saisons.map(s => <option key={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nombre de portions</label>
-              <input
-                type="number" value={nbPortions} onChange={e => setNbPortions(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix de vente TTC (€)</label>
-              <input
-                type="number" value={prixTTC} onChange={e => setPrixTTC(e.target.value)} step="0.01"
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
-              />
-              {prixIndic && (
-                <div style={{ fontSize: '11px', color: c.vert, marginTop: '4px' }}>
-                  Prix indicatif ({seuilVert}% food cost) : <strong>{prixIndic} €</strong>
-                </div>
-              )}
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Description</label>
-              <textarea
-                value={description} onChange={e => setDescription(e.target.value)} rows={3}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', color: c.texte }}
+              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', color: c.texte }}
               />
             </div>
           </div>
@@ -409,100 +400,156 @@ export default function ModifierFiche() {
 
         {/* Ingrédients */}
         <div style={{
-          background: 'white', borderRadius: '12px', padding: '24px',
-          border: `0.5px solid ${c.bordure}`, marginBottom: '16px'
+          background: 'white', borderRadius: '12px', padding: isMobile ? '16px' : '24px',
+          border: `0.5px solid ${c.bordure}`, marginBottom: '12px'
         }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
+          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>
             Ingrédients
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto', gap: '8px', marginBottom: '8px' }}>
-            {['Ingrédient', 'Quantité', 'Unité', ''].map((h, i) => (
-              <div key={i} style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>{h}</div>
-            ))}
-          </div>
-          {ingredients.map((ing, index) => {
-            const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
-            return (
-              <div key={index} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto', gap: '8px', marginBottom: '8px' }}>
-                <select
-                  value={ing.ingredient_id}
-                  onChange={e => modifierIngredient(index, 'ingredient_id', e.target.value)}
-                  style={{
-                    padding: '8px 10px', borderRadius: '8px',
-                    border: `0.5px solid ${ingData?.est_sous_fiche ? '#AFA9EC' : c.bordure}`,
-                    fontSize: '13px', background: ingData?.est_sous_fiche ? '#EEEDFE' : 'white',
-                    outline: 'none', color: c.texte, width: '100%', minWidth: 0
-                  }}
-                >
-                  <option value="">-- Choisir --</option>
-                  {listeIngredients.filter(i => !i.est_sous_fiche).map(i => (
-                    <option key={i.id} value={i.id}>{i.nom}</option>
-                  ))}
-                  {listeIngredients.some(i => i.est_sous_fiche) && (
-                    <>
-                      <option disabled>── Sous-fiches ──</option>
-                      {listeIngredients.filter(i => i.est_sous_fiche).map(i => (
-                        <option key={i.id} value={i.id}>[SF] {i.nom}</option>
+
+          {isMobile ? (
+            <>
+              {ingredients.map((ing, index) => {
+                const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
+                return (
+                  <div key={index} style={{
+                    background: c.fond, borderRadius: '8px', padding: '12px',
+                    marginBottom: '8px', border: `0.5px solid ${c.bordure}`
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500' }}>Ingrédient {index + 1}</span>
+                      <button onClick={() => supprimerIngredient(index)}
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#aaa', fontSize: '16px' }}
+                      >×</button>
+                    </div>
+                    <select value={ing.ingredient_id}
+                      onChange={e => modifierIngredient(index, 'ingredient_id', e.target.value)}
+                      style={{
+                        width: '100%', padding: '10px', borderRadius: '8px',
+                        border: `0.5px solid ${ingData?.est_sous_fiche ? '#AFA9EC' : c.bordure}`,
+                        fontSize: '14px', background: ingData?.est_sous_fiche ? '#EEEDFE' : 'white',
+                        outline: 'none', color: c.texte, marginBottom: '8px'
+                      }}
+                    >
+                      <option value="">-- Choisir un ingrédient --</option>
+                      {listeIngredients.filter(i => !i.est_sous_fiche).map(i => (
+                        <option key={i.id} value={i.id}>{i.nom}</option>
                       ))}
-                    </>
-                  )}
-                </select>
-                <input
-                  type="number" value={ing.quantite} step="0.01"
-                  onChange={e => modifierIngredient(index, 'quantite', e.target.value)}
-                  style={{ padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, width: '100%', minWidth: 0 }}
-                />
-                <select
-                  value={ing.unite}
-                  onChange={e => modifierIngredient(index, 'unite', e.target.value)}
-                  style={{ padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: 'white', outline: 'none', color: c.texte, width: '100%', minWidth: 0 }}
-                >
-                  {['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce', 'portions'].map(u => (
-                    <option key={u}>{u}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => supprimerIngredient(index)}
-                  style={{ background: 'transparent', border: `0.5px solid ${c.bordure}`, borderRadius: '8px', width: '36px', height: '36px', cursor: 'pointer', color: '#aaa', fontSize: '16px', flexShrink: 0 }}
-                >×</button>
+                      {listeIngredients.some(i => i.est_sous_fiche) && (
+                        <>
+                          <option disabled>── Sous-fiches ──</option>
+                          {listeIngredients.filter(i => i.est_sous_fiche).map(i => (
+                            <option key={i.id} value={i.id}>[SF] {i.nom}</option>
+                          ))}
+                        </>
+                      )}
+                    </select>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <input type="number" value={ing.quantite} step="0.01"
+                        onChange={e => modifierIngredient(index, 'quantite', e.target.value)}
+                        placeholder="Quantité"
+                        style={{ padding: '10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
+                      />
+                      <select value={ing.unite}
+                        onChange={e => modifierIngredient(index, 'unite', e.target.value)}
+                        style={{ padding: '10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: 'white', outline: 'none', color: c.texte }}
+                      >
+                        {['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce', 'portions'].map(u => (
+                          <option key={u}>{u}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )
+              })}
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto', gap: '8px', marginBottom: '8px' }}>
+                {['Ingrédient', 'Quantité', 'Unité', ''].map((h, i) => (
+                  <div key={i} style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>{h}</div>
+                ))}
               </div>
-            )
-          })}
-          <button
-            onClick={ajouterIngredient}
-            style={{ background: c.vertClair, color: c.vert, border: `0.5px solid ${c.vert}40`, borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer', marginTop: '8px' }}
+              {ingredients.map((ing, index) => {
+                const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
+                return (
+                  <div key={index} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto', gap: '8px', marginBottom: '8px' }}>
+                    <select value={ing.ingredient_id}
+                      onChange={e => modifierIngredient(index, 'ingredient_id', e.target.value)}
+                      style={{
+                        padding: '8px 10px', borderRadius: '8px',
+                        border: `0.5px solid ${ingData?.est_sous_fiche ? '#AFA9EC' : c.bordure}`,
+                        fontSize: '13px', background: ingData?.est_sous_fiche ? '#EEEDFE' : 'white',
+                        outline: 'none', color: c.texte, width: '100%', minWidth: 0
+                      }}
+                    >
+                      <option value="">-- Choisir --</option>
+                      {listeIngredients.filter(i => !i.est_sous_fiche).map(i => (
+                        <option key={i.id} value={i.id}>{i.nom}</option>
+                      ))}
+                      {listeIngredients.some(i => i.est_sous_fiche) && (
+                        <>
+                          <option disabled>── Sous-fiches ──</option>
+                          {listeIngredients.filter(i => i.est_sous_fiche).map(i => (
+                            <option key={i.id} value={i.id}>[SF] {i.nom}</option>
+                          ))}
+                        </>
+                      )}
+                    </select>
+                    <input type="number" value={ing.quantite} step="0.01"
+                      onChange={e => modifierIngredient(index, 'quantite', e.target.value)}
+                      style={{ padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, width: '100%', minWidth: 0 }}
+                    />
+                    <select value={ing.unite}
+                      onChange={e => modifierIngredient(index, 'unite', e.target.value)}
+                      style={{ padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: 'white', outline: 'none', color: c.texte, width: '100%', minWidth: 0 }}
+                    >
+                      {['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce', 'portions'].map(u => (
+                        <option key={u}>{u}</option>
+                      ))}
+                    </select>
+                    <button onClick={() => supprimerIngredient(index)}
+                      style={{ background: 'transparent', border: `0.5px solid ${c.bordure}`, borderRadius: '8px', width: '36px', height: '36px', cursor: 'pointer', color: '#aaa', fontSize: '16px', flexShrink: 0 }}
+                    >×</button>
+                  </div>
+                )
+              })}
+            </>
+          )}
+
+          <button onClick={ajouterIngredient}
+            style={{
+              background: c.vertClair, color: c.vert, border: `0.5px solid ${c.vert}40`,
+              borderRadius: '8px', padding: '10px 16px', fontSize: '13px',
+              cursor: 'pointer', marginTop: '8px', width: isMobile ? '100%' : 'auto'
+            }}
           >+ Ajouter un ingrédient</button>
         </div>
 
         {/* Allergènes */}
         <div style={{
-          background: 'white', borderRadius: '12px', padding: '24px',
-          border: `0.5px solid ${c.bordure}`, marginBottom: '16px'
+          background: 'white', borderRadius: '12px', padding: isMobile ? '16px' : '24px',
+          border: `0.5px solid ${c.bordure}`, marginBottom: '12px'
         }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
+          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>
             Allergènes
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fill, minmax(180px, 1fr))', gap: '8px' }}>
             {ALLERGENES.map(a => (
-              <div
-                key={a.id}
-                onClick={() => toggleAllergene(a.id)}
+              <div key={a.id} onClick={() => toggleAllergene(a.id)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '8px',
                   padding: '10px 12px', borderRadius: '8px', cursor: 'pointer',
                   border: `0.5px solid ${allergenes.includes(a.id) ? '#E24B4A' : c.bordure}`,
-                  background: allergenes.includes(a.id) ? '#FCEBEB' : 'white',
-                  transition: 'all 0.15s'
+                  background: allergenes.includes(a.id) ? '#FCEBEB' : 'white'
                 }}
               >
                 <span style={{ fontSize: '16px' }}>{a.emoji}</span>
                 <span style={{
-                  fontSize: '13px', fontWeight: allergenes.includes(a.id) ? '500' : '400',
+                  fontSize: isMobile ? '12px' : '13px',
+                  fontWeight: allergenes.includes(a.id) ? '500' : '400',
                   color: allergenes.includes(a.id) ? '#A32D2D' : c.texte
                 }}>{a.label}</span>
-                {allergenes.includes(a.id) && (
-                  <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#A32D2D', fontWeight: '500' }}>✓</span>
-                )}
               </div>
             ))}
           </div>
@@ -512,34 +559,37 @@ export default function ModifierFiche() {
               borderRadius: '8px', fontSize: '12px', color: '#A32D2D',
               border: '0.5px solid #F09595'
             }}>
-              {allergenes.length} allergène{allergenes.length > 1 ? 's' : ''} sélectionné{allergenes.length > 1 ? 's' : ''} : {allergenes.map(id => ALLERGENES.find(a => a.id === id)?.label).join(', ')}
+              {allergenes.length} allergène{allergenes.length > 1 ? 's' : ''} : {allergenes.map(id => ALLERGENES.find(a => a.id === id)?.label).join(', ')}
             </div>
           )}
         </div>
 
         {/* Récapitulatif */}
         <div style={{
-          background: 'white', borderRadius: '12px', padding: '20px',
-          border: `0.5px solid ${c.bordure}`, display: 'flex', gap: '24px', flexWrap: 'wrap'
+          background: 'white', borderRadius: '12px', padding: isMobile ? '16px' : '20px',
+          border: `0.5px solid ${c.bordure}`,
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(140px, 1fr))',
+          gap: '10px'
         }}>
-          <div>
-            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Coût total</div>
-            <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{calculerCout().toFixed(2)} €</div>
+          <div style={{ background: c.fond, borderRadius: '8px', padding: '12px' }}>
+            <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Coût total</div>
+            <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{calculerCout().toFixed(2)} €</div>
           </div>
           {prixIndic && (
-            <div style={{ background: c.vertClair, borderRadius: '8px', padding: '14px' }}>
-              <div style={{ fontSize: '11px', color: c.vert, fontWeight: '500', textTransform: 'uppercase' }}>Prix indicatif TTC</div>
-              <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: c.vert }}>{prixIndic} €</div>
-              <div style={{ fontSize: '10px', color: c.vert, opacity: 0.8, marginTop: '2px' }}>Basé sur {seuilVert}% food cost</div>
+            <div style={{ background: c.vertClair, borderRadius: '8px', padding: '12px' }}>
+              <div style={{ fontSize: '10px', color: c.vert, fontWeight: '500', textTransform: 'uppercase' }}>Prix indicatif TTC</div>
+              <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.vert }}>{prixIndic} €</div>
+              <div style={{ fontSize: '10px', color: c.vert, opacity: 0.8, marginTop: '2px' }}>Basé sur {seuilVert}%</div>
             </div>
           )}
           {fc && (
-            <div>
-              <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Food cost</div>
-              <div style={{
-                fontSize: '22px', fontWeight: '500', marginTop: '4px',
-                color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D'
-              }}>{fc} %</div>
+            <div style={{
+              background: fc < seuilVert ? '#EAF3DE' : fc < seuilOrange ? '#FAEEDA' : '#FCEBEB',
+              borderRadius: '8px', padding: '12px'
+            }}>
+              <div style={{ fontSize: '10px', fontWeight: '500', textTransform: 'uppercase', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>Food cost</div>
+              <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>{fc} %</div>
             </div>
           )}
         </div>
