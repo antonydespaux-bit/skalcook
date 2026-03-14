@@ -51,13 +51,13 @@ export default function FicheDetail() {
       return total
     }, 0)
   }
-
-  const foodCost = () => {
-    const cout = calculerCout()
-    if (!fiche?.prix_ttc || !cout) return null
-    const prixHT = fiche.prix_ttc / 1.10
-    return (cout / prixHT * 100).toFixed(1)
-  }
+const foodCost = () => {
+  const cout = calculerCout()
+  if (!fiche?.prix_ttc || !cout || !fiche?.nb_portions) return null
+  const coutParPortion = cout / fiche.nb_portions
+  const prixHT = fiche.prix_ttc / 1.10
+  return (coutParPortion / prixHT * 100).toFixed(1)
+}
 
   const handleDelete = async () => {
     if (!confirm('Supprimer définitivement cette fiche ?')) return
@@ -230,7 +230,8 @@ export default function FicheDetail() {
           display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px'
         }}>
           {[
-            { label: 'Coût matière', value: cout ? `${cout.toFixed(2)} €` : '—' },
+            { label: 'Coût / portion', value: cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—' },
+            { label: 'Coût total matière', value: cout ? `${cout.toFixed(2)} €` : '—' },
             { label: 'Prix de vente TTC', value: fiche.prix_ttc ? `${Number(fiche.prix_ttc).toFixed(2)} €` : '—' },
             { label: 'Prix HT', value: fiche.prix_ttc ? `${(fiche.prix_ttc / 1.10).toFixed(2)} €` : '—' },
             {

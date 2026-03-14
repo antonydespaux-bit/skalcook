@@ -80,11 +80,12 @@ export default function NouvelleFiche() {
   }
 
   const foodCost = () => {
-    const cout = calculerCout()
-    if (!prixTTC || !cout) return null
-    const prixHT = parseFloat(prixTTC) / 1.10
-    return (cout / prixHT * 100).toFixed(1)
-  }
+  const cout = calculerCout()
+  if (!prixTTC || !cout || !nbPortions) return null
+  const coutParPortion = cout / parseFloat(nbPortions)
+  const prixHT = parseFloat(prixTTC) / 1.10
+  return (coutParPortion / prixHT * 100).toFixed(1)
+}
 
   const handleSubmit = async () => {
     if (!nom) { setError('Le nom de la fiche est obligatoire'); return }
