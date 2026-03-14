@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '../../../lib/supabase'
+import { supabase, getParametres } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
 
@@ -11,21 +11,28 @@ export default function NouveauMenu() {
   const [description, setDescription] = useState('')
   const [fiches, setFiches] = useState([])
   const [selection, setSelection] = useState({ Entrée: '', Plat: '', Dessert: '' })
+  const [params, setParams] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
   const c = theme.couleurs
-  const saisons = ['Hiver 2025', 'Printemps 2026', 'Été 2026', 'Automne 2026', 'Hiver 2026']
+  const saisons = theme.saisons
   const services = ['Entrée', 'Plat', 'Dessert']
 
   useEffect(() => {
     checkUser()
     loadFiches()
+    loadParams()
   }, [])
 
   const checkUser = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) router.push('/')
+  }
+
+  const loadParams = async () => {
+    const p = await getParametres()
+    setParams(p)
   }
 
   const loadFiches = async () => {
@@ -50,6 +57,14 @@ export default function NouveauMenu() {
     if (!prixVente || !cout) return null
     const prixHT = parseFloat(prixVente) / 1.10
     return (cout / prixHT * 100).toFixed(1)
+  }
+
+  const prixIndicatif = () => {
+    const cout = calculerCout()
+    if (!cout) return null
+    const seuil = parseFloat(params['seuil_vert_cuisine'] || 28) / 100
+    const tva = 1 + parseFloat(params['tva_restauration'] || 10) / 100
+    return (cout / seuil * tva).toFixed(2)
   }
 
   const handleSubmit = async () => {
@@ -92,6 +107,9 @@ export default function NouveauMenu() {
 
   const cout = calculerCout()
   const fc = foodCost()
+  const prixIndic = prixIndicatif()
+  const seuilVert = parseFloat(params['seuil_vert_cuisine'] || 28)
+  const seuilOrange = parseFloat(params['seuil_orange_cuisine'] || 35)
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
@@ -103,6 +121,8 @@ export default function NouveauMenu() {
         justifyContent: 'space-between', height: '56px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Logo height={30} couleur="white" onClick={() => router.push('/fiches')} />
+          <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px' }}>|</span>
           <button onClick={() => router.push('/menus')} style={{
             background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
             borderRadius: '8px', padding: '6px 12px', fontSize: '13px',
@@ -163,6 +183,11 @@ export default function NouveauMenu() {
                 placeholder="Ex : 65.00" step="0.01"
                 style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
               />
+              {prixIndic && (
+                <div style={{ fontSize: '11px', color: c.vert, marginTop: '4px' }}>
+                  Prix indicatif ({seuilVert}% food cost) : <strong>{prixIndic} €</strong>
+                </div>
+              )}
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Description</label>
@@ -198,12 +223,9 @@ export default function NouveauMenu() {
                 }}
               >
                 <option value="">-- Choisir une fiche --</option>
-                {fiches
-                  .filter(f => !service || f.categorie === service || f.categorie === 'Plat' || true)
-                  .map(f => (
-                    <option key={f.id} value={f.id}>{f.nom} {f.categorie ? `(${f.categorie})` : ''}</option>
-                  ))
-                }
+                {fiches.map(f => (
+                  <option key={f.id} value={f.id}>{f.nom} {f.categorie ? `(${f.categorie})` : ''}</option>
+                ))}
               </select>
               {selection[service] && (
                 <div style={{ fontSize: '12px', color: c.texteMuted, marginTop: '4px', paddingLeft: '4px' }}>
@@ -229,13 +251,20 @@ export default function NouveauMenu() {
               <div style={{ fontSize: '24px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{(parseFloat(prixVente) / 1.10).toFixed(2)} €</div>
             </div>
           )}
+          {prixIndic && (
+            <div style={{ background: c.vertClair, borderRadius: '8px', padding: '14px' }}>
+              <div style={{ fontSize: '11px', color: c.vert, fontWeight: '500', textTransform: 'uppercase' }}>Prix indicatif TTC</div>
+              <div style={{ fontSize: '24px', fontWeight: '500', marginTop: '4px', color: c.vert }}>{prixIndic} €</div>
+              <div style={{ fontSize: '10px', color: c.vert, opacity: 0.8, marginTop: '2px' }}>Basé sur {seuilVert}% food cost</div>
+            </div>
+          )}
           {fc && (
             <div style={{
-              background: fc < 30 ? '#EAF3DE' : fc < 40 ? '#FAEEDA' : '#FCEBEB',
+              background: fc < seuilVert ? '#EAF3DE' : fc < seuilOrange ? '#FAEEDA' : '#FCEBEB',
               borderRadius: '8px', padding: '14px'
             }}>
-              <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: fc < 30 ? '#3B6D11' : fc < 40 ? '#854F0B' : '#A32D2D' }}>Food cost global</div>
-              <div style={{ fontSize: '24px', fontWeight: '500', marginTop: '4px', color: fc < 30 ? '#3B6D11' : fc < 40 ? '#854F0B' : '#A32D2D' }}>{fc} %</div>
+              <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>Food cost global</div>
+              <div style={{ fontSize: '24px', fontWeight: '500', marginTop: '4px', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>{fc} %</div>
             </div>
           )}
         </div>
