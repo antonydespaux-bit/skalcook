@@ -1,8 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase, getParametres } from '../../../lib/supabase'
+import { supabase, getParametres } from '../../lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
-import { theme, Logo } from '../../../lib/theme.jsx'
+import { theme, Logo } from '../../lib/theme.jsx'
 
 const ALLERGENES = [
   { id: 'arachides', label: 'Arachides', emoji: '🥜' },
