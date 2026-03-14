@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../lib/theme.jsx'
+import { useIsMobile } from '../../lib/useIsMobile'
 
 export default function ArchivesPage() {
   const [fiches, setFiches] = useState([])
@@ -11,6 +12,7 @@ export default function ArchivesPage() {
   const [tab, setTab] = useState('fiches')
   const router = useRouter()
   const c = theme.couleurs
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     checkUser()
@@ -66,21 +68,22 @@ export default function ArchivesPage() {
 
       <div style={{
         background: c.principal, borderBottom: `0.5px solid ${c.accent}40`,
-        padding: '0 24px', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', height: '56px'
+        padding: '0 16px', display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', height: '56px',
+        position: 'sticky', top: 0, zIndex: 100
       }}>
-        <Logo height={30} couleur="white" onClick={() => router.push('/fiches')} />
+        <Logo height={28} couleur="white" onClick={() => router.push('/fiches')} />
         <button onClick={() => router.push('/fiches')} style={{
           background: 'transparent', color: 'rgba(255,255,255,0.7)',
           border: '0.5px solid rgba(255,255,255,0.2)',
-          borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer'
-        }}>← Retour</button>
+          borderRadius: '8px', padding: '8px 12px', fontSize: '13px', cursor: 'pointer'
+        }}>← {!isMobile && 'Retour'}</button>
       </div>
 
-      <div style={{ padding: '24px', maxWidth: '1000px', margin: '0 auto' }}>
+      <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '1000px', margin: '0 auto' }}>
 
         {/* Onglets */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
           {['fiches', 'menus'].map(t => (
             <button
               key={t}
@@ -109,8 +112,67 @@ export default function ArchivesPage() {
               Aucun{tab === 'fiches' ? 'e fiche' : ' menu'} archivé{tab === 'fiches' ? 'e' : ''}
             </div>
           </div>
+        ) : isMobile ? (
+          // Version mobile
+          <div>
+            {items.map(item => (
+              <div key={item.id} style={{
+                background: 'white', borderRadius: '12px', padding: '16px',
+                border: `0.5px solid ${c.bordure}`, marginBottom: '10px',
+                opacity: 0.8
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                      <span style={{
+                        background: '#FAEEDA', color: '#633806',
+                        borderRadius: '4px', padding: '1px 6px', fontSize: '10px', fontWeight: '500'
+                      }}>ARCHIVÉ</span>
+                    </div>
+                    <div style={{ fontSize: '15px', fontWeight: '500', color: c.texte }}>{item.nom}</div>
+                    {item.categorie && (
+                      <div style={{ fontSize: '12px', color: c.texteMuted, marginTop: '2px' }}>{item.categorie}</div>
+                    )}
+                    {item.saison && (
+                      <div style={{ fontSize: '11px', color: c.texteMuted }}>{item.saison}</div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '12px' }}>
+                    {(item.cout_portion || item.prix_ttc || item.prix_vente) && (
+                      <div style={{ fontSize: '13px', color: c.texte, fontWeight: '500' }}>
+                        {item.prix_ttc || item.prix_vente ? `${Number(item.prix_ttc || item.prix_vente).toFixed(2)} €` : '—'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => restaurer(item.id, tab === 'fiches' ? 'fiche' : 'menu')}
+                    style={{
+                      flex: 1, padding: '10px', borderRadius: '8px', fontSize: '13px',
+                      cursor: 'pointer', fontWeight: '500',
+                      background: c.vertClair, color: c.vert,
+                      border: `0.5px solid ${c.vert}40`
+                    }}
+                  >Restaurer</button>
+                  <button
+                    onClick={() => supprimer(item.id, tab === 'fiches' ? 'fiche' : 'menu')}
+                    style={{
+                      padding: '10px 16px', borderRadius: '8px', fontSize: '13px',
+                      cursor: 'pointer', background: 'transparent',
+                      color: '#A32D2D', border: '0.5px solid #ddd'
+                    }}
+                  >Supprimer</button>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
-          <div style={{ background: 'white', borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
+          // Version desktop
+          <div style={{
+            background: 'white', borderRadius: '12px',
+            border: `0.5px solid ${c.bordure}`, overflow: 'hidden'
+          }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: c.principal }}>
@@ -127,7 +189,7 @@ export default function ArchivesPage() {
                 {items.map((item, i) => (
                   <tr key={item.id} style={{
                     borderBottom: i < items.length - 1 ? `0.5px solid ${c.bordure}` : 'none',
-                    background: 'white', opacity: 0.7
+                    background: 'white', opacity: 0.8
                   }}>
                     <td style={{ padding: '12px 16px', fontWeight: '500', color: c.texte }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

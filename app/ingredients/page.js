@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../lib/theme.jsx'
@@ -32,14 +32,14 @@ export default function IngredientsPage() {
 
   const loadIngredients = async () => {
     const { data } = await supabase
-    .from('ingredients')
-    .select('*')
-    .eq('est_sous_fiche', false)
-    .order('nom')
-    .limit(5000)
-     setIngredients(data || [])
-     setSelection([])
-   setLoading(false)
+      .from('ingredients')
+      .select('*')
+      .eq('est_sous_fiche', false)
+      .order('nom')
+      .limit(5000)
+    setIngredients(data || [])
+    setSelection([])
+    setLoading(false)
   }
 
   const ingredientsFiltres = ingredients.filter(i =>
@@ -127,13 +127,13 @@ export default function IngredientsPage() {
         {/* Formulaire ajout */}
         {ajoutVisible && (
           <div style={{
-            background: 'white', borderRadius: '12px', padding: '20px',
+            background: 'white', borderRadius: '12px', padding: isMobile ? '16px' : '20px',
             border: `0.5px solid ${c.accent}`, marginBottom: '16px'
           }}>
             <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>
               Nouvel ingrédient
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr 1fr auto', gap: '10px', alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
                 <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom *</label>
                 <input type="text" value={nouveauNom} onChange={e => setNouveauNom(e.target.value)}
@@ -141,26 +141,27 @@ export default function IngredientsPage() {
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
                 />
               </div>
-              <div>
-                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix HT (€)</label>
-                <input type="text" value={nouveauPrix} onChange={e => setNouveauPrix(e.target.value)}
-                  placeholder="Ex : 4.50"
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Unité</label>
-                <select value={nouvelleUnite} onChange={e => setNouvelleUnite(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: 'white', outline: 'none', color: c.texte }}
-                >
-                  {['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce'].map(u => <option key={u}>{u}</option>)}
-                </select>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix HT (€)</label>
+                  <input type="text" value={nouveauPrix} onChange={e => setNouveauPrix(e.target.value)}
+                    placeholder="Ex : 4.50"
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Unité</label>
+                  <select value={nouvelleUnite} onChange={e => setNouvelleUnite(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: 'white', outline: 'none', color: c.texte }}
+                  >
+                    {['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce'].map(u => <option key={u}>{u}</option>)}
+                  </select>
+                </div>
               </div>
               <button onClick={ajouterIngredient} disabled={saving || !nouveauNom} style={{
-                padding: '10px 20px', background: saving || !nouveauNom ? c.texteMuted : c.accent,
+                width: '100%', padding: '12px', background: saving || !nouveauNom ? c.texteMuted : c.accent,
                 color: c.principal, border: 'none', borderRadius: '8px',
-                fontSize: '13px', fontWeight: '600', cursor: saving || !nouveauNom ? 'not-allowed' : 'pointer',
-                whiteSpace: 'nowrap'
+                fontSize: '13px', fontWeight: '600', cursor: saving || !nouveauNom ? 'not-allowed' : 'pointer'
               }}>
                 {saving ? '...' : 'Ajouter'}
               </button>
@@ -168,28 +169,68 @@ export default function IngredientsPage() {
           </div>
         )}
 
-        {/* Barre de recherche et stats */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* Barre de recherche */}
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', alignItems: 'center' }}>
           <input
             type="text"
             placeholder="Rechercher un ingrédient..."
             value={recherche}
             onChange={e => setRecherche(e.target.value)}
             style={{
-              flex: 1, minWidth: '200px', padding: '10px 14px',
+              flex: 1, padding: '10px 14px',
               borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
               fontSize: '14px', background: 'white', outline: 'none', color: c.texte
             }}
           />
           <span style={{ fontSize: '12px', color: c.texteMuted, whiteSpace: 'nowrap' }}>
-            {ingredientsFiltres.length} ingrédient{ingredientsFiltres.length > 1 ? 's' : ''}
-            {selection.length > 0 && ` — ${selection.length} sélectionné${selection.length > 1 ? 's' : ''}`}
+            {ingredientsFiltres.length}
+            {selection.length > 0 && ` — ${selection.length} sél.`}
           </span>
         </div>
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px', color: c.texteMuted }}>Chargement...</div>
+        ) : isMobile ? (
+          // Version mobile
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', padding: '8px 12px', background: 'white', borderRadius: '8px', border: `0.5px solid ${c.bordure}` }}>
+              <input
+                type="checkbox"
+                checked={selection.length === ingredientsFiltres.length && ingredientsFiltres.length > 0}
+                onChange={toggleTout}
+                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: c.accent }}
+              />
+              <span style={{ fontSize: '13px', color: c.texteMuted }}>
+                {selection.length === ingredientsFiltres.length ? 'Tout désélectionner' : 'Tout sélectionner'}
+              </span>
+            </div>
+            {ingredientsFiltres.map(ing => (
+              <div
+                key={ing.id}
+                style={{
+                  background: selection.includes(ing.id) ? c.accentClair : 'white',
+                  borderRadius: '8px', padding: '12px',
+                  border: `0.5px solid ${c.bordure}`, marginBottom: '6px',
+                  display: 'flex', alignItems: 'center', gap: '12px'
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selection.includes(ing.id)}
+                  onChange={() => toggleSelection(ing.id)}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: c.accent, flexShrink: 0 }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '14px', fontWeight: '500', color: c.texte }}>{ing.nom}</div>
+                  <div style={{ fontSize: '12px', color: c.texteMuted, marginTop: '2px' }}>
+                    {ing.prix_kg ? `${Number(ing.prix_kg).toFixed(2)} €` : '—'} / {ing.unite || '—'}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
+          // Version desktop
           <div style={{
             background: 'white', borderRadius: '12px',
             border: `0.5px solid ${c.bordure}`, overflow: 'hidden'
@@ -206,9 +247,8 @@ export default function IngredientsPage() {
                     />
                   </th>
                   <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase' }}>Nom</th>
-                  {!isMobile && <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase' }}>Prix HT</th>}
-                  {!isMobile && <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase' }}>Unité</th>}
-                  {isMobile && <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase' }}>Prix / Unité</th>}
+                  <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase' }}>Prix HT</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase' }}>Unité</th>
                 </tr>
               </thead>
               <tbody>
@@ -229,19 +269,10 @@ export default function IngredientsPage() {
                       />
                     </td>
                     <td style={{ padding: '10px 16px', fontWeight: '500', color: c.texte }}>{ing.nom}</td>
-                    {!isMobile && (
-                      <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texte }}>
-                        {ing.prix_kg ? `${Number(ing.prix_kg).toFixed(2)} €` : '—'}
-                      </td>
-                    )}
-                    {!isMobile && (
-                      <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texteMuted }}>{ing.unite || '—'}</td>
-                    )}
-                    {isMobile && (
-                      <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texte }}>
-                        {ing.prix_kg ? `${Number(ing.prix_kg).toFixed(2)} €` : '—'} / {ing.unite || '—'}
-                      </td>
-                    )}
+                    <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texte }}>
+                      {ing.prix_kg ? `${Number(ing.prix_kg).toFixed(2)} €` : '—'}
+                    </td>
+                    <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texteMuted }}>{ing.unite || '—'}</td>
                   </tr>
                 ))}
               </tbody>

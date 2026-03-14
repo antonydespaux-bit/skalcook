@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../lib/theme.jsx'
+import { useIsMobile } from '../../lib/useIsMobile'
 
 export default function ParametresPage() {
   const [params, setParams] = useState({})
@@ -11,6 +12,7 @@ export default function ParametresPage() {
   const [saved, setSaved] = useState(false)
   const router = useRouter()
   const c = theme.couleurs
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     checkUser()
@@ -48,7 +50,7 @@ export default function ParametresPage() {
 
   const Section = ({ titre, children }) => (
     <div style={{
-      background: 'white', borderRadius: '12px', padding: '24px',
+      background: 'white', borderRadius: '12px', padding: isMobile ? '16px' : '24px',
       border: `0.5px solid ${c.bordure}`, marginBottom: '16px'
     }}>
       <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
@@ -74,10 +76,11 @@ export default function ParametresPage() {
           style={{
             padding: '10px 12px', borderRadius: '8px',
             border: `0.5px solid ${c.bordure}`, fontSize: '14px',
-            outline: 'none', color: c.texte, width: type === 'number' ? '100px' : '100%'
+            outline: 'none', color: c.texte,
+            width: type === 'number' ? (isMobile ? '100%' : '100px') : '100%'
           }}
         />
-        {suffix && <span style={{ fontSize: '13px', color: c.texteMuted }}>{suffix}</span>}
+        {suffix && <span style={{ fontSize: '13px', color: c.texteMuted, flexShrink: 0 }}>{suffix}</span>}
       </div>
     </div>
   )
@@ -100,33 +103,34 @@ export default function ParametresPage() {
 
       <div style={{
         background: c.principal, borderBottom: `0.5px solid ${c.accent}40`,
-        padding: '0 24px', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', height: '56px'
+        padding: '0 16px', display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', height: '56px',
+        position: 'sticky', top: 0, zIndex: 100
       }}>
-       <Logo height={30} couleur="white" onClick={() => router.push('/fiches')} />
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <Logo height={28} couleur="white" onClick={() => router.push('/fiches')} />
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {saved && (
-            <span style={{ fontSize: '13px', color: '#9FE1CB', fontWeight: '500' }}>
-              Paramètres sauvegardés !
+            <span style={{ fontSize: '12px', color: '#9FE1CB', fontWeight: '500' }}>
+              ✓ {!isMobile && 'Sauvegardé !'}
             </span>
           )}
           <button onClick={handleSave} disabled={saving} style={{
             background: saving ? c.texteMuted : c.accent,
             color: c.principal, border: 'none', borderRadius: '8px',
-            padding: '8px 20px', fontSize: '13px', fontWeight: '600',
+            padding: '8px 16px', fontSize: '13px', fontWeight: '600',
             cursor: saving ? 'not-allowed' : 'pointer'
           }}>
-            {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+            {saving ? '...' : 'Sauvegarder'}
           </button>
           <button onClick={() => router.push('/fiches')} style={{
             background: 'transparent', color: 'rgba(255,255,255,0.7)',
             border: '0.5px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer'
-          }}>← Retour</button>
+            borderRadius: '8px', padding: '8px 12px', fontSize: '13px', cursor: 'pointer'
+          }}>← {!isMobile && 'Retour'}</button>
         </div>
       </div>
 
-      <div style={{ padding: '24px', maxWidth: '700px', margin: '0 auto' }}>
+      <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '700px', margin: '0 auto' }}>
 
         {/* Établissement */}
         <Section titre="Établissement">
@@ -142,10 +146,9 @@ export default function ParametresPage() {
             fontSize: '12px', color: c.texteMuted, marginBottom: '16px',
             border: `0.5px solid ${c.bordure}`
           }}>
-            Ces seuils définissent les couleurs dans l'application : vert = bon, orange = attention, rouge = trop élevé.
-            Le seuil vert sert aussi à calculer le <strong style={{ color: c.texte }}>prix de vente indicatif</strong>.
+            Ces seuils définissent les couleurs dans l'application. Le seuil vert sert aussi à calculer le <strong style={{ color: c.texte }}>prix de vente indicatif</strong>.
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
             <Champ label="Seuil vert — en dessous de" cle="seuil_vert_cuisine" type="number" suffix="%" description="Objectif idéal" />
             <Champ label="Seuil orange — en dessous de" cle="seuil_orange_cuisine" type="number" suffix="%" description="Maximum acceptable" />
           </div>
@@ -154,13 +157,13 @@ export default function ParametresPage() {
             fontSize: '13px', color: '#085041', border: '0.5px solid #9FE1CB'
           }}>
             Prix indicatif = Coût portion ÷ {params['seuil_vert_cuisine'] || 28}% × {100 + parseFloat(params['tva_restauration'] || 10)}%
-            {' '}→ Ex: pour un coût de 5,00 € → prix indicatif = <strong>{prixIndicatif(5)} €</strong>
+            {' '}→ Ex: coût 5,00 € → prix indicatif = <strong>{prixIndicatif(5)} €</strong>
           </div>
         </Section>
 
         {/* Seuils boissons */}
         <Section titre="Seuils food cost — Boissons">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
             <Champ label="Seuil vert — en dessous de" cle="seuil_vert_boissons" type="number" suffix="%" description="Objectif idéal" />
             <Champ label="Seuil orange — en dessous de" cle="seuil_orange_boissons" type="number" suffix="%" description="Maximum acceptable" />
           </div>
@@ -168,7 +171,7 @@ export default function ParametresPage() {
 
         {/* TVA */}
         <Section titre="Taux de TVA">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '16px' }}>
             <Champ label="TVA restauration" cle="tva_restauration" type="number" suffix="%" />
             <Champ label="TVA alcool" cle="tva_alcool" type="number" suffix="%" />
             <Champ label="TVA sans alcool" cle="tva_sans_alcool" type="number" suffix="%" />
