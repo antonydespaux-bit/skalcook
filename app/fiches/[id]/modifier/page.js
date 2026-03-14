@@ -2,13 +2,15 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../../lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
+import { theme, Logo } from '../../../../lib/theme.jsx'
 
 export default function ModifierFiche() {
   const [nom, setNom] = useState('')
-  const [categorie, setCategorie] = useState('Plat')
+  const [categorie, setCategorie] = useState('Plats')
   const [nbPortions, setNbPortions] = useState('')
   const [prixTTC, setPrixTTC] = useState('')
   const [description, setDescription] = useState('')
+  const [saison, setSaison] = useState('Printemps 2026')
   const [ingredients, setIngredients] = useState([])
   const [listeIngredients, setListeIngredients] = useState([])
   const [loading, setLoading] = useState(true)
@@ -16,6 +18,8 @@ export default function ModifierFiche() {
   const [error, setError] = useState('')
   const router = useRouter()
   const params = useParams()
+  const c = theme.couleurs
+  const categories = [...theme.categories, 'Sous-fiche']
 
   useEffect(() => {
     checkUser()
@@ -37,10 +41,11 @@ export default function ModifierFiche() {
     if (!ficheData) { router.push('/fiches'); return }
 
     setNom(ficheData.nom)
-    setCategorie(ficheData.categorie || 'Plat')
+    setCategorie(ficheData.categorie || 'Plats')
     setNbPortions(ficheData.nb_portions || '')
     setPrixTTC(ficheData.prix_ttc || '')
     setDescription(ficheData.description || '')
+    setSaison(ficheData.saison || 'Printemps 2026')
 
     const { data: ingsData } = await supabase
       .from('fiche_ingredients')
@@ -95,15 +100,19 @@ export default function ModifierFiche() {
 
   const foodCost = () => {
     const cout = calculerCout()
-    if (!prixTTC || !cout) return null
+    if (!prixTTC || !cout || !nbPortions) return null
+    const coutParPortion = cout / parseFloat(nbPortions)
     const prixHT = parseFloat(prixTTC) / 1.10
-    return (cout / prixHT * 100).toFixed(1)
+    return (coutParPortion / prixHT * 100).toFixed(1)
   }
 
   const handleSubmit = async () => {
     if (!nom) { setError('Le nom est obligatoire'); return }
     setSaving(true)
     setError('')
+
+    const cout = calculerCout()
+    const coutPortion = nbPortions ? (cout / parseFloat(nbPortions)) : null
 
     await supabase
       .from('fiches')
@@ -113,6 +122,8 @@ export default function ModifierFiche() {
         nb_portions: nbPortions ? parseInt(nbPortions) : null,
         prix_ttc: prixTTC ? parseFloat(prixTTC) : null,
         description,
+        saison,
+        cout_portion: coutPortion,
         updated_at: new Date().toISOString()
       })
       .eq('id', params.id)
@@ -141,16 +152,16 @@ export default function ModifierFiche() {
   const fc = foodCost()
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f0' }}>
-      <div style={{ fontSize: '14px', color: '#888' }}>Chargement...</div>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
+      <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
     </div>
   )
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f5f5f0' }}>
+    <div style={{ minHeight: '100vh', background: c.fond }}>
 
       <div style={{
-        background: 'white', borderBottom: '0.5px solid #e0e0d8',
+        background: c.principal, borderBottom: `0.5px solid ${c.accent}40`,
         padding: '0 24px', display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', height: '56px'
       }}>
@@ -158,22 +169,20 @@ export default function ModifierFiche() {
           <button
             onClick={() => router.push(`/fiches/${params.id}`)}
             style={{
-              background: 'transparent', border: '0.5px solid #ddd',
+              background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
               borderRadius: '8px', padding: '6px 12px',
-              fontSize: '13px', cursor: 'pointer', color: '#666'
+              fontSize: '13px', cursor: 'pointer', color: 'rgba(255,255,255,0.7)'
             }}
-          >
-            ← Retour
-          </button>
-          <span style={{ fontSize: '15px', fontWeight: '500' }}>Modifier — {nom}</span>
+          >← Retour</button>
+          <span style={{ fontSize: '15px', fontWeight: '500', color: 'white' }}>Modifier — {nom}</span>
         </div>
         <button
           onClick={handleSubmit}
           disabled={saving}
           style={{
-            background: saving ? '#aaa' : '#1D9E75',
-            color: 'white', border: 'none', borderRadius: '8px',
-            padding: '8px 20px', fontSize: '13px', fontWeight: '500',
+            background: saving ? c.texteMuted : c.accent,
+            color: c.principal, border: 'none', borderRadius: '8px',
+            padding: '8px 20px', fontSize: '13px', fontWeight: '600',
             cursor: saving ? 'not-allowed' : 'pointer'
           }}
         >
@@ -187,56 +196,69 @@ export default function ModifierFiche() {
           <div style={{
             background: '#FCEBEB', color: '#A32D2D', borderRadius: '8px',
             padding: '12px 16px', fontSize: '13px', marginBottom: '20px'
-          }}>
-            {error}
-          </div>
+          }}>{error}</div>
         )}
 
         <div style={{
           background: 'white', borderRadius: '12px', padding: '24px',
-          border: '0.5px solid #e0e0d8', marginBottom: '16px'
+          border: `0.5px solid ${c.bordure}`, marginBottom: '16px'
         }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: '#888', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
+          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
             Informations générales
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ fontSize: '12px', color: '#666', fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom *</label>
+              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom *</label>
               <input
                 type="text" value={nom} onChange={e => setNom(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '14px', outline: 'none' }}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
               />
             </div>
+
             <div>
-              <label style={{ fontSize: '12px', color: '#666', fontWeight: '500', display: 'block', marginBottom: '6px' }}>Catégorie</label>
-              <select
-                value={categorie} onChange={e => setCategorie(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '14px', background: 'white', outline: 'none' }}
-              >
-                {['Entrée', 'Plat', 'Dessert', 'Sauce', 'Garniture', 'Sous-fiche'].map(c => (
-                  <option key={c}>{c}</option>
-                ))}
+              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Catégorie</label>
+              <select value={categorie} onChange={e => setCategorie(e.target.value)} style={{
+                width: '100%', padding: '10px 12px', borderRadius: '8px',
+                border: `0.5px solid ${c.bordure}`, fontSize: '14px',
+                background: 'white', outline: 'none', color: c.texte
+              }}>
+                {categories.map(cat => <option key={cat}>{cat}</option>)}
               </select>
             </div>
+
             <div>
-              <label style={{ fontSize: '12px', color: '#666', fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nombre de portions</label>
+              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Saison</label>
+              <select value={saison} onChange={e => setSaison(e.target.value)} style={{
+                width: '100%', padding: '10px 12px', borderRadius: '8px',
+                border: `0.5px solid ${c.bordure}`, fontSize: '14px',
+                background: 'white', outline: 'none', color: c.texte
+              }}>
+                {theme.saisons.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nombre de portions</label>
               <input
                 type="number" value={nbPortions} onChange={e => setNbPortions(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '14px', outline: 'none' }}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
               />
             </div>
+
             <div>
-              <label style={{ fontSize: '12px', color: '#666', fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix de vente TTC (€)</label>
+              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix de vente TTC (€)</label>
               <input
                 type="number" value={prixTTC} onChange={e => setPrixTTC(e.target.value)} step="0.01"
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '14px', outline: 'none' }}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
               />
             </div>
+
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ fontSize: '12px', color: '#666', fontWeight: '500', display: 'block', marginBottom: '6px' }}>Description</label>
+              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Description</label>
               <textarea
                 value={description} onChange={e => setDescription(e.target.value)} rows={3}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '14px', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', color: c.texte }}
               />
             </div>
           </div>
@@ -244,70 +266,89 @@ export default function ModifierFiche() {
 
         <div style={{
           background: 'white', borderRadius: '12px', padding: '24px',
-          border: '0.5px solid #e0e0d8', marginBottom: '16px'
+          border: `0.5px solid ${c.bordure}`, marginBottom: '16px'
         }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: '#888', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
+          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
             Ingrédients
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '8px', marginBottom: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto', gap: '8px', marginBottom: '8px' }}>
             {['Ingrédient', 'Quantité', 'Unité', ''].map((h, i) => (
-              <div key={i} style={{ fontSize: '11px', color: '#888', fontWeight: '500', textTransform: 'uppercase' }}>{h}</div>
+              <div key={i} style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>{h}</div>
             ))}
           </div>
 
-          {ingredients.map((ing, index) => (
-            <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '8px', marginBottom: '8px' }}>
-              <select
-                value={ing.ingredient_id}
-                onChange={e => modifierIngredient(index, 'ingredient_id', e.target.value)}
-                style={{ padding: '8px 10px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '13px', background: 'white', outline: 'none' }}
-              >
-                <option value="">-- Choisir --</option>
-                {listeIngredients.map(i => (
-                  <option key={i.id} value={i.id}>{i.nom}</option>
-                ))}
-              </select>
-              <input
-                type="number" value={ing.quantite} step="0.01"
-                onChange={e => modifierIngredient(index, 'quantite', e.target.value)}
-                style={{ padding: '8px 10px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '13px', outline: 'none' }}
-              />
-              <select
-                value={ing.unite}
-                onChange={e => modifierIngredient(index, 'unite', e.target.value)}
-                style={{ padding: '8px 10px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '13px', background: 'white', outline: 'none' }}
-              >
-                {['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce'].map(u => (
-                  <option key={u}>{u}</option>
-                ))}
-              </select>
-              <button
-                onClick={() => supprimerIngredient(index)}
-                style={{ background: 'transparent', border: '0.5px solid #ddd', borderRadius: '8px', width: '36px', height: '36px', cursor: 'pointer', color: '#aaa', fontSize: '16px' }}
-              >×</button>
-            </div>
-          ))}
+          {ingredients.map((ing, index) => {
+            const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
+            return (
+              <div key={index} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto', gap: '8px', marginBottom: '8px' }}>
+                <select
+                  value={ing.ingredient_id}
+                  onChange={e => modifierIngredient(index, 'ingredient_id', e.target.value)}
+                  style={{
+                    padding: '8px 10px', borderRadius: '8px',
+                    border: `0.5px solid ${ingData?.est_sous_fiche ? '#AFA9EC' : c.bordure}`,
+                    fontSize: '13px',
+                    background: ingData?.est_sous_fiche ? '#EEEDFE' : 'white',
+                    outline: 'none', color: c.texte, width: '100%', minWidth: 0
+                  }}
+                >
+                  <option value="">-- Choisir --</option>
+                  {listeIngredients.filter(i => !i.est_sous_fiche).map(i => (
+                    <option key={i.id} value={i.id}>{i.nom}</option>
+                  ))}
+                  {listeIngredients.some(i => i.est_sous_fiche) && (
+                    <>
+                      <option disabled>── Sous-fiches ──</option>
+                      {listeIngredients.filter(i => i.est_sous_fiche).map(i => (
+                        <option key={i.id} value={i.id}>[SF] {i.nom}</option>
+                      ))}
+                    </>
+                  )}
+                </select>
+                <input
+                  type="number" value={ing.quantite} step="0.01"
+                  onChange={e => modifierIngredient(index, 'quantite', e.target.value)}
+                  style={{ padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, width: '100%', minWidth: 0 }}
+                />
+                <select
+                  value={ing.unite}
+                  onChange={e => modifierIngredient(index, 'unite', e.target.value)}
+                  style={{ padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: 'white', outline: 'none', color: c.texte, width: '100%', minWidth: 0 }}
+                >
+                  {['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce', 'portions'].map(u => (
+                    <option key={u}>{u}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => supprimerIngredient(index)}
+                  style={{ background: 'transparent', border: `0.5px solid ${c.bordure}`, borderRadius: '8px', width: '36px', height: '36px', cursor: 'pointer', color: '#aaa', fontSize: '16px', flexShrink: 0 }}
+                >×</button>
+              </div>
+            )
+          })}
 
           <button
             onClick={ajouterIngredient}
-            style={{ background: '#E1F5EE', color: '#085041', border: '0.5px solid #9FE1CB', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer', marginTop: '8px' }}
-          >
-            + Ajouter un ingrédient
-          </button>
+            style={{
+              background: c.vertClair, color: c.vert,
+              border: `0.5px solid ${c.vert}40`, borderRadius: '8px',
+              padding: '8px 16px', fontSize: '13px', cursor: 'pointer', marginTop: '8px'
+            }}
+          >+ Ajouter un ingrédient</button>
         </div>
 
         {fc && (
           <div style={{
             background: 'white', borderRadius: '12px', padding: '20px',
-            border: '0.5px solid #e0e0d8', display: 'flex', gap: '24px'
+            border: `0.5px solid ${c.bordure}`, display: 'flex', gap: '24px'
           }}>
             <div>
-              <div style={{ fontSize: '11px', color: '#888', fontWeight: '500', textTransform: 'uppercase' }}>Coût matière</div>
-              <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px' }}>{calculerCout().toFixed(2)} €</div>
+              <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Coût total</div>
+              <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{calculerCout().toFixed(2)} €</div>
             </div>
             <div>
-              <div style={{ fontSize: '11px', color: '#888', fontWeight: '500', textTransform: 'uppercase' }}>Food cost</div>
+              <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Food cost</div>
               <div style={{
                 fontSize: '22px', fontWeight: '500', marginTop: '4px',
                 color: fc < 30 ? '#3B6D11' : fc < 40 ? '#854F0B' : '#A32D2D'

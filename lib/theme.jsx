@@ -18,7 +18,26 @@ export const theme = {
   hotel: {
     nom: 'La Fantaisie',
     adresse: '24 Rue Cadet, Paris 9ème',
-  }
+  },
+  categories: [
+    'Crudo',
+    'Entrées',
+    'Plats',
+    'Plats à partager',
+    'Accompagnements',
+    'Desserts',
+    'Café',
+    'Roof Top',
+    'Room Service',
+    'Events'
+  ],
+  saisons: [
+    'Hiver 2025',
+    'Printemps 2026',
+    'Été 2026',
+    'Automne 2026',
+    'Hiver 2026'
+  ]
 }
 
 export function Logo({ height = 40, couleur = 'white' }) {

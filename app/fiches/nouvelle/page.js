@@ -21,7 +21,8 @@ export default function NouvelleFiche() {
   const router = useRouter()
   const c = theme.couleurs
 
-  const saisons = ['Hiver 2025', 'Printemps 2026', 'Été 2026', 'Automne 2026', 'Hiver 2026']
+  const saisons = theme.saisons
+  const categories = [...theme.categories, 'Sous-fiche']
   const isSousFiche = categorie === 'Sous-fiche'
 
   useEffect(() => {
@@ -235,7 +236,7 @@ export default function NouvelleFiche() {
                 border: `0.5px solid ${c.bordure}`, fontSize: '14px',
                 background: 'white', outline: 'none', color: c.texte
               }}>
-                {['Entrée', 'Plat', 'Dessert', 'Sauce', 'Garniture', 'Sous-fiche'].map(cat => (
+                {categories.map(cat => (
                   <option key={cat}>{cat}</option>
                 ))}
               </select>
