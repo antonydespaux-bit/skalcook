@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '../../../lib/supabase'
+import { supabase, getParametres } from '../../../lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
 
@@ -20,14 +20,16 @@ const ALLERGENES = [
 export default function FicheDetail() {
   const [fiche, setFiche] = useState(null)
   const [ingredients, setIngredients] = useState([])
+  const [params, setParams] = useState({})
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const params = useParams()
+  const params_route = useParams()
   const c = theme.couleurs
 
   useEffect(() => {
     checkUser()
     loadFiche()
+    loadParams()
   }, [])
 
   const checkUser = async () => {
@@ -35,11 +37,16 @@ export default function FicheDetail() {
     if (!session) router.push('/')
   }
 
+  const loadParams = async () => {
+    const p = await getParametres()
+    setParams(p)
+  }
+
   const loadFiche = async () => {
     const { data: ficheData } = await supabase
       .from('fiches')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', params_route.id)
       .single()
 
     if (!ficheData) { router.push('/fiches'); return }
@@ -52,7 +59,7 @@ export default function FicheDetail() {
         unite,
         ingredients (id, nom, prix_kg, unite)
       `)
-      .eq('fiche_id', params.id)
+      .eq('fiche_id', params_route.id)
 
     setIngredients(ingsData || [])
     setLoading(false)
@@ -79,12 +86,14 @@ export default function FicheDetail() {
     const cout = calculerCout()
     if (!cout || !fiche?.nb_portions) return null
     const coutPortion = cout / fiche.nb_portions
-    return (coutPortion / 0.28 * 1.10).toFixed(2)
+    const seuil = parseFloat(params['seuil_vert_cuisine'] || 28) / 100
+    const tva = 1 + parseFloat(params['tva_restauration'] || 10) / 100
+    return (coutPortion / seuil * tva).toFixed(2)
   }
 
   const handleDelete = async () => {
     if (!confirm('Supprimer définitivement cette fiche ?')) return
-    await supabase.from('fiches').delete().eq('id', params.id)
+    await supabase.from('fiches').delete().eq('id', params_route.id)
     router.push('/fiches')
   }
 
@@ -97,11 +106,12 @@ export default function FicheDetail() {
   const cout = calculerCout()
   const fc = foodCost()
   const prixIndic = prixIndicatif()
+  const seuilVert = parseFloat(params['seuil_vert_cuisine'] || 28)
+  const seuilOrange = parseFloat(params['seuil_orange_cuisine'] || 35)
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
 
-      {/* Barre du haut */}
       <div className="no-print" style={{
         background: c.principal, borderBottom: `0.5px solid ${c.accent}40`,
         padding: '0 24px', display: 'flex', alignItems: 'center',
@@ -130,7 +140,7 @@ export default function FicheDetail() {
             }}
           >Imprimer</button>
           <button
-            onClick={() => router.push(`/fiches/${params.id}/modifier`)}
+            onClick={() => router.push(`/fiches/${params_route.id}/modifier`)}
             style={{
               background: 'transparent', color: 'rgba(255,255,255,0.7)',
               border: '0.5px solid rgba(255,255,255,0.2)',
@@ -282,21 +292,28 @@ export default function FicheDetail() {
           border: `0.5px solid ${c.bordure}`,
           display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px'
         }}>
-          {[
-            { label: 'Coût total', value: cout ? `${cout.toFixed(2)} €` : '—' },
-            { label: 'Coût / portion', value: cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—' },
-            { label: 'Prix TTC', value: fiche.prix_ttc ? `${Number(fiche.prix_ttc).toFixed(2)} €` : '—' },
-            { label: 'Prix HT', value: fiche.prix_ttc ? `${(fiche.prix_ttc / 1.10).toFixed(2)} €` : '—' },
-          ].map((stat, i) => (
-            <div key={i} style={{ background: c.fond, borderRadius: '8px', padding: '14px' }}>
-              <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                {stat.label}
-              </div>
-              <div style={{ fontSize: '20px', fontWeight: '500', marginTop: '4px', color: c.texte }}>
-                {stat.value}
-              </div>
+          <div style={{ background: c.fond, borderRadius: '8px', padding: '14px' }}>
+            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Coût total</div>
+            <div style={{ fontSize: '20px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{cout ? `${cout.toFixed(2)} €` : '—'}</div>
+          </div>
+          <div style={{ background: c.fond, borderRadius: '8px', padding: '14px' }}>
+            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Coût / portion</div>
+            <div style={{ fontSize: '20px', fontWeight: '500', marginTop: '4px', color: c.texte }}>
+              {cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—'}
             </div>
-          ))}
+          </div>
+          <div style={{ background: c.fond, borderRadius: '8px', padding: '14px' }}>
+            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Prix TTC</div>
+            <div style={{ fontSize: '20px', fontWeight: '500', marginTop: '4px', color: c.texte }}>
+              {fiche.prix_ttc ? `${Number(fiche.prix_ttc).toFixed(2)} €` : '—'}
+            </div>
+          </div>
+          <div style={{ background: c.fond, borderRadius: '8px', padding: '14px' }}>
+            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Prix HT</div>
+            <div style={{ fontSize: '20px', fontWeight: '500', marginTop: '4px', color: c.texte }}>
+              {fiche.prix_ttc ? `${(fiche.prix_ttc / 1.10).toFixed(2)} €` : '—'}
+            </div>
+          </div>
           {!fiche.prix_ttc && prixIndic && (
             <div style={{ background: c.vertClair, borderRadius: '8px', padding: '14px' }}>
               <div style={{ fontSize: '11px', color: c.vert, fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -306,26 +323,25 @@ export default function FicheDetail() {
                 {prixIndic} €
               </div>
               <div style={{ fontSize: '10px', color: c.vert, opacity: 0.8, marginTop: '2px' }}>
-                Basé sur 28% food cost
+                Basé sur {seuilVert}% food cost
               </div>
             </div>
           )}
           {fc && (
             <div style={{
-              background: fc < 30 ? '#EAF3DE' : fc < 40 ? '#FAEEDA' : '#FCEBEB',
+              background: fc < seuilVert ? '#EAF3DE' : fc < seuilOrange ? '#FAEEDA' : '#FCEBEB',
               borderRadius: '8px', padding: '14px'
             }}>
-              <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em', color: fc < 30 ? '#3B6D11' : fc < 40 ? '#854F0B' : '#A32D2D' }}>
+              <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>
                 Food cost
               </div>
-              <div style={{ fontSize: '20px', fontWeight: '500', marginTop: '4px', color: fc < 30 ? '#3B6D11' : fc < 40 ? '#854F0B' : '#A32D2D' }}>
+              <div style={{ fontSize: '20px', fontWeight: '500', marginTop: '4px', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>
                 {fc} %
               </div>
             </div>
           )}
         </div>
 
-        {/* Pied de page impression */}
         <div style={{ marginTop: '16px', textAlign: 'center', fontSize: '11px', color: '#bbb' }}>
           {theme.hotel.nom} — {fiche.nom} — {new Date().toLocaleDateString('fr-FR')}
         </div>

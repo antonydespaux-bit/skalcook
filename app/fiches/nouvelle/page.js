@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '../../../lib/supabase'
+import { supabase, getParametres } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
 
@@ -30,6 +30,7 @@ export default function NouvelleFiche() {
     { ingredient_id: '', nom: '', quantite: '', unite: 'kg' }
   ])
   const [listeIngredients, setListeIngredients] = useState([])
+  const [params, setParams] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
@@ -41,11 +42,17 @@ export default function NouvelleFiche() {
   useEffect(() => {
     checkUser()
     loadIngredients()
+    loadParams()
   }, [])
 
   const checkUser = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) router.push('/')
+  }
+
+  const loadParams = async () => {
+    const p = await getParametres()
+    setParams(p)
   }
 
   const loadIngredients = async () => {
@@ -110,7 +117,9 @@ export default function NouvelleFiche() {
   const prixIndicatif = () => {
     const coutPortion = calculerCoutPortion()
     if (!coutPortion) return null
-    return (parseFloat(coutPortion) / 0.28 * 1.10).toFixed(2)
+    const seuil = parseFloat(params['seuil_vert_cuisine'] || 28) / 100
+    const tva = 1 + parseFloat(params['tva_restauration'] || 10) / 100
+    return (parseFloat(coutPortion) / seuil * tva).toFixed(2)
   }
 
   const handleSubmit = async () => {
@@ -171,6 +180,7 @@ export default function NouvelleFiche() {
   const fc = foodCost()
   const coutPortion = calculerCoutPortion()
   const prixIndic = prixIndicatif()
+  const seuilVert = parseFloat(params['seuil_vert_cuisine'] || 28)
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
@@ -306,7 +316,7 @@ export default function NouvelleFiche() {
                 />
                 {prixIndic && !prixTTC && (
                   <div style={{ fontSize: '11px', color: c.vert, marginTop: '4px' }}>
-                    Prix indicatif (28% food cost) : <strong>{prixIndic} €</strong>
+                    Prix indicatif ({seuilVert}% food cost) : <strong>{prixIndic} €</strong>
                   </div>
                 )}
               </div>
@@ -464,7 +474,7 @@ export default function NouvelleFiche() {
             <div style={{ background: c.vertClair, borderRadius: '8px', padding: '14px' }}>
               <div style={{ fontSize: '11px', color: c.vert, fontWeight: '500', textTransform: 'uppercase' }}>Prix indicatif TTC</div>
               <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: c.vert }}>{prixIndic} €</div>
-              <div style={{ fontSize: '10px', color: c.vert, opacity: 0.8, marginTop: '2px' }}>Basé sur 28% food cost</div>
+              <div style={{ fontSize: '10px', color: c.vert, opacity: 0.8, marginTop: '2px' }}>Basé sur {seuilVert}% food cost</div>
             </div>
           )}
           {!isSousFiche && fc && (
@@ -472,7 +482,7 @@ export default function NouvelleFiche() {
               <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Food cost</div>
               <div style={{
                 fontSize: '22px', fontWeight: '500', marginTop: '4px',
-                color: fc < 30 ? '#3B6D11' : fc < 40 ? '#854F0B' : '#A32D2D'
+                color: fc < seuilVert ? '#3B6D11' : fc < parseFloat(params['seuil_orange_cuisine'] || 35) ? '#854F0B' : '#A32D2D'
               }}>{fc} %</div>
             </div>
           )}
