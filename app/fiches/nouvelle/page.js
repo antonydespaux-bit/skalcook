@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
+import { theme, Logo } from '../../../lib/theme.jsx'
 
 export default function NouvelleFiche() {
   const [nom, setNom] = useState('')
@@ -10,6 +11,7 @@ export default function NouvelleFiche() {
   const [unitePortions, setUnitePortions] = useState('portions')
   const [prixTTC, setPrixTTC] = useState('')
   const [description, setDescription] = useState('')
+  const [saison, setSaison] = useState('Printemps 2026')
   const [ingredients, setIngredients] = useState([
     { ingredient_id: '', nom: '', quantite: '', unite: 'kg' }
   ])
@@ -17,7 +19,9 @@ export default function NouvelleFiche() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
+  const c = theme.couleurs
 
+  const saisons = ['Hiver 2025', 'Printemps 2026', 'Été 2026', 'Automne 2026', 'Hiver 2026']
   const isSousFiche = categorie === 'Sous-fiche'
 
   useEffect(() => {
@@ -99,6 +103,7 @@ export default function NouvelleFiche() {
         nb_portions: parseInt(nbPortions),
         prix_ttc: isSousFiche ? null : (prixTTC ? parseFloat(prixTTC) : null),
         description,
+        saison,
         cout_portion: coutPortion ? parseFloat(coutPortion) : null
       }])
       .select()
@@ -123,7 +128,6 @@ export default function NouvelleFiche() {
       await supabase.from('fiche_ingredients').insert(ingredientsAInserer)
     }
 
-    // Si c'est une sous-fiche, on l'ajoute automatiquement dans les ingrédients
     if (isSousFiche && coutPortion) {
       await supabase.from('ingredients').insert([{
         nom: fiche.nom,
@@ -141,25 +145,31 @@ export default function NouvelleFiche() {
   const coutPortion = calculerCoutPortion()
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f5f5f0' }}>
+    <div style={{ minHeight: '100vh', background: c.fond }}>
 
       <div style={{
-        background: 'white', borderBottom: '0.5px solid #e0e0d8',
-        padding: '0 24px', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', height: '56px'
+        background: c.principal,
+        borderBottom: `0.5px solid ${c.accent}40`,
+        padding: '0 24px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        height: '56px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
             onClick={() => router.push(isSousFiche ? '/sous-fiches' : '/fiches')}
             style={{
-              background: 'transparent', border: '0.5px solid #ddd',
+              background: 'transparent',
+              border: `0.5px solid rgba(255,255,255,0.2)`,
               borderRadius: '8px', padding: '6px 12px',
-              fontSize: '13px', cursor: 'pointer', color: '#666'
+              fontSize: '13px', cursor: 'pointer',
+              color: 'rgba(255,255,255,0.7)'
             }}
           >
             ← Retour
           </button>
-          <span style={{ fontSize: '15px', fontWeight: '500' }}>
+          <span style={{ fontSize: '15px', fontWeight: '500', color: 'white' }}>
             {isSousFiche ? 'Nouvelle sous-fiche' : 'Nouvelle fiche technique'}
           </span>
         </div>
@@ -167,9 +177,9 @@ export default function NouvelleFiche() {
           onClick={handleSubmit}
           disabled={loading}
           style={{
-            background: loading ? '#aaa' : (isSousFiche ? '#7F77DD' : '#1D9E75'),
-            color: 'white', border: 'none', borderRadius: '8px',
-            padding: '8px 20px', fontSize: '13px', fontWeight: '500',
+            background: loading ? c.texteMuted : c.accent,
+            color: c.principal, border: 'none', borderRadius: '8px',
+            padding: '8px 20px', fontSize: '13px', fontWeight: '600',
             cursor: loading ? 'not-allowed' : 'pointer'
           }}
         >
@@ -188,66 +198,103 @@ export default function NouvelleFiche() {
           </div>
         )}
 
+        {isSousFiche && (
+          <div style={{
+            background: c.violetClair, color: '#3C3489', borderRadius: '8px',
+            padding: '10px 14px', fontSize: '13px', marginBottom: '16px',
+            display: 'flex', alignItems: 'center', gap: '8px',
+            border: `0.5px solid #AFA9EC`
+          }}>
+            <span style={{
+              background: c.violet, color: 'white', borderRadius: '6px',
+              padding: '2px 8px', fontSize: '11px', fontWeight: '500'
+            }}>SF</span>
+            Cette fiche sera disponible comme ingrédient dans les fiches principales
+          </div>
+        )}
+
         {/* Informations générales */}
         <div style={{
           background: 'white', borderRadius: '12px', padding: '24px',
-          border: `0.5px solid ${isSousFiche ? '#AFA9EC' : '#e0e0d8'}`,
+          border: `0.5px solid ${isSousFiche ? '#AFA9EC' : c.bordure}`,
           marginBottom: '16px'
         }}>
-          {isSousFiche && (
-            <div style={{
-              background: '#EEEDFE', color: '#3C3489', borderRadius: '8px',
-              padding: '10px 14px', fontSize: '13px', marginBottom: '16px',
-              display: 'flex', alignItems: 'center', gap: '8px'
-            }}>
-              <span style={{
-                background: '#7F77DD', color: 'white', borderRadius: '6px',
-                padding: '2px 8px', fontSize: '11px', fontWeight: '500'
-              }}>SF</span>
-              Cette fiche sera disponible comme ingrédient dans les fiches principales
-            </div>
-          )}
+          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
+            Informations générales
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ fontSize: '12px', color: '#666', fontWeight: '500', display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>
                 Nom *
               </label>
               <input
                 type="text" value={nom} onChange={e => setNom(e.target.value)}
                 placeholder={isSousFiche ? 'Ex : Sauce béarnaise' : 'Ex : Blanquette de veau'}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '14px', outline: 'none' }}
+                style={{
+                  width: '100%', padding: '10px 12px', borderRadius: '8px',
+                  border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte
+                }}
               />
             </div>
 
             <div>
-              <label style={{ fontSize: '12px', color: '#666', fontWeight: '500', display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>
                 Catégorie
               </label>
               <select
                 value={categorie} onChange={e => setCategorie(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '14px', background: 'white', outline: 'none' }}
+                style={{
+                  width: '100%', padding: '10px 12px', borderRadius: '8px',
+                  border: `0.5px solid ${c.bordure}`, fontSize: '14px',
+                  background: 'white', outline: 'none', color: c.texte
+                }}
               >
-                {['Entrée', 'Plat', 'Dessert', 'Sauce', 'Garniture', 'Sous-fiche'].map(c => (
-                  <option key={c}>{c}</option>
+                {['Entrée', 'Plat', 'Dessert', 'Sauce', 'Garniture', 'Sous-fiche'].map(cat => (
+                  <option key={cat}>{cat}</option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label style={{ fontSize: '12px', color: '#666', fontWeight: '500', display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>
+                Saison
+              </label>
+              <select
+                value={saison} onChange={e => setSaison(e.target.value)}
+                style={{
+                  width: '100%', padding: '10px 12px', borderRadius: '8px',
+                  border: `0.5px solid ${c.bordure}`, fontSize: '14px',
+                  background: 'white', outline: 'none', color: c.texte
+                }}
+              >
+                {saisons.map(s => (
+                  <option key={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>
                 {isSousFiche ? 'Quantité produite *' : 'Nombre de portions *'}
               </label>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <input
                   type="number" value={nbPortions} onChange={e => setNbPortions(e.target.value)}
                   placeholder="Ex : 10"
-                  style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '14px', outline: 'none' }}
+                  style={{
+                    flex: 1, padding: '10px 12px', borderRadius: '8px',
+                    border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte
+                  }}
                 />
                 {isSousFiche && (
                   <select
                     value={unitePortions} onChange={e => setUnitePortions(e.target.value)}
-                    style={{ padding: '10px 12px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '14px', background: 'white', outline: 'none' }}
+                    style={{
+                      padding: '10px 12px', borderRadius: '8px',
+                      border: `0.5px solid ${c.bordure}`, fontSize: '14px',
+                      background: 'white', outline: 'none', color: c.texte
+                    }}
                   >
                     {['portions', 'kg', 'L', 'cl', 'ml', 'u'].map(u => (
                       <option key={u}>{u}</option>
@@ -259,25 +306,32 @@ export default function NouvelleFiche() {
 
             {!isSousFiche && (
               <div>
-                <label style={{ fontSize: '12px', color: '#666', fontWeight: '500', display: 'block', marginBottom: '6px' }}>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>
                   Prix de vente TTC (€)
                 </label>
                 <input
                   type="number" value={prixTTC} onChange={e => setPrixTTC(e.target.value)}
                   placeholder="Ex : 18.50" step="0.01"
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '14px', outline: 'none' }}
+                  style={{
+                    width: '100%', padding: '10px 12px', borderRadius: '8px',
+                    border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte
+                  }}
                 />
               </div>
             )}
 
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ fontSize: '12px', color: '#666', fontWeight: '500', display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>
                 Description / Présentation
               </label>
               <textarea
                 value={description} onChange={e => setDescription(e.target.value)}
                 placeholder="Notes de présentation, dressage..." rows={3}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '14px', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+                style={{
+                  width: '100%', padding: '10px 12px', borderRadius: '8px',
+                  border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none',
+                  resize: 'vertical', fontFamily: 'inherit', color: c.texte
+                }}
               />
             </div>
           </div>
@@ -286,9 +340,9 @@ export default function NouvelleFiche() {
         {/* Ingrédients */}
         <div style={{
           background: 'white', borderRadius: '12px', padding: '24px',
-          border: '0.5px solid #e0e0d8', marginBottom: '16px'
+          border: `0.5px solid ${c.bordure}`, marginBottom: '16px'
         }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: '#888', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
+          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
             Ingrédients
           </div>
 
@@ -306,7 +360,7 @@ export default function NouvelleFiche() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '8px', marginBottom: '8px' }}>
             {['Ingrédient', 'Quantité', 'Unité', ''].map((h, i) => (
-              <div key={i} style={{ fontSize: '11px', color: '#888', fontWeight: '500', textTransform: 'uppercase' }}>{h}</div>
+              <div key={i} style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>{h}</div>
             ))}
           </div>
 
@@ -314,36 +368,48 @@ export default function NouvelleFiche() {
             const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
             return (
               <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '8px', marginBottom: '8px' }}>
-                <div style={{ position: 'relative' }}>
-                  <select
-                    value={ing.ingredient_id}
-                    onChange={e => modifierIngredient(index, 'ingredient_id', e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${ingData?.est_sous_fiche ? '#AFA9EC' : '#ddd'}`, fontSize: '13px', background: ingData?.est_sous_fiche ? '#EEEDFE' : 'white', outline: 'none' }}
-                  >
-                    <option value="">-- Choisir --</option>
-                    {listeIngredients.filter(i => !i.est_sous_fiche).map(i => (
-                      <option key={i.id} value={i.id}>{i.nom}</option>
-                    ))}
-                    {listeIngredients.some(i => i.est_sous_fiche) && (
-                      <>
-                        <option disabled>── Sous-fiches ──</option>
-                        {listeIngredients.filter(i => i.est_sous_fiche).map(i => (
-                          <option key={i.id} value={i.id}>[SF] {i.nom}</option>
-                        ))}
-                      </>
-                    )}
-                  </select>
-                </div>
+                <select
+                  value={ing.ingredient_id}
+                  onChange={e => modifierIngredient(index, 'ingredient_id', e.target.value)}
+                  style={{
+                    padding: '8px 10px', borderRadius: '8px',
+                    border: `0.5px solid ${ingData?.est_sous_fiche ? '#AFA9EC' : c.bordure}`,
+                    fontSize: '13px',
+                    background: ingData?.est_sous_fiche ? '#EEEDFE' : 'white',
+                    outline: 'none', color: c.texte
+                  }}
+                >
+                  <option value="">-- Choisir --</option>
+                  {listeIngredients.filter(i => !i.est_sous_fiche).map(i => (
+                    <option key={i.id} value={i.id}>{i.nom}</option>
+                  ))}
+                  {listeIngredients.some(i => i.est_sous_fiche) && (
+                    <>
+                      <option disabled>── Sous-fiches ──</option>
+                      {listeIngredients.filter(i => i.est_sous_fiche).map(i => (
+                        <option key={i.id} value={i.id}>[SF] {i.nom}</option>
+                      ))}
+                    </>
+                  )}
+                </select>
                 <input
                   type="number" value={ing.quantite} step="0.01"
                   onChange={e => modifierIngredient(index, 'quantite', e.target.value)}
                   placeholder="0"
-                  style={{ padding: '8px 10px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '13px', outline: 'none' }}
+                  style={{
+                    padding: '8px 10px', borderRadius: '8px',
+                    border: `0.5px solid ${c.bordure}`, fontSize: '13px',
+                    outline: 'none', color: c.texte
+                  }}
                 />
                 <select
                   value={ing.unite}
                   onChange={e => modifierIngredient(index, 'unite', e.target.value)}
-                  style={{ padding: '8px 10px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '13px', background: 'white', outline: 'none' }}
+                  style={{
+                    padding: '8px 10px', borderRadius: '8px',
+                    border: `0.5px solid ${c.bordure}`, fontSize: '13px',
+                    background: 'white', outline: 'none', color: c.texte
+                  }}
                 >
                   {['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce', 'portions'].map(u => (
                     <option key={u}>{u}</option>
@@ -351,7 +417,11 @@ export default function NouvelleFiche() {
                 </select>
                 <button
                   onClick={() => supprimerIngredient(index)}
-                  style={{ background: 'transparent', border: '0.5px solid #ddd', borderRadius: '8px', width: '36px', height: '36px', cursor: 'pointer', color: '#aaa', fontSize: '16px' }}
+                  style={{
+                    background: 'transparent', border: `0.5px solid ${c.bordure}`,
+                    borderRadius: '8px', width: '36px', height: '36px',
+                    cursor: 'pointer', color: '#aaa', fontSize: '16px'
+                  }}
                 >×</button>
               </div>
             )
@@ -359,7 +429,11 @@ export default function NouvelleFiche() {
 
           <button
             onClick={ajouterIngredient}
-            style={{ background: '#E1F5EE', color: '#085041', border: '0.5px solid #9FE1CB', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer', marginTop: '8px' }}
+            style={{
+              background: c.vertClair, color: c.vert,
+              border: `0.5px solid ${c.vert}40`, borderRadius: '8px',
+              padding: '8px 16px', fontSize: '13px', cursor: 'pointer', marginTop: '8px'
+            }}
           >
             + Ajouter un ingrédient
           </button>
@@ -368,14 +442,14 @@ export default function NouvelleFiche() {
         {/* Récapitulatif */}
         <div style={{
           background: 'white', borderRadius: '12px', padding: '20px',
-          border: '0.5px solid #e0e0d8', display: 'flex', gap: '24px', flexWrap: 'wrap'
+          border: `0.5px solid ${c.bordure}`, display: 'flex', gap: '24px', flexWrap: 'wrap'
         }}>
           <div>
-            <div style={{ fontSize: '11px', color: '#888', fontWeight: '500', textTransform: 'uppercase' }}>Coût total</div>
-            <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px' }}>{calculerCout().toFixed(2)} €</div>
+            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Coût total</div>
+            <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{calculerCout().toFixed(2)} €</div>
           </div>
           {isSousFiche && coutPortion && (
-            <div style={{ background: '#EEEDFE', borderRadius: '8px', padding: '14px' }}>
+            <div style={{ background: c.violetClair, borderRadius: '8px', padding: '14px' }}>
               <div style={{ fontSize: '11px', color: '#3C3489', fontWeight: '500', textTransform: 'uppercase' }}>
                 Coût / {unitePortions}
               </div>
@@ -386,7 +460,7 @@ export default function NouvelleFiche() {
           )}
           {!isSousFiche && fc && (
             <div>
-              <div style={{ fontSize: '11px', color: '#888', fontWeight: '500', textTransform: 'uppercase' }}>Food cost</div>
+              <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Food cost</div>
               <div style={{
                 fontSize: '22px', fontWeight: '500', marginTop: '4px',
                 color: fc < 30 ? '#3B6D11' : fc < 40 ? '#854F0B' : '#A32D2D'
