@@ -2,16 +2,20 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
+import { theme, Logo } from '../../lib/theme.jsx'
+import { useIsMobile } from '../../lib/useIsMobile'
 
 export default function SousFichesPage() {
-  const [sousFiches, setSousFiches] = useState([])
+  const [fiches, setFiches] = useState([])
   const [loading, setLoading] = useState(true)
   const [recherche, setRecherche] = useState('')
   const router = useRouter()
+  const c = theme.couleurs
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     checkUser()
-    loadSousFiches()
+    loadFiches()
   }, [])
 
   const checkUser = async () => {
@@ -19,128 +23,171 @@ export default function SousFichesPage() {
     if (!session) router.push('/')
   }
 
-  const loadSousFiches = async () => {
+  const loadFiches = async () => {
     const { data } = await supabase
       .from('fiches')
       .select('*')
       .eq('categorie', 'Sous-fiche')
-      .order('created_at', { ascending: false })
-    setSousFiches(data || [])
+      .eq('archive', false)
+      .order('nom')
+    setFiches(data || [])
     setLoading(false)
   }
 
-  const sousFichesFiltrees = sousFiches.filter(f =>
+  const fichesFiltrees = fiches.filter(f =>
     f.nom.toLowerCase().includes(recherche.toLowerCase())
   )
 
+  const coutMoyen = fiches.filter(f => f.cout_portion).length > 0
+    ? fiches.filter(f => f.cout_portion).reduce((sum, f) => sum + Number(f.cout_portion), 0) / fiches.filter(f => f.cout_portion).length
+    : null
+
   return (
-    <div style={{ minHeight: '100vh', background: '#f5f5f0' }}>
+    <div style={{ minHeight: '100vh', background: c.fond }}>
 
       <div style={{
-        background: 'white', borderBottom: '0.5px solid #e0e0d8',
-        padding: '0 24px', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', height: '56px'
+        background: c.principal, borderBottom: `0.5px solid ${c.accent}40`,
+        padding: '0 16px', display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', height: '56px',
+        position: 'sticky', top: 0, zIndex: 100
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button
-            onClick={() => router.push('/fiches')}
-            style={{ background: 'transparent', border: '0.5px solid #ddd', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', cursor: 'pointer', color: '#666' }}
-          >
-            ← Retour
-          </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ background: '#7F77DD', color: 'white', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: '500' }}>SF</span>
-            <span style={{ fontSize: '15px', fontWeight: '500' }}>Sous-fiches techniques</span>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Logo height={28} couleur="white" onClick={() => router.push('/dashboard')} />
+          <button onClick={() => router.push('/fiches')} style={{
+            background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
+            borderRadius: '8px', padding: '6px 10px',
+            fontSize: '13px', cursor: 'pointer', color: 'rgba(255,255,255,0.7)'
+          }}>← {!isMobile && 'Retour'}</button>
+          {!isMobile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{
+                background: c.violet, color: 'white', borderRadius: '6px',
+                padding: '2px 8px', fontSize: '11px', fontWeight: '500'
+              }}>SF</span>
+              <span style={{ fontSize: '14px', fontWeight: '500', color: 'white' }}>Sous-fiches techniques</span>
+            </div>
+          )}
         </div>
-        <button
-          onClick={() => router.push('/fiches/nouvelle?type=sous-fiche')}
-          style={{ background: '#7F77DD', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}
-        >
-          + Nouvelle sous-fiche
-        </button>
+        <button onClick={() => router.push('/fiches/nouvelle')} style={{
+          background: c.accent, color: c.principal, border: 'none',
+          borderRadius: '8px', padding: '8px 14px', fontSize: '13px',
+          fontWeight: '600', cursor: 'pointer'
+        }}>+ {!isMobile && 'Nouvelle sous-fiche'}</button>
       </div>
 
-      <div style={{ padding: '24px', maxWidth: '900px', margin: '0 auto' }}>
+      <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '1000px', margin: '0 auto' }}>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
+        {/* Stats */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(3, 1fr)',
+          gap: isMobile ? '8px' : '12px',
+          marginBottom: isMobile ? '16px' : '24px'
+        }}>
           {[
-            { label: 'Sous-fiches totales', value: sousFiches.length },
-            { label: 'Coût moyen / portion', value: sousFiches.length ? (sousFiches.reduce((s, f) => s + (f.cout_portion || 0), 0) / sousFiches.length).toFixed(2) + ' €' : '—' },
-            { label: 'Utilisées comme ingrédient', value: sousFiches.length },
+            { label: 'Sous-fiches totales', value: fiches.length },
+            { label: 'Coût moyen / portion', value: coutMoyen ? `${coutMoyen.toFixed(2)} €` : '—' },
+            { label: 'Utilisées comme ingrédient', value: fiches.length },
           ].map((stat, i) => (
-            <div key={i} style={{ background: 'white', borderRadius: '10px', padding: '16px', border: '0.5px solid #e0e0d8' }}>
-              <div style={{ fontSize: '11px', color: '#888', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{stat.label}</div>
-              <div style={{ fontSize: '24px', fontWeight: '500', marginTop: '4px' }}>{stat.value}</div>
+            <div key={i} style={{
+              background: 'white', borderRadius: '10px',
+              padding: isMobile ? '12px' : '16px',
+              border: `0.5px solid ${c.bordure}`
+            }}>
+              <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
+                {stat.label}
+              </div>
+              <div style={{ fontSize: isMobile ? '20px' : '26px', fontWeight: '500', color: c.texte }}>
+                {stat.value}
+              </div>
             </div>
           ))}
         </div>
 
+        {/* Recherche */}
         <input
           type="text"
           placeholder="Rechercher une sous-fiche..."
           value={recherche}
           onChange={e => setRecherche(e.target.value)}
-          style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '0.5px solid #ddd', fontSize: '14px', background: 'white', outline: 'none', marginBottom: '16px' }}
+          style={{
+            width: '100%', padding: '10px 14px',
+            borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
+            fontSize: '14px', background: 'white', outline: 'none',
+            color: c.texte, marginBottom: '16px'
+          }}
         />
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px', color: '#888', fontSize: '14px' }}>Chargement...</div>
-        ) : sousFichesFiltrees.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px', background: 'white', borderRadius: '12px', border: '0.5px solid #e0e0d8' }}>
-            <div style={{ fontSize: '14px', color: '#888', marginBottom: '16px' }}>
-              {sousFiches.length === 0 ? 'Aucune sous-fiche pour le moment' : 'Aucun résultat'}
+          <div style={{ textAlign: 'center', padding: '60px', color: c.texteMuted }}>Chargement...</div>
+        ) : fichesFiltrees.length === 0 ? (
+          <div style={{
+            textAlign: 'center', padding: '60px', background: 'white',
+            borderRadius: '12px', border: `0.5px solid ${c.bordure}`
+          }}>
+            <div style={{ fontSize: '14px', color: c.texteMuted, marginBottom: '16px' }}>
+              Aucune sous-fiche pour le moment
             </div>
-            {sousFiches.length === 0 && (
-              <button
-                onClick={() => router.push('/fiches/nouvelle')}
-                style={{ background: '#7F77DD', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '13px', cursor: 'pointer' }}
-              >
-                Créer la première sous-fiche
-              </button>
-            )}
+            <button onClick={() => router.push('/fiches/nouvelle')} style={{
+              background: c.accent, color: c.principal, border: 'none',
+              borderRadius: '8px', padding: '10px 20px', fontSize: '13px',
+              cursor: 'pointer', fontWeight: '600'
+            }}>Créer la première sous-fiche</button>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' }}>
-            {sousFichesFiltrees.map(fiche => (
-              <div
-                key={fiche.id}
-                style={{ background: 'white', borderRadius: '12px', padding: '18px', border: '0.5px solid #AFA9EC', cursor: 'pointer' }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = '#7F77DD'}
-                onMouseLeave={e => e.currentTarget.style.borderColor = '#AFA9EC'}
-              >
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: isMobile ? '10px' : '14px'
+          }}>
+            {fichesFiltrees.map(fiche => (
+              <div key={fiche.id} style={{
+                background: 'white', borderRadius: '12px', padding: '18px',
+                border: `0.5px solid ${c.bordure}`
+              }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                      <span style={{ background: '#7F77DD', color: 'white', borderRadius: '6px', padding: '2px 6px', fontSize: '10px', fontWeight: '500' }}>SF</span>
-                      <span style={{ fontSize: '15px', fontWeight: '500' }}>{fiche.nom}</span>
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#888' }}>
-                      {fiche.nb_portions} {fiche.nb_portions > 1 ? 'portions' : 'portion'}
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      background: c.violet, color: 'white', borderRadius: '6px',
+                      padding: '2px 8px', fontSize: '11px', fontWeight: '500', flexShrink: 0
+                    }}>SF</span>
+                    <span style={{ fontSize: isMobile ? '14px' : '15px', fontWeight: '500', color: c.texte }}>{fiche.nom}</span>
                   </div>
                   {fiche.cout_portion && (
-                    <div style={{ background: '#EEEDFE', borderRadius: '8px', padding: '6px 10px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '10px', color: '#534AB7' }}>/ portion</div>
+                    <div style={{
+                      background: c.violetClair, borderRadius: '8px',
+                      padding: '6px 10px', textAlign: 'right', flexShrink: 0, marginLeft: '8px'
+                    }}>
+                      <div style={{ fontSize: '10px', color: '#3C3489', opacity: 0.7 }}>/ portion</div>
                       <div style={{ fontSize: '14px', fontWeight: '500', color: '#3C3489' }}>
                         {Number(fiche.cout_portion).toFixed(3)} €
                       </div>
                     </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+
+                <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '14px' }}>
+                  {fiche.nb_portions} portion{fiche.nb_portions > 1 ? 's' : ''}
+                  {fiche.saison && ` — ${fiche.saison}`}
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     onClick={() => router.push(`/fiches/${fiche.id}`)}
-                    style={{ flex: 1, padding: '7px', background: '#EEEDFE', color: '#3C3489', border: 'none', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}
-                  >
-                    Voir
-                  </button>
+                    style={{
+                      flex: 1, padding: '8px', background: c.violetClair, color: '#3C3489',
+                      border: `0.5px solid #AFA9EC`, borderRadius: '8px',
+                      fontSize: '12px', cursor: 'pointer', fontWeight: '500'
+                    }}
+                  >Voir</button>
                   <button
                     onClick={() => router.push(`/fiches/${fiche.id}/modifier`)}
-                    style={{ flex: 1, padding: '7px', background: 'transparent', color: '#666', border: '0.5px solid #ddd', borderRadius: '8px', fontSize: '12px', cursor: 'pointer' }}
-                  >
-                    Modifier
-                  </button>
+                    style={{
+                      flex: 1, padding: '8px', background: 'transparent', color: c.texteMuted,
+                      border: `0.5px solid ${c.bordure}`, borderRadius: '8px',
+                      fontSize: '12px', cursor: 'pointer'
+                    }}
+                  >Modifier</button>
                 </div>
               </div>
             ))}
