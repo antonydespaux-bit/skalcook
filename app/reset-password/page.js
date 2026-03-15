@@ -1,29 +1,35 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../lib/theme.jsx'
+import { useTheme } from '../../lib/useTheme'
 
-export default function NouveauMotDePassePage() {
-  const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
+export default function ResetPasswordPage() {
+  const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [error, setError] = useState('')
   const router = useRouter()
+  const { c } = useTheme()
 
-  const handleSubmit = async (e) => {
+  const handleReset = async (e) => {
     e.preventDefault()
-    if (password !== confirm) { setError('Les mots de passe ne correspondent pas'); return }
-    if (password.length < 6) { setError('Le mot de passe doit faire au moins 6 caractères'); return }
     setLoading(true)
     setError('')
 
-    const { error: errUpdate } = await supabase.auth.updateUser({ password })
-    if (errUpdate) { setError('Erreur : ' + errUpdate.message); setLoading(false); return }
+    const { error: errReset } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'https://ft-manager-five.vercel.app/nouveau-mot-de-passe'
+    })
+
+    if (errReset) {
+      setError('Erreur : ' + errReset.message)
+      setLoading(false)
+      return
+    }
 
     setSuccess(true)
-    setTimeout(() => router.push('/'), 2000)
+    setLoading(false)
   }
 
   return (
@@ -50,15 +56,20 @@ export default function NouveauMotDePassePage() {
         }}>
           {success ? (
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '40px', marginBottom: '16px' }}>✅</div>
-              <div style={{ fontSize: '16px', fontWeight: '500', color: theme.couleurs.texte, marginBottom: '8px' }}>Mot de passe mis à jour !</div>
-              <div style={{ fontSize: '13px', color: theme.couleurs.texteMuted }}>Redirection en cours...</div>
+              <div style={{ fontSize: '40px', marginBottom: '16px' }}>📧</div>
+              <div style={{ fontSize: '16px', fontWeight: '500', color: theme.couleurs.texte, marginBottom: '8px' }}>Email envoyé !</div>
+              <div style={{ fontSize: '13px', color: theme.couleurs.texteMuted, lineHeight: '1.6' }}>
+                Vérifiez la boîte mail de <strong>{email}</strong> et cliquez sur le lien pour définir un nouveau mot de passe.
+              </div>
             </div>
           ) : (
             <>
-              <h2 style={{ fontSize: '18px', fontWeight: '500', color: theme.couleurs.texte, marginBottom: '24px', textAlign: 'center' }}>
-                Nouveau mot de passe
+              <h2 style={{ fontSize: '18px', fontWeight: '500', color: theme.couleurs.texte, marginBottom: '8px', textAlign: 'center' }}>
+                Réinitialiser le mot de passe
               </h2>
+              <p style={{ fontSize: '13px', color: theme.couleurs.texteMuted, textAlign: 'center', marginBottom: '24px' }}>
+                Entrez l'email du compte pour recevoir un lien de réinitialisation.
+              </p>
 
               {error && (
                 <div style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '8px', padding: '12px 14px', fontSize: '13px', marginBottom: '16px' }}>
@@ -66,26 +77,13 @@ export default function NouveauMotDePassePage() {
                 </div>
               )}
 
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleReset}>
                 <div style={{ marginBottom: '16px' }}>
                   <label style={{ fontSize: '12px', color: theme.couleurs.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Nouveau mot de passe
+                    Email
                   </label>
-                  <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                    placeholder="••••••••" required
-                    style={{
-                      width: '100%', padding: '12px 14px', borderRadius: '8px',
-                      border: `0.5px solid ${theme.couleurs.bordure}`, fontSize: '14px',
-                      outline: 'none', color: theme.couleurs.texte, background: theme.couleurs.fond
-                    }}
-                  />
-                </div>
-                <div style={{ marginBottom: '24px' }}>
-                  <label style={{ fontSize: '12px', color: theme.couleurs.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Confirmer le mot de passe
-                  </label>
-                  <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
-                    placeholder="••••••••" required
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                    placeholder="jeremy@lafantaisie.com" required
                     style={{
                       width: '100%', padding: '12px 14px', borderRadius: '8px',
                       border: `0.5px solid ${theme.couleurs.bordure}`, fontSize: '14px',
@@ -99,11 +97,19 @@ export default function NouveauMotDePassePage() {
                   color: theme.couleurs.accent, border: 'none', borderRadius: '8px',
                   fontSize: '14px', fontWeight: '600', cursor: loading ? 'not-allowed' : 'pointer'
                 }}>
-                  {loading ? 'Mise à jour...' : 'Définir le mot de passe'}
+                  {loading ? 'Envoi...' : 'Envoyer le lien'}
                 </button>
               </form>
             </>
           )}
+
+          <button onClick={() => router.push('/')} style={{
+            width: '100%', marginTop: '16px', background: 'transparent',
+            color: theme.couleurs.texteMuted, border: 'none', fontSize: '13px',
+            cursor: 'pointer', textDecoration: 'underline'
+          }}>
+            Retour à la connexion
+          </button>
         </div>
       </div>
     </div>
