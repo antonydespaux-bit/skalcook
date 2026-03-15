@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
+import { log } from '../../../lib/useLog'
 
 const LOGO_URL = 'https://uvmslpdcywephdneciwd.supabase.co/storage/v1/object/public/fiches-photos/logo-la-fantaisie.png'
 
@@ -63,9 +64,7 @@ export default function FicheDetail() {
 
   const calculerCout = () => {
     return ingredients.reduce((total, ing) => {
-      if (ing.ingredients?.prix_kg && ing.quantite) {
-        return total + (ing.ingredients.prix_kg * ing.quantite)
-      }
+      if (ing.ingredients?.prix_kg && ing.quantite) return total + (ing.ingredients.prix_kg * ing.quantite)
       return total
     }, 0)
   }
@@ -73,9 +72,7 @@ export default function FicheDetail() {
   const foodCost = () => {
     const cout = calculerCout()
     if (!fiche?.prix_ttc || !cout || !fiche?.nb_portions) return null
-    const coutParPortion = cout / fiche.nb_portions
-    const prixHT = fiche.prix_ttc / 1.10
-    return (coutParPortion / prixHT * 100).toFixed(1)
+    return (cout / fiche.nb_portions / (fiche.prix_ttc / 1.10) * 100).toFixed(1)
   }
 
   const prixIndicatif = () => {
@@ -89,6 +86,16 @@ export default function FicheDetail() {
 
   const handleDelete = async () => {
     if (!confirm('Supprimer définitivement cette fiche ?')) return
+
+    await log({
+      action: 'SUPPRESSION',
+      entite: 'fiche',
+      entite_id: params_route.id,
+      entite_nom: fiche.nom,
+      section: 'cuisine',
+      details: `Catégorie: ${fiche.categorie}, Saison: ${fiche.saison}`
+    })
+
     if (fiche.photo_url) {
       const path = fiche.photo_url.split('/').pop()
       await supabase.storage.from('fiches-photos').remove([path])
@@ -113,7 +120,6 @@ export default function FicheDetail() {
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
 
-      {/* Barre navigation — cachée à l'impression */}
       <div className="no-print" style={{
         background: c.principal, borderBottom: `0.5px solid ${c.accent}40`,
         padding: '0 16px', display: 'flex', alignItems: 'center',
@@ -148,28 +154,19 @@ export default function FicheDetail() {
         </div>
       </div>
 
-      {/* Vue normale (écran) */}
+      {/* Vue normale écran */}
       <div className="no-print" style={{ padding: isMobile ? '12px' : '24px', maxWidth: '800px', margin: '0 auto' }}>
 
-        <div style={{
-          background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px',
-          border: `0.5px solid ${c.bordure}`, marginBottom: '12px'
-        }}>
+        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
           {fiche.photo_url && (
-            <img src={fiche.photo_url} alt={fiche.nom}
-              style={{ width: '100%', height: isMobile ? '200px' : '250px', objectFit: 'cover', borderRadius: '8px', marginBottom: '16px' }}
-            />
+            <img src={fiche.photo_url} alt={fiche.nom} style={{ width: '100%', height: isMobile ? '200px' : '250px', objectFit: 'cover', borderRadius: '8px', marginBottom: '16px' }} />
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <div style={{ flex: 1 }}>
               <h1 style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: '500', marginBottom: '8px', color: c.texte }}>{fiche.nom}</h1>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {fiche.categorie && (
-                  <span style={{ background: c.accentClair, color: c.principal, borderRadius: '20px', padding: '3px 12px', fontSize: '12px', fontWeight: '500' }}>{fiche.categorie}</span>
-                )}
-                {fiche.saison && (
-                  <span style={{ background: c.fond, color: c.texteMuted, borderRadius: '20px', padding: '3px 12px', fontSize: '12px', border: `0.5px solid ${c.bordure}` }}>{fiche.saison}</span>
-                )}
+                {fiche.categorie && <span style={{ background: c.accentClair, color: c.principal, borderRadius: '20px', padding: '3px 12px', fontSize: '12px', fontWeight: '500' }}>{fiche.categorie}</span>}
+                {fiche.saison && <span style={{ background: c.fond, color: c.texteMuted, borderRadius: '20px', padding: '3px 12px', fontSize: '12px', border: `0.5px solid ${c.bordure}` }}>{fiche.saison}</span>}
               </div>
             </div>
             <div style={{ background: c.principal, color: c.accent, borderRadius: '10px', padding: '8px 14px', textAlign: 'center', flexShrink: 0, marginLeft: '12px' }}>
@@ -177,13 +174,9 @@ export default function FicheDetail() {
               <div style={{ fontSize: '20px', fontWeight: '500' }}>{fiche.nb_portions || '—'}</div>
             </div>
           </div>
-
           {fiche.description && (
-            <div style={{ background: c.fond, borderRadius: '8px', padding: '12px', fontSize: '13px', color: c.texteMuted, lineHeight: '1.6' }}>
-              {fiche.description}
-            </div>
+            <div style={{ background: c.fond, borderRadius: '8px', padding: '12px', fontSize: '13px', color: c.texteMuted, lineHeight: '1.6' }}>{fiche.description}</div>
           )}
-
           {fiche.allergenes && fiche.allergenes.length > 0 && (
             <div style={{ background: '#FCEBEB', borderRadius: '8px', padding: '12px', marginTop: '12px', border: '0.5px solid #F09595' }}>
               <div style={{ fontSize: '11px', color: '#A32D2D', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>Allergènes présents</div>
@@ -200,7 +193,6 @@ export default function FicheDetail() {
               </div>
             </div>
           )}
-
           {isMobile && (
             <button onClick={handleDelete} style={{ marginTop: '12px', width: '100%', padding: '10px', background: 'transparent', color: '#A32D2D', border: '0.5px solid #F09595', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}>
               Supprimer cette fiche
@@ -208,11 +200,9 @@ export default function FicheDetail() {
           )}
         </div>
 
-        {/* Ingrédients écran */}
+        {/* Ingrédients */}
         <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', overflow: 'hidden' }}>
-          <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Ingrédients
-          </div>
+          <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Ingrédients</div>
           {isMobile ? (
             <div style={{ padding: '12px' }}>
               {ingredients.map((ing, i) => {
@@ -258,21 +248,15 @@ export default function FicheDetail() {
           )}
         </div>
 
-        {/* Récapitulatif financier écran */}
-        <div style={{
-          background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '20px',
-          border: `0.5px solid ${c.bordure}`,
-          display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px'
-        }}>
+        {/* Récapitulatif financier */}
+        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '20px', border: `0.5px solid ${c.bordure}`, display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
           <div style={{ background: c.fond, borderRadius: '8px', padding: '12px' }}>
             <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Coût total</div>
             <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{cout ? `${cout.toFixed(2)} €` : '—'}</div>
           </div>
           <div style={{ background: c.fond, borderRadius: '8px', padding: '12px' }}>
             <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Coût / portion</div>
-            <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.texte }}>
-              {cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—'}
-            </div>
+            <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—'}</div>
           </div>
           <div style={{ background: c.fond, borderRadius: '8px', padding: '12px' }}>
             <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Prix TTC</div>
@@ -298,27 +282,12 @@ export default function FicheDetail() {
         </div>
       </div>
 
-      {/* ========== VERSION IMPRESSION ========== */}
-      <div className="print-only" style={{
-        fontFamily: 'Georgia, serif',
-        color: '#1a1a1a',
-        background: 'white',
-        padding: '0',
-        width: '100%'
-      }}>
-
-        {/* En-tête */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-          borderBottom: '2px solid #2C1810', paddingBottom: '16px', marginBottom: '20px'
-        }}>
+      {/* Version impression */}
+      <div className="print-only" style={{ fontFamily: 'Georgia, serif', color: '#1a1a1a', background: 'white', padding: '0', width: '100%' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #2C1810', paddingBottom: '16px', marginBottom: '20px' }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#8B7355', marginBottom: '6px', fontFamily: 'sans-serif' }}>
-              Fiche technique — {fiche.categorie || ''}
-            </div>
-            <h1 style={{ fontSize: '28px', fontWeight: '400', color: '#2C1810', marginBottom: '8px', letterSpacing: '1px' }}>
-              {fiche.nom}
-            </h1>
+            <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#8B7355', marginBottom: '6px', fontFamily: 'sans-serif' }}>Fiche technique — {fiche.categorie || ''}</div>
+            <h1 style={{ fontSize: '28px', fontWeight: '400', color: '#2C1810', marginBottom: '8px', letterSpacing: '1px' }}>{fiche.nom}</h1>
             <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: '#8B7355', fontFamily: 'sans-serif' }}>
               {fiche.saison && <span>Saison : {fiche.saison}</span>}
               {fiche.nb_portions && <span>Portions : {fiche.nb_portions}</span>}
@@ -330,35 +299,21 @@ export default function FicheDetail() {
           </div>
         </div>
 
-        {/* Photo + Description */}
         {(fiche.photo_url || fiche.description) && (
           <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
-            {fiche.photo_url && (
-              <img src={fiche.photo_url} alt={fiche.nom}
-                style={{ width: '200px', height: '150px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }}
-              />
-            )}
-            {fiche.description && (
-              <div style={{ flex: 1, fontSize: '12px', color: '#555', lineHeight: '1.8', fontStyle: 'italic', paddingTop: '4px', fontFamily: 'Georgia, serif' }}>
-                {fiche.description}
-              </div>
-            )}
+            {fiche.photo_url && <img src={fiche.photo_url} alt={fiche.nom} style={{ width: '200px', height: '150px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} />}
+            {fiche.description && <div style={{ flex: 1, fontSize: '12px', color: '#555', lineHeight: '1.8', fontStyle: 'italic', paddingTop: '4px' }}>{fiche.description}</div>}
           </div>
         )}
 
-        {/* Tableau ingrédients */}
         <div style={{ marginBottom: '20px' }}>
-          <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#8B7355', marginBottom: '10px', fontFamily: 'sans-serif', fontWeight: '600' }}>
-            Ingrédients
-          </div>
+          <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#8B7355', marginBottom: '10px', fontFamily: 'sans-serif', fontWeight: '600' }}>Ingrédients</div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: 'sans-serif' }}>
             <thead>
               <tr style={{ background: '#F0E8E0' }}>
-                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#2C1810', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', border: '0.5px solid #e8e4dc' }}>Ingrédient</th>
-                <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: '600', color: '#2C1810', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', border: '0.5px solid #e8e4dc' }}>Quantité</th>
-                <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: '600', color: '#2C1810', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', border: '0.5px solid #e8e4dc' }}>Unité</th>
-                <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: '600', color: '#2C1810', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', border: '0.5px solid #e8e4dc' }}>Prix unit.</th>
-                <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: '600', color: '#2C1810', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', border: '0.5px solid #e8e4dc' }}>Coût</th>
+                {['Ingrédient', 'Quantité', 'Unité', 'Prix unit.', 'Coût'].map((h, i) => (
+                  <th key={h} style={{ padding: '8px 12px', textAlign: i === 0 ? 'left' : 'right', fontWeight: '600', color: '#2C1810', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', border: '0.5px solid #e8e4dc' }}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -369,29 +324,19 @@ export default function FicheDetail() {
                     <td style={{ padding: '7px 12px', color: '#2C1810', fontWeight: '500', border: '0.5px solid #e8e4dc' }}>{ing.ingredients?.nom || '—'}</td>
                     <td style={{ padding: '7px 12px', textAlign: 'right', color: '#2C1810', border: '0.5px solid #e8e4dc' }}>{ing.quantite}</td>
                     <td style={{ padding: '7px 12px', textAlign: 'right', color: '#8B7355', border: '0.5px solid #e8e4dc' }}>{ing.unite}</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#8B7355', border: '0.5px solid #e8e4dc' }}>
-                      {ing.ingredients?.prix_kg ? `${Number(ing.ingredients.prix_kg).toFixed(2)} €` : '—'}
-                    </td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: '600', color: '#2C1810', border: '0.5px solid #e8e4dc' }}>
-                      {coutLigne ? `${coutLigne.toFixed(2)} €` : '—'}
-                    </td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#8B7355', border: '0.5px solid #e8e4dc' }}>{ing.ingredients?.prix_kg ? `${Number(ing.ingredients.prix_kg).toFixed(2)} €` : '—'}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: '600', color: '#2C1810', border: '0.5px solid #e8e4dc' }}>{coutLigne ? `${coutLigne.toFixed(2)} €` : '—'}</td>
                   </tr>
                 )
               })}
-              {/* Total */}
               <tr style={{ background: '#2C1810' }}>
-                <td colSpan={4} style={{ padding: '8px 12px', color: '#C4956A', fontWeight: '600', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', border: '0.5px solid #2C1810' }}>
-                  Coût total
-                </td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', color: '#C4956A', fontWeight: '700', fontSize: '14px', border: '0.5px solid #2C1810' }}>
-                  {cout.toFixed(2)} €
-                </td>
+                <td colSpan={4} style={{ padding: '8px 12px', color: '#C4956A', fontWeight: '600', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', border: '0.5px solid #2C1810' }}>Coût total</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', color: '#C4956A', fontWeight: '700', fontSize: '14px', border: '0.5px solid #2C1810' }}>{cout.toFixed(2)} €</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        {/* Récapitulatif financier */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
           {[
             { label: 'Coût / portion', value: cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—' },
@@ -406,27 +351,16 @@ export default function FicheDetail() {
           ))}
         </div>
 
-        {/* Allergènes */}
         {fiche.allergenes && fiche.allergenes.length > 0 && (
           <div style={{ background: '#FCEBEB', borderRadius: '6px', padding: '12px', marginBottom: '20px', border: '0.5px solid #F09595' }}>
-            <div style={{ fontSize: '9px', color: '#A32D2D', textTransform: 'uppercase', letterSpacing: '2px', fontFamily: 'sans-serif', fontWeight: '600', marginBottom: '8px' }}>
-              ⚠ Allergènes présents
-            </div>
+            <div style={{ fontSize: '9px', color: '#A32D2D', textTransform: 'uppercase', letterSpacing: '2px', fontFamily: 'sans-serif', fontWeight: '600', marginBottom: '8px' }}>⚠ Allergènes présents</div>
             <div style={{ fontSize: '11px', color: '#A32D2D', fontFamily: 'sans-serif', fontWeight: '500' }}>
-              {fiche.allergenes.map(id => {
-                const allergene = ALLERGENES.find(a => a.id === id)
-                return allergene ? `${allergene.emoji} ${allergene.label}` : null
-              }).filter(Boolean).join('  •  ')}
+              {fiche.allergenes.map(id => { const a = ALLERGENES.find(a => a.id === id); return a ? `${a.emoji} ${a.label}` : null }).filter(Boolean).join('  •  ')}
             </div>
           </div>
         )}
 
-        {/* Pied de page */}
-        <div style={{
-          borderTop: '1px solid #e8e4dc', paddingTop: '12px',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          fontSize: '9px', color: '#8B7355', fontFamily: 'sans-serif'
-        }}>
+        <div style={{ borderTop: '1px solid #e8e4dc', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', color: '#8B7355', fontFamily: 'sans-serif' }}>
           <span>{params['nom_etablissement'] || 'La Fantaisie'} — {params['adresse'] || '24 Rue Cadet, Paris 9ème'}</span>
           <span>{fiche.nom} — {fiche.saison || ''} — Imprimé le {today}</span>
         </div>
