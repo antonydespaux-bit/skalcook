@@ -41,3 +41,33 @@ body {
 .print-only {
   display: none;
 }
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  body {
+    background: white !important;
+  }
+}
