@@ -121,6 +121,13 @@ export default function LoginPage() {
             }}>
               {loading ? 'Connexion...' : 'Se connecter'}
             </button>
+            <button onClick={() => router.push('/reset-password')} style={{
+            width: '100%', marginTop: '12px', background: 'transparent',
+             color: theme.couleurs.texteMuted, border: 'none', fontSize: '13px',
+            cursor: 'pointer', textDecoration: 'underline'
+            }}>
+              Mot de passe oublié ?
+          </button>
           </form>
         </div>
 
