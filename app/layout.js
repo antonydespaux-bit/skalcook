@@ -1,4 +1,3 @@
-import { ThemeProvider } from '../lib/ThemeContext'
 import './globals.css'
 
 export const metadata = {
@@ -10,9 +9,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="fr">
       <body>
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
+        {children}
       </body>
     </html>
   )
