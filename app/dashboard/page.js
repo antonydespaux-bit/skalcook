@@ -4,6 +4,7 @@ import { supabase, getParametres } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../lib/theme.jsx'
 import { useIsMobile } from '../../lib/useIsMobile'
+import { useTheme } from '../../lib/useTheme'
 
 export default function DashboardPage() {
   const [fiches, setFiches] = useState([])
@@ -13,8 +14,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [menuOuvert, setMenuOuvert] = useState(false)
   const router = useRouter()
-  const c = theme.couleurs
   const isMobile = useIsMobile()
+  const { c, darkMode, toggleDarkMode } = useTheme()
 
   useEffect(() => {
     checkUser()
@@ -184,7 +185,7 @@ export default function DashboardPage() {
           Tableau de bord — {params['nom_etablissement'] || 'La Fantaisie'}
         </div>
 
-        {/* KPIs principaux */}
+        {/* KPIs */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
@@ -192,34 +193,24 @@ export default function DashboardPage() {
           marginBottom: '24px'
         }}>
           <div style={{
-            background: foodCostMoyen ? fichesFCColor(foodCostMoyen).bg : 'white',
+            background: foodCostMoyen ? fichesFCColor(foodCostMoyen).bg : c.blanc,
             borderRadius: '12px', padding: isMobile ? '14px' : '20px',
             border: `0.5px solid ${c.bordure}`
           }}>
-            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>
-              Food cost moyen
-            </div>
+            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Food cost moyen</div>
             <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: foodCostMoyen ? fichesFCColor(foodCostMoyen).color : c.texte }}>
               {foodCostMoyen ? `${foodCostMoyen.toFixed(1)}%` : '—'}
             </div>
-            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>
-              Sur {fichesAvecFC.length} fiches
-            </div>
+            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Sur {fichesAvecFC.length} fiches</div>
           </div>
 
           <div style={{
-            background: 'white', borderRadius: '12px', padding: isMobile ? '14px' : '20px',
+            background: c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px',
             border: `0.5px solid ${c.bordure}`, cursor: 'pointer'
           }} onClick={() => router.push('/fiches')}>
-            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>
-              Fiches actives
-            </div>
-            <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: c.texte }}>
-              {fiches.length}
-            </div>
-            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>
-              {menus.length} menu{menus.length > 1 ? 's' : ''}
-            </div>
+            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Fiches actives</div>
+            <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: c.texte }}>{fiches.length}</div>
+            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>{menus.length} menu{menus.length > 1 ? 's' : ''}</div>
           </div>
 
           <div style={{
@@ -227,31 +218,19 @@ export default function DashboardPage() {
             borderRadius: '12px', padding: isMobile ? '14px' : '20px',
             border: `0.5px solid ${c.bordure}`
           }}>
-            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>
-              Fiches en alerte
-            </div>
-            <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: fichesAlerte.length > 0 ? '#A32D2D' : '#3B6D11' }}>
-              {fichesAlerte.length}
-            </div>
-            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>
-              Food cost {'>'} {seuilOrange}%
-            </div>
+            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Fiches en alerte</div>
+            <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: fichesAlerte.length > 0 ? '#A32D2D' : '#3B6D11' }}>{fichesAlerte.length}</div>
+            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Food cost {'>'} {seuilOrange}%</div>
           </div>
 
           <div style={{
-            background: ingredientsPrixHausse.length > 0 ? '#FAEEDA' : 'white',
+            background: ingredientsPrixHausse.length > 0 ? '#FAEEDA' : c.blanc,
             borderRadius: '12px', padding: isMobile ? '14px' : '20px',
             border: `0.5px solid ${c.bordure}`
           }}>
-            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>
-              Prix modifiés
-            </div>
-            <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: ingredientsPrixHausse.length > 0 ? '#854F0B' : c.texte }}>
-              {ingredientsPrixHausse.length}
-            </div>
-            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>
-              Ingrédients récents
-            </div>
+            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Prix modifiés</div>
+            <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: ingredientsPrixHausse.length > 0 ? '#854F0B' : c.texte }}>{ingredientsPrixHausse.length}</div>
+            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Ingrédients récents</div>
           </div>
         </div>
 
@@ -263,48 +242,35 @@ export default function DashboardPage() {
         }}>
 
           {/* Fiches en alerte */}
-          <div style={{
-            background: 'white', borderRadius: '12px',
-            border: `0.5px solid ${c.bordure}`, overflow: 'hidden'
-          }}>
-            <div style={{
-              padding: '16px 20px', borderBottom: `0.5px solid ${c.bordure}`,
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-            }}>
-              <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>
-                🚨 Fiches en alerte
-              </div>
+          <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
+            <div style={{ padding: '16px 20px', borderBottom: `0.5px solid ${c.bordure}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>🚨 Fiches en alerte</div>
               <span style={{ fontSize: '11px', color: c.texteMuted }}>Food cost {'>'} {seuilOrange}%</span>
             </div>
             {fichesAlerte.length === 0 ? (
-              <div style={{ padding: '24px', textAlign: 'center', color: c.texteMuted, fontSize: '13px' }}>
-                ✓ Aucune fiche en alerte
-              </div>
+              <div style={{ padding: '24px', textAlign: 'center', color: c.texteMuted, fontSize: '13px' }}>✓ Aucune fiche en alerte</div>
             ) : (
               <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                 {fichesAlerte.slice(0, 10).map((fiche, i) => {
                   const fc = foodCostFiche(fiche)
                   return (
-                    <div
-                      key={fiche.id}
-                      onClick={() => router.push(`/fiches/${fiche.id}`)}
+                    <div key={fiche.id} onClick={() => router.push(`/fiches/${fiche.id}`)}
                       style={{
                         padding: '12px 20px', cursor: 'pointer',
                         borderBottom: i < fichesAlerte.length - 1 ? `0.5px solid ${c.bordure}` : 'none',
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        background: c.blanc
                       }}
                       onMouseEnter={e => e.currentTarget.style.background = c.fond}
-                      onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                      onMouseLeave={e => e.currentTarget.style.background = c.blanc}
                     >
                       <div>
                         <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>{fiche.nom}</div>
                         <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '2px' }}>{fiche.categorie}</div>
                       </div>
-                      <span style={{
-                        background: '#FCEBEB', color: '#A32D2D',
-                        borderRadius: '20px', padding: '3px 10px',
-                        fontSize: '12px', fontWeight: '600'
-                      }}>{fc.toFixed(1)}%</span>
+                      <span style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '20px', padding: '3px 10px', fontSize: '12px', fontWeight: '600' }}>
+                        {fc.toFixed(1)}%
+                      </span>
                     </div>
                   )
                 })}
@@ -313,14 +279,9 @@ export default function DashboardPage() {
           </div>
 
           {/* Fiches par catégorie */}
-          <div style={{
-            background: 'white', borderRadius: '12px',
-            border: `0.5px solid ${c.bordure}`, overflow: 'hidden'
-          }}>
+          <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: `0.5px solid ${c.bordure}` }}>
-              <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>
-                📊 Fiches par espace
-              </div>
+              <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>📊 Fiches par espace</div>
             </div>
             <div style={{ padding: '16px 20px' }}>
               {fichesByCategorie.map(({ cat, nb }) => (
@@ -332,8 +293,7 @@ export default function DashboardPage() {
                   <div style={{ background: c.fond, borderRadius: '20px', height: '6px', overflow: 'hidden' }}>
                     <div style={{
                       background: c.accent, height: '100%', borderRadius: '20px',
-                      width: `${(nb / maxFiches) * 100}%`,
-                      transition: 'width 0.5s ease'
+                      width: `${(nb / maxFiches) * 100}%`, transition: 'width 0.5s ease'
                     }} />
                   </div>
                 </div>
@@ -344,14 +304,9 @@ export default function DashboardPage() {
 
         {/* Ingrédients prix modifiés */}
         {ingredientsPrixHausse.length > 0 && (
-          <div style={{
-            background: 'white', borderRadius: '12px',
-            border: `0.5px solid ${c.bordure}`, overflow: 'hidden'
-          }}>
+          <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: `0.5px solid ${c.bordure}` }}>
-              <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>
-                📈 Ingrédients avec prix modifiés récemment
-              </div>
+              <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>📈 Ingrédients avec prix modifiés récemment</div>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
@@ -373,7 +328,7 @@ export default function DashboardPage() {
                       : null
                     const hausse = variation > 0
                     return (
-                      <tr key={ing.id} style={{ borderBottom: i < ingredientsPrixHausse.length - 1 ? `0.5px solid ${c.bordure}` : 'none' }}>
+                      <tr key={ing.id} style={{ borderBottom: i < ingredientsPrixHausse.length - 1 ? `0.5px solid ${c.bordure}` : 'none', background: c.blanc }}>
                         <td style={{ padding: '10px 16px', fontWeight: '500', color: c.texte }}>{ing.nom}</td>
                         <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texteMuted }}>
                           {ing.prix_precedent ? `${Number(ing.prix_precedent).toFixed(2)} €` : '—'}
