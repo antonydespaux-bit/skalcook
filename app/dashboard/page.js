@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../lib/theme.jsx'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
+import { useRole } from '../../lib/useRole'
 
 export default function DashboardPage() {
   const [fiches, setFiches] = useState([])
@@ -15,7 +16,8 @@ export default function DashboardPage() {
   const [menuOuvert, setMenuOuvert] = useState(false)
   const router = useRouter()
   const isMobile = useIsMobile()
-  const { c, darkMode, toggleDarkMode } = useTheme()
+  const { c } = useTheme()
+  const { role, nom, loading: roleLoading } = useRole()
 
   useEffect(() => {
     checkUser()
@@ -93,19 +95,23 @@ export default function DashboardPage() {
 
   const maxFiches = Math.max(...fichesByCategorie.map(c => c.nb), 1)
 
+  const peutModifier = role === 'admin' || role === 'cuisine'
+
   const navItems = [
-    { label: '+ Nouvelle fiche', path: '/fiches/nouvelle', accent: true },
+    ...(peutModifier ? [{ label: '+ Nouvelle fiche', path: '/fiches/nouvelle', accent: true }] : []),
     { label: 'Fiches', path: '/fiches' },
+    ...(role === 'admin' || role === 'bar' ? [{ label: 'Bar', path: '/bar' }] : []),
     { label: 'Menus', path: '/menus' },
     { label: 'Récap', path: '/recap' },
     { label: 'Sous-fiches', path: '/sous-fiches' },
-    { label: 'Ingrédients', path: '/ingredients' },
+    ...(peutModifier ? [{ label: 'Ingrédients', path: '/ingredients' }] : []),
     { label: 'Archives', path: '/archives' },
-    { label: 'Paramètres', path: '/parametres' },
+    ...(role === 'admin' ? [{ label: 'Paramètres', path: '/parametres' }] : []),
+    ...(role === 'admin' ? [{ label: '👥 Utilisateurs', path: '/admin' }] : []),
     { label: 'Déconnexion', path: null, action: handleLogout },
   ]
 
-  if (loading) return (
+  if (loading || roleLoading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
       <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
     </div>
@@ -124,19 +130,15 @@ export default function DashboardPage() {
         <Logo height={28} couleur="white" onClick={() => router.push('/dashboard')} />
 
         {isMobile ? (
-          <button
-            onClick={() => setMenuOuvert(!menuOuvert)}
-            style={{
-              background: 'transparent', border: '0.5px solid rgba(255,255,255,0.3)',
-              borderRadius: '8px', padding: '8px 12px', cursor: 'pointer',
-              color: 'white', fontSize: '18px'
-            }}
-          >☰</button>
+          <button onClick={() => setMenuOuvert(!menuOuvert)} style={{
+            background: 'transparent', border: '0.5px solid rgba(255,255,255,0.3)',
+            borderRadius: '8px', padding: '8px 12px', cursor: 'pointer',
+            color: 'white', fontSize: '18px'
+          }}>☰</button>
         ) : (
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {navItems.map((item, i) => (
-              <button
-                key={i}
+              <button key={i}
                 onClick={() => item.action ? item.action() : router.push(item.path)}
                 style={{
                   background: item.accent ? c.accent : 'transparent',
@@ -151,7 +153,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Menu mobile déroulant */}
+      {/* Menu mobile */}
       {isMobile && menuOuvert && (
         <div style={{
           background: c.principal, padding: '8px 16px 16px',
@@ -159,8 +161,7 @@ export default function DashboardPage() {
           position: 'sticky', top: '56px', zIndex: 99
         }}>
           {navItems.map((item, i) => (
-            <button
-              key={i}
+            <button key={i}
               onClick={() => {
                 setMenuOuvert(false)
                 item.action ? item.action() : router.push(item.path)
@@ -181,8 +182,23 @@ export default function DashboardPage() {
 
       <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '1100px', margin: '0 auto' }}>
 
-        <div style={{ fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '20px', fontWeight: '500' }}>
-          Tableau de bord — {params['nom_etablissement'] || 'La Fantaisie'}
+        {/* Titre + rôle */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div style={{ fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '500' }}>
+            Tableau de bord — {params['nom_etablissement'] || 'La Fantaisie'}
+          </div>
+          {nom && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12px', color: c.texteMuted }}>Bonjour, <strong style={{ color: c.texte }}>{nom}</strong></span>
+              <span style={{
+                background: role === 'admin' ? '#F0E8E0' : role === 'cuisine' ? '#EAF3DE' : role === 'bar' ? '#EEEDFE' : '#FAEEDA',
+                color: role === 'admin' ? '#2C1810' : role === 'cuisine' ? '#3B6D11' : role === 'bar' ? '#3C3489' : '#854F0B',
+                borderRadius: '20px', padding: '3px 10px', fontSize: '11px', fontWeight: '500'
+              }}>
+                {role === 'admin' ? 'Administrateur' : role === 'cuisine' ? 'Cuisine' : role === 'bar' ? 'Bar' : 'Directeur'}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* KPIs */}
