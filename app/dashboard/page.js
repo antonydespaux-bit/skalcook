@@ -6,6 +6,20 @@ import { theme, Logo } from '../../lib/theme.jsx'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
+import * as XLSX from 'xlsx'
+
+const ALLERGENES = [
+  { id: 'arachides', label: 'Arachides', emoji: '🥜' },
+  { id: 'soja', label: 'Soja', emoji: '🫘' },
+  { id: 'lait', label: 'Lait', emoji: '🥛' },
+  { id: 'fruits_a_coque', label: 'Fruits à coque', emoji: '🌰' },
+  { id: 'celeri', label: 'Céleri', emoji: '🥬' },
+  { id: 'moutarde', label: 'Moutarde', emoji: '🌿' },
+  { id: 'sesame', label: 'Graines de sésame', emoji: '🌾' },
+  { id: 'sulfites', label: 'Anhydride sulfureux', emoji: '🍷' },
+  { id: 'lupin', label: 'Lupin', emoji: '🌼' },
+  { id: 'mollusques', label: 'Mollusques', emoji: '🦪' },
+]
 
 export default function DashboardPage() {
   const [fiches, setFiches] = useState([])
@@ -14,6 +28,8 @@ export default function DashboardPage() {
   const [params, setParams] = useState({})
   const [loading, setLoading] = useState(true)
   const [menuOuvert, setMenuOuvert] = useState(false)
+  const [showAllergenes, setShowAllergenes] = useState(false)
+  const [filtreCategorie, setFiltreCategorie] = useState('toutes')
   const router = useRouter()
   const isMobile = useIsMobile()
   const { c } = useTheme()
@@ -85,6 +101,26 @@ export default function DashboardPage() {
 
   const maxFiches = Math.max(...fichesByCategorie.map(c => c.nb), 1)
 
+  // Fiches avec allergènes
+  const fichesAvecAllergenes = fiches.filter(f => f.allergenes && f.allergenes.length > 0)
+  const fichesFiltreesAllergenes = filtreCategorie === 'toutes'
+    ? fichesAvecAllergenes
+    : fichesAvecAllergenes.filter(f => f.categorie === filtreCategorie)
+
+  const exportAllergenesExcel = () => {
+    const wb = XLSX.utils.book_new()
+    const rows = fichesFiltreesAllergenes.map(f => {
+      const row = { 'Fiche': f.nom, 'Catégorie': f.categorie || '—', 'Saison': f.saison || '—' }
+      ALLERGENES.forEach(a => {
+        row[`${a.emoji} ${a.label}`] = f.allergenes?.includes(a.id) ? '✓' : ''
+      })
+      return row
+    })
+    const ws = XLSX.utils.json_to_sheet(rows)
+    XLSX.utils.book_append_sheet(wb, ws, 'Allergènes')
+    XLSX.writeFile(wb, `allergenes_la_fantaisie_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.xlsx`)
+  }
+
   const peutModifier = role === 'admin' || role === 'cuisine'
 
   const navItems = [
@@ -110,25 +146,23 @@ export default function DashboardPage() {
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
 
-      <div style={{
+      {/* Navigation */}
+      <div className="no-print" style={{
         background: c.principal, borderBottom: `0.5px solid ${c.accent}40`,
         padding: '0 16px', display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', height: '56px',
         position: 'sticky', top: 0, zIndex: 100
       }}>
         <Logo height={28} couleur="white" onClick={() => router.push('/dashboard')} />
-
         {isMobile ? (
           <button onClick={() => setMenuOuvert(!menuOuvert)} style={{
             background: 'transparent', border: '0.5px solid rgba(255,255,255,0.3)',
-            borderRadius: '8px', padding: '8px 12px', cursor: 'pointer',
-            color: 'white', fontSize: '18px'
+            borderRadius: '8px', padding: '8px 12px', cursor: 'pointer', color: 'white', fontSize: '18px'
           }}>☰</button>
         ) : (
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {navItems.map((item, i) => (
-              <button key={i}
-                onClick={() => item.action ? item.action() : router.push(item.path)}
+              <button key={i} onClick={() => item.action ? item.action() : router.push(item.path)}
                 style={{
                   background: item.accent ? c.accent : 'transparent',
                   color: item.accent ? c.principal : 'rgba(255,255,255,0.7)',
@@ -143,14 +177,13 @@ export default function DashboardPage() {
       </div>
 
       {isMobile && menuOuvert && (
-        <div style={{
+        <div className="no-print" style={{
           background: c.principal, padding: '8px 16px 16px',
           borderBottom: `0.5px solid ${c.accent}40`,
           position: 'sticky', top: '56px', zIndex: 99
         }}>
           {navItems.map((item, i) => (
-            <button key={i}
-              onClick={() => { setMenuOuvert(false); item.action ? item.action() : router.push(item.path) }}
+            <button key={i} onClick={() => { setMenuOuvert(false); item.action ? item.action() : router.push(item.path) }}
               style={{
                 display: 'block', width: '100%', textAlign: 'left',
                 background: item.accent ? c.accent : 'transparent',
@@ -165,7 +198,8 @@ export default function DashboardPage() {
 
       <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '1100px', margin: '0 auto' }}>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        {/* Titre + rôle */}
+        <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div style={{ fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '500' }}>
             Tableau de bord Cuisine — {params['nom_etablissement'] || 'La Fantaisie'}
           </div>
@@ -184,15 +218,11 @@ export default function DashboardPage() {
         </div>
 
         {/* KPIs */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
+        <div className="no-print" style={{
+          display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
           gap: isMobile ? '10px' : '16px', marginBottom: '24px'
         }}>
-          <div style={{
-            background: foodCostMoyen ? fichesFCColor(foodCostMoyen).bg : c.blanc,
-            borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}`
-          }}>
+          <div style={{ background: foodCostMoyen ? fichesFCColor(foodCostMoyen).bg : c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
             <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Food cost moyen</div>
             <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: foodCostMoyen ? fichesFCColor(foodCostMoyen).color : c.texte }}>
               {foodCostMoyen ? `${foodCostMoyen.toFixed(1)}%` : '—'}
@@ -200,38 +230,27 @@ export default function DashboardPage() {
             <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Sur {fichesAvecFC.length} fiches</div>
           </div>
 
-          <div style={{
-            background: c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px',
-            border: `0.5px solid ${c.bordure}`, cursor: 'pointer'
-          }} onClick={() => router.push('/fiches')}>
+          <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}`, cursor: 'pointer' }}
+            onClick={() => router.push('/fiches')}>
             <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Fiches actives</div>
             <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: c.texte }}>{fiches.length}</div>
             <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>{menus.length} menu{menus.length > 1 ? 's' : ''}</div>
           </div>
 
-          <div style={{
-            background: fichesAlerte.length > 0 ? '#FCEBEB' : '#EAF3DE',
-            borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}`
-          }}>
+          <div style={{ background: fichesAlerte.length > 0 ? '#FCEBEB' : '#EAF3DE', borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
             <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Fiches en alerte</div>
             <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: fichesAlerte.length > 0 ? '#A32D2D' : '#3B6D11' }}>{fichesAlerte.length}</div>
             <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Food cost {'>'} {seuilOrange}%</div>
           </div>
 
-          <div style={{
-            background: ingredientsPrixHausse.length > 0 ? '#FAEEDA' : c.blanc,
-            borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}`
-          }}>
+          <div style={{ background: ingredientsPrixHausse.length > 0 ? '#FAEEDA' : c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
             <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Prix modifiés</div>
             <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: ingredientsPrixHausse.length > 0 ? '#854F0B' : c.texte }}>{ingredientsPrixHausse.length}</div>
             <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Ingrédients récents</div>
           </div>
         </div>
 
-        <div style={{
-          display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-          gap: isMobile ? '12px' : '16px', marginBottom: '16px'
-        }}>
+        <div className="no-print" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? '12px' : '16px', marginBottom: '16px' }}>
 
           {/* Fiches en alerte */}
           <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
@@ -247,11 +266,7 @@ export default function DashboardPage() {
                   const fc = foodCostFiche(fiche)
                   return (
                     <div key={fiche.id} onClick={() => router.push(`/fiches/${fiche.id}`)}
-                      style={{
-                        padding: '12px 20px', cursor: 'pointer',
-                        borderBottom: i < fichesAlerte.length - 1 ? `0.5px solid ${c.bordure}` : 'none',
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: c.blanc
-                      }}
+                      style={{ padding: '12px 20px', cursor: 'pointer', borderBottom: i < fichesAlerte.length - 1 ? `0.5px solid ${c.bordure}` : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: c.blanc }}
                       onMouseEnter={e => e.currentTarget.style.background = c.fond}
                       onMouseLeave={e => e.currentTarget.style.background = c.blanc}
                     >
@@ -259,9 +274,7 @@ export default function DashboardPage() {
                         <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>{fiche.nom}</div>
                         <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '2px' }}>{fiche.categorie}</div>
                       </div>
-                      <span style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '20px', padding: '3px 10px', fontSize: '12px', fontWeight: '600' }}>
-                        {fc.toFixed(1)}%
-                      </span>
+                      <span style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '20px', padding: '3px 10px', fontSize: '12px', fontWeight: '600' }}>{fc.toFixed(1)}%</span>
                     </div>
                   )
                 })}
@@ -292,7 +305,7 @@ export default function DashboardPage() {
 
         {/* Ingrédients prix modifiés */}
         {ingredientsPrixHausse.length > 0 && (
-          <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
+          <div className="no-print" style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden', marginBottom: '16px' }}>
             <div style={{ padding: '16px 20px', borderBottom: `0.5px solid ${c.bordure}` }}>
               <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>📈 Ingrédients avec prix modifiés récemment</div>
             </div>
@@ -332,6 +345,112 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+
+        {/* Tableau allergènes */}
+        <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: `0.5px solid ${c.bordure}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>⚠️ Tableau des allergènes</div>
+              <span style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '20px', padding: '2px 8px', fontSize: '11px', fontWeight: '500' }}>
+                {fichesAvecAllergenes.length} fiche{fichesAvecAllergenes.length > 1 ? 's' : ''}
+              </span>
+            </div>
+            <div className="no-print" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <select value={filtreCategorie} onChange={e => setFiltreCategorie(e.target.value)} style={{
+                padding: '6px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
+                fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer'
+              }}>
+                <option value="toutes">Toutes les catégories</option>
+                {theme.categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
+              <button onClick={() => { setShowAllergenes(!showAllergenes) }} style={{
+                padding: '6px 12px', background: c.fond, color: c.texte,
+                border: `0.5px solid ${c.bordure}`, borderRadius: '8px', fontSize: '12px', cursor: 'pointer'
+              }}>{showAllergenes ? 'Masquer' : 'Afficher'}</button>
+              <button onClick={exportAllergenesExcel} style={{
+                padding: '6px 12px', background: c.vert, color: 'white',
+                border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
+              }}>📊 Excel</button>
+              <button onClick={() => window.print()} style={{
+                padding: '6px 12px', background: c.accent, color: c.principal,
+                border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
+              }}>🖨️ Imprimer</button>
+            </div>
+          </div>
+
+          {(showAllergenes || true) && (
+            <div style={{ overflowX: 'auto' }}>
+
+              {/* En-tête impression */}
+              <div className="print-only" style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #2C1810', marginBottom: '16px' }}>
+                <div>
+                  <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#8B7355', marginBottom: '6px', fontFamily: 'sans-serif' }}>Tableau des allergènes</div>
+                  <div style={{ fontSize: '20px', fontWeight: '400', color: '#2C1810', fontFamily: 'Georgia, serif' }}>{params['nom_etablissement'] || 'La Fantaisie'}</div>
+                  <div style={{ fontSize: '11px', color: '#8B7355', fontFamily: 'sans-serif', marginTop: '4px' }}>
+                    Fiches actives — Imprimé le {new Date().toLocaleDateString('fr-FR')}
+                  </div>
+                </div>
+                <img src="https://uvmslpdcywephdneciwd.supabase.co/storage/v1/object/public/fiches-photos/logo-la-fantaisie.png" alt="La Fantaisie" style={{ height: '70px', objectFit: 'contain' }} />
+              </div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: isMobile ? '11px' : '12px', minWidth: '800px' }}>
+                <thead>
+                  <tr style={{ background: c.principal }}>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase', position: 'sticky', left: 0, background: c.principal, zIndex: 1 }}>
+                      Fiche / Catégorie
+                    </th>
+                    {ALLERGENES.map(a => (
+                      <th key={a.id} style={{ padding: '8px 6px', textAlign: 'center', fontSize: '10px', color: c.accent, fontWeight: '500', minWidth: '60px' }}>
+                        <div style={{ fontSize: '16px' }}>{a.emoji}</div>
+                        <div style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.5px', lineHeight: '1.2', marginTop: '2px' }}>{a.label}</div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {fichesFiltreesAllergenes.map((fiche, i) => (
+                    <tr key={fiche.id} style={{
+                      borderBottom: `0.5px solid ${c.bordure}`,
+                      background: i % 2 === 0 ? c.blanc : c.fond
+                    }}>
+                      <td style={{ padding: '10px 12px', position: 'sticky', left: 0, background: i % 2 === 0 ? c.blanc : c.fond, zIndex: 1 }}>
+                        <div style={{ fontWeight: '500', color: c.texte, fontSize: '13px' }}>{fiche.nom}</div>
+                        <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '2px' }}>{fiche.categorie}</div>
+                      </td>
+                      {ALLERGENES.map(a => (
+                        <td key={a.id} style={{ padding: '10px 6px', textAlign: 'center' }}>
+                          {fiche.allergenes?.includes(a.id) ? (
+                            <div style={{
+                              width: '22px', height: '22px', borderRadius: '50%',
+                              background: '#FCEBEB', border: '1.5px solid #A32D2D',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              margin: '0 auto', fontSize: '11px', color: '#A32D2D', fontWeight: '700'
+                            }}>✓</div>
+                          ) : (
+                            <div style={{ width: '22px', height: '22px', margin: '0 auto', opacity: 0.15, fontSize: '12px', textAlign: 'center', color: c.bordure }}>—</div>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                  {fichesFiltreesAllergenes.length === 0 && (
+                    <tr>
+                      <td colSpan={ALLERGENES.length + 1} style={{ padding: '30px', textAlign: 'center', color: c.texteMuted, fontSize: '13px' }}>
+                        Aucune fiche avec allergènes
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              {/* Légende impression */}
+              <div className="print-only" style={{ padding: '16px 20px', borderTop: '1px solid #e8e4dc', fontSize: '10px', color: '#8B7355', fontFamily: 'sans-serif' }}>
+                <strong>Légende :</strong> ✓ = Allergène présent dans la fiche technique —
+                {ALLERGENES.map(a => ` ${a.emoji} ${a.label}`).join(' — ')}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
