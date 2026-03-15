@@ -128,6 +128,13 @@ export default function LoginPage() {
             }}>
               Mot de passe oublié ?
           </button>
+          <button onClick={() => router.push('/inscription')} style={{
+          width: '100%', marginTop: '8px', background: 'transparent',
+          color: c.texteMuted, border: 'none', fontSize: '13px',
+           cursor: 'pointer', textDecoration: 'underline'
+            }}>
+            Créer un compte
+          </button>
           </form>
         </div>
 
