@@ -392,8 +392,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Version impression uniquement */}
-      <div className="print-only" style={{ fontFamily: 'sans-serif', color: '#1a1a1a', background: 'white', padding: '0' }}>
+      {/* Version impression uniquement - CORRIGÉE POUR LE PAYSAGE */}
+      <div className="print-only dashboard-allergenes-print" style={{ fontFamily: 'sans-serif', color: '#1a1a1a', background: 'white', padding: '0' }}>
 
         {/* En-tête */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #2C1810', paddingBottom: '12px', marginBottom: '16px' }}>

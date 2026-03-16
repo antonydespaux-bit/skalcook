@@ -12,6 +12,10 @@ body {
   color: #1a1a1a;
 }
 
+.print-only {
+  display: none;
+}
+
 @media print {
   * {
     -webkit-print-color-adjust: exact !important;
@@ -32,19 +36,16 @@ body {
     padding: 0 !important;
   }
 
+  /* --- RÈGLE PAR DÉFAUT : PORTRAIT (Fiches techniques) --- */
   @page {
-    size: A4;
-    margin: 15mm;
-  }
-}
-
-.print-only {
-  display: none;
-}
-@media print {
-  @page {
-    size: A4 landscape;
+    size: portrait;
     margin: 10mm;
+  }
+
+  /* --- RÈGLE SPÉCIFIQUE : PAYSAGE (Allergènes) --- */
+  /* On utilise le nom de page "landscape" */
+  .dashboard-allergenes-print {
+    page: landscape-page;
   }
 
   table {
@@ -58,16 +59,10 @@ body {
   tr {
     page-break-inside: avoid;
   }
+}
 
-  .no-print {
-    display: none !important;
-  }
-
-  .print-only {
-    display: block !important;
-  }
-
-  body {
-    background: white !important;
-  }
+/* Définition du format paysage nommé pour le navigateur */
+@page landscape-page {
+  size: landscape;
+  margin: 5mm;
 }
