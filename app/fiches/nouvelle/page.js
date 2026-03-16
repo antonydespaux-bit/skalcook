@@ -33,7 +33,12 @@ export default function NouvelleFiche() {
   const { c } = useTheme()
   const saisons = theme.saisons
   const categories = [...theme.categories, 'Sous-fiche']
+  
+  // LOGIQUE HYBRIDE : Définition des types de fiches
   const isSousFiche = categorie === 'Sous-fiche'
+  const isAccompagnement = categorie === 'Accompagnements'
+  const isIngredientPossible = isSousFiche || isAccompagnement
+
   const isMobile = useIsMobile()
 
   const autosaveData = { nom, categorie, nbPortions, unitePortions, prixTTC, description, saison, allergenes, ingredients }
@@ -171,10 +176,14 @@ export default function NouvelleFiche() {
       await supabase.from('fiche_ingredients').insert(ingredientsAInserer)
     }
 
-    if (isSousFiche && coutPortion) {
+    // LOGIQUE HYBRIDE : Insertion automatique dans la table ingrédients
+    if (isIngredientPossible && coutPortion) {
       await supabase.from('ingredients').insert([{
-        nom: fiche.nom, prix_kg: parseFloat(coutPortion),
-        unite: unitePortions, est_sous_fiche: true, fiche_id: fiche.id
+        nom: fiche.nom, 
+        prix_kg: parseFloat(coutPortion),
+        unite: isSousFiche ? unitePortions : 'portions', // Accompagnements = toujours en portions
+        est_sous_fiche: true, 
+        fiche_id: fiche.id
       }])
     }
 
@@ -245,10 +254,17 @@ export default function NouvelleFiche() {
 
         {error && <div style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '8px', padding: '12px 16px', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
 
-        {isSousFiche && (
-          <div style={{ background: c.violetClair, color: '#3C3489', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', border: '0.5px solid #AFA9EC' }}>
-            <span style={{ background: c.violet, color: 'white', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: '500' }}>SF</span>
-            Cette fiche sera disponible comme ingrédient dans les fiches principales
+        {isIngredientPossible && (
+          <div style={{ 
+            background: isSousFiche ? c.violetClair : c.vertClair, 
+            color: isSousFiche ? '#3C3489' : c.vert, 
+            borderRadius: '8px', padding: '10px 14px', fontSize: '13px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', 
+            border: `0.5px solid ${isSousFiche ? '#AFA9EC' : c.vert + '40'}` 
+          }}>
+            <span style={{ background: isSousFiche ? c.violet : c.vert, color: 'white', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: '500' }}>
+              {isSousFiche ? 'SOUS-FICHE' : 'ACCOMPAGNEMENT'}
+            </span>
+            Cette fiche sera disponible comme ingrédient dans les autres fiches.
           </div>
         )}
 
@@ -277,7 +293,7 @@ export default function NouvelleFiche() {
         </div>
 
         {/* Informations générales */}
-        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${isSousFiche ? '#AFA9EC' : c.bordure}`, marginBottom: '12px' }}>
+        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${isIngredientPossible ? (isSousFiche ? '#AFA9EC' : c.vert + '40') : c.bordure}`, marginBottom: '12px' }}>
           <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Informations générales</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>

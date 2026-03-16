@@ -14,6 +14,7 @@ export default function ModifierFiche() {
   const [nom, setNom] = useState('')
   const [categorie, setCategorie] = useState('Plats')
   const [nbPortions, setNbPortions] = useState('')
+  const [unitePortions, setUnitePortions] = useState('portions') // Ajouté pour cohérence
   const [prixTTC, setPrixTTC] = useState('')
   const [description, setDescription] = useState('')
   const [saison, setSaison] = useState('Printemps 2026')
@@ -32,6 +33,12 @@ export default function ModifierFiche() {
   const params_route = useParams()
   const { c } = useTheme()
   const categories = [...theme.categories, 'Sous-fiche']
+  
+  // LOGIQUE HYBRIDE
+  const isSousFiche = categorie === 'Sous-fiche'
+  const isAccompagnement = categorie === 'Accompagnements'
+  const isIngredientPossible = isSousFiche || isAccompagnement
+
   const isMobile = useIsMobile()
 
   const autosaveData = { nom, categorie, nbPortions, prixTTC, description, saison, allergenes, ingredients }
@@ -177,22 +184,50 @@ export default function ModifierFiche() {
       }
     }
 
+    // 1. Mise à jour de la fiche
     await supabase.from('fiches').update({
       nom, categorie,
       nb_portions: nbPortions ? parseInt(nbPortions) : null,
-      prix_ttc: prixTTC ? parseFloat(prixTTC) : null,
+      prix_ttc: isSousFiche ? null : (prixTTC ? parseFloat(prixTTC) : null), // Sécurité prix pour sous-fiches
       description, saison, allergenes, photo_url: photoUrl,
       cout_portion: coutPortion, updated_at: new Date().toISOString()
     }).eq('id', params_route.id)
 
+    // 2. Mise à jour des ingrédients de la fiche
     await supabase.from('fiche_ingredients').delete().eq('fiche_id', params_route.id)
-
     const ingredientsAInserer = ingredients
       .filter(i => i.ingredient_id && i.quantite)
       .map(i => ({ fiche_id: params_route.id, ingredient_id: i.ingredient_id, quantite: parseFloat(i.quantite), unite: i.unite }))
 
     if (ingredientsAInserer.length > 0) {
       await supabase.from('fiche_ingredients').insert(ingredientsAInserer)
+    }
+
+    // 3. LOGIQUE HYBRIDE : Mise à jour ou Création de l'ingrédient réutilisable
+    if (isIngredientPossible && coutPortion) {
+      const { data: ingExistant } = await supabase
+        .from('ingredients')
+        .select('id')
+        .eq('fiche_id', params_route.id)
+        .single()
+
+      if (ingExistant) {
+        // Mise à jour si déjà présent
+        await supabase.from('ingredients').update({
+          nom: nom,
+          prix_kg: parseFloat(coutPortion),
+          unite: isSousFiche ? unitePortions : 'portions'
+        }).eq('id', ingExistant.id)
+      } else {
+        // Création si c'est un nouvel accompagnement devenu ingrédient
+        await supabase.from('ingredients').insert([{
+          nom: nom,
+          prix_kg: parseFloat(coutPortion),
+          unite: isSousFiche ? unitePortions : 'portions',
+          est_sous_fiche: true,
+          fiche_id: params_route.id
+        }])
+      }
     }
 
     await log({
@@ -261,6 +296,20 @@ export default function ModifierFiche() {
 
         {error && <div style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '8px', padding: '12px 16px', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
 
+        {isIngredientPossible && (
+          <div style={{ 
+            background: isSousFiche ? c.violetClair : c.vertClair, 
+            color: isSousFiche ? '#3C3489' : c.vert, 
+            borderRadius: '8px', padding: '10px 14px', fontSize: '13px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', 
+            border: `0.5px solid ${isSousFiche ? '#AFA9EC' : c.vert + '40'}` 
+          }}>
+            <span style={{ background: isSousFiche ? c.violet : c.vert, color: 'white', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: '500' }}>
+              {isSousFiche ? 'SOUS-FICHE' : 'ACCOMPAGNEMENT'}
+            </span>
+            Cette fiche est synchronisée avec la liste des ingrédients.
+          </div>
+        )}
+
         {/* Photo */}
         <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
           <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Photo du plat</div>
@@ -287,7 +336,7 @@ export default function ModifierFiche() {
         </div>
 
         {/* Informations générales */}
-        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
+        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${isIngredientPossible ? (isSousFiche ? '#AFA9EC' : c.vert + '40') : c.bordure}`, marginBottom: '12px' }}>
           <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Informations générales</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
@@ -312,18 +361,27 @@ export default function ModifierFiche() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
-                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nombre de portions</label>
-                <input type="number" value={nbPortions} onChange={e => setNbPortions(e.target.value)}
-                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
-                />
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{isSousFiche ? 'Quantité produite' : 'Nombre de portions'}</label>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <input type="number" value={nbPortions} onChange={e => setNbPortions(e.target.value)}
+                    style={{ flex: 1, padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
+                  />
+                  {isSousFiche && (
+                    <select value={unitePortions} onChange={e => setUnitePortions(e.target.value)} style={{ padding: '12px 8px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: c.blanc, outline: 'none', color: c.texte }}>
+                      {['portions', 'kg', 'L', 'cl', 'ml', 'u'].map(u => <option key={u}>{u}</option>)}
+                    </select>
+                  )}
+                </div>
               </div>
-              <div>
-                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix TTC (€)</label>
-                <input type="number" value={prixTTC} onChange={e => setPrixTTC(e.target.value)} step="0.01"
-                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
-                />
-                {prixIndic && <div style={{ fontSize: '11px', color: c.vert, marginTop: '4px' }}>Indicatif ({seuilVert}%) : <strong>{prixIndic} €</strong></div>}
-              </div>
+              {!isSousFiche && (
+                <div>
+                  <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix TTC (€)</label>
+                  <input type="number" value={prixTTC} onChange={e => setPrixTTC(e.target.value)} step="0.01"
+                    style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
+                  />
+                  {prixIndic && <div style={{ fontSize: '11px', color: c.vert, marginTop: '4px' }}>Indicatif ({seuilVert}%) : <strong>{prixIndic} €</strong></div>}
+                </div>
+              )}
             </div>
             <div>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Description</label>
@@ -412,14 +470,14 @@ export default function ModifierFiche() {
             <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Coût total</div>
             <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{calculerCout().toFixed(2)} €</div>
           </div>
-          {prixIndic && (
+          {prixIndic && !isSousFiche && (
             <div style={{ background: c.vertClair, borderRadius: '8px', padding: '12px' }}>
               <div style={{ fontSize: '10px', color: c.vert, fontWeight: '500', textTransform: 'uppercase' }}>Prix indicatif TTC</div>
               <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.vert }}>{prixIndic} €</div>
               <div style={{ fontSize: '10px', color: c.vert, opacity: 0.8, marginTop: '2px' }}>Basé sur {seuilVert}%</div>
             </div>
           )}
-          {fc && (
+          {fc && !isSousFiche && (
             <div style={{ background: fc < seuilVert ? '#EAF3DE' : fc < seuilOrange ? '#FAEEDA' : '#FCEBEB', borderRadius: '8px', padding: '12px' }}>
               <div style={{ fontSize: '10px', fontWeight: '500', textTransform: 'uppercase', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>Food cost</div>
               <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>{fc} %</div>
