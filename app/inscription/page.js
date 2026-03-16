@@ -13,31 +13,28 @@ export default function InscriptionPage() {
   const [success, setSuccess] = useState(false)
   const router = useRouter()
 
-  const handleInscription = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
+const handleInscription = async (e) => {
+  e.preventDefault()
+  setLoading(true)
+  setError('')
 
-    const { data, error: errSignup } = await supabase.auth.signUp({
-      email, password,
-      options: { data: { nom } }
-    })
+  const res = await fetch('/api/create-user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, nom, role: 'cuisine' })
+  })
 
-    if (errSignup) { setError('Erreur : ' + errSignup.message); setLoading(false); return }
+  const data = await res.json()
 
-    // Créer le profil avec rôle cuisine
-    if (data.user) {
-      await supabase.from('profils').upsert({
-        id: data.user.id,
-        email,
-        nom,
-        role: 'cuisine'
-      })
-    }
-
-    setSuccess(true)
+  if (!res.ok || data.error) {
+    setError('Erreur : ' + data.error)
     setLoading(false)
+    return
   }
+
+  setSuccess(true)
+  setLoading(false)
+}
 
   return (
     <div style={{

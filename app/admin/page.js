@@ -37,39 +37,37 @@ export default function AdminPage() {
     setLoading(false)
   }
 
-  const creerUtilisateur = async () => {
-    if (!newEmail || !newPassword || !newNom) {
-      setError('Tous les champs sont obligatoires')
-      return
-    }
-    setCreating(true)
-    setError('')
-    setSuccess('')
-
-    const { data, error: errCreate } = await supabase.auth.admin.createUser({
-      email: newEmail,
-      password: newPassword,
-      email_confirm: true
-    })
-
-    if (errCreate) {
-      setError('Erreur : ' + errCreate.message)
-      setCreating(false)
-      return
-    }
-
-    await supabase.from('profils').update({
-      role: newRole, nom: newNom
-    }).eq('id', data.user.id)
-
-    setNewEmail('')
-    setNewPassword('')
-    setNewNom('')
-    setNewRole('cuisine')
-    setSuccess(`Compte créé pour ${newNom} !`)
-    await loadProfils()
-    setCreating(false)
+const creerUtilisateur = async () => {
+  if (!newEmail || !newPassword || !newNom) {
+    setError('Tous les champs sont obligatoires')
+    return
   }
+  setCreating(true)
+  setError('')
+  setSuccess('')
+
+  const res = await fetch('/api/create-user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: newEmail, password: newPassword, nom: newNom, role: newRole })
+  })
+
+  const data = await res.json()
+
+  if (!res.ok || data.error) {
+    setError('Erreur : ' + data.error)
+    setCreating(false)
+    return
+  }
+
+  setNewEmail('')
+  setNewPassword('')
+  setNewNom('')
+  setNewRole('cuisine')
+  setSuccess(`Compte créé pour ${newNom} !`)
+  await loadProfils()
+  setCreating(false)
+}
 
   const changerRole = async (id, newRole) => {
     await supabase.from('profils').update({ role: newRole }).eq('id', id)
