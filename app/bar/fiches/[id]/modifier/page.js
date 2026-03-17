@@ -11,7 +11,7 @@ import { log } from '../../../../../lib/useLog'
 import { ALLERGENES } from '../../../../../lib/allergenes'
 import IngredientSearch from '../../../../../components/IngredientSearch'
 
-const CATEGORIES_BAR = ['Cocktails', 'Vins', 'Bières', 'Softs', 'Champagnes', 'Spiritueux', 'Sans alcool', 'Mocktails', 'Sous-fiche']
+const CATEGORIES_BAR = ['Cocktails', 'Vins', 'Bières', 'Softs', 'Champagnes', 'Spiritueux', 'Sans alcool', 'Mocktails', 'Eaux', 'Caféterie', 'Sous-fiche']
 
 export default function ModifierBarFiche() {
   const [nom, setNom] = useState('')
