@@ -99,21 +99,22 @@ export default function ArdoisePage() {
 
   const supprimerIngredient = (id) => setPanier(panier.filter(i => i.id !== id))
 
-  // --- CALCULS DE COÛT MATIÈRE (Food Cost) ---
+// --- CALCULS DE COÛT MATIÈRE (Food Cost) ---
   const coutIngredients = panier.reduce((acc, ing) => {
     const qte = parseFloat(ing.quantite) || 0
     const pu = parseFloat(ing.prix_u) || 0
     return acc + (pu * qte)
   }, 0)
 
-  // Récupération des forfaits (Boisson/Pain/Beurre/etc)
-  const coutFixe = getSetting('cout_fixe_boisson') + getSetting('cout_fixe_dessert')
+  // On n'applique le coût fixe QUE si le panier contient au moins un ingrédient
+  const aDesIngredients = panier.length > 0
+  const coutFixeBase = getSetting('cout_fixe_boisson') + getSetting('cout_fixe_dessert')
+  const coutFixe = aDesIngredients ? coutFixeBase : 0
+  
   const coutTotalMatiere = coutIngredients + coutFixe
   
   const prixVenteTTC = getSetting('prix_formule_midi')
-  const prixVenteHT = prixVenteTTC / 1.1 // On enlève la TVA 10%
-  
-  // Ratio Coût Matière : (Coût / Prix Vente HT) * 100
+  const prixVenteHT = prixVenteTTC / 1.1 
   const ratioFoodCost = prixVenteHT > 0 ? (coutTotalMatiere / prixVenteHT) * 100 : 0
 
   const validerArdoise = async () => {
