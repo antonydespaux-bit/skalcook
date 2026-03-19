@@ -52,7 +52,11 @@ export default function FicheDetail() {
 
   const calculerCout = () => {
     return ingredients.reduce((total, ing) => {
-      if (ing.ingredients?.prix_kg && ing.quantite) return total + (ing.ingredients.prix_kg * ing.quantite)
+      if (ing.ingredients?.prix_kg && ing.quantite) {
+        // Gestion des conversions pour le calcul du coût total
+        let coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
+        return total + (ing.ingredients.prix_kg * ing.quantite * coef)
+      }
       return total
     }, 0)
   }
@@ -89,6 +93,12 @@ export default function FicheDetail() {
     router.push('/fiches')
   }
 
+  // Fonction pour obtenir l'unité d'affichage (portions, kg, L, u)
+  const getUniteLabel = () => {
+    if (!fiche?.unite_production || fiche.unite_production === 'portions') return 'Portions'
+    return fiche.unite_production
+  }
+
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
       <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
@@ -101,6 +111,7 @@ export default function FicheDetail() {
   const seuilVert = parseFloat(params['seuil_vert_cuisine'] || 28)
   const seuilOrange = parseFloat(params['seuil_orange_cuisine'] || 35)
   const today = new Date().toLocaleDateString('fr-FR')
+  const uniteLabel = getUniteLabel()
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
@@ -153,8 +164,9 @@ export default function FicheDetail() {
                 {fiche.saison && <span style={{ background: c.fond, color: c.texteMuted, borderRadius: '20px', padding: '3px 12px', fontSize: '12px', border: `0.5px solid ${c.bordure}` }}>{fiche.saison}</span>}
               </div>
             </div>
-            <div style={{ background: c.principal, color: c.accent, borderRadius: '10px', padding: '8px 14px', textAlign: 'center', flexShrink: 0, marginLeft: '12px' }}>
-              <div style={{ fontSize: '10px', opacity: 0.7 }}>Portions</div>
+            {/* BADGE DYNAMIQUE ICI */}
+            <div style={{ background: c.principal, color: c.accent, borderRadius: '10px', padding: '8px 14px', textAlign: 'center', flexShrink: 0, marginLeft: '12px', minWidth: '70px' }}>
+              <div style={{ fontSize: '10px', opacity: 0.7, textTransform: 'capitalize' }}>{uniteLabel}</div>
               <div style={{ fontSize: '20px', fontWeight: '500' }}>{fiche.nb_portions || '—'}</div>
             </div>
           </div>
@@ -216,7 +228,8 @@ export default function FicheDetail() {
               </thead>
               <tbody>
                 {ingredients.map((ing, i) => {
-                  const coutLigne = ing.ingredients?.prix_kg && ing.quantite ? ing.ingredients.prix_kg * ing.quantite : null
+                  let coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
+                  const coutLigne = ing.ingredients?.prix_kg && ing.quantite ? ing.ingredients.prix_kg * ing.quantite * coef : null
                   return (
                     <tr key={i} style={{ borderBottom: i < ingredients.length - 1 ? `0.5px solid ${c.bordure}` : 'none', background: c.blanc }}>
                       <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '500', color: c.texte }}>{ing.ingredients?.nom || '—'}</td>
@@ -239,7 +252,7 @@ export default function FicheDetail() {
             <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{cout ? `${cout.toFixed(2)} €` : '—'}</div>
           </div>
           <div style={{ background: c.fond, borderRadius: '8px', padding: '12px' }}>
-            <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Coût / portion</div>
+            <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Coût / {uniteLabel.slice(0, -1)}</div>
             <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—'}</div>
           </div>
           <div style={{ background: c.fond, borderRadius: '8px', padding: '12px' }}>
@@ -250,14 +263,14 @@ export default function FicheDetail() {
             <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Prix HT</div>
             <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{fiche.prix_ttc ? `${(fiche.prix_ttc / 1.10).toFixed(2)} €` : '—'}</div>
           </div>
-          {prixIndic && (
+          {prixIndic && !fiche.categorie?.includes('Sous-fiche') && (
             <div style={{ background: c.vertClair, borderRadius: '8px', padding: '12px' }}>
               <div style={{ fontSize: '10px', color: c.vert, fontWeight: '500', textTransform: 'uppercase' }}>Prix indicatif TTC</div>
               <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.vert }}>{prixIndic} €</div>
               <div style={{ fontSize: '10px', color: c.vert, opacity: 0.8, marginTop: '2px' }}>Basé sur {seuilVert}%</div>
             </div>
           )}
-          {fc && (
+          {fc && !fiche.categorie?.includes('Sous-fiche') && (
             <div style={{ background: fc < seuilVert ? '#EAF3DE' : fc < seuilOrange ? '#FAEEDA' : '#FCEBEB', borderRadius: '8px', padding: '12px' }}>
               <div style={{ fontSize: '10px', fontWeight: '500', textTransform: 'uppercase', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>Food cost</div>
               <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>{fc} %</div>
@@ -268,13 +281,13 @@ export default function FicheDetail() {
 
       {/* Version impression */}
       <div className="print-only" style={{ fontFamily: 'Georgia, serif', color: '#1a1a1a', background: 'white', padding: '0', width: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #2C1810', paddingBottom: '16px', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #2C1810', paddingBottom: '166px', marginBottom: '20px' }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#8B7355', marginBottom: '6px', fontFamily: 'sans-serif' }}>Fiche technique — {fiche.categorie || ''}</div>
             <h1 style={{ fontSize: '28px', fontWeight: '400', color: '#2C1810', marginBottom: '8px', letterSpacing: '1px' }}>{fiche.nom}</h1>
             <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: '#8B7355', fontFamily: 'sans-serif' }}>
               {fiche.saison && <span>Saison : {fiche.saison}</span>}
-              {fiche.nb_portions && <span>Portions : {fiche.nb_portions}</span>}
+              {fiche.nb_portions && <span>{uniteLabel} : {fiche.nb_portions}</span>}
               {params['chef_cuisine'] && <span>Chef : {params['chef_cuisine']}</span>}
             </div>
           </div>
@@ -302,7 +315,8 @@ export default function FicheDetail() {
             </thead>
             <tbody>
               {ingredients.map((ing, i) => {
-                const coutLigne = ing.ingredients?.prix_kg && ing.quantite ? ing.ingredients.prix_kg * ing.quantite : null
+                let coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
+                const coutLigne = ing.ingredients?.prix_kg && ing.quantite ? ing.ingredients.prix_kg * ing.quantite * coef : null
                 return (
                   <tr key={i} style={{ background: i % 2 === 0 ? 'white' : '#FAF9F6' }}>
                     <td style={{ padding: '7px 12px', color: '#2C1810', fontWeight: '500', border: '0.5px solid #e8e4dc' }}>{ing.ingredients?.nom || '—'}</td>
@@ -323,7 +337,7 @@ export default function FicheDetail() {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
           {[
-            { label: 'Coût / portion', value: cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—' },
+            { label: `Coût / ${uniteLabel.slice(0, -1)}`, value: cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—' },
             { label: 'Prix HT', value: fiche.prix_ttc ? `${(fiche.prix_ttc / 1.10).toFixed(2)} €` : '—' },
             { label: 'Prix TTC', value: fiche.prix_ttc ? `${Number(fiche.prix_ttc).toFixed(2)} €` : '—' },
             { label: 'Food cost', value: fc ? `${fc} %` : '—', highlight: fc ? (fc < seuilVert ? '#EAF3DE' : fc < seuilOrange ? '#FAEEDA' : '#FCEBEB') : null, color: fc ? (fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D') : '#2C1810' }
