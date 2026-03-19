@@ -81,7 +81,7 @@ export default function SousFichesPage() {
         }}>
           {[
             { label: 'Sous-fiches totales', value: fiches.length },
-            { label: 'Coût moyen / portion', value: coutMoyen ? `${coutMoyen.toFixed(2)} €` : '—' },
+            { label: 'Coût moyen / unité', value: coutMoyen ? `${coutMoyen.toFixed(2)} €` : '—' },
             { label: 'Utilisées comme ingrédient', value: fiches.length },
           ].map((stat, i) => (
             <div key={i} style={{
@@ -125,39 +125,46 @@ export default function SousFichesPage() {
             gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
             gap: isMobile ? '10px' : '14px'
           }}>
-            {fichesFiltrees.map(fiche => (
-              <div key={fiche.id} style={{
-                background: c.blanc, borderRadius: '12px', padding: '18px',
-                border: `0.5px solid ${c.bordure}`
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ background: c.violet, color: 'white', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: '500', flexShrink: 0 }}>SF</span>
-                    <span style={{ fontSize: isMobile ? '14px' : '15px', fontWeight: '500', color: c.texte }}>{fiche.nom}</span>
-                  </div>
-                  {fiche.cout_portion && (
-                    <div style={{ background: c.violetClair, borderRadius: '8px', padding: '6px 10px', textAlign: 'right', flexShrink: 0, marginLeft: '8px' }}>
-                      <div style={{ fontSize: '10px', color: '#3C3489', opacity: 0.7 }}>/ portion</div>
-                      <div style={{ fontSize: '14px', fontWeight: '500', color: '#3C3489' }}>{Number(fiche.cout_portion).toFixed(3)} €</div>
+            {fichesFiltrees.map(fiche => {
+              // LOGIQUE D'UNITE DYNAMIQUE
+              const uniteLabel = (fiche.unite_production && fiche.unite_production !== 'portions') 
+                ? fiche.unite_production 
+                : 'portion';
+
+              return (
+                <div key={fiche.id} style={{
+                  background: c.blanc, borderRadius: '12px', padding: '18px',
+                  border: `0.5px solid ${c.bordure}`
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ background: c.violet, color: 'white', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: '500', flexShrink: 0 }}>SF</span>
+                      <span style={{ fontSize: isMobile ? '14px' : '15px', fontWeight: '500', color: c.texte }}>{fiche.nom}</span>
                     </div>
-                  )}
+                    {fiche.cout_portion && (
+                      <div style={{ background: c.violetClair, borderRadius: '8px', padding: '6px 10px', textAlign: 'right', flexShrink: 0, marginLeft: '8px' }}>
+                        <div style={{ fontSize: '10px', color: '#3C3489', opacity: 0.7 }}>/ {uniteLabel}</div>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: '#3C3489' }}>{Number(fiche.cout_portion).toFixed(3)} €</div>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '14px' }}>
+                    {fiche.nb_portions} {uniteLabel}{fiche.nb_portions > 1 && uniteLabel === 'portion' ? 's' : ''}
+                    {fiche.saison && ` — ${fiche.saison}`}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => router.push(`/fiches/${fiche.id}`)} style={{
+                      flex: 1, padding: '8px', background: c.violetClair, color: '#3C3489',
+                      border: `0.5px solid #AFA9EC`, borderRadius: '8px', fontSize: '12px', cursor: 'pointer', fontWeight: '500'
+                    }}>Voir</button>
+                    <button onClick={() => router.push(`/fiches/${fiche.id}/modifier`)} style={{
+                      flex: 1, padding: '8px', background: 'transparent', color: c.texteMuted,
+                      border: `0.5px solid ${c.bordure}`, borderRadius: '8px', fontSize: '12px', cursor: 'pointer'
+                    }}>Modifier</button>
+                  </div>
                 </div>
-                <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '14px' }}>
-                  {fiche.nb_portions} portion{fiche.nb_portions > 1 ? 's' : ''}
-                  {fiche.saison && ` — ${fiche.saison}`}
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={() => router.push(`/fiches/${fiche.id}`)} style={{
-                    flex: 1, padding: '8px', background: c.violetClair, color: '#3C3489',
-                    border: `0.5px solid #AFA9EC`, borderRadius: '8px', fontSize: '12px', cursor: 'pointer', fontWeight: '500'
-                  }}>Voir</button>
-                  <button onClick={() => router.push(`/fiches/${fiche.id}/modifier`)} style={{
-                    flex: 1, padding: '8px', background: 'transparent', color: c.texteMuted,
-                    border: `0.5px solid ${c.bordure}`, borderRadius: '8px', fontSize: '12px', cursor: 'pointer'
-                  }}>Modifier</button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
