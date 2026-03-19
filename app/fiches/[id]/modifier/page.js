@@ -51,12 +51,12 @@ export default function ModifierFiche() {
     if (!session) router.push('/')
   }
 
-  const loadParams = async () => {
+const loadParams = async () => {
     const p = await getParametres()
     setParams(p)
   }
 
-const loadData = async () => {
+  const loadData = async () => {
     const { data: ficheData } = await supabase.from('fiches').select('*').eq('id', params_route.id).single()
     if (!ficheData) { router.push('/fiches'); return }
 
@@ -67,27 +67,24 @@ const loadData = async () => {
     setDescription(ficheData.description || '')
     setSaison(ficheData.saison || 'Printemps 2026')
     setAllergenes(ficheData.allergenes || [])
-    if (ficheData.photo_url) { setPhotoExistante(ficheData.photo_url); setPhotoPreview(ficheData.photo_url) }
+    if (ficheData.photo_url) { 
+      setPhotoExistante(ficheData.photo_url)
+      setPhotoPreview(ficheData.photo_url) 
+    }
 
     // RÉCUPÉRATION DES INGRÉDIENTS AVEC LEURS UNITÉS
     const { data: ingsData } = await supabase
       .from('fiche_ingredients')
-      .select(`quantite, unite, ingredients (id, nom, prix_kg, unite)`) // On récupère l'unité de la liaison ET de l'ingrédient
+      .select(`quantite, unite, ingredients (id, nom, prix_kg, unite)`)
       .eq('fiche_id', params_route.id)
 
     setIngredients((ingsData || []).map(i => ({
       ingredient_id: i.ingredients?.id || '',
       nom: i.ingredients?.nom || '',
       quantite: i.quantite,
-      // CRUCIAL : Si l'unité n'est pas stockée dans la liaison, on prend celle de l'ingrédient, sinon 'kg'
       unite: i.unite || i.ingredients?.unite || 'kg' 
     })))
 
-    const { data: liste } = await supabase.from('ingredients').select('*').order('nom').limit(5000)
-    setListeIngredients(liste || [])
-    setLoading(false)
-  }
-  
     const { data: liste } = await supabase.from('ingredients').select('*').order('nom').limit(5000)
     setListeIngredients(liste || [])
     setLoading(false)
@@ -106,7 +103,7 @@ const loadData = async () => {
     setIngredients(draft.ingredients || [])
     setDraftRestored(true)
   }
-
+  
   const toggleAllergene = (id) => {
     setAllergenes(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id])
   }
