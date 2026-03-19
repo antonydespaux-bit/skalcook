@@ -56,7 +56,7 @@ export default function ModifierFiche() {
     setParams(p)
   }
 
-  const loadData = async () => {
+const loadData = async () => {
     const { data: ficheData } = await supabase.from('fiches').select('*').eq('id', params_route.id).single()
     if (!ficheData) { router.push('/fiches'); return }
 
@@ -69,18 +69,25 @@ export default function ModifierFiche() {
     setAllergenes(ficheData.allergenes || [])
     if (ficheData.photo_url) { setPhotoExistante(ficheData.photo_url); setPhotoPreview(ficheData.photo_url) }
 
+    // RÉCUPÉRATION DES INGRÉDIENTS AVEC LEURS UNITÉS
     const { data: ingsData } = await supabase
       .from('fiche_ingredients')
-      .select(`quantite, unite, ingredients (id, nom, prix_kg, unite)`)
+      .select(`quantite, unite, ingredients (id, nom, prix_kg, unite)`) // On récupère l'unité de la liaison ET de l'ingrédient
       .eq('fiche_id', params_route.id)
 
     setIngredients((ingsData || []).map(i => ({
       ingredient_id: i.ingredients?.id || '',
       nom: i.ingredients?.nom || '',
       quantite: i.quantite,
-      unite: i.unite
+      // CRUCIAL : Si l'unité n'est pas stockée dans la liaison, on prend celle de l'ingrédient, sinon 'kg'
+      unite: i.unite || i.ingredients?.unite || 'kg' 
     })))
 
+    const { data: liste } = await supabase.from('ingredients').select('*').order('nom').limit(5000)
+    setListeIngredients(liste || [])
+    setLoading(false)
+  }
+  
     const { data: liste } = await supabase.from('ingredients').select('*').order('nom').limit(5000)
     setListeIngredients(liste || [])
     setLoading(false)
@@ -138,13 +145,28 @@ export default function ModifierFiche() {
     setIngredients(nouveaux)
   }
 
-  const calculerCout = () => {
-    return ingredients.reduce((total, ing) => {
-      const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
-      if (ingData?.prix_kg && ing.quantite) return total + (ingData.prix_kg * parseFloat(ing.quantite))
-      return total
-    }, 0)
-  }
+const calculerCout = () => {
+  return ingredients.reduce((total, ing) => {
+    const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
+    if (!ingData?.prix_kg || !ing.quantite) return total
+
+    let quantiteNumerique = parseFloat(ing.quantite)
+    
+    // LOGIQUE DE CONVERSION AUTOMATIQUE
+    // Si l'unité choisie est 'g' ou 'ml', on divise par 1000 pour 
+    // ramener la quantité au prix par Kg ou par Litre stocké en base.
+    const unitesSousMultiples = ['g', 'ml', 'cl']
+    let coefficient = 1
+    
+    if (ing.unite === 'g' || ing.unite === 'ml') {
+      coefficient = 0.001 // Division par 1000
+    } else if (ing.unite === 'cl') {
+      coefficient = 0.01  // Division par 100 (100cl = 1L)
+    }
+
+    return total + (ingData.prix_kg * quantiteNumerique * coefficient)
+  }, 0)
+}
 
   const foodCost = () => {
     const cout = calculerCout()
@@ -198,24 +220,35 @@ export default function ModifierFiche() {
       await supabase.from('fiche_ingredients').insert(ingredientsAInserer)
     }
 
-    // Mettre à jour l'ingrédient si sous-fiche ou accompagnement
-    if (isIngredientPossible(categorie) && coutPortion) {
-      const { data: ingExistant } = await supabase
-        .from('ingredients').select('id').eq('fiche_id', params_route.id).single()
+// --- CORRECTION UNITÉ DYNAMIQUE ---
+if (isIngredientPossible(categorie) && coutPortion) {
+  const { data: ingExistant } = await supabase
+    .from('ingredients').select('id').eq('fiche_id', params_route.id).single()
 
-      if (ingExistant) {
-        await supabase.from('ingredients').update({
-          nom, prix_kg: parseFloat(coutPortion)
-        }).eq('fiche_id', params_route.id)
-      } else {
-        await supabase.from('ingredients').insert([{
-          nom, prix_kg: parseFloat(coutPortion),
-          unite: isSousFiche ? 'portions' : 'portions',
-          est_sous_fiche: true, fiche_id: params_route.id
-        }])
-      }
-    }
+  // On définit l'unité de production : 
+  // Si c'est une sous-fiche, on regarde si le Chef a défini une unité spécifique.
+  // Sinon, on utilise 'portions' ou 'u' par défaut.
+  let uniteProduction = 'portions'
+  if (isSousFiche) {
+    // Ici, on pourrait même ajouter un sélecteur d'unité global pour la fiche.
+    // Pour l'instant, on harmonise : kg pour les accompagnements, u pour le reste.
+    uniteProduction = categorie === 'Accompagnements' ? 'portions' : 'u'
+  }
 
+  const payloadIngredient = {
+    nom, 
+    prix_kg: parseFloat(coutPortion),
+    unite: uniteProduction, // L'unité choisie est maintenant sauvegardée
+    est_sous_fiche: true, 
+    fiche_id: params_route.id
+  }
+
+  if (ingExistant) {
+    await supabase.from('ingredients').update(payloadIngredient).eq('fiche_id', params_route.id)
+  } else {
+    await supabase.from('ingredients').insert([payloadIngredient])
+  }
+}
     await log({
       action: 'MODIFICATION', entite: 'fiche', entite_id: params_route.id,
       entite_nom: nom, section: 'cuisine',
