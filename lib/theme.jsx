@@ -84,3 +84,4 @@ export function IconBar({ size = 16, color = 'currentColor' }) {
   )
 }
 export const c = theme.couleurs
+
