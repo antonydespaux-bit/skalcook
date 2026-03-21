@@ -1,12 +1,12 @@
 'use client'
-export const dynamic = 'force-dynamic'
-export const dynamic = 'force-dynamic'
+
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '../../../lib/useTheme'
 import NavbarCuisine from '../../../components/NavbarCuisine'
 
+export const dynamic = 'force-dynamic'
 export default function ArdoisePage() {
   const router = useRouter()
   const { c } = useTheme()

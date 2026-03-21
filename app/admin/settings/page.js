@@ -2,7 +2,9 @@
 export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase' // Ton client supabase
-import { c } from '../../../lib/theme'
+import { theme } from '../../../lib/theme'
+const c = theme.couleurs
+
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState([])
