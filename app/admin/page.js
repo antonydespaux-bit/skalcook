@@ -71,7 +71,7 @@ const creerUtilisateur = async () => {
   const data = await res.json()
 
 if (!res.ok || data.error) {
-  setError('Erreur : ' + JSON.stringify(data))
+    setError('Erreur : ' + data.error)
     setCreating(false)
     return
   }
