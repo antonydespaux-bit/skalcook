@@ -6,7 +6,6 @@ import { useTheme } from '../lib/useTheme'
 import { useRole } from '../lib/useRole'
 import { useIsMobile } from '../lib/useIsMobile'
 
-const { c, nomEtablissement, logoUrl } = useTheme()
 
 // Puis utilisez c.principal au lieu de NAV, c.accent au lieu de ACCENT
 const NAV = c.principal || '#18181B'
