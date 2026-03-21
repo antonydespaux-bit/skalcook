@@ -1,8 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase, getParametres } from '../../../lib/supabase'
+import { supabase, getParametres, getClientId } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
+import { log } from '../../../lib/useLog'
 
 export default function NouveauMenu() {
   const [nom, setNom] = useState('')
@@ -72,22 +73,21 @@ export default function NouveauMenu() {
     setLoading(true)
     setError('')
 
+    const clientId = await getClientId()
+    if (!clientId) { setError('Erreur : session expirée'); setLoading(false); return }
+
     const { data: menu, error: errMenu } = await supabase
       .from('menus')
       .insert([{
-        nom,
-        saison,
+        nom, saison,
         prix_vente: prixVente ? parseFloat(prixVente) : null,
-        description
+        description,
+        client_id: clientId
       }])
       .select()
       .single()
 
-    if (errMenu) {
-      setError('Erreur : ' + errMenu.message)
-      setLoading(false)
-      return
-    }
+    if (errMenu) { setError('Erreur : ' + errMenu.message); setLoading(false); return }
 
     const menuFiches = services
       .filter(service => selection[service])
@@ -95,12 +95,19 @@ export default function NouveauMenu() {
         menu_id: menu.id,
         fiche_id: selection[service],
         service,
-        ordre: index
+        ordre: index,
+        client_id: clientId
       }))
 
     if (menuFiches.length > 0) {
       await supabase.from('menu_fiches').insert(menuFiches)
     }
+
+    await log({
+      action: 'CREATION', entite: 'menu', entite_id: menu.id,
+      entite_nom: nom, section: 'cuisine',
+      details: `Saison: ${saison}`
+    })
 
     router.push('/menus')
   }
@@ -160,8 +167,7 @@ export default function NouveauMenu() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom du menu *</label>
-              <input
-                type="text" value={nom} onChange={e => setNom(e.target.value)}
+              <input type="text" value={nom} onChange={e => setNom(e.target.value)}
                 placeholder="Ex : Menu Dégustation, Menu Midi..."
                 style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
               />
@@ -178,8 +184,7 @@ export default function NouveauMenu() {
             </div>
             <div>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix de vente TTC (€)</label>
-              <input
-                type="number" value={prixVente} onChange={e => setPrixVente(e.target.value)}
+              <input type="number" value={prixVente} onChange={e => setPrixVente(e.target.value)}
                 placeholder="Ex : 65.00" step="0.01"
                 style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
               />
@@ -191,8 +196,7 @@ export default function NouveauMenu() {
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Description</label>
-              <textarea
-                value={description} onChange={e => setDescription(e.target.value)}
+              <textarea value={description} onChange={e => setDescription(e.target.value)}
                 placeholder="Description du menu..." rows={2}
                 style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', color: c.texte }}
               />
@@ -213,8 +217,7 @@ export default function NouveauMenu() {
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 {service}
               </label>
-              <select
-                value={selection[service]}
+              <select value={selection[service]}
                 onChange={e => setSelection({ ...selection, [service]: e.target.value })}
                 style={{
                   width: '100%', padding: '10px 12px', borderRadius: '8px',

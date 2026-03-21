@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase, getParametres } from '../../../lib/supabase'
+import { supabase, getParametres, getClientId } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
 import { useIsMobile } from '../../../lib/useIsMobile'
@@ -9,6 +9,7 @@ import { useAutosave } from '../../../lib/useAutosave'
 import { log } from '../../../lib/useLog'
 import { ALLERGENES } from '../../../lib/allergenes'
 import IngredientSearch from '../../../components/IngredientSearch'
+
 
 const isIngredientPossible = (cat) => cat === 'Sous-fiche' || cat === 'Accompagnements'
 
@@ -134,65 +135,76 @@ export default function NouvelleFiche() {
     return (parseFloat(coutPortion) / seuil * tva).toFixed(2)
   }
 
-  const handleSubmit = async () => {
-    if (!nom) { setError('Le nom de la fiche est obligatoire'); return }
-    if (!nbPortions) { setError('Le nombre de portions est obligatoire'); return }
-    setLoading(true)
-    setError('')
+const handleSubmit = async () => {
+  if (!nom) { setError('Le nom de la fiche est obligatoire'); return }
+  if (!nbPortions) { setError('Le nombre de portions est obligatoire'); return }
+  setLoading(true)
+  setError('')
 
-    const coutPortion = calculerCoutPortion()
+  const clientId = await getClientId()
+  if (!clientId) { setError('Erreur : session expirée'); setLoading(false); return }
 
-    const { data: fiche, error: errFiche } = await supabase
-      .from('fiches')
-      .insert([{
-        nom, categorie,
-        nb_portions: parseInt(nbPortions),
-        prix_ttc: isSousFiche ? null : (prixTTC ? parseFloat(prixTTC) : null),
-        description, saison, allergenes,
-        cout_portion: coutPortion ? parseFloat(coutPortion) : null
-      }])
-      .select().single()
+  const coutPortion = calculerCoutPortion()
 
-    if (errFiche) { setError('Erreur : ' + errFiche.message); setLoading(false); return }
+  const { data: fiche, error: errFiche } = await supabase
+    .from('fiches')
+    .insert([{
+      nom, categorie,
+      nb_portions: parseInt(nbPortions),
+      prix_ttc: isSousFiche ? null : (prixTTC ? parseFloat(prixTTC) : null),
+      description, saison, allergenes,
+      cout_portion: coutPortion ? parseFloat(coutPortion) : null,
+      client_id: clientId
+    }])
+    .select().single()
 
-    if (photo) {
-      const ext = photo.name.split('.').pop()
-      const path = `${fiche.id}.${ext}`
-      const { error: errPhoto } = await supabase.storage.from('fiches-photos').upload(path, photo, { upsert: true })
-      if (!errPhoto) {
-        const { data: urlData } = supabase.storage.from('fiches-photos').getPublicUrl(path)
-        await supabase.from('fiches').update({ photo_url: urlData.publicUrl }).eq('id', fiche.id)
-      }
+  if (errFiche) { setError('Erreur : ' + errFiche.message); setLoading(false); return }
+
+  if (photo) {
+    const ext = photo.name.split('.').pop()
+    const path = `${clientId}/${fiche.id}.${ext}`
+    const { error: errPhoto } = await supabase.storage
+      .from('fiches-photos').upload(path, photo, { upsert: true })
+    if (!errPhoto) {
+      const { data: urlData } = supabase.storage.from('fiches-photos').getPublicUrl(path)
+      await supabase.from('fiches').update({ photo_url: urlData.publicUrl }).eq('id', fiche.id)
     }
-
-    const ingredientsAInserer = ingredients
-      .filter(i => i.ingredient_id && i.quantite)
-      .map(i => ({ fiche_id: fiche.id, ingredient_id: i.ingredient_id, quantite: parseFloat(i.quantite), unite: i.unite }))
-
-    if (ingredientsAInserer.length > 0) {
-      await supabase.from('fiche_ingredients').insert(ingredientsAInserer)
-    }
-
-    // Ajouter dans les ingrédients si sous-fiche ou accompagnement
-    if (isIngredientPossible(categorie) && coutPortion) {
-      await supabase.from('ingredients').insert([{
-        nom: fiche.nom,
-        prix_kg: parseFloat(coutPortion),
-        unite: isSousFiche ? unitePortions : 'portions',
-        est_sous_fiche: true,
-        fiche_id: fiche.id
-      }])
-    }
-
-    await log({
-      action: 'CREATION', entite: 'fiche', entite_id: fiche.id,
-      entite_nom: nom, section: 'cuisine',
-      details: `Catégorie: ${categorie}, Saison: ${saison}`
-    })
-
-    clearDraft()
-    router.push(isSousFiche ? '/sous-fiches' : '/fiches')
   }
+
+  const ingredientsAInserer = ingredients
+    .filter(i => i.ingredient_id && i.quantite)
+    .map(i => ({
+      fiche_id: fiche.id,
+      ingredient_id: i.ingredient_id,
+      quantite: parseFloat(i.quantite),
+      unite: i.unite,
+      client_id: clientId
+    }))
+
+  if (ingredientsAInserer.length > 0) {
+    await supabase.from('fiche_ingredients').insert(ingredientsAInserer)
+  }
+
+  if (isIngredientPossible(categorie) && coutPortion) {
+    await supabase.from('ingredients').insert([{
+      nom: fiche.nom,
+      prix_kg: parseFloat(coutPortion),
+      unite: isSousFiche ? unitePortions : 'portions',
+      est_sous_fiche: true,
+      fiche_id: fiche.id,
+      client_id: clientId
+    }])
+  }
+
+  await log({
+    action: 'CREATION', entite: 'fiche', entite_id: fiche.id,
+    entite_nom: nom, section: 'cuisine',
+    details: `Catégorie: ${categorie}, Saison: ${saison}`
+  })
+
+  clearDraft()
+  router.push(isSousFiche ? '/sous-fiches' : '/fiches')
+}
 
   const fc = foodCost()
   const coutPortion = calculerCoutPortion()

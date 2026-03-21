@@ -46,10 +46,26 @@ const creerUtilisateur = async () => {
   setError('')
   setSuccess('')
 
+  // Récupérer le client_id de l'admin connecté
+  const { data: { session } } = await supabase.auth.getSession()
+  const clientId = session?.user?.user_metadata?.client_id
+
+  if (!clientId) {
+    setError('Erreur : client_id introuvable')
+    setCreating(false)
+    return
+  }
+
   const res = await fetch('/api/create-user', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: newEmail, password: newPassword, nom: newNom, role: newRole })
+    body: JSON.stringify({
+      email: newEmail,
+      password: newPassword,
+      nom: newNom,
+      role: newRole,
+      client_id: clientId
+    })
   })
 
   const data = await res.json()

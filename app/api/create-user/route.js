@@ -7,31 +7,37 @@ const supabaseAdmin = createClient(
 
 export async function POST(request) {
   try {
-    const { email, password, nom, role } = await request.json()
+    const { email, password, nom, role, client_id } = await request.json()
 
     if (!email || !password || !nom) {
       return Response.json({ error: 'Paramètres manquants' }, { status: 400 })
     }
 
-    // Créer l'utilisateur avec le client admin
+    if (!client_id) {
+      return Response.json({ error: 'client_id manquant' }, { status: 400 })
+    }
+
+    // Créer l'utilisateur avec client_id dans le JWT
     const { data, error: errCreate } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
-      email_confirm: true
+      email_confirm: true,
+      user_metadata: { client_id }
     })
 
     if (errCreate) {
       return Response.json({ error: errCreate.message }, { status: 400 })
     }
 
-    // Créer le profil
+    // Créer le profil avec client_id
     const { error: errProfil } = await supabaseAdmin
       .from('profils')
       .upsert({
         id: data.user.id,
         email,
         nom,
-        role: role || 'cuisine'
+        role: role || 'cuisine',
+        client_id
       })
 
     if (errProfil) {

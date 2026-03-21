@@ -1,11 +1,12 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '../../../lib/supabase'
+import { supabase, getClientId } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
+import { log } from '../../../lib/useLog'
 
 export default function BarIngredientsPage() {
   const [ingredients, setIngredients] = useState([])
@@ -62,6 +63,11 @@ export default function BarIngredientsPage() {
     if (!confirm(`Supprimer ${selection.length} ingrédient${selection.length > 1 ? 's' : ''} ?`)) return
     setSupprimant(true)
     await supabase.from('ingredients_bar').delete().in('id', selection)
+    await log({
+      action: 'SUPPRESSION', entite: 'ingredient_bar',
+      entite_nom: `${selection.length} ingrédients`, section: 'bar',
+      details: `IDs: ${selection.join(', ')}`
+    })
     await loadIngredients()
     setSupprimant(false)
   }
@@ -69,11 +75,22 @@ export default function BarIngredientsPage() {
   const ajouterIngredient = async () => {
     if (!nouveauNom) return
     setSaving(true)
+
+    const clientId = await getClientId()
+    if (!clientId) { setSaving(false); return }
+
     await supabase.from('ingredients_bar').insert([{
       nom: nouveauNom.trim(),
       prix_kg: nouveauPrix ? parseFloat(nouveauPrix.replace(',', '.')) : null,
-      unite: nouvelleUnite
+      unite: nouvelleUnite,
+      client_id: clientId
     }])
+
+    await log({
+      action: 'CREATION', entite: 'ingredient_bar',
+      entite_nom: nouveauNom.trim(), section: 'bar'
+    })
+
     setNouveauNom('')
     setNouveauPrix('')
     setNouvelleUnite('cl')

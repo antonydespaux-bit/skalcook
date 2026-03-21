@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase, getClientId } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../lib/theme.jsx'
 import { useIsMobile } from '../../lib/useIsMobile'
@@ -65,6 +65,9 @@ export default function ImportPage() {
     setResultat(null)
     setProgression(0)
 
+    const clientId = await getClientId()
+    if (!clientId) { setLoading(false); return }
+
     const batchSize = 50
     let importes = 0
     let misAJour = 0
@@ -76,14 +79,29 @@ export default function ImportPage() {
       for (const ing of batch) {
         try {
           const { data: existing } = await supabase
-            .from('ingredients').select('id, prix_kg').eq('nom', ing.nom).single()
+            .from('ingredients')
+            .select('id, prix_kg')
+            .eq('nom', ing.nom)
+            .eq('client_id', clientId)
+            .single()
+
           if (existing) {
             if (existing.prix_kg !== ing.prix_kg) {
-              await supabase.from('ingredients').update({ prix_kg: ing.prix_kg, unite: ing.unite }).eq('id', existing.id)
+              await supabase.from('ingredients')
+                .update({
+                  prix_kg: ing.prix_kg,
+                  unite: ing.unite,
+                  prix_precedent: existing.prix_kg,
+                  prix_updated_at: new Date().toISOString()
+                })
+                .eq('id', existing.id)
               misAJour++
             }
           } else {
-            await supabase.from('ingredients').insert([ing])
+            await supabase.from('ingredients').insert([{
+              ...ing,
+              client_id: clientId
+            }])
             importes++
           }
         } catch (e) { erreurs++ }

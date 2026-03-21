@@ -18,10 +18,26 @@ const handleInscription = async (e) => {
   setLoading(true)
   setError('')
 
+  // Récupérer le client_id de l'admin connecté
+  const { data: { session } } = await supabase.auth.getSession()
+  const clientId = session?.user?.user_metadata?.client_id
+
+  if (!clientId) {
+    setError('Erreur : client_id introuvable. Connectez-vous d\'abord.')
+    setLoading(false)
+    return
+  }
+
   const res = await fetch('/api/create-user', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, nom, role: 'cuisine' })
+    body: JSON.stringify({
+      email,
+      password,
+      nom,
+      role: 'cuisine',
+      client_id: clientId
+    })
   })
 
   const data = await res.json()
@@ -31,6 +47,10 @@ const handleInscription = async (e) => {
     setLoading(false)
     return
   }
+
+  setSuccess(true)
+  setLoading(false)
+}
 
   setSuccess(true)
   setLoading(false)
@@ -131,4 +151,5 @@ const handleInscription = async (e) => {
       </div>
     </div>
   )
-}
+
+

@@ -1,8 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase, getParametres } from '../../../lib/supabase'
+import { supabase, getParametres, getClientId } from '../../../lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
+import { log } from '../../../lib/useLog'
 
 export default function MenuDetail() {
   const [menu, setMenu] = useState(null)
@@ -98,15 +99,14 @@ export default function MenuDetail() {
   const handleSave = async () => {
     setSaving(true)
 
-    await supabase
-      .from('menus')
-      .update({
-        nom,
-        saison,
-        prix_vente: prixVente ? parseFloat(prixVente) : null,
-        description
-      })
-      .eq('id', params_route.id)
+    const clientId = await getClientId()
+    if (!clientId) { setSaving(false); return }
+
+    await supabase.from('menus').update({
+      nom, saison,
+      prix_vente: prixVente ? parseFloat(prixVente) : null,
+      description
+    }).eq('id', params_route.id)
 
     await supabase.from('menu_fiches').delete().eq('menu_id', params_route.id)
 
@@ -116,12 +116,19 @@ export default function MenuDetail() {
         menu_id: params_route.id,
         fiche_id: selection[service],
         service,
-        ordre: index
+        ordre: index,
+        client_id: clientId
       }))
 
     if (menuFichesAInserer.length > 0) {
       await supabase.from('menu_fiches').insert(menuFichesAInserer)
     }
+
+    await log({
+      action: 'MODIFICATION', entite: 'menu', entite_id: params_route.id,
+      entite_nom: nom, section: 'cuisine',
+      details: `Saison: ${saison}`
+    })
 
     await loadData()
     setSaving(false)
@@ -131,6 +138,10 @@ export default function MenuDetail() {
   const handleDelete = async () => {
     if (!confirm('Supprimer ce menu ?')) return
     await supabase.from('menus').delete().eq('id', params_route.id)
+    await log({
+      action: 'SUPPRESSION', entite: 'menu', entite_id: params_route.id,
+      entite_nom: menu.nom, section: 'cuisine'
+    })
     router.push('/menus')
   }
 
@@ -289,8 +300,7 @@ export default function MenuDetail() {
                 <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>
                   {service}
                 </label>
-                <select
-                  value={selection[service]}
+                <select value={selection[service]}
                   onChange={e => setSelection({ ...selection, [service]: e.target.value })}
                   style={{
                     width: '100%', padding: '10px 12px', borderRadius: '8px',

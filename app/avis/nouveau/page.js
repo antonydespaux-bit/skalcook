@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { supabase } from '../../../lib/supabase'
+import { supabase, getClientId } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
 import { useIsMobile } from '../../../lib/useIsMobile'
@@ -23,21 +23,24 @@ export default function NouvelAvisPage() {
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
 
-  const handleSubmit = async () => {
-    if (!form.review_text) { setError('Le texte de l\'avis est obligatoire'); return }
-    setLoading(true)
-    setError('')
+const handleSubmit = async () => {
+  if (!form.review_text) { setError('Le texte de l\'avis est obligatoire'); return }
+  setLoading(true)
+  setError('')
 
-    const sentiment = form.sentiment || (form.stars >= 4 ? 'pos' : form.stars <= 2 ? 'neg' : 'mix')
+  const clientId = await getClientId()
+  if (!clientId) { setError('Erreur : session expirée'); setLoading(false); return }
 
-    const { error: errInsert } = await supabase.from('avis').insert([{
-      ...form, sentiment
-    }])
+  const sentiment = form.sentiment || (form.stars >= 4 ? 'pos' : form.stars <= 2 ? 'neg' : 'mix')
 
-    if (errInsert) { setError('Erreur : ' + errInsert.message); setLoading(false); return }
+  const { error: errInsert } = await supabase.from('avis').insert([{
+    ...form, sentiment, client_id: clientId
+  }])
 
-    router.push(form.section === 'bar' ? '/bar/avis' : '/avis')
-  }
+  if (errInsert) { setError('Erreur : ' + errInsert.message); setLoading(false); return }
+
+  router.push(form.section === 'bar' ? '/bar/avis' : '/avis')
+}
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
