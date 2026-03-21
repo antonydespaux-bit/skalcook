@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase, getClientId } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../lib/theme.jsx'
 
@@ -9,8 +9,8 @@ export default function InscriptionPage() {
   const [password, setPassword] = useState('')
   const [nom, setNom] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [error, setError] = useState('')
   const router = useRouter()
 
 const handleInscription = async (e) => {
