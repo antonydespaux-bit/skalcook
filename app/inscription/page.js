@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { supabase, getClientId } from '../../lib/supabase'
+import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../lib/theme.jsx'
 
@@ -13,48 +13,37 @@ export default function InscriptionPage() {
   const [error, setError] = useState('')
   const router = useRouter()
 
-const handleInscription = async (e) => {
-  e.preventDefault()
-  setLoading(true)
-  setError('')
+  const handleInscription = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
 
-  // Récupérer le client_id de l'admin connecté
-  const { data: { session } } = await supabase.auth.getSession()
-  const clientId = session?.user?.user_metadata?.client_id
+    const { data: { session } } = await supabase.auth.getSession()
+    const clientId = session?.user?.user_metadata?.client_id
 
-  if (!clientId) {
-    setError('Erreur : client_id introuvable. Connectez-vous d\'abord.')
-    setLoading(false)
-    return
-  }
+    if (!clientId) {
+      setError('Erreur : client_id introuvable. Connectez-vous d\'abord.')
+      setLoading(false)
+      return
+    }
 
-  const res = await fetch('/api/create-user', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      email,
-      password,
-      nom,
-      role: 'cuisine',
-      client_id: clientId
+    const res = await fetch('/api/create-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, nom, role: 'cuisine', client_id: clientId })
     })
-  })
 
-  const data = await res.json()
+    const data = await res.json()
 
-  if (!res.ok || data.error) {
-    setError('Erreur : ' + data.error)
+    if (!res.ok || data.error) {
+      setError('Erreur : ' + data.error)
+      setLoading(false)
+      return
+    }
+
+    setSuccess(true)
     setLoading(false)
-    return
   }
-
-  setSuccess(true)
-  setLoading(false)
-}
-
-  setSuccess(true)
-  setLoading(false)
-}
 
   return (
     <div style={{
@@ -151,5 +140,4 @@ const handleInscription = async (e) => {
       </div>
     </div>
   )
-
-
+}
