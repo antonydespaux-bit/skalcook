@@ -9,7 +9,7 @@ const supabaseAdmin = createClient(
 // Pages publiques qui ne nécessitent pas de tenant
 const PUBLIC_PATHS = ['/', '/reset-password', '/nouveau-mot-de-passe', '/inscription']
 
-export async function middleware(request) {
+export async function proxy(request) {
   const { pathname, hostname } = request.nextUrl
 
   // Ignorer les assets statiques
