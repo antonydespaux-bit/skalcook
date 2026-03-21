@@ -282,6 +282,11 @@ export default function SuperAdminPage() {
               borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer'
             }}>← Retour</button>
           )}
+            <button onClick={() => router.push('/superadmin/prospects')} style={{
+           background: 'rgba(99,102,241,0.2)', color: '#A5B4FC',
+           border: '0.5px solid rgba(99,102,241,0.3)',
+           borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer'
+          }}>👥 Prospects</button>
           <button onClick={() => router.push('/dashboard')} style={{
             background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.6)',
             border: '0.5px solid rgba(255,255,255,0.1)',
