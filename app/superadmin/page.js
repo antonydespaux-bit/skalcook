@@ -602,7 +602,7 @@ export default function SuperAdminPage() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: '10px' }}>
                   {MODULES_DISPONIBLES.map((mod) => {
-                    const actif = modulesActifs.includes(mod.id)
+                    const moduleActif = modulesActifs.includes(mod.id)
                     return (
                       <div key={mod.id} onClick={() => toggleModule(mod.id)} style={{
                         padding: '14px 12px', borderRadius: '10px', cursor: 'pointer',
