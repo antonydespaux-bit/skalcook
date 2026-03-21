@@ -27,18 +27,18 @@ export default function NavbarBar() {
     return pathname.startsWith(path)
   }
 
-  const navItems = [
-    { label: 'Dashboard', path: '/bar/dashboard' },
-    ...(peutModifier ? [{ label: '+ Nouvelle fiche', path: '/bar/fiches/nouvelle', accent: true }] : []),
-    { label: 'Fiches', path: '/bar/fiches' },
-    { label: 'Sous-fiches', path: '/bar/sous-fiches' },
-    { label: 'Récap', path: '/bar/recap' },
-    ...(peutModifier ? [{ label: 'Ingrédients', path: '/bar/ingredients' }] : []),
-    { label: 'Archives', path: '/bar/archives' },
-    ...(role === 'admin' ? [{ label: '🍽️ Cuisine', path: '/choix' }] : []),
-    ...(role === 'directeur' ? [{ label: '🍽️ Cuisine', path: '/dashboard' }] : []),
-    { label: 'Déconnexion', path: null, action: handleLogout },
-  ]
+const navItems = [
+  { label: 'Dashboard', path: '/bar/dashboard' },
+  ...(peutModifier ? [{ label: '+ Nouvelle fiche', path: '/bar/fiches/nouvelle', accent: true }] : []),
+  { label: 'Fiches', path: '/bar/fiches' },
+  { label: 'Sous-fiches', path: '/bar/sous-fiches' },
+  { label: 'Récap', path: '/bar/recap' },
+  ...(peutModifier ? [{ label: 'Ingrédients', path: '/bar/ingredients' }] : []),
+  { label: 'Archives', path: '/bar/archives' },
+  ...(role === 'admin' ? [{ label: '🍽️ Cuisine', path: '/choix' }] : []),
+  ...(role === 'directeur' ? [{ label: '🍽️ Cuisine', path: '/dashboard' }] : []),
+  { label: 'Déconnexion', path: null, action: handleLogout },
+]
 
   const btnStyle = (item) => {
     const active = item.path && isActive(item.path)

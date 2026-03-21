@@ -27,21 +27,21 @@ export default function NavbarCuisine() {
     return pathname.startsWith(path)
   }
 
-  const navItems = [
-    { label: 'Dashboard', path: '/dashboard' },
-    ...(peutModifier ? [{ label: '+ Nouvelle fiche', path: '/fiches/nouvelle', accent: true }] : []),
-    { label: 'Fiches', path: '/fiches' },
-    { label: 'Sous-fiches', path: '/sous-fiches' },
-    { label: 'Menus', path: '/menus' },
-    { label: 'Récap', path: '/recap' },
-    ...(peutModifier ? [{ label: 'Ingrédients', path: '/ingredients' }] : []),
-    { label: 'Archives', path: '/archives' },
-    ...(role === 'admin' ? [{ label: '🍸 Bar', path: '/bar/dashboard' }] : []),
-    { label: '⭐ Avis', path: '/avis' },
-    ...(role === 'admin' ? [{ label: 'Paramètres', path: '/parametres' }] : []),
-    ...(role === 'admin' ? [{ label: '👥 Utilisateurs', path: '/admin' }] : []),
-    { label: 'Déconnexion', path: null, action: handleLogout },
-  ]
+const navItems = [
+  { label: 'Dashboard', path: '/dashboard' },
+  ...(peutModifier ? [{ label: '+ Nouvelle fiche', path: '/fiches/nouvelle', accent: true }] : []),
+  { label: 'Fiches', path: '/fiches' },
+  { label: 'Sous-fiches', path: '/sous-fiches' },
+  { label: 'Menus', path: '/menus' },
+  { label: 'Récap', path: '/recap' },
+  ...(peutModifier ? [{ label: 'Ingrédients', path: '/ingredients' }] : []),
+  { label: 'Archives', path: '/archives' },
+  ...(role === 'admin' ? [{ label: '🍸 Bar', path: '/bar/dashboard' }] : []),
+  { label: '⭐ Avis', path: '/avis' },
+  ...(role === 'admin' ? [{ label: 'Paramètres', path: '/parametres' }] : []),
+  ...(role === 'admin' ? [{ label: '👥 Utilisateurs', path: '/admin' }] : []),
+  { label: 'Déconnexion', path: null, action: handleLogout },
+]
 
   const btnStyle = (item) => {
     const active = item.path && isActive(item.path)
