@@ -2,18 +2,17 @@
 import { useState, useEffect } from 'react'
 import { supabase, getParametres } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
-import { theme, Logo } from '../../../lib/theme.jsx'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
+import NavbarBar from '../../../components/NavbarBar'
 
 export default function BarDashboardPage() {
   const [fiches, setFiches] = useState([])
   const [ingredientsPrixHausse, setIngredientsPrixHausse] = useState([])
   const [params, setParams] = useState({})
   const [loading, setLoading] = useState(true)
-  const [menuOuvert, setMenuOuvert] = useState(false)
-  const [isPrixExpanded, setIsPrixExpanded] = useState(false) // État rétractable ajouté
+  const [isPrixExpanded, setIsPrixExpanded] = useState(false)
   const router = useRouter()
   const isMobile = useIsMobile()
   const { c } = useTheme()
@@ -38,28 +37,16 @@ export default function BarDashboardPage() {
   const loadData = async () => {
     const p = await getParametres()
     setParams(p)
-
     const { data: fichesData } = await supabase
-      .from('fiches_bar')
-      .select('*')
-      .neq('categorie', 'Sous-fiche')
-      .eq('archive', false)
-
+      .from('fiches_bar').select('*').neq('categorie', 'Sous-fiche').eq('archive', false)
     const { data: prixData } = await supabase
-      .from('ingredients_bar')
-      .select('*')
+      .from('ingredients_bar').select('*')
       .not('prix_precedent', 'is', null)
       .order('prix_updated_at', { ascending: false })
       .limit(20)
-
     setFiches(fichesData || [])
     setIngredientsPrixHausse(prixData || [])
     setLoading(false)
-  }
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/')
   }
 
   const seuilVert = parseFloat(params['seuil_vert_boissons'] || 22)
@@ -91,21 +78,6 @@ export default function BarDashboardPage() {
 
   const maxFiches = Math.max(...fichesByCategorie.map(c => c.nb), 1)
 
-  const peutModifier = role === 'admin' || role === 'bar'
-
-  const navItems = [
-    ...(peutModifier ? [{ label: '+ Nouvelle fiche', path: '/bar/fiches/nouvelle', accent: true }] : []),
-    { label: 'Fiches Bar', path: '/bar/fiches' },
-    { label: 'Sous-fiches', path: '/bar/sous-fiches' },
-    { label: 'Récap', path: '/bar/recap' },
-    { label: 'Ingrédients', path: '/bar/ingredients' },
-    { label: 'Import', path: '/bar/import' },
-    { label: 'Archives', path: '/bar/archives' },
-    ...(role === 'admin' ? [{ label: '🍽️ Cuisine', path: '/choix' }] : []),
-    ...(role === 'directeur' ? [{ label: '🍽️ Cuisine', path: '/dashboard' }] : []),
-    { label: 'Déconnexion', path: null, action: handleLogout },
-  ]
-
   if (loading || roleLoading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
       <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
@@ -115,63 +87,7 @@ export default function BarDashboardPage() {
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
 
-      <div style={{
-        background: '#3C3489', borderBottom: '0.5px solid #7F77DD40',
-        padding: '0 16px', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', height: '56px',
-        position: 'sticky', top: 0, zIndex: 100
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Logo height={28} couleur="white" onClick={() => router.push('/bar/dashboard')} />
-          <span style={{ background: '#7F77DD', color: 'white', borderRadius: '6px', padding: '2px 10px', fontSize: '11px', fontWeight: '600', letterSpacing: '1px' }}>BAR</span>
-        </div>
-
-        {isMobile ? (
-          <button onClick={() => setMenuOuvert(!menuOuvert)} style={{
-            background: 'transparent', border: '0.5px solid rgba(255,255,255,0.3)',
-            borderRadius: '8px', padding: '8px 12px', cursor: 'pointer',
-            color: 'white', fontSize: '18px'
-          }}>☰</button>
-        ) : (
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            {navItems.map((item, i) => (
-              <button key={i}
-                onClick={() => item.action ? item.action() : router.push(item.path)}
-                style={{
-                  background: item.accent ? '#C4956A' : 'transparent',
-                  color: item.accent ? '#3C3489' : 'rgba(255,255,255,0.7)',
-                  border: item.accent ? 'none' : '0.5px solid rgba(255,255,255,0.2)',
-                  borderRadius: '8px', padding: '8px 14px', fontSize: '13px',
-                  fontWeight: item.accent ? '600' : '400', cursor: 'pointer'
-                }}
-              >{item.label}</button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {isMobile && menuOuvert && (
-        <div style={{
-          background: '#3C3489', padding: '8px 16px 16px',
-          borderBottom: '0.5px solid #7F77DD40',
-          position: 'sticky', top: '56px', zIndex: 99
-        }}>
-          {navItems.map((item, i) => (
-            <button key={i}
-              onClick={() => { setMenuOuvert(false); item.action ? item.action() : router.push(item.path) }}
-              style={{
-                display: 'block', width: '100%', textAlign: 'left',
-                background: item.accent ? '#C4956A' : 'transparent',
-                color: item.accent ? '#3C3489' : 'rgba(255,255,255,0.85)',
-                border: 'none', borderRadius: '8px',
-                padding: '12px 16px', fontSize: '14px',
-                fontWeight: item.accent ? '600' : '400',
-                cursor: 'pointer', marginBottom: '4px'
-              }}
-            >{item.label}</button>
-          ))}
-        </div>
-      )}
+      <NavbarBar />
 
       <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '1100px', margin: '0 auto' }}>
 
@@ -191,43 +107,27 @@ export default function BarDashboardPage() {
 
         {/* KPIs */}
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
+          display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
           gap: isMobile ? '10px' : '16px', marginBottom: '24px'
         }}>
-          <div style={{
-            background: foodCostMoyen ? fichesFCColor(foodCostMoyen).bg : c.blanc,
-            borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}`
-          }}>
+          <div style={{ background: foodCostMoyen ? fichesFCColor(foodCostMoyen).bg : c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
             <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Food cost moyen</div>
             <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: foodCostMoyen ? fichesFCColor(foodCostMoyen).color : c.texte }}>
               {foodCostMoyen ? `${foodCostMoyen.toFixed(1)}%` : '—'}
             </div>
             <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Sur {fichesAvecFC.length} fiches</div>
           </div>
-
-          <div style={{
-            background: c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px',
-            border: `0.5px solid ${c.bordure}`, cursor: 'pointer'
-          }} onClick={() => router.push('/bar/fiches')}>
+          <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}`, cursor: 'pointer' }} onClick={() => router.push('/bar/fiches')}>
             <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Fiches actives</div>
             <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: c.texte }}>{fiches.length}</div>
             <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Cocktails & boissons</div>
           </div>
-
-          <div style={{
-            background: fichesAlerte.length > 0 ? '#FCEBEB' : '#EAF3DE',
-            borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}`
-          }}>
+          <div style={{ background: fichesAlerte.length > 0 ? '#FCEBEB' : '#EAF3DE', borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
             <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Fiches en alerte</div>
             <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: fichesAlerte.length > 0 ? '#A32D2D' : '#3B6D11' }}>{fichesAlerte.length}</div>
             <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Food cost {'>'} {seuilOrange}%</div>
           </div>
-
-          <div style={{
-            background: ingredientsPrixHausse.length > 0 ? '#FAEEDA' : c.blanc,
-            borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}`
-          }}>
+          <div style={{ background: ingredientsPrixHausse.length > 0 ? '#FAEEDA' : c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
             <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Prix modifiés</div>
             <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: ingredientsPrixHausse.length > 0 ? '#854F0B' : c.texte }}>{ingredientsPrixHausse.length}</div>
             <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Ingrédients récents</div>
@@ -235,8 +135,6 @@ export default function BarDashboardPage() {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? '12px' : '16px', marginBottom: '16px' }}>
-
-          {/* Fiches en alerte */}
           <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: `0.5px solid ${c.bordure}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>🚨 Fiches en alerte</div>
@@ -250,11 +148,7 @@ export default function BarDashboardPage() {
                   const fc = foodCostFiche(fiche)
                   return (
                     <div key={fiche.id} onClick={() => router.push(`/bar/fiches/${fiche.id}`)}
-                      style={{
-                        padding: '12px 20px', cursor: 'pointer',
-                        borderBottom: i < fichesAlerte.length - 1 ? `0.5px solid ${c.bordure}` : 'none',
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: c.blanc
-                      }}
+                      style={{ padding: '12px 20px', cursor: 'pointer', borderBottom: i < fichesAlerte.length - 1 ? `0.5px solid ${c.bordure}` : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: c.blanc }}
                       onMouseEnter={e => e.currentTarget.style.background = c.fond}
                       onMouseLeave={e => e.currentTarget.style.background = c.blanc}
                     >
@@ -262,17 +156,13 @@ export default function BarDashboardPage() {
                         <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>{fiche.nom}</div>
                         <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '2px' }}>{fiche.categorie}</div>
                       </div>
-                      <span style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '20px', padding: '3px 10px', fontSize: '12px', fontWeight: '600' }}>
-                        {fc.toFixed(1)}%
-                      </span>
+                      <span style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '20px', padding: '3px 10px', fontSize: '12px', fontWeight: '600' }}>{fc.toFixed(1)}%</span>
                     </div>
                   )
                 })}
               </div>
             )}
           </div>
-
-          {/* Fiches par catégorie */}
           <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: `0.5px solid ${c.bordure}` }}>
               <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>📊 Fiches par catégorie</div>
@@ -295,22 +185,17 @@ export default function BarDashboardPage() {
           </div>
         </div>
 
-        {/* SECTION PRIX MODIFIÉS RÉTRACTABLE (BAR VERSION) */}
+        {/* SECTION PRIX MODIFIÉS RÉTRACTABLE */}
         {ingredientsPrixHausse.length > 0 && (
           <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden', marginBottom: '16px' }}>
-            <div 
-              onClick={() => setIsPrixExpanded(!isPrixExpanded)}
-              style={{ 
-                padding: '16px 20px', 
-                borderBottom: isPrixExpanded ? `0.5px solid ${c.bordure}` : 'none', 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                cursor: 'pointer',
-                background: isPrixExpanded ? '#EEEDFE50' : c.blanc,
-                transition: 'background 0.2s ease'
-              }}
-            >
+            <div onClick={() => setIsPrixExpanded(!isPrixExpanded)} style={{
+              padding: '16px 20px',
+              borderBottom: isPrixExpanded ? `0.5px solid ${c.bordure}` : 'none',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              cursor: 'pointer',
+              background: isPrixExpanded ? '#EEEDFE50' : c.blanc,
+              transition: 'background 0.2s ease'
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ fontSize: '13px', fontWeight: '500', color: '#3C3489' }}>📈 Ingrédients Bar avec prix modifiés</div>
                 <span style={{ background: '#EEEDFE', color: '#3C3489', borderRadius: '20px', padding: '2px 10px', fontSize: '11px', fontWeight: '600' }}>
@@ -321,7 +206,6 @@ export default function BarDashboardPage() {
                 {isPrixExpanded ? '− Masquer' : '+ Développer'}
               </div>
             </div>
-
             {isPrixExpanded && (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>

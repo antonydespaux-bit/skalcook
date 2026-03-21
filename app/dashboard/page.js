@@ -2,11 +2,12 @@
 import { useState, useEffect } from 'react'
 import { supabase, getParametres } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
-import { theme, Logo } from '../../lib/theme.jsx'
+import { theme } from '../../lib/theme.jsx'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
 import { ALLERGENES } from '../../lib/allergenes'
+import NavbarCuisine from '../../components/NavbarCuisine'
 import * as XLSX from 'xlsx'
 
 export default function DashboardPage() {
@@ -15,9 +16,8 @@ export default function DashboardPage() {
   const [ingredientsPrixHausse, setIngredientsPrixHausse] = useState([])
   const [params, setParams] = useState({})
   const [loading, setLoading] = useState(true)
-  const [menuOuvert, setMenuOuvert] = useState(false)
   const [filtreCategorie, setFiltreCategorie] = useState('toutes')
-  const [isPrixExpanded, setIsPrixExpanded] = useState(false) // État pour réduire/développer les prix
+  const [isPrixExpanded, setIsPrixExpanded] = useState(false)
   const router = useRouter()
   const isMobile = useIsMobile()
   const { c } = useTheme()
@@ -49,11 +49,6 @@ export default function DashboardPage() {
     setMenus(menusData || [])
     setIngredientsPrixHausse(prixData || [])
     setLoading(false)
-  }
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/')
   }
 
   const seuilVert = parseFloat(params['seuil_vert_cuisine'] || 28)
@@ -102,23 +97,6 @@ export default function DashboardPage() {
     XLSX.writeFile(wb, `allergenes_la_fantaisie_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.xlsx`)
   }
 
-  const peutModifier = role === 'admin' || role === 'cuisine'
-
-  const navItems = [
-    ...(peutModifier ? [{ label: '+ Nouvelle fiche', path: '/fiches/nouvelle', accent: true }] : []),
-    { label: 'Fiches', path: '/fiches' },
-    ...(role === 'admin' ? [{ label: '🍸 Bar', path: '/bar/dashboard' }] : []),
-    { label: 'Menus', path: '/menus' },
-    { label: 'Récap', path: '/recap' },
-    { label: 'Sous-fiches', path: '/sous-fiches' },
-    ...(peutModifier ? [{ label: 'Ingrédients', path: '/ingredients' }] : []),
-    { label: '⭐ Avis', path: '/avis' },
-    { label: 'Archives', path: '/archives' },
-    ...(role === 'admin' ? [{ label: 'Paramètres', path: '/parametres' }] : []),
-    ...(role === 'admin' ? [{ label: '👥 Utilisateurs', path: '/admin' }] : []),
-    { label: 'Déconnexion', path: null, action: handleLogout },
-  ]
-
   if (loading || roleLoading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
       <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
@@ -130,54 +108,7 @@ export default function DashboardPage() {
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
 
-      <div className="no-print" style={{
-        background: c.principal, borderBottom: `0.5px solid ${c.accent}40`,
-        padding: '0 16px', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', height: '56px',
-        position: 'sticky', top: 0, zIndex: 100
-      }}>
-        <Logo height={28} couleur="white" onClick={() => router.push('/dashboard')} />
-        {isMobile ? (
-          <button onClick={() => setMenuOuvert(!menuOuvert)} style={{
-            background: 'transparent', border: '0.5px solid rgba(255,255,255,0.3)',
-            borderRadius: '8px', padding: '8px 12px', cursor: 'pointer', color: 'white', fontSize: '18px'
-          }}>☰</button>
-        ) : (
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            {navItems.map((item, i) => (
-              <button key={i} onClick={() => item.action ? item.action() : router.push(item.path)}
-                style={{
-                  background: item.accent ? c.accent : 'transparent',
-                  color: item.accent ? c.principal : 'rgba(255,255,255,0.7)',
-                  border: item.accent ? 'none' : '0.5px solid rgba(255,255,255,0.2)',
-                  borderRadius: '8px', padding: '8px 14px', fontSize: '13px',
-                  fontWeight: item.accent ? '600' : '400', cursor: 'pointer'
-                }}
-              >{item.label}</button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {isMobile && menuOuvert && (
-        <div className="no-print" style={{
-          background: c.principal, padding: '8px 16px 16px',
-          borderBottom: `0.5px solid ${c.accent}40`,
-          position: 'sticky', top: '56px', zIndex: 99
-        }}>
-          {navItems.map((item, i) => (
-            <button key={i} onClick={() => { setMenuOuvert(false); item.action ? item.action() : router.push(item.path) }}
-              style={{
-                display: 'block', width: '100%', textAlign: 'left',
-                background: item.accent ? c.accent : 'transparent',
-                color: item.accent ? c.principal : 'rgba(255,255,255,0.85)',
-                border: 'none', borderRadius: '8px', padding: '12px 16px', fontSize: '14px',
-                fontWeight: item.accent ? '600' : '400', cursor: 'pointer', marginBottom: '4px'
-              }}
-            >{item.label}</button>
-          ))}
-        </div>
-      )}
+      <NavbarCuisine />
 
       {/* Vue écran */}
       <div className="no-print" style={{ padding: isMobile ? '12px' : '24px', maxWidth: '1100px', margin: '0 auto' }}>
@@ -281,29 +212,17 @@ export default function DashboardPage() {
         {/* SECTION PRIX MODIFIÉS RÉTRACTABLE */}
         {ingredientsPrixHausse.length > 0 && (
           <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden', marginBottom: '16px' }}>
-            <div 
-              onClick={() => setIsPrixExpanded(!isPrixExpanded)}
-              style={{ 
-                padding: '16px 20px', 
-                borderBottom: isPrixExpanded ? `0.5px solid ${c.bordure}` : 'none', 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                cursor: 'pointer',
-                background: isPrixExpanded ? c.fond + '40' : c.blanc,
-                transition: 'background 0.2s ease'
-              }}
-            >
+            <div onClick={() => setIsPrixExpanded(!isPrixExpanded)} style={{
+              padding: '16px 20px',
+              borderBottom: isPrixExpanded ? `0.5px solid ${c.bordure}` : 'none',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              cursor: 'pointer',
+              background: isPrixExpanded ? c.fond + '40' : c.blanc,
+              transition: 'background 0.2s ease'
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>📈 Ingrédients avec prix modifiés récemment</div>
-                <span style={{ 
-                  background: '#FAEEDA', 
-                  color: '#854F0B', 
-                  borderRadius: '20px', 
-                  padding: '2px 10px', 
-                  fontSize: '11px', 
-                  fontWeight: '600' 
-                }}>
+                <span style={{ background: '#FAEEDA', color: '#854F0B', borderRadius: '20px', padding: '2px 10px', fontSize: '11px', fontWeight: '600' }}>
                   {ingredientsPrixHausse.length} alertes
                 </span>
               </div>
@@ -311,7 +230,6 @@ export default function DashboardPage() {
                 {isPrixExpanded ? '− Masquer' : '+ Développer'}
               </div>
             </div>
-            
             {isPrixExpanded && (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
@@ -351,7 +269,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Tableau allergènes écran */}
+        {/* Tableau allergènes */}
         <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: `0.5px solid ${c.bordure}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -368,14 +286,8 @@ export default function DashboardPage() {
                 <option value="toutes">Toutes les catégories</option>
                 {theme.categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
               </select>
-              <button onClick={exportAllergenesExcel} style={{
-                padding: '6px 12px', background: c.vert, color: 'white',
-                border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
-              }}>📊 Excel</button>
-              <button onClick={() => window.print()} style={{
-                padding: '6px 12px', background: c.accent, color: c.principal,
-                border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
-              }}>🖨️ Imprimer</button>
+              <button onClick={exportAllergenesExcel} style={{ padding: '6px 12px', background: c.vert, color: 'white', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>📊 Excel</button>
+              <button onClick={() => window.print()} style={{ padding: '6px 12px', background: c.accent, color: c.principal, border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>🖨️ Imprimer</button>
             </div>
           </div>
           <div style={{ overflowX: 'auto' }}>
@@ -424,10 +336,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Version impression uniquement - CORRIGÉE POUR LE PAYSAGE */}
+      {/* Version impression */}
       <div className="print-only dashboard-allergenes-print" style={{ fontFamily: 'sans-serif', color: '#1a1a1a', background: 'white', padding: '0' }}>
-
-        {/* En-tête */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #2C1810', paddingBottom: '12px', marginBottom: '16px' }}>
           <div>
             <div style={{ fontSize: '8px', letterSpacing: '3px', textTransform: 'uppercase', color: '#8B7355', marginBottom: '4px' }}>Tableau des allergènes — Fiches actives</div>
@@ -436,8 +346,6 @@ export default function DashboardPage() {
           </div>
           <img src="https://uvmslpdcywephdneciwd.supabase.co/storage/v1/object/public/fiches-photos/logo-la-fantaisie.png" alt="La Fantaisie" style={{ height: '60px', objectFit: 'contain' }} />
         </div>
-
-        {/* Tableau compact pour impression paysage */}
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px', tableLayout: 'fixed' }}>
           <thead>
             <tr style={{ background: '#2C1810' }}>
@@ -470,8 +378,6 @@ export default function DashboardPage() {
             ))}
           </tbody>
         </table>
-
-        {/* Légende */}
         <div style={{ marginTop: '10px', borderTop: '1px solid #e8e4dc', paddingTop: '8px', fontSize: '7px', color: '#8B7355' }}>
           <strong>Allergènes :</strong> {ALLERGENES.map(a => `${a.emoji} ${a.label}`).join(' — ')}
         </div>
