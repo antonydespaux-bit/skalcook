@@ -2,18 +2,22 @@
 import { useRouter, usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Logo } from '../lib/theme.jsx'
 import { useTheme } from '../lib/useTheme'
 import { useRole } from '../lib/useRole'
 import { useIsMobile } from '../lib/useIsMobile'
+
+const NAV = '#18181B'
+const ACCENT = '#6366F1'
+const ACCENT_LIGHT = '#EEF2FF'
 
 export default function NavbarCuisine() {
   const router = useRouter()
   const pathname = usePathname()
   const { c } = useTheme()
-  const { role } = useRole()
+  const { role, nom: nomUser } = useRole()
   const isMobile = useIsMobile()
   const [menuOuvert, setMenuOuvert] = useState(false)
+  const [groupeOuvert, setGroupeOuvert] = useState(null)
 
   const peutModifier = role === 'admin' || role === 'cuisine'
 
@@ -22,111 +26,309 @@ export default function NavbarCuisine() {
     router.push('/')
   }
 
-  const isActive = (path) => {
-    if (path === '/dashboard') return pathname === '/dashboard'
-    return pathname.startsWith(path)
+  const isActive = (paths) => {
+    const arr = Array.isArray(paths) ? paths : [paths]
+    return arr.some(p => {
+      if (p === '/dashboard') return pathname === '/dashboard'
+      return pathname.startsWith(p)
+    })
   }
 
-const navItems = [
-  { label: 'Dashboard', path: '/dashboard' },
-  ...(peutModifier ? [{ label: '+ Nouvelle fiche', path: '/fiches/nouvelle', accent: true }] : []),
-  { label: 'Fiches', path: '/fiches' },
-  { label: 'Sous-fiches', path: '/sous-fiches' },
-  { label: 'Menus', path: '/menus' },
-  { label: 'Récap', path: '/recap' },
-  ...(peutModifier ? [{ label: 'Ingrédients', path: '/ingredients' }] : []),
-  { label: 'Archives', path: '/archives' },
-  { label: '⭐ Avis', path: '/avis' },
-  ...(role === 'admin' || role === 'directeur' ? [{ label: '🍸 Bar', path: '/bar/dashboard' }] : []),
-  ...(role === 'admin' ? [{ label: 'Paramètres', path: '/parametres' }] : []),
-  ...(role === 'admin' ? [{ label: '👥 Utilisateurs', path: '/admin' }] : []),
-  { label: 'Déconnexion', path: null, action: handleLogout },
-]
+  // Groupes de navigation Option 3
+  const groupes = [
+    {
+      label: 'Fiches',
+      paths: ['/fiches', '/sous-fiches', '/archives'],
+      items: [
+        { label: 'Toutes les fiches', path: '/fiches' },
+        { label: 'Sous-fiches', path: '/sous-fiches' },
+        { label: 'Archives', path: '/archives' },
+      ]
+    },
+    {
+      label: 'Contenus',
+      paths: ['/menus', '/recap', '/ingredients', '/import', '/avis'],
+      items: [
+        { label: 'Menus', path: '/menus' },
+        { label: 'Récap food cost', path: '/recap' },
+        ...(peutModifier ? [{ label: 'Ingrédients', path: '/ingredients' }] : []),
+        { label: 'Avis clients', path: '/avis' },
+      ]
+    },
+    ...(role === 'admin' ? [{
+      label: 'Admin',
+      paths: ['/parametres', '/admin', '/admin/logs', '/admin/ardoise'],
+      items: [
+        { label: 'Paramètres', path: '/parametres' },
+        { label: 'Utilisateurs', path: '/admin' },
+        { label: 'Activité', path: '/admin/logs' },
+        { label: 'Ardoise', path: '/admin/ardoise' },
+      ]
+    }] : []),
+  ]
 
-  const btnStyle = (item) => {
-    const active = item.path && isActive(item.path)
-    if (item.accent) return {
-      background: c.accent, color: c.principal, border: 'none',
-      borderRadius: '8px', padding: '8px 14px', fontSize: '13px',
-      fontWeight: '600', cursor: 'pointer'
-    }
-    if (active) return {
-      background: 'rgba(196, 149, 106, 0.25)',
-      color: 'white',
-      border: '0.5px solid rgba(196, 149, 106, 0.5)',
-      borderRadius: '8px', padding: '8px 14px', fontSize: '13px',
-      fontWeight: '600', cursor: 'pointer'
-    }
-    return {
-      background: 'transparent', color: 'rgba(255,255,255,0.7)',
-      border: '0.5px solid rgba(255,255,255,0.2)',
-      borderRadius: '8px', padding: '8px 14px', fontSize: '13px',
-      fontWeight: '400', cursor: 'pointer'
-    }
-  }
-
-  const btnMobileStyle = (item) => {
-    const active = item.path && isActive(item.path)
-    if (item.accent) return {
-      display: 'block', width: '100%', textAlign: 'left',
-      background: c.accent, color: c.principal,
-      border: 'none', borderRadius: '8px', padding: '12px 16px',
-      fontSize: '14px', fontWeight: '600', cursor: 'pointer', marginBottom: '4px'
-    }
-    if (active) return {
-      display: 'block', width: '100%', textAlign: 'left',
-      background: 'rgba(196, 149, 106, 0.25)', color: 'white',
-      border: '0.5px solid rgba(196, 149, 106, 0.5)',
-      borderRadius: '8px', padding: '12px 16px',
-      fontSize: '14px', fontWeight: '600', cursor: 'pointer', marginBottom: '4px'
-    }
-    return {
-      display: 'block', width: '100%', textAlign: 'left',
-      background: 'transparent', color: 'rgba(255,255,255,0.85)',
-      border: 'none', borderRadius: '8px', padding: '12px 16px',
-      fontSize: '14px', fontWeight: '400', cursor: 'pointer', marginBottom: '4px'
-    }
+  const dropdownStyle = {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    marginTop: '8px',
+    background: '#FFFFFF',
+    border: '0.5px solid #E4E4E7',
+    borderRadius: '10px',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+    minWidth: '180px',
+    zIndex: 200,
+    overflow: 'hidden',
+    padding: '4px',
   }
 
   return (
     <>
       <div className="no-print" style={{
-        background: c.principal, borderBottom: `0.5px solid ${c.accent}40`,
-        padding: '0 16px', display: 'flex', alignItems: 'center',
+        background: NAV,
+        borderBottom: '0.5px solid rgba(255,255,255,0.06)',
+        padding: '0 20px',
+        display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', height: '56px',
         position: 'sticky', top: 0, zIndex: 100
-      }}>
-        <Logo height={28} couleur="white" onClick={() => router.push('/dashboard')} />
-        {isMobile ? (
-          <button onClick={() => setMenuOuvert(!menuOuvert)} style={{
-            background: 'transparent', border: '0.5px solid rgba(255,255,255,0.3)',
-            borderRadius: '8px', padding: '8px 12px', cursor: 'pointer',
-            color: 'white', fontSize: '18px'
-          }}>☰</button>
-        ) : (
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'nowrap', overflowX: 'auto' }}>
-            {navItems.map((item, i) => (
-              <button key={i}
-                onClick={() => item.action ? item.action() : router.push(item.path)}
-                style={btnStyle(item)}
-              >{item.label}</button>
-            ))}
-          </div>
-        )}
+      }}
+        onClick={() => groupeOuvert && setGroupeOuvert(null)}
+      >
+        {/* Logo + Dashboard */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); router.push('/dashboard') }}
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              padding: '6px 10px', borderRadius: '8px',
+              display: 'flex', alignItems: 'center', gap: '8px'
+            }}
+          >
+            <div style={{
+              width: '28px', height: '28px', borderRadius: '6px',
+              background: ACCENT, display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              <span style={{ fontSize: '14px' }}>🍽️</span>
+            </div>
+            {!isMobile && (
+              <span style={{ fontSize: '14px', fontWeight: '600', color: 'white', letterSpacing: '0.3px' }}>
+                FT Manager
+              </span>
+            )}
+          </button>
+
+          {/* Séparateur */}
+          {!isMobile && <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.1)', margin: '0 4px' }} />}
+
+          {/* Dashboard pill */}
+          {!isMobile && (
+            <button
+              onClick={(e) => { e.stopPropagation(); router.push('/dashboard') }}
+              style={{
+                background: isActive('/dashboard') ? 'rgba(99,102,241,0.15)' : 'transparent',
+                border: 'none',
+                borderBottom: isActive('/dashboard') ? `2px solid ${ACCENT}` : '2px solid transparent',
+                borderRadius: '0',
+                padding: '0 12px',
+                height: '56px',
+                fontSize: '13px',
+                fontWeight: isActive('/dashboard') ? '500' : '400',
+                color: isActive('/dashboard') ? 'white' : 'rgba(255,255,255,0.55)',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+            >
+              Dashboard
+            </button>
+          )}
+
+          {/* Groupes dropdown */}
+          {!isMobile && groupes.map((groupe) => {
+            const active = isActive(groupe.paths)
+            const ouvert = groupeOuvert === groupe.label
+            return (
+              <div key={groupe.label} style={{ position: 'relative' }}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setGroupeOuvert(ouvert ? null : groupe.label)
+                  }}
+                  style={{
+                    background: ouvert ? 'rgba(255,255,255,0.06)' : 'transparent',
+                    border: 'none',
+                    borderBottom: active ? `2px solid ${ACCENT}` : '2px solid transparent',
+                    borderRadius: '0',
+                    padding: '0 12px',
+                    height: '56px',
+                    fontSize: '13px',
+                    fontWeight: active ? '500' : '400',
+                    color: active ? 'white' : 'rgba(255,255,255,0.55)',
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: '5px',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {groupe.label}
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path d={ouvert ? "M2 7L5 4L8 7" : "M2 4L5 7L8 4"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                </button>
+
+                {ouvert && (
+                  <div style={dropdownStyle} onClick={e => e.stopPropagation()}>
+                    {groupe.items.map((item) => (
+                      <button
+                        key={item.path}
+                        onClick={() => { setGroupeOuvert(null); router.push(item.path) }}
+                        style={{
+                          display: 'block', width: '100%', textAlign: 'left',
+                          padding: '9px 12px', border: 'none',
+                          borderRadius: '6px',
+                          background: isActive(item.path) ? ACCENT_LIGHT : 'transparent',
+                          color: isActive(item.path) ? ACCENT : '#18181B',
+                          fontSize: '13px',
+                          fontWeight: isActive(item.path) ? '500' : '400',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {/* Lien Bar pour admin/directeur */}
+          {!isMobile && (role === 'admin' || role === 'directeur') && (
+            <button
+              onClick={(e) => { e.stopPropagation(); router.push('/bar/dashboard') }}
+              style={{
+                background: 'transparent', border: 'none',
+                borderBottom: '2px solid transparent',
+                borderRadius: '0', padding: '0 12px', height: '56px',
+                fontSize: '13px', fontWeight: '400',
+                color: 'rgba(255,255,255,0.55)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
+                transition: 'all 0.15s',
+              }}
+            >
+              🍸 Bar
+            </button>
+          )}
+        </div>
+
+        {/* Droite : CTA + user + hamburger */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {!isMobile && peutModifier && (
+            <button
+              onClick={(e) => { e.stopPropagation(); router.push('/fiches/nouvelle') }}
+              style={{
+                background: ACCENT, color: 'white', border: 'none',
+                borderRadius: '8px', padding: '7px 14px',
+                fontSize: '13px', fontWeight: '500', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: '5px',
+              }}
+            >
+              <span style={{ fontSize: '16px', lineHeight: 1 }}>+</span>
+              Nouvelle fiche
+            </button>
+          )}
+
+          {!isMobile && (
+            <button
+              onClick={handleLogout}
+              style={{
+                background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.55)',
+                border: '0.5px solid rgba(255,255,255,0.1)',
+                borderRadius: '8px', padding: '7px 12px',
+                fontSize: '13px', cursor: 'pointer',
+              }}
+            >
+              Déconnexion
+            </button>
+          )}
+
+          {isMobile && (
+            <button onClick={() => setMenuOuvert(!menuOuvert)} style={{
+              background: menuOuvert ? 'rgba(255,255,255,0.1)' : 'transparent',
+              border: '0.5px solid rgba(255,255,255,0.15)',
+              borderRadius: '8px', padding: '8px 12px', cursor: 'pointer',
+              color: 'white', fontSize: '16px'
+            }}>☰</button>
+          )}
+        </div>
       </div>
 
+      {/* Menu mobile */}
       {isMobile && menuOuvert && (
         <div className="no-print" style={{
-          background: c.principal, padding: '8px 16px 16px',
-          borderBottom: `0.5px solid ${c.accent}40`,
+          background: NAV, padding: '12px 16px 20px',
+          borderBottom: '0.5px solid rgba(255,255,255,0.06)',
           position: 'sticky', top: '56px', zIndex: 99
         }}>
-          {navItems.map((item, i) => (
-            <button key={i}
-              onClick={() => { setMenuOuvert(false); item.action ? item.action() : router.push(item.path) }}
-              style={btnMobileStyle(item)}
+          {peutModifier && (
+            <button
+              onClick={() => { setMenuOuvert(false); router.push('/fiches/nouvelle') }}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left',
+                background: ACCENT, color: 'white', border: 'none',
+                borderRadius: '8px', padding: '12px 16px',
+                fontSize: '14px', fontWeight: '500', cursor: 'pointer', marginBottom: '4px'
+              }}
+            >+ Nouvelle fiche</button>
+          )}
+
+          <button
+            onClick={() => { setMenuOuvert(false); router.push('/dashboard') }}
+            style={{
+              display: 'block', width: '100%', textAlign: 'left',
+              background: isActive('/dashboard') ? 'rgba(99,102,241,0.15)' : 'transparent',
+              color: isActive('/dashboard') ? 'white' : 'rgba(255,255,255,0.7)',
+              border: 'none', borderRadius: '8px', padding: '12px 16px',
+              fontSize: '14px', cursor: 'pointer', marginBottom: '4px'
+            }}
+          >Dashboard</button>
+
+          {/* Tous les items groupés à plat sur mobile */}
+          {groupes.flatMap(g => g.items).map((item) => (
+            <button
+              key={item.path}
+              onClick={() => { setMenuOuvert(false); router.push(item.path) }}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left',
+                background: isActive(item.path) ? 'rgba(99,102,241,0.15)' : 'transparent',
+                color: isActive(item.path) ? 'white' : 'rgba(255,255,255,0.6)',
+                border: 'none', borderRadius: '8px', padding: '11px 16px',
+                fontSize: '14px', cursor: 'pointer', marginBottom: '2px'
+              }}
             >{item.label}</button>
           ))}
+
+          {(role === 'admin' || role === 'directeur') && (
+            <button
+              onClick={() => { setMenuOuvert(false); router.push('/bar/dashboard') }}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left',
+                background: 'transparent', color: 'rgba(255,255,255,0.6)',
+                border: 'none', borderRadius: '8px', padding: '11px 16px',
+                fontSize: '14px', cursor: 'pointer', marginBottom: '2px'
+              }}
+            >🍸 Bar</button>
+          )}
+
+          <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '8px 0' }} />
+
+          <button
+            onClick={handleLogout}
+            style={{
+              display: 'block', width: '100%', textAlign: 'left',
+              background: 'transparent', color: 'rgba(255,255,255,0.4)',
+              border: 'none', borderRadius: '8px', padding: '11px 16px',
+              fontSize: '14px', cursor: 'pointer'
+            }}
+          >Déconnexion</button>
         </div>
       )}
     </>
