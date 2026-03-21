@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
-import { theme, Logo } from '../../lib/theme.jsx'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
@@ -38,56 +37,61 @@ export default function AdminPage() {
     setLoading(false)
   }
 
-const creerUtilisateur = async () => {
-  if (!newEmail || !newPassword || !newNom) {
-    setError('Tous les champs sont obligatoires')
-    return
-  }
-  setCreating(true)
-  setError('')
-  setSuccess('')
+  const creerUtilisateur = async () => {
+    if (!newEmail || !newPassword || !newNom) {
+      setError('Tous les champs sont obligatoires')
+      return
+    }
+    setCreating(true)
+    setError('')
+    setSuccess('')
 
-  // Récupérer le client_id de l'admin connecté
-  const { data: { session } } = await supabase.auth.getSession()
-  const clientId = session?.user?.user_metadata?.client_id
+    const { data: { session } } = await supabase.auth.getSession()
+    const clientId = session?.user?.user_metadata?.client_id
 
-  if (!clientId) {
-    setError('Erreur : client_id introuvable')
-    setCreating(false)
-    return
-  }
+    if (!clientId) {
+      setError('Erreur : client_id introuvable')
+      setCreating(false)
+      return
+    }
 
-  const res = await fetch('/api/create-user', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      email: newEmail,
-      password: newPassword,
-      nom: newNom,
-      role: newRole,
-      client_id: clientId
+    const res = await fetch('/api/create-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: newEmail,
+        password: newPassword,
+        nom: newNom,
+        role: newRole,
+        client_id: clientId
+      })
     })
-  })
 
-  const data = await res.json()
+    const data = await res.json()
 
-if (!res.ok || data.error) {
-    setError('Erreur : ' + data.error)
+    if (!res.ok || data.error) {
+      setError('Erreur : ' + data.error)
+      setCreating(false)
+      return
+    }
+
+    setNewEmail('')
+    setNewPassword('')
+    setNewNom('')
+    setNewRole('cuisine')
+    setSuccess(`Compte créé pour ${newNom} !`)
+    await loadProfils()
     setCreating(false)
-    return
   }
-
-  setNewEmail('')
-  setNewPassword('')
-  setNewNom('')
-  setNewRole('cuisine')
-  setSuccess(`Compte créé pour ${newNom} !`)
-  await loadProfils()
-  setCreating(false)
-}
 
   const changerRole = async (id, newRole) => {
     await supabase.from('profils').update({ role: newRole }).eq('id', id)
+    await loadProfils()
+  }
+
+  const supprimerUtilisateur = async (id, nom) => {
+    if (!confirm(`Supprimer le compte de ${nom} ? Cette action est irréversible.`)) return
+    await supabase.from('profils').delete().eq('id', id)
     await loadProfils()
   }
 
@@ -98,6 +102,16 @@ if (!res.ok || data.error) {
       case 'bar': return { label: 'Bar', color: '#3C3489', bg: '#EEEDFE' }
       case 'directeur': return { label: 'Directeur', color: '#854F0B', bg: '#FAEEDA' }
       default: return { label: 'Non défini', color: '#8B7355', bg: '#FAF9F6' }
+    }
+  }
+
+  const droitsRole = (role) => {
+    switch (role) {
+      case 'admin': return '⚙️ Accès complet — Cuisine, Bar, paramètres et gestion des utilisateurs'
+      case 'cuisine': return '👨‍🍳 Cuisine — peut créer, modifier et supprimer des fiches cuisine'
+      case 'bar': return '🍸 Bar — peut créer, modifier et supprimer des fiches bar'
+      case 'directeur': return '👔 Lecture seule — peut voir et exporter Cuisine + Bar mais pas modifier'
+      default: return '—'
     }
   }
 
@@ -140,6 +154,7 @@ if (!res.ok || data.error) {
               <div>
                 <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom *</label>
                 <input type="text" value={newNom} onChange={e => setNewNom(e.target.value)}
+                  autoComplete="off"
                   placeholder="Ex : Marie Dupont"
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
                 />
@@ -162,6 +177,7 @@ if (!res.ok || data.error) {
               <div>
                 <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Email *</label>
                 <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)}
+                  autoComplete="off"
                   placeholder="marie@lafantaisie.com"
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
                 />
@@ -169,6 +185,7 @@ if (!res.ok || data.error) {
               <div>
                 <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Mot de passe *</label>
                 <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                  autoComplete="new-password"
                   placeholder="Minimum 6 caractères"
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
                 />
@@ -176,10 +193,7 @@ if (!res.ok || data.error) {
             </div>
 
             <div style={{ background: c.fond, borderRadius: '8px', padding: '12px', fontSize: '12px', color: c.texteMuted, border: `0.5px solid ${c.bordure}` }}>
-              {newRole === 'cuisine' && '👨‍🍳 Accès complet à la section Cuisine — peut créer, modifier et supprimer des fiches'}
-              {newRole === 'bar' && '🍸 Accès complet à la section Bar — peut créer, modifier et supprimer des fiches bar'}
-              {newRole === 'directeur' && '👔 Accès en lecture seule sur Cuisine + Bar — peut voir et exporter mais pas modifier'}
-              {newRole === 'admin' && '⚙️ Accès complet sur tout — Cuisine, Bar, paramètres et gestion des utilisateurs'}
+              {droitsRole(newRole)}
             </div>
 
             <button onClick={creerUtilisateur} disabled={creating} style={{
@@ -215,11 +229,14 @@ if (!res.ok || data.error) {
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   flexWrap: 'wrap', gap: '10px'
                 }}>
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <div style={{ fontSize: '14px', fontWeight: '500', color: c.texte }}>{profil.nom || '—'}</div>
                     <div style={{ fontSize: '12px', color: c.texteMuted, marginTop: '2px' }}>{profil.email}</div>
+                    <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px', fontStyle: 'italic' }}>
+                      {droitsRole(profil.role)}
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <span style={{
                       background: r.bg, color: r.color,
                       borderRadius: '20px', padding: '4px 12px',
@@ -240,6 +257,13 @@ if (!res.ok || data.error) {
                       <option value="directeur">Directeur</option>
                       <option value="admin">Admin</option>
                     </select>
+                    {profil.role !== 'admin' && (
+                      <button onClick={() => supprimerUtilisateur(profil.id, profil.nom)} style={{
+                        background: 'transparent', color: '#F09595',
+                        border: `0.5px solid #F09595`, borderRadius: '8px',
+                        padding: '6px 10px', fontSize: '12px', cursor: 'pointer'
+                      }}>🗑️</button>
+                    )}
                   </div>
                 </div>
               )
