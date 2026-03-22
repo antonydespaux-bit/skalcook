@@ -1,11 +1,11 @@
 'use client'
 export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
-import { supabase, getClientId } from '../../../lib/supabase'
+import { supabase, getClientId } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
-import { useTheme } from '../../../lib/useTheme'
-import { useRole } from '../../../lib/useRole'
-import NavbarCuisine from '../../../components/NavbarCuisine'
+import { useTheme } from '../../lib/useTheme'
+import { useRole } from '../../lib/useRole'
+import NavbarCuisine from '../../components/NavbarCuisine'
 
 const EMOJIS_LIEUX = ['🍽', '🌅', '🍷', '🛎', '🏨', '🌿', '🎭', '☕', '🍸', '🌊', '🏔', '🌃']
 const EMOJIS_CATS = ['🥗', '🍖', '🍮', '🥪', '⚙️', '🍹', '🍷', '🍺', '🥤', '🥃', '🍾', '🧃', '🥩', '🐟', '🧀', '🍰', '🫕', '🥘']
