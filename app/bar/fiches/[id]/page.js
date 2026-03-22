@@ -17,17 +17,22 @@ export default function BarFicheDetail() {
   const router = useRouter()
   const params_route = useParams()
   const isMobile = useIsMobile()
-  const { c, nomEtablissement, logoUrl } = useTheme()
+  const { c, logoUrl, nomEtablissement } = useTheme()
   const { role } = useRole()
 
+  const peutModifier = role === 'admin' || role === 'bar'
+
   useEffect(() => {
-    // Injection CSS impression
     const style = document.createElement('style')
     style.innerHTML = `
       @media print {
         .no-print { display: none !important; }
-        body { background: white !important; }
-        .print-content { padding: 20px !important; }
+        .print-only { display: block !important; }
+        body { background: white !important; margin: 0; padding: 0; }
+        @page { margin: 15mm 15mm 15mm 15mm; }
+      }
+      @media screen {
+        .print-only { display: none !important; }
       }
     `
     document.head.appendChild(style)
@@ -38,42 +43,52 @@ export default function BarFicheDetail() {
   }, [])
 
   const checkUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) router.push('/')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) router.push('/')
+    } catch { router.push('/') }
   }
 
   const loadParams = async () => {
-    const p = await getParametres()
-    setParams(p)
+    try {
+      const p = await getParametres()
+      setParams(p)
+    } catch (err) { console.error('Params error:', err) }
   }
 
   const loadFiche = async () => {
-    const clientId = await getClientId()
-    if (!clientId) { router.push('/'); return }
+    try {
+      const clientId = await getClientId()
+      if (!clientId) { router.push('/'); return }
 
-    const { data: ficheData } = await supabase
-      .from('fiches_bar')
-      .select('*')
-      .eq('id', params_route.id)
-      .eq('client_id', clientId)
-      .single()
+      const { data: ficheData, error } = await supabase
+        .from('fiches_bar')
+        .select('*')
+        .eq('id', params_route.id)
+        .eq('client_id', clientId)
+        .single()
 
-    if (!ficheData) { router.push('/bar/fiches'); return }
-    setFiche(ficheData)
+      if (error || !ficheData) { router.push('/bar/fiches'); return }
+      setFiche(ficheData)
 
-    const { data: ingsData } = await supabase
-      .from('fiche_bar_ingredients')
-      .select(`
-        quantite,
-        unite,
-        ingredients_bar (id, nom, prix_kg, unite),
-        sous_fiche_id,
-        fiches_bar!sous_fiche_id (id, nom, cout_portion, unite_production)
-      `)
-      .eq('fiche_bar_id', params_route.id)
+      const { data: ingsData } = await supabase
+        .from('fiche_bar_ingredients')
+        .select(`
+          quantite,
+          unite,
+          ingredients_bar (id, nom, prix_kg, unite),
+          sous_fiche_id,
+          fiches_bar!sous_fiche_id (id, nom, cout_portion, unite_production)
+        `)
+        .eq('fiche_bar_id', params_route.id)
 
-    setIngredients(ingsData || [])
-    setLoading(false)
+      setIngredients(ingsData || [])
+    } catch (err) {
+      console.error('Load fiche error:', err)
+      router.push('/bar/fiches')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const calculerCout = () => {
@@ -105,23 +120,26 @@ export default function BarFicheDetail() {
     if (!coutTotal || !fiche?.nb_portions) return null
     const coutPortion = coutTotal / fiche.nb_portions
     const seuil = parseFloat(params['seuil_vert_boissons'] || 22) / 100
-    const tva = 1 + parseFloat(params['tva_restauration'] || 10) / 100
+    const tva = 1 + TVA_BAR() / 100
     return (coutPortion / seuil * tva).toFixed(2)
   }
 
   const handleDelete = async () => {
     if (!confirm('Supprimer définitivement cette fiche ?')) return
-    await log({
-      action: 'SUPPRESSION', entite: 'fiche_bar', entite_id: params_route.id,
-      entite_nom: fiche.nom, section: 'bar',
-      details: `Catégorie: ${fiche.categorie}`
-    })
-    if (fiche.photo_url) {
-      const path = fiche.photo_url.split('/').pop()
-      await supabase.storage.from('fiches-photos').remove([path])
-    }
-    await supabase.from('fiches_bar').delete().eq('id', params_route.id)
-    router.push('/bar/fiches')
+    try {
+      const clientId = await getClientId()
+      await log({
+        action: 'SUPPRESSION', entite: 'fiche_bar', entite_id: params_route.id,
+        entite_nom: fiche.nom, section: 'bar',
+        details: `Catégorie: ${fiche.categorie}`
+      })
+      if (fiche.photo_url) {
+        const path = fiche.photo_url.split('/').pop()
+        await supabase.storage.from('fiches-photos').remove([path])
+      }
+      await supabase.from('fiches_bar').delete().eq('id', params_route.id).eq('client_id', clientId)
+      router.push('/bar/fiches')
+    } catch (err) { console.error('Delete error:', err) }
   }
 
   if (loading) return (
@@ -135,13 +153,12 @@ export default function BarFicheDetail() {
   const prixIndic = prixIndicatif()
   const seuilVert = parseFloat(params['seuil_vert_boissons'] || 22)
   const seuilOrange = parseFloat(params['seuil_orange_boissons'] || 28)
-  const peutModifier = role === 'admin' || role === 'bar'
   const today = new Date().toLocaleDateString('fr-FR')
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
 
-      {/* Navbar — masquée à l'impression */}
+      {/* Navbar */}
       <div className="no-print" style={{
         background: '#3C3489', borderBottom: '0.5px solid #7F77DD40',
         padding: '0 16px', display: 'flex', alignItems: 'center',
@@ -168,36 +185,20 @@ export default function BarFicheDetail() {
               borderRadius: '8px', padding: '8px 12px', fontSize: '13px', cursor: 'pointer'
             }}>{isMobile ? '✏️' : 'Modifier'}</button>
           )}
-          {peutModifier && (
+          {peutModifier && !isMobile && (
             <button onClick={handleDelete} style={{
               background: 'transparent', color: '#F09595',
               border: '0.5px solid rgba(255,255,255,0.2)',
               borderRadius: '8px', padding: '8px 12px', fontSize: '13px', cursor: 'pointer'
-            }}>{isMobile ? '🗑️' : 'Supprimer'}</button>
+            }}>Supprimer</button>
           )}
         </div>
       </div>
 
-      {/* Contenu — visible à l'écran ET à l'impression */}
-      <div className="print-content" style={{ padding: isMobile ? '12px' : '24px', maxWidth: '800px', margin: '0 auto' }}>
+      {/* ── CONTENU ÉCRAN ── */}
+      <div className="no-print" style={{ padding: isMobile ? '12px' : '24px', maxWidth: '800px', margin: '0 auto' }}>
 
-        {/* En-tête impression */}
-        <div style={{
-          display: 'none', justifyContent: 'space-between', alignItems: 'center',
-          marginBottom: '20px', paddingBottom: '16px', borderBottom: '2px solid #3C3489'
-        }} className="print-only">
-          {logoUrl ? (
-            <img src={logoUrl} alt={nomEtablissement} style={{ height: '40px', objectFit: 'contain' }} />
-          ) : (
-            <span style={{ fontSize: '18px', fontWeight: '700', color: '#3C3489' }}>{nomEtablissement}</span>
-          )}
-          <div style={{ textAlign: 'right', fontSize: '11px', color: '#71717A' }}>
-            <div>Fiche technique Bar</div>
-            <div>{today}</div>
-          </div>
-        </div>
-
-        {/* Photo */}
+        {/* Infos générales */}
         <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
           {fiche.photo_url && (
             <img src={fiche.photo_url} alt={fiche.nom} style={{ width: '100%', height: isMobile ? '200px' : '250px', objectFit: 'cover', borderRadius: '8px', marginBottom: '16px' }} />
@@ -206,12 +207,8 @@ export default function BarFicheDetail() {
             <div style={{ flex: 1 }}>
               <h1 style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: '500', marginBottom: '8px', color: c.texte }}>{fiche.nom}</h1>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {fiche.categorie && (
-                  <span style={{ background: '#EEEDFE', color: '#3C3489', borderRadius: '20px', padding: '3px 12px', fontSize: '12px', fontWeight: '500' }}>{fiche.categorie}</span>
-                )}
-                {fiche.saison && (
-                  <span style={{ background: c.fond, color: c.texteMuted, borderRadius: '20px', padding: '3px 12px', fontSize: '12px', border: `0.5px solid ${c.bordure}` }}>{fiche.saison}</span>
-                )}
+                {fiche.categorie && <span style={{ background: '#EEEDFE', color: '#3C3489', borderRadius: '20px', padding: '3px 12px', fontSize: '12px', fontWeight: '500' }}>{fiche.categorie}</span>}
+                {fiche.saison && <span style={{ background: c.fond, color: c.texteMuted, borderRadius: '20px', padding: '3px 12px', fontSize: '12px', border: `0.5px solid ${c.bordure}` }}>{fiche.saison}</span>}
               </div>
             </div>
             <div style={{ background: '#3C3489', color: '#C4956A', borderRadius: '10px', padding: '8px 14px', textAlign: 'center', flexShrink: 0, marginLeft: '12px' }}>
@@ -219,17 +216,29 @@ export default function BarFicheDetail() {
               <div style={{ fontSize: '20px', fontWeight: '500' }}>{fiche.nb_portions || '—'}</div>
             </div>
           </div>
-
           {fiche.description && (
             <p style={{ fontSize: '14px', color: c.texteMuted, lineHeight: '1.6', marginTop: '8px' }}>{fiche.description}</p>
+          )}
+          {fiche.allergenes && fiche.allergenes.length > 0 && (
+            <div style={{ background: '#FCEBEB', borderRadius: '8px', padding: '12px', marginTop: '12px', border: '0.5px solid #F09595' }}>
+              <div style={{ fontSize: '11px', color: '#A32D2D', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>Allergènes présents</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {fiche.allergenes.map(id => {
+                  const a = ALLERGENES.find(al => al.id === id)
+                  return a ? (
+                    <span key={id} style={{ background: 'white', color: '#A32D2D', border: '0.5px solid #F09595', borderRadius: '20px', padding: '4px 10px', fontSize: '12px', fontWeight: '500' }}>
+                      {a.emoji} {a.label}
+                    </span>
+                  ) : null
+                })}
+              </div>
+            </div>
           )}
         </div>
 
         {/* Ingrédients */}
         <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', overflow: 'hidden' }}>
-          <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Ingrédients & Préparations
-          </div>
+          <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Ingrédients & Préparations</div>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: c.fond }}>
@@ -248,13 +257,13 @@ export default function BarFicheDetail() {
                   <tr key={i} style={{ borderBottom: `0.5px solid ${c.bordure}` }}>
                     <td style={{ padding: '12px 16px', fontSize: '14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {isSF && <span style={{ background: c.violet, color: 'white', borderRadius: '4px', padding: '1px 5px', fontSize: '9px' }}>SF</span>}
-                        <span style={{ fontWeight: isSF ? '600' : '400' }}>{nom}</span>
+                        {isSF && <span style={{ background: '#7C3AED', color: 'white', borderRadius: '4px', padding: '1px 5px', fontSize: '9px' }}>SF</span>}
+                        <span style={{ fontWeight: isSF ? '600' : '400', color: c.texte }}>{nom}</span>
                       </div>
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px' }}>{item.quantite} {item.unite}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', color: c.texte }}>{item.quantite} {item.unite}</td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '13px', color: c.texteMuted }}>{prixUnit ? `${Number(prixUnit).toFixed(2)} €` : '—'}</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: '500' }}>{coutLigne.toFixed(2)} €</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: '500', color: c.texte }}>{coutLigne.toFixed(2)} €</td>
                   </tr>
                 )
               })}
@@ -262,24 +271,27 @@ export default function BarFicheDetail() {
           </table>
         </div>
 
-        {/* Allergènes */}
-        {fiche.allergenes && fiche.allergenes.length > 0 && (
-          <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', padding: '16px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '12px' }}>Allergènes</div>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {fiche.allergenes.map(id => {
-                const a = ALLERGENES.find(al => al.id === id)
-                return a ? (
-                  <span key={id} style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '20px', padding: '4px 12px', fontSize: '12px', fontWeight: '500', border: '0.5px solid #F09595' }}>
-                    {a.emoji} {a.label}
-                  </span>
-                ) : null
-              })}
+        {/* Instructions — APRÈS ingrédients */}
+        {fiche.instructions && (
+          <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', overflow: 'hidden' }}>
+            <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              📋 Instructions de préparation
+            </div>
+            <div style={{ padding: '16px 20px' }}>
+              {fiche.instructions.split('\n').map((ligne, i) => (
+                ligne.trim() === '' ? (
+                  <div key={i} style={{ height: '10px' }} />
+                ) : (
+                  <div key={i} style={{ fontSize: '14px', color: c.texte, lineHeight: '1.8', marginBottom: '2px' }}>
+                    {ligne}
+                  </div>
+                )
+              ))}
             </div>
           </div>
         )}
 
-        {/* Récapitulatif financier */}
+        {/* Récap financier */}
         <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '20px', border: `0.5px solid ${c.bordure}`, display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
           <div style={{ background: c.fond, borderRadius: '8px', padding: '12px' }}>
             <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Coût total</div>
@@ -294,9 +306,9 @@ export default function BarFicheDetail() {
             <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{fiche.prix_ttc ? `${Number(fiche.prix_ttc).toFixed(2)} €` : '—'}</div>
           </div>
           {prixIndic && (
-            <div style={{ background: c.vertClair, borderRadius: '8px', padding: '12px' }}>
-              <div style={{ fontSize: '10px', color: c.vert, fontWeight: '500', textTransform: 'uppercase' }}>Prix indicatif</div>
-              <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.vert }}>{prixIndic} €</div>
+            <div style={{ background: '#DCFCE7', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ fontSize: '10px', color: '#16A34A', fontWeight: '500', textTransform: 'uppercase' }}>Prix indicatif</div>
+              <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: '#16A34A' }}>{prixIndic} €</div>
             </div>
           )}
           {fc && (
@@ -308,18 +320,124 @@ export default function BarFicheDetail() {
         </div>
       </div>
 
-      {/* CSS print-only */}
-      <style>{`
-        @media print {
-          .print-only { display: flex !important; }
-          .no-print { display: none !important; }
-          .print-content { padding: 20px !important; max-width: 100% !important; }
-          body { background: white !important; }
-        }
-        @media screen {
-          .print-only { display: none !important; }
-        }
-      `}</style>
+      {/* ── VERSION IMPRESSION BAR ── */}
+      <div className="print-only" style={{ fontFamily: 'Georgia, serif', color: '#1a1a1a', background: 'white', padding: '0', width: '100%' }}>
+
+        {/* En-tête */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #3C3489', paddingBottom: '16px', marginBottom: '20px' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#7C3AED', marginBottom: '6px', fontFamily: 'sans-serif' }}>Fiche technique Bar — {fiche.categorie || ''}</div>
+            <h1 style={{ fontSize: '28px', fontWeight: '400', color: '#3C3489', marginBottom: '8px', letterSpacing: '1px' }}>{fiche.nom}</h1>
+            <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: '#7C3AED', fontFamily: 'sans-serif' }}>
+              {fiche.saison && <span>Saison : {fiche.saison}</span>}
+              {fiche.nb_portions && <span>Portions : {fiche.nb_portions}</span>}
+            </div>
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '20px' }}>
+            {logoUrl
+              ? <img src={logoUrl} alt={nomEtablissement} style={{ height: '60px', objectFit: 'contain' }} />
+              : <div style={{ fontSize: '16px', fontWeight: '700', color: '#3C3489' }}>{nomEtablissement}</div>
+            }
+          </div>
+        </div>
+
+        {/* Photo + description */}
+        {(fiche.photo_url || fiche.description) && (
+          <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+            {fiche.photo_url && <img src={fiche.photo_url} alt={fiche.nom} style={{ width: '180px', height: '130px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} />}
+            {fiche.description && <div style={{ flex: 1, fontSize: '12px', color: '#555', lineHeight: '1.8', fontStyle: 'italic' }}>{fiche.description}</div>}
+          </div>
+        )}
+
+        {/* Ingrédients */}
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#7C3AED', marginBottom: '10px', fontFamily: 'sans-serif', fontWeight: '600' }}>Ingrédients & Préparations</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: 'sans-serif' }}>
+            <thead>
+              <tr style={{ background: '#EEEDFE' }}>
+                {['Désignation', 'Quantité', 'Prix unit.', 'Coût'].map((h, i) => (
+                  <th key={h} style={{ padding: '8px 12px', textAlign: i === 0 ? 'left' : 'right', fontWeight: '600', color: '#3C3489', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', border: '0.5px solid #DDD6FE' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ingredients.map((item, i) => {
+                const isSF = !!item.sous_fiche_id
+                const nom = isSF ? item.fiches_bar?.nom : item.ingredients_bar?.nom
+                const prixUnit = isSF ? item.fiches_bar?.cout_portion : item.ingredients_bar?.prix_kg
+                const coutLigne = prixUnit && item.quantite ? prixUnit * item.quantite : 0
+                return (
+                  <tr key={i} style={{ background: i % 2 === 0 ? 'white' : '#F5F3FF' }}>
+                    <td style={{ padding: '7px 12px', border: '0.5px solid #DDD6FE' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {isSF && <span style={{ background: '#7C3AED', color: 'white', borderRadius: '3px', padding: '1px 4px', fontSize: '8px' }}>SF</span>}
+                        <span style={{ color: '#3C3489', fontWeight: isSF ? '600' : '400' }}>{nom}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#3C3489', border: '0.5px solid #DDD6FE' }}>{item.quantite} {item.unite}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#7C3AED', border: '0.5px solid #DDD6FE' }}>{prixUnit ? `${Number(prixUnit).toFixed(2)} €` : '—'}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: '600', color: '#3C3489', border: '0.5px solid #DDD6FE' }}>{coutLigne.toFixed(2)} €</td>
+                  </tr>
+                )
+              })}
+              <tr style={{ background: '#3C3489' }}>
+                <td colSpan={3} style={{ padding: '8px 12px', color: '#C4956A', fontWeight: '600', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', border: '0.5px solid #3C3489' }}>Coût total</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', color: '#C4956A', fontWeight: '700', fontSize: '14px', border: '0.5px solid #3C3489' }}>{cout.toFixed(2)} €</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* ── INSTRUCTIONS À L'IMPRESSION — après ingrédients ── */}
+        {fiche.instructions && (
+          <div style={{ marginBottom: '20px', pageBreakInside: 'avoid' }}>
+            <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#7C3AED', marginBottom: '10px', fontFamily: 'sans-serif', fontWeight: '600' }}>Instructions de préparation</div>
+            <div style={{
+              border: '0.5px solid #DDD6FE', borderRadius: '4px', padding: '14px 16px',
+              fontSize: '12px', fontFamily: 'sans-serif', color: '#3C3489',
+              lineHeight: '1.9',
+              whiteSpace: 'pre-wrap'
+            }}>
+              {fiche.instructions}
+            </div>
+          </div>
+        )}
+
+        {/* Récap financier */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
+          {[
+            { label: 'Coût / portion', value: cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—' },
+            { label: `TVA ${TVA_BAR()}%`, value: fiche.prix_ttc ? `${(fiche.prix_ttc / (1 + TVA_BAR() / 100)).toFixed(2)} €` : '—' },
+            { label: 'Prix TTC', value: fiche.prix_ttc ? `${Number(fiche.prix_ttc).toFixed(2)} €` : '—' },
+            {
+              label: 'Food cost', value: fc ? `${fc} %` : '—',
+              highlight: fc ? (fc < seuilVert ? '#EAF3DE' : fc < seuilOrange ? '#FAEEDA' : '#FCEBEB') : null,
+              color: fc ? (fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D') : '#3C3489'
+            }
+          ].map((item, i) => (
+            <div key={i} style={{ background: item.highlight || '#EEEDFE', borderRadius: '6px', padding: '10px 12px', border: '0.5px solid #DDD6FE' }}>
+              <div style={{ fontSize: '9px', color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '1px', fontFamily: 'sans-serif', marginBottom: '4px' }}>{item.label}</div>
+              <div style={{ fontSize: '16px', fontWeight: '700', color: item.color || '#3C3489', fontFamily: 'sans-serif' }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Allergènes */}
+        {fiche.allergenes && fiche.allergenes.length > 0 && (
+          <div style={{ background: '#FCEBEB', borderRadius: '6px', padding: '12px', marginBottom: '16px', border: '0.5px solid #F09595' }}>
+            <div style={{ fontSize: '9px', color: '#A32D2D', textTransform: 'uppercase', letterSpacing: '2px', fontFamily: 'sans-serif', fontWeight: '600', marginBottom: '8px' }}>⚠ Allergènes présents</div>
+            <div style={{ fontSize: '11px', color: '#A32D2D', fontFamily: 'sans-serif', fontWeight: '500' }}>
+              {fiche.allergenes.map(id => { const a = ALLERGENES.find(a => a.id === id); return a ? `${a.emoji} ${a.label}` : null }).filter(Boolean).join('  •  ')}
+            </div>
+          </div>
+        )}
+
+        {/* Pied de page */}
+        <div style={{ borderTop: '1px solid #DDD6FE', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', color: '#7C3AED', fontFamily: 'sans-serif' }}>
+          <span>{nomEtablissement || params['nom_etablissement'] || ''} — Bar</span>
+          <span>{fiche.nom} — {fiche.saison || ''} — Imprimé le {today}</span>
+        </div>
+      </div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase, getParametres } from '../../../lib/supabase'
+import { supabase, getParametres, getClientId } from '../../../lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
 import { useIsMobile } from '../../../lib/useIsMobile'
@@ -8,8 +8,6 @@ import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
 import { log } from '../../../lib/useLog'
 import { ALLERGENES } from '../../../lib/allergenes'
-
-const LOGO_URL = 'https://uvmslpdcywephdneciwd.supabase.co/storage/v1/object/public/fiches-photos/logo-la-fantaisie.png'
 
 export default function FicheDetail() {
   const [fiche, setFiche] = useState(null)
@@ -19,45 +17,79 @@ export default function FicheDetail() {
   const router = useRouter()
   const params_route = useParams()
   const isMobile = useIsMobile()
-  const { c } = useTheme()
+  const { c, logoUrl, nomEtablissement } = useTheme()
   const { role } = useRole()
 
   const peutModifier = role === 'admin' || role === 'cuisine'
 
   useEffect(() => {
+    // Injection CSS impression
+    const style = document.createElement('style')
+    style.innerHTML = `
+      @media print {
+        .no-print { display: none !important; }
+        .print-only { display: block !important; }
+        body { background: white !important; margin: 0; padding: 0; }
+        @page { margin: 15mm 15mm 15mm 15mm; }
+      }
+      @media screen {
+        .print-only { display: none !important; }
+      }
+    `
+    document.head.appendChild(style)
     checkUser()
     loadFiche()
     loadParams()
+    return () => document.head.removeChild(style)
   }, [])
 
   const checkUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) router.push('/')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) router.push('/')
+    } catch { router.push('/') }
   }
 
   const loadParams = async () => {
-    const p = await getParametres()
-    setParams(p)
+    try {
+      const p = await getParametres()
+      setParams(p)
+    } catch (err) { console.error('Params error:', err) }
   }
 
   const loadFiche = async () => {
-    const { data: ficheData } = await supabase
-      .from('fiches').select('*').eq('id', params_route.id).single()
-    if (!ficheData) { router.push('/fiches'); return }
-    setFiche(ficheData)
+    try {
+      const clientId = await getClientId()
+      if (!clientId) { router.push('/'); return }
 
-    const { data: ingsData } = await supabase
-      .from('fiche_ingredients')
-      .select(`quantite, unite, ingredients (id, nom, prix_kg, unite)`)
-      .eq('fiche_id', params_route.id)
-    setIngredients(ingsData || [])
-    setLoading(false)
+      const { data: ficheData, error } = await supabase
+        .from('fiches')
+        .select('*')
+        .eq('id', params_route.id)
+        .eq('client_id', clientId)
+        .single()
+
+      if (error || !ficheData) { router.push('/fiches'); return }
+      setFiche(ficheData)
+
+      const { data: ingsData } = await supabase
+        .from('fiche_ingredients')
+        .select(`quantite, unite, ingredients (id, nom, prix_kg, unite)`)
+        .eq('fiche_id', params_route.id)
+
+      setIngredients(ingsData || [])
+    } catch (err) {
+      console.error('Load fiche error:', err)
+      router.push('/fiches')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const calculerCout = () => {
     return ingredients.reduce((total, ing) => {
       if (ing.ingredients?.prix_kg && ing.quantite) {
-        let coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
+        const coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
         return total + (ing.ingredients.prix_kg * ing.quantite * coef)
       }
       return total
@@ -81,19 +113,20 @@ export default function FicheDetail() {
 
   const handleDelete = async () => {
     if (!confirm('Supprimer définitivement cette fiche ?')) return
-
-    await log({
-      action: 'SUPPRESSION', entite: 'fiche', entite_id: params_route.id,
-      entite_nom: fiche.nom, section: 'cuisine',
-      details: `Catégorie: ${fiche.categorie}, Saison: ${fiche.saison}`
-    })
-
-    if (fiche.photo_url) {
-      const path = fiche.photo_url.split('/').pop()
-      await supabase.storage.from('fiches-photos').remove([path])
-    }
-    await supabase.from('fiches').delete().eq('id', params_route.id)
-    router.push('/fiches')
+    try {
+      const clientId = await getClientId()
+      await log({
+        action: 'SUPPRESSION', entite: 'fiche', entite_id: params_route.id,
+        entite_nom: fiche.nom, section: 'cuisine',
+        details: `Catégorie: ${fiche.categorie}, Saison: ${fiche.saison}`
+      })
+      if (fiche.photo_url) {
+        const path = fiche.photo_url.split('/').pop()
+        await supabase.storage.from('fiches-photos').remove([path])
+      }
+      await supabase.from('fiches').delete().eq('id', params_route.id).eq('client_id', clientId)
+      router.push('/fiches')
+    } catch (err) { console.error('Delete error:', err) }
   }
 
   const getUniteLabel = () => {
@@ -118,6 +151,7 @@ export default function FicheDetail() {
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
 
+      {/* Navbar — masquée à l'impression */}
       <div className="no-print" style={{
         background: c.principal, borderBottom: `0.5px solid ${c.accent}40`,
         padding: '0 16px', display: 'flex', alignItems: 'center',
@@ -134,7 +168,7 @@ export default function FicheDetail() {
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
           <button onClick={() => window.print()} style={{
-            background: c.accent, color: c.principal, border: 'none',
+            background: c.accent, color: 'white', border: 'none',
             borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '600', cursor: 'pointer'
           }}>{isMobile ? '🖨️' : '🖨️ Imprimer'}</button>
           {peutModifier && (
@@ -154,8 +188,10 @@ export default function FicheDetail() {
         </div>
       </div>
 
+      {/* ── CONTENU ÉCRAN ── */}
       <div className="no-print" style={{ padding: isMobile ? '12px' : '24px', maxWidth: '800px', margin: '0 auto' }}>
 
+        {/* Infos générales */}
         <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
           {fiche.photo_url && (
             <img src={fiche.photo_url} alt={fiche.nom} style={{ width: '100%', height: isMobile ? '200px' : '250px', objectFit: 'cover', borderRadius: '8px', marginBottom: '16px' }} />
@@ -164,7 +200,7 @@ export default function FicheDetail() {
             <div style={{ flex: 1 }}>
               <h1 style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: '500', marginBottom: '8px', color: c.texte }}>{fiche.nom}</h1>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {fiche.categorie && <span style={{ background: c.accentClair, color: c.principal, borderRadius: '20px', padding: '3px 12px', fontSize: '12px', fontWeight: '500' }}>{fiche.categorie}</span>}
+                {fiche.categorie && <span style={{ background: c.accentClair, color: c.accent, borderRadius: '20px', padding: '3px 12px', fontSize: '12px', fontWeight: '500' }}>{fiche.categorie}</span>}
                 {fiche.saison && <span style={{ background: c.fond, color: c.texteMuted, borderRadius: '20px', padding: '3px 12px', fontSize: '12px', border: `0.5px solid ${c.bordure}` }}>{fiche.saison}</span>}
               </div>
             </div>
@@ -184,7 +220,7 @@ export default function FicheDetail() {
                   const allergene = ALLERGENES.find(a => a.id === id)
                   if (!allergene) return null
                   return (
-                    <span key={id} style={{ background: 'white', color: '#A32D2D', border: '0.5px solid #F09595', borderRadius: '20px', padding: '4px 10px', fontSize: '12px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span key={id} style={{ background: 'white', color: '#A32D2D', border: '0.5px solid #F09595', borderRadius: '20px', padding: '4px 10px', fontSize: '12px', fontWeight: '500' }}>
                       {allergene.emoji} {allergene.label}
                     </span>
                   )
@@ -205,7 +241,8 @@ export default function FicheDetail() {
           {isMobile ? (
             <div style={{ padding: '12px' }}>
               {ingredients.map((ing, i) => {
-                const coutLigne = ing.ingredients?.prix_kg && ing.quantite ? ing.ingredients.prix_kg * ing.quantite : null
+                const coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
+                const coutLigne = ing.ingredients?.prix_kg && ing.quantite ? ing.ingredients.prix_kg * ing.quantite * coef : null
                 return (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < ingredients.length - 1 ? `0.5px solid ${c.bordure}` : 'none' }}>
                     <div>
@@ -214,7 +251,6 @@ export default function FicheDetail() {
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       {coutLigne && <div style={{ fontSize: '14px', fontWeight: '500', color: c.texte }}>{coutLigne.toFixed(2)} €</div>}
-                      {ing.ingredients?.prix_kg && <div style={{ fontSize: '11px', color: c.texteMuted }}>{Number(ing.ingredients.prix_kg).toFixed(2)} €/kg</div>}
                     </div>
                   </div>
                 )
@@ -231,10 +267,10 @@ export default function FicheDetail() {
               </thead>
               <tbody>
                 {ingredients.map((ing, i) => {
-                  let coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
+                  const coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
                   const coutLigne = ing.ingredients?.prix_kg && ing.quantite ? ing.ingredients.prix_kg * ing.quantite * coef : null
                   return (
-                    <tr key={i} style={{ borderBottom: i < ingredients.length - 1 ? `0.5px solid ${c.bordure}` : 'none', background: c.blanc }}>
+                    <tr key={i} style={{ borderBottom: i < ingredients.length - 1 ? `0.5px solid ${c.bordure}` : 'none' }}>
                       <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '500', color: c.texte }}>{ing.ingredients?.nom || '—'}</td>
                       <td style={{ padding: '12px 16px', fontSize: '14px', textAlign: 'right', color: c.texte }}>{ing.quantite}</td>
                       <td style={{ padding: '12px 16px', fontSize: '14px', textAlign: 'right', color: c.texteMuted }}>{ing.unite}</td>
@@ -247,6 +283,27 @@ export default function FicheDetail() {
             </table>
           )}
         </div>
+
+        {/* Instructions — APRÈS les ingrédients */}
+        {fiche.instructions && (
+          <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', overflow: 'hidden' }}>
+            <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              📋 Instructions de préparation
+            </div>
+            <div style={{ padding: '16px 20px' }}>
+              {/* Rendu avec sauts de lignes respectés */}
+              {fiche.instructions.split('\n').map((ligne, i) => (
+                ligne.trim() === '' ? (
+                  <div key={i} style={{ height: '10px' }} />
+                ) : (
+                  <div key={i} style={{ fontSize: '14px', color: c.texte, lineHeight: '1.8', marginBottom: '2px' }}>
+                    {ligne}
+                  </div>
+                )
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Récapitulatif financier */}
         <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '20px', border: `0.5px solid ${c.bordure}`, display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
@@ -282,8 +339,10 @@ export default function FicheDetail() {
         </div>
       </div>
 
-      {/* Version impression */}
+      {/* ── VERSION IMPRESSION ── */}
       <div className="print-only" style={{ fontFamily: 'Georgia, serif', color: '#1a1a1a', background: 'white', padding: '0', width: '100%' }}>
+
+        {/* En-tête */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #2C1810', paddingBottom: '16px', marginBottom: '20px' }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#8B7355', marginBottom: '6px', fontFamily: 'sans-serif' }}>Fiche technique — {fiche.categorie || ''}</div>
@@ -291,14 +350,17 @@ export default function FicheDetail() {
             <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: '#8B7355', fontFamily: 'sans-serif' }}>
               {fiche.saison && <span>Saison : {fiche.saison}</span>}
               {fiche.nb_portions && <span>{uniteLabel} : {fiche.nb_portions}</span>}
-              {params['chef_cuisine'] && <span>Chef : {params['chef_cuisine']}</span>}
             </div>
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '20px' }}>
-            <img src={LOGO_URL} alt="La Fantaisie" style={{ height: '80px', objectFit: 'contain' }} />
+            {logoUrl
+              ? <img src={logoUrl} alt={nomEtablissement} style={{ height: '60px', objectFit: 'contain' }} />
+              : <div style={{ fontSize: '16px', fontWeight: '700', color: '#2C1810' }}>{nomEtablissement}</div>
+            }
           </div>
         </div>
 
+        {/* Photo + description */}
         {(fiche.photo_url || fiche.description) && (
           <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
             {fiche.photo_url && <img src={fiche.photo_url} alt={fiche.nom} style={{ width: '200px', height: '150px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} />}
@@ -306,6 +368,7 @@ export default function FicheDetail() {
           </div>
         )}
 
+        {/* Ingrédients */}
         <div style={{ marginBottom: '20px' }}>
           <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#8B7355', marginBottom: '10px', fontFamily: 'sans-serif', fontWeight: '600' }}>Ingrédients</div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: 'sans-serif' }}>
@@ -318,7 +381,7 @@ export default function FicheDetail() {
             </thead>
             <tbody>
               {ingredients.map((ing, i) => {
-                let coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
+                const coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
                 const coutLigne = ing.ingredients?.prix_kg && ing.quantite ? ing.ingredients.prix_kg * ing.quantite * coef : null
                 return (
                   <tr key={i} style={{ background: i % 2 === 0 ? 'white' : '#FAF9F6' }}>
@@ -338,12 +401,33 @@ export default function FicheDetail() {
           </table>
         </div>
 
+        {/* ── INSTRUCTIONS À L'IMPRESSION — après ingrédients ── */}
+        {fiche.instructions && (
+          <div style={{ marginBottom: '20px', pageBreakInside: 'avoid' }}>
+            <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#8B7355', marginBottom: '10px', fontFamily: 'sans-serif', fontWeight: '600' }}>Instructions de préparation</div>
+            <div style={{
+              border: '0.5px solid #e8e4dc', borderRadius: '4px', padding: '14px 16px',
+              fontSize: '12px', fontFamily: 'sans-serif', color: '#2C1810',
+              lineHeight: '1.9',
+              /* CLEF : white-space pre-wrap respecte les sauts de ligne */
+              whiteSpace: 'pre-wrap'
+            }}>
+              {fiche.instructions}
+            </div>
+          </div>
+        )}
+
+        {/* Récap financier */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
           {[
             { label: `Coût / ${uniteLabel.slice(0, -1)}`, value: cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—' },
             { label: 'Prix HT', value: fiche.prix_ttc ? `${(fiche.prix_ttc / 1.10).toFixed(2)} €` : '—' },
             { label: 'Prix TTC', value: fiche.prix_ttc ? `${Number(fiche.prix_ttc).toFixed(2)} €` : '—' },
-            { label: 'Food cost', value: fc ? `${fc} %` : '—', highlight: fc ? (fc < seuilVert ? '#EAF3DE' : fc < seuilOrange ? '#FAEEDA' : '#FCEBEB') : null, color: fc ? (fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D') : '#2C1810' }
+            {
+              label: 'Food cost', value: fc ? `${fc} %` : '—',
+              highlight: fc ? (fc < seuilVert ? '#EAF3DE' : fc < seuilOrange ? '#FAEEDA' : '#FCEBEB') : null,
+              color: fc ? (fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D') : '#2C1810'
+            }
           ].map((item, i) => (
             <div key={i} style={{ background: item.highlight || '#F0E8E0', borderRadius: '6px', padding: '10px 12px', border: '0.5px solid #e8e4dc' }}>
               <div style={{ fontSize: '9px', color: '#8B7355', textTransform: 'uppercase', letterSpacing: '1px', fontFamily: 'sans-serif', marginBottom: '4px' }}>{item.label}</div>
@@ -352,8 +436,9 @@ export default function FicheDetail() {
           ))}
         </div>
 
+        {/* Allergènes */}
         {fiche.allergenes && fiche.allergenes.length > 0 && (
-          <div style={{ background: '#FCEBEB', borderRadius: '6px', padding: '12px', marginBottom: '20px', border: '0.5px solid #F09595' }}>
+          <div style={{ background: '#FCEBEB', borderRadius: '6px', padding: '12px', marginBottom: '16px', border: '0.5px solid #F09595' }}>
             <div style={{ fontSize: '9px', color: '#A32D2D', textTransform: 'uppercase', letterSpacing: '2px', fontFamily: 'sans-serif', fontWeight: '600', marginBottom: '8px' }}>⚠ Allergènes présents</div>
             <div style={{ fontSize: '11px', color: '#A32D2D', fontFamily: 'sans-serif', fontWeight: '500' }}>
               {fiche.allergenes.map(id => { const a = ALLERGENES.find(a => a.id === id); return a ? `${a.emoji} ${a.label}` : null }).filter(Boolean).join('  •  ')}
@@ -361,8 +446,9 @@ export default function FicheDetail() {
           </div>
         )}
 
+        {/* Pied de page */}
         <div style={{ borderTop: '1px solid #e8e4dc', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', color: '#8B7355', fontFamily: 'sans-serif' }}>
-          <span>{params['nom_etablissement'] || 'La Fantaisie'} — {params['adresse'] || '24 Rue Cadet, Paris 9ème'}</span>
+          <span>{nomEtablissement || params['nom_etablissement'] || ''} — {params['adresse'] || ''}</span>
           <span>{fiche.nom} — {fiche.saison || ''} — Imprimé le {today}</span>
         </div>
       </div>
