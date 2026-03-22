@@ -19,6 +19,7 @@ export default function ModifierFiche() {
   const [prixTTC, setPrixTTC] = useState('')
   const [perte, setPerte] = useState(0)
   const [description, setDescription] = useState('')
+  const [instructions, setInstructions] = useState('')
   const [saison, setSaison] = useState('Printemps 2026')
   const [allergenes, setAllergenes] = useState([])
   const [photo, setPhoto] = useState(null)
@@ -38,7 +39,7 @@ export default function ModifierFiche() {
   const isMobile = useIsMobile()
   const isSousFiche = categorie === 'Sous-fiche'
 
-  const autosaveData = { nom, categorie, nbPortions, prixTTC, perte, description, saison, allergenes, ingredients }
+  const autosaveData = { nom, categorie, nbPortions, prixTTC, perte, description, instructions, saison, allergenes, ingredients }
   const { hasDraft, lastSaved, getDraft, clearDraft } = useAutosave(`modifier-fiche-${params_route.id}`, autosaveData, 60000)
 
   useEffect(() => {
@@ -67,6 +68,7 @@ export default function ModifierFiche() {
     setPrixTTC(ficheData.prix_ttc || '')
     setPerte(ficheData.perte || 0)
     setDescription(ficheData.description || '')
+    setInstructions(ficheData.instructions || '')
     setSaison(ficheData.saison || 'Printemps 2026')
     setAllergenes(ficheData.allergenes || [])
     if (ficheData.photo_url) { setPhotoExistante(ficheData.photo_url); setPhotoPreview(ficheData.photo_url) }
@@ -97,6 +99,7 @@ export default function ModifierFiche() {
     setPrixTTC(draft.prixTTC || '')
     setPerte(draft.perte || 0)
     setDescription(draft.description || '')
+    setInstructions(draft.instructions || '')
     setSaison(draft.saison || 'Printemps 2026')
     setAllergenes(draft.allergenes || [])
     setIngredients(draft.ingredients || [])
@@ -197,7 +200,9 @@ export default function ModifierFiche() {
       nom, categorie,
       nb_portions: nbPortions ? parseInt(nbPortions) : null,
       prix_ttc: isSousFiche ? null : (prixTTC ? parseFloat(prixTTC) : null),
-      description, saison, allergenes, photo_url: photoUrl,
+      description,
+      instructions: instructions || null,
+      saison, allergenes, photo_url: photoUrl,
       cout_portion: coutPortion,
       perte: perte ? parseFloat(perte) : 0,
       updated_at: new Date().toISOString()
@@ -280,7 +285,7 @@ export default function ModifierFiche() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {lastSaved && <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>{!isMobile && `Sauvegardé à ${lastSaved.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`}{isMobile && '✓'}</span>}
           <button onClick={handleSubmit} disabled={saving} style={{
-            background: saving ? c.texteMuted : c.accent, color: c.principal, border: 'none',
+            background: saving ? c.texteMuted : c.accent, color: 'white', border: 'none',
             borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: saving ? 'not-allowed' : 'pointer'
           }}>
             {saving ? '...' : 'Enregistrer'}
@@ -401,8 +406,9 @@ export default function ModifierFiche() {
             )}
 
             <div>
-              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Description</label>
-              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3}
+              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Description courte</label>
+              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2}
+                placeholder="Description affichée en haut de la fiche..."
                 style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', color: c.texte, background: c.blanc }}
               />
             </div>
@@ -432,15 +438,6 @@ export default function ModifierFiche() {
                       {['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce', 'portions'].map(u => <option key={u}>{u}</option>)}
                     </select>
                   </div>
-                  {(() => {
-                    const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
-                    const cout = ingData?.prix_kg && ing.quantite ? (ingData.prix_kg * parseFloat(ing.quantite)).toFixed(2) : null
-                    return cout ? (
-                      <div style={{ marginTop: '6px', padding: '6px 10px', background: c.fond, borderRadius: '6px', fontSize: '12px', color: c.texte, fontWeight: '500', textAlign: 'right', border: `0.5px solid ${c.bordure}` }}>
-                        Coût : <strong>{cout} €</strong>
-                      </div>
-                    ) : null
-                  })()}
                 </div>
               ))}
             </>
@@ -465,11 +462,7 @@ export default function ModifierFiche() {
                     {(() => {
                       const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
                       const cout = ingData?.prix_kg && ing.quantite ? (ingData.prix_kg * parseFloat(ing.quantite)).toFixed(2) : null
-                      return (
-                        <span style={{ fontSize: '11px', fontWeight: '500', color: cout ? c.texte : c.texteMuted, whiteSpace: 'nowrap' }}>
-                          {cout ? `${cout} €` : '—'}
-                        </span>
-                      )
+                      return <span style={{ fontSize: '11px', fontWeight: '500', color: cout ? c.texte : c.texteMuted, whiteSpace: 'nowrap' }}>{cout ? `${cout} €` : '—'}</span>
                     })()}
                   </div>
                   <button onClick={() => supprimerIngredient(index)} style={{ background: 'transparent', border: `0.5px solid ${c.bordure}`, borderRadius: '8px', width: '36px', height: '36px', cursor: 'pointer', color: '#aaa', fontSize: '16px', flexShrink: 0 }}>×</button>
@@ -480,6 +473,34 @@ export default function ModifierFiche() {
           <button onClick={ajouterIngredient} style={{ background: c.vertClair, color: c.vert, border: `0.5px solid ${c.vert}40`, borderRadius: '8px', padding: '10px 16px', fontSize: '13px', cursor: 'pointer', marginTop: '8px', width: isMobile ? '100%' : 'auto' }}>
             + Ajouter un ingrédient
           </button>
+        </div>
+
+        {/* ── INSTRUCTIONS — bloc dédié après ingrédients ── */}
+        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
+          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
+            📋 Instructions de préparation
+          </div>
+          <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '12px' }}>
+            Les sauts de ligne seront respectés à l'écran et à l'impression.
+          </div>
+          <textarea
+            value={instructions}
+            onChange={e => setInstructions(e.target.value)}
+            rows={8}
+            placeholder={`1. Préparer la marinade en mélangeant...\n2. Saisir la viande à feu vif...\n3. Déglacer avec le vin blanc...\n\nDressage :\n- Disposer les légumes...`}
+            style={{
+              width: '100%', padding: '12px', borderRadius: '8px',
+              border: `0.5px solid ${c.bordure}`, fontSize: '14px',
+              outline: 'none', resize: 'vertical', fontFamily: 'inherit',
+              color: c.texte, background: c.blanc, lineHeight: '1.7',
+              minHeight: '180px'
+            }}
+          />
+          {instructions && (
+            <div style={{ marginTop: '8px', fontSize: '12px', color: c.texteMuted }}>
+              {instructions.split('\n').length} ligne{instructions.split('\n').length > 1 ? 's' : ''} — {instructions.length} caractères
+            </div>
+          )}
         </div>
 
         {/* Allergènes */}
