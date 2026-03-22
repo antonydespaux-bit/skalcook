@@ -58,42 +58,62 @@ export default function ModifierBarFiche() {
   }
 
   const loadData = async () => {
-    const { data: ficheData } = await supabase
-      .from('fiches_bar').select('*').eq('id', params_route.id).single()
-    if (!ficheData) { router.push('/bar/fiches'); return }
+    try {
+      const { data: ficheData } = await supabase
+        .from('fiches_bar').select('*').eq('id', params_route.id).single()
+      if (!ficheData) { router.push('/bar/fiches'); return }
 
-    setNom(ficheData.nom)
-    setCategorie(ficheData.categorie || 'Cocktails')
-    setNbPortions(ficheData.nb_portions || '')
-    setPrixTTC(ficheData.prix_ttc || '')
-    setPerte(ficheData.perte || 0)
-    setDescription(ficheData.description || '')
-    setInstructions(ficheData.instructions || '')
-    setSaison(ficheData.saison || 'Printemps 2026')
-    setAllergenes(ficheData.allergenes || [])
-    if (ficheData.photo_url) { setPhotoExistante(ficheData.photo_url); setPhotoPreview(ficheData.photo_url) }
+      setNom(ficheData.nom)
+      setCategorie(ficheData.categorie || 'Cocktails')
+      setNbPortions(ficheData.nb_portions || '')
+      setPrixTTC(ficheData.prix_ttc || '')
+      setPerte(ficheData.perte || 0)
+      setDescription(ficheData.description || '')
+      setInstructions(ficheData.instructions || '')
+      setSaison(ficheData.saison || 'Printemps 2026')
+      setAllergenes(ficheData.allergenes || [])
+      if (ficheData.photo_url) { setPhotoExistante(ficheData.photo_url); setPhotoPreview(ficheData.photo_url) }
 
-    const { data: ingsData, error: errIngs } = await supabase
-      .from('fiche_bar_ingredients')
-      .select(`
-        quantite,
-        unite,
-        sous_fiche_id,
-        ingredients_bar!ingredient_id (id, nom, prix_kg, unite),
-        fiches_bar!sous_fiche_id (id, nom, cout_portion, unite_production)
-      `)
-      .eq('fiche_bar_id', params_route.id)
-      
-    setIngredients((ingsData || []).map(i => ({
-      ingredient_id: i.ingredients_bar?.id || '',
-      nom: i.ingredients_bar?.nom || '',
-      quantite: i.quantite,
-      unite: i.unite
-    })))
+      // Requête ingrédients en deux temps pour éviter le bug de jointure Supabase
+      const { data: liens } = await supabase
+        .from('fiche_bar_ingredients')
+        .select('quantite, unite, ingredient_id, sous_fiche_id')
+        .eq('fiche_bar_id', params_route.id)
 
-    const { data: liste } = await supabase.from('ingredients_bar').select('*').order('nom').limit(5000)
-    setListeIngredients(liste || [])
-    setLoading(false)
+      if (liens && liens.length > 0) {
+        const ingIds = liens.filter(l => l.ingredient_id && !l.sous_fiche_id).map(l => l.ingredient_id)
+        const sfIds = liens.filter(l => l.sous_fiche_id).map(l => l.sous_fiche_id)
+
+        const [{ data: ingsData }, { data: sfsData }] = await Promise.all([
+          ingIds.length > 0
+            ? supabase.from('ingredients_bar').select('id, nom, prix_kg, unite').in('id', ingIds)
+            : Promise.resolve({ data: [] }),
+          sfIds.length > 0
+            ? supabase.from('fiches_bar').select('id, nom, cout_portion, unite_production').in('id', sfIds)
+            : Promise.resolve({ data: [] })
+        ])
+
+        const ingsMap = Object.fromEntries((ingsData || []).map(i => [i.id, i]))
+        const sfsMap = Object.fromEntries((sfsData || []).map(s => [s.id, s]))
+
+        setIngredients(liens.map(l => ({
+          ingredient_id: l.ingredient_id || '',
+          sous_fiche_id: l.sous_fiche_id || '',
+          nom: l.ingredient_id ? (ingsMap[l.ingredient_id]?.nom || '') : (sfsMap[l.sous_fiche_id]?.nom || ''),
+          quantite: l.quantite,
+          unite: l.unite
+        })))
+      } else {
+        setIngredients([])
+      }
+
+      const { data: liste } = await supabase.from('ingredients_bar').select('*').order('nom').limit(5000)
+      setListeIngredients(liste || [])
+    } catch (err) {
+      console.error('Load data error:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const restaurerBrouillon = () => {
@@ -365,7 +385,6 @@ export default function ModifierBarFiche() {
                 {prixIndic && <div style={{ fontSize: '11px', color: '#3B6D11', marginTop: '4px' }}>Indicatif ({seuilVert}%) TVA {TVA_BAR()}% : <strong>{prixIndic} €</strong></div>}
               </div>
             </div>
-
             <div>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>% de perte — évaporation, décantation...</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -381,7 +400,6 @@ export default function ModifierBarFiche() {
                 </div>
               )}
             </div>
-
             <div>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Description courte</label>
               <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2}
@@ -452,26 +470,13 @@ export default function ModifierBarFiche() {
           </button>
         </div>
 
-        {/* ── INSTRUCTIONS BAR — bloc dédié après ingrédients ── */}
+        {/* Instructions */}
         <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
-            📋 Instructions de préparation
-          </div>
-          <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '12px' }}>
-            Les sauts de ligne seront respectés à l'écran et à l'impression.
-          </div>
-          <textarea
-            value={instructions}
-            onChange={e => setInstructions(e.target.value)}
-            rows={8}
-            placeholder={`1. Verser le rhum dans le shaker...\n2. Ajouter le jus de citron vert...\n3. Shaker vigoureusement 10 secondes...\n\nDressage :\n- Verser dans un verre à cocktail glacé...\n- Garnir d'une tranche de citron...`}
-            style={{
-              width: '100%', padding: '12px', borderRadius: '8px',
-              border: '0.5px solid #AFA9EC', fontSize: '14px',
-              outline: 'none', resize: 'vertical', fontFamily: 'inherit',
-              color: c.texte, background: c.blanc, lineHeight: '1.7',
-              minHeight: '180px'
-            }}
+          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>📋 Instructions de préparation</div>
+          <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '12px' }}>Les sauts de ligne seront respectés à l'écran et à l'impression.</div>
+          <textarea value={instructions} onChange={e => setInstructions(e.target.value)} rows={8}
+            placeholder={`1. Verser le rhum dans le shaker...\n2. Ajouter le jus de citron vert...\n3. Shaker vigoureusement 10 secondes...\n\nDressage :\n- Verser dans un verre à cocktail glacé...`}
+            style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '0.5px solid #AFA9EC', fontSize: '14px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', color: c.texte, background: c.blanc, lineHeight: '1.7', minHeight: '180px' }}
           />
           {instructions && (
             <div style={{ marginTop: '8px', fontSize: '12px', color: c.texteMuted }}>

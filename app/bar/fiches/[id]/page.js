@@ -56,42 +56,66 @@ export default function BarFicheDetail() {
     } catch (err) { console.error('Params error:', err) }
   }
 
-  const loadFiche = async () => {
-    try {
-      const clientId = await getClientId()
-      if (!clientId) { router.push('/'); return }
+const loadFiche = async () => {
+  try {
+    const clientId = await getClientId()
+    if (!clientId) { router.push('/'); return }
 
-      const { data: ficheData, error } = await supabase
-        .from('fiches_bar')
-        .select('*')
-        .eq('id', params_route.id)
-        .eq('client_id', clientId)
-        .single()
+    const { data: ficheData, error } = await supabase
+      .from('fiches_bar')
+      .select('*')
+      .eq('id', params_route.id)
+      .eq('client_id', clientId)
+      .single()
 
-      if (error || !ficheData) { router.push('/bar/fiches'); return }
-      setFiche(ficheData)
+    if (error || !ficheData) { router.push('/bar/fiches'); return }
+    setFiche(ficheData)
 
-      // Chargement ingrédients SANS filtre client_id sur la table de jointure
-      const { data: ingsData, error: errIngs } = await supabase
-        .from('fiche_bar_ingredients')
-        .select(`
-          quantite,
-          unite,
-          sous_fiche_id,
-          ingredients_bar!ingredient_id (id, nom, prix_kg, unite),
-          fiches_bar!sous_fiche_id (id, nom, cout_portion, unite_production)
-        `)
-        .eq('fiche_bar_id', params_route.id)
-        
-      if (errIngs) console.error('Ingrédients error:', errIngs)
-      setIngredients(ingsData || [])
-    } catch (err) {
-      console.error('Load fiche error:', err)
-      router.push('/bar/fiches')
-    } finally {
+    // Requête 1 — liens de jointure
+    const { data: liens } = await supabase
+      .from('fiche_bar_ingredients')
+      .select('quantite, unite, ingredient_id, sous_fiche_id')
+      .eq('fiche_bar_id', params_route.id)
+
+    if (!liens || liens.length === 0) {
+      setIngredients([])
       setLoading(false)
+      return
     }
+
+    // Requête 2 — ingrédients classiques
+    const ingIds = liens.filter(l => l.ingredient_id && !l.sous_fiche_id).map(l => l.ingredient_id)
+    const sfIds = liens.filter(l => l.sous_fiche_id).map(l => l.sous_fiche_id)
+
+    const [{ data: ingsData }, { data: sfsData }] = await Promise.all([
+      ingIds.length > 0
+        ? supabase.from('ingredients_bar').select('id, nom, prix_kg, unite').in('id', ingIds)
+        : Promise.resolve({ data: [] }),
+      sfIds.length > 0
+        ? supabase.from('fiches_bar').select('id, nom, cout_portion, unite_production').in('id', sfIds)
+        : Promise.resolve({ data: [] })
+    ])
+
+    // Assemblage manuel
+    const ingsMap = Object.fromEntries((ingsData || []).map(i => [i.id, i]))
+    const sfsMap = Object.fromEntries((sfsData || []).map(s => [s.id, s]))
+
+    const result = liens.map(l => ({
+      quantite: l.quantite,
+      unite: l.unite,
+      sous_fiche_id: l.sous_fiche_id,
+      ingredients_bar: l.ingredient_id ? ingsMap[l.ingredient_id] || null : null,
+      fiches_bar: l.sous_fiche_id ? sfsMap[l.sous_fiche_id] || null : null,
+    }))
+
+    setIngredients(result)
+  } catch (err) {
+    console.error('Load fiche error:', err)
+    router.push('/bar/fiches')
+  } finally {
+    setLoading(false)
   }
+}
 
   const calculerCout = () => {
     return ingredients.reduce((total, item) => {
