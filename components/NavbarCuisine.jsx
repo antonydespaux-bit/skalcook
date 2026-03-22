@@ -61,9 +61,9 @@ export default function NavbarCuisine() {
     },
     ...(role === 'admin' ? [{
       label: 'Admin',
-      paths: ['/parametres', '/admin', '/admin/logs', '/admin/ardoise'],
+      paths: ['/admin/settings', '/admin', '/admin/logs', '/admin/ardoise'],
       items: [
-        { label: 'Paramètres', path: '/parametres' },
+        { label: 'Paramètres', path: '/admin/settings' },
         { label: 'Utilisateurs', path: '/admin' },
         { label: 'Activité', path: '/admin/logs' },
         ...(hasModule('ardoise') ? [{ label: 'Ardoise', path: '/admin/ardoise' }] : []),
