@@ -1,10 +1,12 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase, getClientId } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
-import { theme, Logo } from '../../lib/theme.jsx'
+import { theme } from '../../lib/theme.jsx'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
+import { useRole } from '../../lib/useRole'
+import { log } from '../../lib/useLog'
 import * as XLSX from 'xlsx'
 import NavbarCuisine from '../../components/NavbarCuisine'
 
@@ -19,6 +21,9 @@ export default function RecapPage() {
   const router = useRouter()
   const isMobile = useIsMobile()
   const { c } = useTheme()
+  const { role } = useRole()
+
+  const peutModifier = role === 'admin' || role === 'cuisine'
 
   useEffect(() => {
     checkUser()
@@ -26,28 +31,47 @@ export default function RecapPage() {
   }, [])
 
   const checkUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) router.push('/')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) router.push('/')
+    } catch (err) {
+      console.error('Auth error:', err)
+      router.push('/')
+    }
   }
 
   const loadData = async () => {
-    const { data: fichesData } = await supabase
-      .from('fiches')
-      .select('*')
-      .neq('categorie', 'Sous-fiche')
-      .eq('archive', false)
-      .order('nom')
+    try {
+      const clientId = await getClientId()
+      if (!clientId) { router.push('/'); return }
 
-    const { data: menusData } = await supabase
-      .from('menus')
-      .select(`*, menu_fiches(id, service, fiches(id, nom, cout_portion))`)
-      .eq('archive', false)
-      .order('nom')
+      const { data: fichesData, error: errFiches } = await supabase
+        .from('fiches')
+        .select('*')
+        .eq('client_id', clientId)
+        .neq('categorie', 'Sous-fiche')
+        .eq('archive', false)
+        .order('nom')
 
-    setFiches(fichesData || [])
-    setMenus(menusData || [])
-    setModifArchive({})
-    setLoading(false)
+      if (errFiches) throw errFiches
+
+      const { data: menusData, error: errMenus } = await supabase
+        .from('menus')
+        .select(`*, menu_fiches(id, service, fiches(id, nom, cout_portion))`)
+        .eq('client_id', clientId)
+        .eq('archive', false)
+        .order('nom')
+
+      if (errMenus) throw errMenus
+
+      setFiches(fichesData || [])
+      setMenus(menusData || [])
+      setModifArchive({})
+    } catch (err) {
+      console.error('Load data error:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const fichesFiltrees = fiches.filter(f =>
@@ -83,7 +107,14 @@ export default function RecapPage() {
         if (!cout) return null
         return cout / (m.prix_vente / 1.10) * 100
       }).filter(v => v !== null)
-      return { nb: lignes.length, coutMoyen: moyenne(couts), prixHTMoyen: moyenne(prixHTs), prixTTCMoyen: moyenne(prixTTCs), beneficeMoyen: moyenne(benefices), ratioMoyen: moyenne(ratios) }
+      return {
+        nb: lignes.length,
+        coutMoyen: moyenne(couts),
+        prixHTMoyen: moyenne(prixHTs),
+        prixTTCMoyen: moyenne(prixTTCs),
+        beneficeMoyen: moyenne(benefices),
+        ratioMoyen: moyenne(ratios)
+      }
     }
 
     const couts = lignes.filter(f => f.cout_portion > 0).map(f => Number(f.cout_portion))
@@ -92,7 +123,14 @@ export default function RecapPage() {
     const benefices = lignes.filter(f => f.prix_ttc && f.cout_portion).map(f => (f.prix_ttc / 1.10) - Number(f.cout_portion))
     const ratios = lignes.filter(f => f.prix_ttc && f.cout_portion).map(f => Number(f.cout_portion) / (f.prix_ttc / 1.10) * 100)
 
-    return { nb: lignes.length, coutMoyen: moyenne(couts), prixHTMoyen: moyenne(prixHTs), prixTTCMoyen: moyenne(prixTTCs), beneficeMoyen: moyenne(benefices), ratioMoyen: moyenne(ratios) }
+    return {
+      nb: lignes.length,
+      coutMoyen: moyenne(couts),
+      prixHTMoyen: moyenne(prixHTs),
+      prixTTCMoyen: moyenne(prixTTCs),
+      beneficeMoyen: moyenne(benefices),
+      ratioMoyen: moyenne(ratios)
+    }
   }
 
   const fcColor = (fc) => {
@@ -115,17 +153,50 @@ export default function RecapPage() {
 
   const sauvegarderArchives = async () => {
     setSaving(true)
-    const ids = Object.keys(modifArchive).filter(id => modifArchive[id])
-    for (const id of ids) {
-      const isFiche = fiches.find(f => f.id === id)
-      if (isFiche) {
-        await supabase.from('fiches').update({ archive: true }).eq('id', id)
-      } else {
-        await supabase.from('menus').update({ archive: true }).eq('id', id)
+    try {
+      const clientId = await getClientId()
+      if (!clientId) return
+
+      const ids = Object.keys(modifArchive).filter(id => modifArchive[id])
+
+      // Séparer fiches et menus
+      const idsFiches = ids.filter(id => fiches.find(f => f.id === id))
+      const idsMenus = ids.filter(id => menus.find(m => m.id === id))
+
+      if (idsFiches.length > 0) {
+        const { error } = await supabase
+          .from('fiches')
+          .update({ archive: true })
+          .in('id', idsFiches)
+          .eq('client_id', clientId)
+        if (error) throw error
       }
+
+      if (idsMenus.length > 0) {
+        const { error } = await supabase
+          .from('menus')
+          .update({ archive: true })
+          .in('id', idsMenus)
+          .eq('client_id', clientId)
+        if (error) throw error
+      }
+
+      await log({
+        action: 'ARCHIVAGE',
+        entite: 'fiche',
+        entite_id: ids[0],
+        entite_nom: `${ids.length} élément(s)`,
+        section: 'cuisine',
+        details: `Archivage depuis récap — IDs: ${ids.join(', ')}`
+      })
+
+      await loadData()
+    } catch (err) {
+      console.error('Archive error:', err)
+      alert('Erreur lors de l\'archivage')
+    } finally {
+      setSaving(false)
     }
-    await loadData()
-    setSaving(false)
   }
 
   const nbArchivesSelectionnes = Object.values(modifArchive).filter(Boolean).length
@@ -162,7 +233,7 @@ export default function RecapPage() {
       const ws = XLSX.utils.json_to_sheet(rows)
       XLSX.utils.book_append_sheet(wb, ws, cat.substring(0, 31))
     })
-    XLSX.writeFile(wb, `recap_la_fantaisie_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.xlsx`)
+    XLSX.writeFile(wb, `recap_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.xlsx`)
   }
 
   const DetailFiches = ({ cat }) => {
@@ -171,7 +242,7 @@ export default function RecapPage() {
 
     return isMobile ? (
       <div style={{ padding: '8px 12px', background: c.fond }}>
-        {lignes.map((item, i) => {
+        {lignes.map((item) => {
           const cout = cat === 'Menus'
             ? (item.menu_fiches?.reduce((t, mf) => t + (mf.fiches?.cout_portion || 0), 0) || 0)
             : item.cout_portion
@@ -184,19 +255,22 @@ export default function RecapPage() {
             <div key={item.id} style={{
               background: aArchiver ? '#FAEEDA' : c.blanc,
               borderRadius: '8px', padding: '12px', marginBottom: '8px',
-              border: `0.5px solid ${c.bordure}`
+              border: `0.5px solid ${aArchiver ? '#FAC775' : c.bordure}`
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <div style={{ fontSize: '14px', fontWeight: '500', color: c.texte, cursor: 'pointer', flex: 1 }}
+                <div
+                  style={{ fontSize: '14px', fontWeight: '500', color: c.texte, cursor: 'pointer', flex: 1 }}
                   onClick={() => router.push(cat === 'Menus' ? `/menus/${item.id}` : `/fiches/${item.id}`)}
                 >{item.nom}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {fc && (
                     <span style={{ background: fcBg(fc), color: fcColor(fc), borderRadius: '20px', padding: '2px 8px', fontSize: '11px', fontWeight: '500' }}>{fc}%</span>
                   )}
-                  <input type="checkbox" checked={aArchiver} onChange={() => toggleArchive(item.id)}
-                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: c.accent }}
-                  />
+                  {peutModifier && (
+                    <input type="checkbox" checked={aArchiver} onChange={() => toggleArchive(item.id)}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#DC2626' }}
+                    />
+                  )}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: c.texteMuted }}>
@@ -210,12 +284,12 @@ export default function RecapPage() {
       </div>
     ) : (
       <tr>
-        <td colSpan={8} style={{ padding: '0', background: c.fond }}>
+        <td colSpan={peutModifier ? 8 : 7} style={{ padding: '0', background: c.fond }}>
           <div style={{ padding: '12px 16px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
               <thead>
                 <tr>
-                  {['Nom', 'Saison', 'Coût / portion', 'Prix HT', 'Prix TTC', 'Bénéfice', 'Food cost', 'Archiver'].map(h => (
+                  {['Nom', 'Saison', 'Coût / portion', 'Prix HT', 'Prix TTC', 'Bénéfice', 'Food cost', ...(peutModifier ? ['Archiver'] : [])].map(h => (
                     <th key={h} style={{
                       padding: '6px 10px', textAlign: h === 'Nom' ? 'left' : 'right',
                       color: c.texteMuted, fontWeight: '500', fontSize: '11px',
@@ -254,11 +328,13 @@ export default function RecapPage() {
                           <span style={{ background: fcBg(fc), color: fcColor(fc), borderRadius: '20px', padding: '2px 8px', fontSize: '11px', fontWeight: '500' }}>{fc} %</span>
                         ) : '—'}
                       </td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right' }}>
-                        <input type="checkbox" checked={aArchiver} onChange={() => toggleArchive(item.id)}
-                          style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: c.accent }}
-                        />
-                      </td>
+                      {peutModifier && (
+                        <td style={{ padding: '8px 10px', textAlign: 'right' }}>
+                          <input type="checkbox" checked={aArchiver} onChange={() => toggleArchive(item.id)}
+                            style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#DC2626' }}
+                          />
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
@@ -272,11 +348,11 @@ export default function RecapPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-
       <NavbarCuisine />
 
       <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '1100px', margin: '0 auto' }}>
 
+        {/* Barre d'actions */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
           <select value={saisonFiltree} onChange={e => setSaisonFiltree(e.target.value)} style={{
             padding: '8px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
@@ -286,10 +362,56 @@ export default function RecapPage() {
             <option value="toutes">Toutes les saisons</option>
             {theme.saisons.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+
           <span style={{ fontSize: '12px', color: c.texteMuted }}>
             {fichesFiltrees.length} fiche{fichesFiltrees.length > 1 ? 's' : ''} + {menusFiltres.length} menu{menusFiltres.length > 1 ? 's' : ''}
           </span>
+
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {/* Bouton archiver — visible dès qu'une case est cochée */}
+            {peutModifier && nbArchivesSelectionnes > 0 && (
+              <button
+                onClick={sauvegarderArchives}
+                disabled={saving}
+                style={{
+                  padding: '8px 16px', borderRadius: '8px', fontSize: '13px',
+                  fontWeight: '500', border: 'none',
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  background: saving ? '#A5B4FC' : '#DC2626',
+                  color: 'white', display: 'flex', alignItems: 'center', gap: '6px'
+                }}
+              >
+                {saving ? 'Archivage...' : `📥 Archiver la sélection (${nbArchivesSelectionnes})`}
+              </button>
+            )}
+
+            {/* Export Excel */}
+            <button onClick={exportExcel} style={{
+              padding: '8px 14px', borderRadius: '8px', fontSize: '13px',
+              border: `0.5px solid ${c.bordure}`, background: c.blanc,
+              color: c.texteMuted, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '6px'
+            }}>
+              📊 {!isMobile && 'Export Excel'}
+            </button>
+          </div>
         </div>
+
+        {/* Bandeau sélection active */}
+        {peutModifier && nbArchivesSelectionnes > 0 && (
+          <div style={{
+            background: '#FEE2E2', border: '0.5px solid #FECACA',
+            borderRadius: '10px', padding: '10px 16px', marginBottom: '16px',
+            fontSize: '13px', color: '#DC2626',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+          }}>
+            <span>📥 {nbArchivesSelectionnes} fiche{nbArchivesSelectionnes > 1 ? 's' : ''} sélectionnée{nbArchivesSelectionnes > 1 ? 's' : ''} pour archivage</span>
+            <button onClick={() => setModifArchive({})} style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: '#DC2626', fontSize: '13px', fontWeight: '500'
+            }}>Annuler</button>
+          </div>
+        )}
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px', color: c.texteMuted }}>Chargement...</div>
@@ -313,7 +435,7 @@ export default function RecapPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{
                           background: isMenuCat ? c.accentClair : c.violetClair,
-                          color: isMenuCat ? c.principal : '#3C3489',
+                          color: isMenuCat ? c.accent : '#3C3489',
                           borderRadius: '20px', padding: '3px 12px', fontSize: '12px', fontWeight: '500'
                         }}>{cat}</span>
                         <span style={{ fontSize: '11px', color: c.texteMuted }}>{stats.nb} fiche{stats.nb > 1 ? 's' : ''}</span>
@@ -378,7 +500,7 @@ export default function RecapPage() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <span style={{
                               background: isMenuCat ? c.accentClair : c.violetClair,
-                              color: isMenuCat ? c.principal : '#3C3489',
+                              color: isMenuCat ? c.accent : '#3C3489',
                               borderRadius: '20px', padding: '3px 12px', fontSize: '12px', fontWeight: '500'
                             }}>{cat}</span>
                             <span style={{ fontSize: '11px', color: c.texteMuted }}>{stats.nb} fiche{stats.nb > 1 ? 's' : ''}</span>
