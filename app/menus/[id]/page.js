@@ -25,15 +25,15 @@ export default function MenuDetail() {
   const c = theme.couleurs
   const services = ['Entrée', 'Plat', 'Dessert']
 
-  useEffect(() => {
-    const style = document.createElement('style')
-    style.innerHTML = `@media print { .no-print { display: none !important; } body { background: white !important; } @page { margin: 15mm; } }`
-    document.head.appendChild(style)
-    return () => document.head.removeChild(style)
-    checkUser()
-    loadData()
-    loadParams()
-  }, [])
+useEffect(() => {
+  const style = document.createElement('style')
+  style.innerHTML = `@media print { .no-print { display: none !important; } body { background: white !important; } @page { margin: 15mm; } }`
+  document.head.appendChild(style)
+  checkUser()
+  loadData()
+  loadParams()
+  return () => document.head.removeChild(style)
+}, [])
 
   const checkUser = async () => {
     const { data: { session } } = await supabase.auth.getSession()
