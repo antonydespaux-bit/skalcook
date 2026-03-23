@@ -26,6 +26,10 @@ export default function MenuDetail() {
   const services = ['Entrée', 'Plat', 'Dessert']
 
   useEffect(() => {
+    const style = document.createElement('style')
+    style.innerHTML = `@media print { .no-print { display: none !important; } body { background: white !important; } @page { margin: 15mm; } }`
+    document.head.appendChild(style)
+    return () => document.head.removeChild(style)
     checkUser()
     loadData()
     loadParams()
@@ -163,7 +167,7 @@ export default function MenuDetail() {
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
 
-      <div style={{
+<div className="no-print" style={{
         background: c.principal, borderBottom: `0.5px solid ${c.accent}40`,
         padding: '0 24px', display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', height: '56px'
@@ -388,7 +392,7 @@ export default function MenuDetail() {
         </div>
 
         <div style={{ marginTop: '16px', textAlign: 'center', fontSize: '11px', color: '#bbb' }}>
-          {theme.hotel.nom} — {menu.nom} — {new Date().toLocaleDateString('fr-FR')}
+          {nomEtablissement} — {menu.nom} — {new Date().toLocaleDateString('fr-FR')}
         </div>
       </div>
     </div>
