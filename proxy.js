@@ -23,7 +23,7 @@ export async function proxy(request) {
   }
 
   // Détecter le tenant depuis le sous-domaine
-  // Ex: lafantaisie.skalcook.app → slug = 'lafantaisie'
+  // Ex: lafantaisie.skalcook.com → slug = 'lafantaisie'
   // Ex: lafantaisie.localhost:3000 → slug = 'lafantaisie'
   // Ex: localhost:3000 → pas de tenant
   const parts = hostname.split('.')
@@ -35,11 +35,11 @@ export async function proxy(request) {
       tenantSlug = parts[0]
     }
   } else if (hostname.includes('vercel.app')) {
-    // Vercel preview : lafantaisie-ft-manager.vercel.app
+    // Vercel preview : *.vercel.app (souvent sans sous-domaine client → cookie tenant_slug)
     // On utilise le cookie comme fallback
     tenantSlug = request.cookies.get('tenant_slug')?.value
   } else {
-    // Production : lafantaisie.skalcook.app
+    // Production : lafantaisie.skalcook.com
     if (parts.length >= 3) {
       tenantSlug = parts[0]
     }

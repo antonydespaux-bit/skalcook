@@ -41,7 +41,7 @@ export const theme = {
     violetClair: '#2E1065',
   },
   hotel: {
-    nom: 'FT Manager',
+    nom: 'Skalcook',
     adresse: '',
   },
   categories: [

@@ -18,8 +18,9 @@ export default function ResetPasswordPage() {
     setLoading(true)
     setError('')
 
+    const origin = (process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).replace(/\/$/, '')
     const { error: errReset } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://ft-manager-five.vercel.app/nouveau-mot-de-passe'
+      redirectTo: `${origin}/nouveau-mot-de-passe`
     })
 
     if (errReset) {

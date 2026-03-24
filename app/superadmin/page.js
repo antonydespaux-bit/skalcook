@@ -59,6 +59,7 @@ export default function SuperAdminPage() {
   const [inviteClient, setInviteClient] = useState(null)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteNomComplet, setInviteNomComplet] = useState('')
+  const [inviteSending, setInviteSending] = useState(false)
 
   useEffect(() => {
     checkAuth()
@@ -242,6 +243,7 @@ export default function SuperAdminPage() {
     setInviteClient(client)
     setInviteEmail('')
     setInviteNomComplet('')
+    setInviteSending(false)
     setShowInviteModal(true)
   }
 
@@ -250,16 +252,40 @@ export default function SuperAdminPage() {
     setInviteClient(null)
     setInviteEmail('')
     setInviteNomComplet('')
+    setInviteSending(false)
   }
 
-  const handleInviteAdmin = () => {
+  const handleInviteAdmin = async () => {
     if (!inviteEmail.trim() || !inviteNomComplet.trim() || !inviteClient?.id) return
-    console.log('Invite Admin payload', {
-      email: inviteEmail.trim(),
-      nom_complet: inviteNomComplet.trim(),
-      client_id: inviteClient.id
-    })
-    fermerInviteAdmin()
+    setInviteSending(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        alert('Session expirée. Reconnectez-vous.')
+        return
+      }
+      const res = await fetch('/api/invite-admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          nom_complet: inviteNomComplet.trim(),
+          client_id: inviteClient.id
+        })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(typeof data.error === 'string' ? data.error : 'Erreur lors de l’invitation.')
+        return
+      }
+      alert('Invitation envoyée avec succès !')
+      fermerInviteAdmin()
+    } finally {
+      setInviteSending(false)
+    }
   }
 
   if (!authorized || loading) return (
@@ -526,7 +552,7 @@ export default function SuperAdminPage() {
                     <input value={slug} onChange={e => setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
                       placeholder="Ex : la-fantaisie" style={inputStyle} />
                     <div style={{ fontSize: '11px', color: '#71717A', marginTop: '4px' }}>
-                      URL : <code style={{ background: '#F4F4F5', padding: '1px 6px', borderRadius: '4px' }}>{slug || 'votre-slug'}.skalcook.app</code>
+                      URL : <code style={{ background: '#F4F4F5', padding: '1px 6px', borderRadius: '4px' }}>{slug || 'votre-slug'}.skalcook.com</code>
                     </div>
                   </div>
                   <div>
@@ -785,25 +811,28 @@ export default function SuperAdminPage() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
               <button
                 onClick={fermerInviteAdmin}
+                disabled={inviteSending}
                 style={{
                   background: 'white', color: '#71717A',
                   border: '0.5px solid #E4E4E7', borderRadius: '8px',
-                  padding: '10px 14px', fontSize: '13px', cursor: 'pointer'
+                  padding: '10px 14px', fontSize: '13px',
+                  cursor: inviteSending ? 'not-allowed' : 'pointer',
+                  opacity: inviteSending ? 0.6 : 1
                 }}
               >
                 Annuler
               </button>
               <button
                 onClick={handleInviteAdmin}
-                disabled={!inviteEmail.trim() || !inviteNomComplet.trim()}
+                disabled={!inviteEmail.trim() || !inviteNomComplet.trim() || inviteSending}
                 style={{
-                  background: (!inviteEmail.trim() || !inviteNomComplet.trim()) ? '#A5B4FC' : '#6366F1',
+                  background: (!inviteEmail.trim() || !inviteNomComplet.trim() || inviteSending) ? '#A5B4FC' : '#6366F1',
                   color: 'white', border: 'none', borderRadius: '8px',
                   padding: '10px 14px', fontSize: '13px', fontWeight: '500',
-                  cursor: (!inviteEmail.trim() || !inviteNomComplet.trim()) ? 'not-allowed' : 'pointer'
+                  cursor: (!inviteEmail.trim() || !inviteNomComplet.trim() || inviteSending) ? 'not-allowed' : 'pointer'
                 }}
               >
-                Inviter
+                {inviteSending ? 'Envoi…' : 'Inviter'}
               </button>
             </div>
           </div>
