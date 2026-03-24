@@ -55,7 +55,7 @@ export default function LoginPage() {
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <div style={{
             background: c.principal, borderRadius: '16px',
-            padding: '16px 24px', display: 'inline-flex',
+            padding: '14px 20px', display: 'flex',
             alignItems: 'center', justifyContent: 'center',
             marginBottom: '16px'
           }}>
@@ -138,7 +138,7 @@ export default function LoginPage() {
         </div>
 
         <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '11px', color: c.texteMuted }}>
-          {theme.hotel.nom} — {theme.hotel.adresse}
+          Skalcook
         </div>
       </div>
     </div>
