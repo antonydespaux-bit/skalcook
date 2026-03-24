@@ -85,9 +85,9 @@ export function LogoBand({ c, style, children }) {
   )
 }
 
-export function Logo({ height = 40, couleur, onClick, nom }) {
-  // couleur explicite prioritaire, sinon fallback sur l'accent du theme
-  const toqueColor = couleur ?? theme.couleurs.accent
+export function Logo({ height = 40, couleur = 'white', onClick, nom }) {
+  // 'couleur' reste prioritaire si fournie, sinon on prend la couleur d'accent du thème
+  const toqueColor = couleur || theme.couleurs.accent
   const textColor = couleur === 'white' ? 'white' : '#18181B'
 
   return (
