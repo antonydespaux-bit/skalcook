@@ -53,7 +53,7 @@ export const theme = {
   ]
 }
 
-import theme from './theme'
+
 
 export function Logo({ height = 40, couleur = 'white', onClick, nom }) {
   // 'couleur' reste prioritaire si fournie, sinon on prend la couleur d'accent du thème
