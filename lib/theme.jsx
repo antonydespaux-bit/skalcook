@@ -53,15 +53,25 @@ export const theme = {
   ]
 }
 
-// Logo neutre — affiche le nom de l'app ou de l'établissement
 export function Logo({ height = 40, couleur = 'white', onClick, nom }) {
+  const textColor = couleur === 'white' ? 'white' : '#18181B'
+
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 30" height={height}
-      style={{ display: 'block', cursor: onClick ? 'pointer' : 'default' }} onClick={onClick}>
-      <text x="4" y="22" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="16"
-        fontWeight="600" letterSpacing="1" fill={couleur}>
-        {nom || 'FT Manager'}
-      </text>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 44"
+      height={height}
+      style={{ display: 'block', cursor: onClick ? 'pointer' : 'default' }}
+      onClick={onClick}>
+      {/* Toque */}
+      <rect x="2" y="32" width="28" height="8" rx="2" fill="#6366F1"/>
+      <ellipse cx="7"  cy="28" rx="7"  ry="8"  fill="#6366F1"/>
+      <ellipse cx="16" cy="25" rx="8"  ry="10" fill="#6366F1"/>
+      <ellipse cx="25" cy="28" rx="7"  ry="8"  fill="#6366F1"/>
+      <ellipse cx="15" cy="19" rx="4"  ry="2.5" fill="white" opacity="0.2"/>
+      {/* Wordmark — un seul bloc */}
+      <text x="38" y="36"
+        fontFamily="ui-sans-serif, system-ui, sans-serif"
+        fontSize="26" fontWeight="700" letterSpacing="-0.5"
+        fill={textColor}>Skalcook</text>
     </svg>
   )
 }
