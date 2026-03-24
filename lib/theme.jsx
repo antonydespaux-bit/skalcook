@@ -53,7 +53,11 @@ export const theme = {
   ]
 }
 
+import theme from './theme'
+
 export function Logo({ height = 40, couleur = 'white', onClick, nom }) {
+  // 'couleur' reste prioritaire si fournie, sinon on prend la couleur d'accent du thème
+  const toqueColor = couleur || theme.couleurs.accent
   const textColor = couleur === 'white' ? 'white' : '#18181B'
 
   return (
@@ -69,11 +73,11 @@ export function Logo({ height = 40, couleur = 'white', onClick, nom }) {
       }}
       onClick={onClick}>
       
-      {/* Icône Toque (Indigo) */}
-      <rect x="2" y="32" width="28" height="8" rx="2" fill="#6366F1"/>
-      <ellipse cx="7"  cy="28" rx="7"  ry="8"  fill="#6366F1"/>
-      <ellipse cx="16" cy="25" rx="8"  ry="10" fill="#6366F1"/>
-      <ellipse cx="25" cy="28" rx="7"  ry="8"  fill="#6366F1"/>
+      {/* Icône Toque (Accent thème ou couleur prop) */}
+      <rect x="2" y="32" width="28" height="8" rx="2" fill={toqueColor}/>
+      <ellipse cx="7"  cy="28" rx="7"  ry="8"  fill={toqueColor}/>
+      <ellipse cx="16" cy="25" rx="8"  ry="10" fill={toqueColor}/>
+      <ellipse cx="25" cy="28" rx="7"  ry="8"  fill={toqueColor}/>
       <ellipse cx="15" cy="19" rx="4"  ry="2.5" fill="white" opacity="0.2"/>
       
       {/* Texte Skalcook */}
