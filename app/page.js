@@ -55,9 +55,13 @@ export default function LoginPage() {
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <div style={{
             background: c.principal, borderRadius: '16px',
-            padding: '14px 20px', display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            marginBottom: '16px'
+            padding: '14px 20px',
+            display: 'flex',
+            alignItems: 'center', 
+            justifyContent: 'center',
+            marginBottom: '16px',
+            width: '100%',
+            overflow: 'hidden'
           }}>
             <Logo height={32} couleur="white" />
           </div>
