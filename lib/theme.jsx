@@ -53,7 +53,37 @@ export const theme = {
   ]
 }
 
+function logoBandStyle(c) {
+  return {
+    background: c.principal,
+    borderRadius: '16px',
+    boxSizing: 'border-box',
+    width: '100%',
+    minHeight: '72px',
+    padding: '22px 28px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    lineHeight: 0,
+  }
+}
 
+/** Wrapper : léger translate pour compenser la baseline du texte dans le SVG (sans toucher au Logo des navbars) */
+export function LogoBand({ c, style, children }) {
+  return (
+    <div style={{ ...logoBandStyle(c), ...style }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        lineHeight: 0,
+        transform: 'translateY(-2px)',
+      }}>
+        {children}
+      </div>
+    </div>
+  )
+}
 
 export function Logo({ height = 40, couleur = 'white', onClick, nom }) {
   // 'couleur' reste prioritaire si fournie, sinon on prend la couleur d'accent du thème
@@ -67,8 +97,8 @@ export function Logo({ height = 40, couleur = 'white', onClick, nom }) {
       height={height}
       style={{ 
         display: 'block', 
-        width: 'auto',   // Permet au container de calculer le vrai centre
-        margin: '0 auto', 
+        width: 'auto',
+        margin: '0 auto',
         cursor: onClick ? 'pointer' : 'default' 
       }}
       onClick={onClick}>

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
-import { theme, Logo } from '../../lib/theme.jsx'
+import { theme, Logo, LogoBand } from '../../lib/theme.jsx'
 import { useRole } from '../../lib/useRole'
 
 export default function ChoixPage() {
@@ -46,20 +46,14 @@ export default function ChoixPage() {
       padding: '20px'
     }}>
 
-{/* Logo */}
-      <div style={{
-        background: c.principal, 
-        borderRadius: '16px',
-        padding: '14px 20px', 
+      <LogoBand c={c} style={{
+        maxWidth: '380px',
         marginBottom: '12px',
-        display: 'flex',          // On passe de inline-flex à flex
-        alignItems: 'center', 
-        justifyContent: 'center',
-        width: 'fit-content',     // Il prend la largeur du logo + ton padding
-        minWidth: '200px'         // Pour garder un beau rectangle comme sur ta capture
+        marginLeft: 'auto',
+        marginRight: 'auto',
       }}>
         <Logo height={32} couleur="white" />
-      </div>
+      </LogoBand>
       
       <div style={{ fontSize: '12px', color: c.texteMuted, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '40px' }}>
         Bonjour {nom} — Choisissez votre espace

@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRouter } from 'next/navigation'
-import { theme, Logo } from '../lib/theme.jsx'
+import { theme, Logo, LogoBand } from '../lib/theme.jsx'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -53,18 +53,9 @@ export default function LoginPage() {
       <div style={{ width: '100%', maxWidth: '380px' }}>
 
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <div style={{
-            background: c.principal, borderRadius: '16px',
-            padding: '14px 20px',
-            display: 'flex',
-            alignItems: 'center', 
-            justifyContent: 'center',
-            marginBottom: '16px',
-            width: '100%',
-            overflow: 'hidden'
-          }}>
+          <LogoBand c={c} style={{ marginBottom: '16px' }}>
             <Logo height={32} couleur="white" />
-          </div>
+          </LogoBand>
           <div style={{ fontSize: '13px', color: c.texteMuted, letterSpacing: '2px', textTransform: 'uppercase' }}>
             Gestion des fiches techniques
           </div>
