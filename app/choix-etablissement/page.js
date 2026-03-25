@@ -16,8 +16,11 @@ export default function ChoixEtablissementPage() {
   useEffect(() => {
     const init = async () => {
       try {
-        const { data: sessionData } = await supabase.auth.getSession()
-        const user = sessionData?.session?.user
+        const { data: userData, error: userErr } = await supabase.auth.getUser()
+        const user = userData?.user
+        if (userErr) {
+          console.log('choix-etablissement:getUser error', userErr)
+        }
         if (!user) {
           router.push('/login')
           return
@@ -25,8 +28,11 @@ export default function ChoixEtablissementPage() {
  
         const { data, error: accesErr } = await supabase
           .from('acces_clients')
-          .select('client_id, role, clients(id, nom_etablissement, nom, slug)')
+          .select('*, clients(*)')
           .eq('user_id', user.id)
+
+        console.log('choix-etablissement:acces_clients raw data', data)
+        console.log('choix-etablissement:acces_clients error', accesErr)
 
         if (accesErr) {
           setError('Impossible de charger vos établissements.')
@@ -35,19 +41,14 @@ export default function ChoixEtablissementPage() {
         }
 
         const rows = (data || []).filter((r) => r?.client_id)
+        console.log('choix-etablissement:acces_clients filtered rows', rows)
         setEtablissements(rows)
-
-        if (rows.length === 1) {
-          const selectedId = rows[0].client_id
-          try { localStorage.setItem('client_id', selectedId) } catch (e) {}
-          router.push('/dashboard')
-          return
-        }
 
         if (rows.length === 0) {
           setError('Aucun établissement associé à votre compte.')
         }
       } catch (e) {
+        console.log('choix-etablissement:init exception', e)
         setError('Une erreur est survenue.')
       } finally {
         setLoading(false)
