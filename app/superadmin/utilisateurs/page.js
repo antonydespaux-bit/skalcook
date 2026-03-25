@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import { theme, Logo, LogoBand } from '../../../lib/theme.jsx'
@@ -53,6 +53,7 @@ export default function SuperadminUsersPage() {
   const [error, setError] = useState('')
   const [deletingId, setDeletingId] = useState(null)
   const [currentUserId, setCurrentUserId] = useState(null)
+  const [roleFilter, setRoleFilter] = useState('tous')
 
   const loadUsers = async () => {
     const { data: sessionData } = await supabase.auth.getSession()
@@ -116,6 +117,17 @@ export default function SuperadminUsersPage() {
 
     init()
   }, [])
+
+  const roleOptions = useMemo(() => {
+    const roles = Array.from(new Set((users || []).map((u) => String(u.role || '').trim()).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b))
+    return ['tous', ...roles]
+  }, [users])
+
+  const filteredUsers = useMemo(() => {
+    if (roleFilter === 'tous') return users
+    return users.filter((u) => String(u.role || '').toLowerCase() === roleFilter.toLowerCase())
+  }, [users, roleFilter])
 
   const deleteUser = async (user) => {
     if (!user?.id) return
@@ -215,8 +227,36 @@ export default function SuperadminUsersPage() {
             Utilisateurs
           </div>
           <div style={{ fontSize: '13px', color: c.texteMuted }}>
-            {users.length} utilisateur{users.length > 1 ? 's' : ''} dans `profils`
+            {filteredUsers.length} utilisateur{filteredUsers.length > 1 ? 's' : ''}
+            {roleFilter !== 'tous' ? ` (${roleFilter})` : ''} · total: {users.length}
           </div>
+        </div>
+
+        <div style={{
+          background: 'white', borderRadius: '12px', border: `0.5px solid ${c.bordure}`,
+          padding: '12px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px'
+        }}>
+          <span style={{ fontSize: '12px', color: c.texteMuted, textTransform: 'uppercase', fontWeight: 700 }}>
+            Filtrer par role
+          </span>
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            style={{
+              border: `0.5px solid ${c.bordure}`,
+              borderRadius: '8px',
+              padding: '7px 10px',
+              fontSize: '13px',
+              color: c.texte,
+              background: 'white'
+            }}
+          >
+            {roleOptions.map((role) => (
+              <option key={role} value={role}>
+                {role === 'tous' ? 'Tous les roles' : role}
+              </option>
+            ))}
+          </select>
         </div>
 
         {error && (
@@ -248,11 +288,15 @@ export default function SuperadminUsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => {
+                {filteredUsers.map((user) => {
                   const badge = roleBadgeStyle(user.role)
                   const isSelf = user.id === currentUserId
                   return (
-                    <tr key={user.id} style={{ borderBottom: `0.5px solid ${c.bordure}` }}>
+                    <tr
+                      key={user.id}
+                      onClick={() => router.push(`/superadmin/utilisateurs/${user.id}`)}
+                      style={{ borderBottom: `0.5px solid ${c.bordure}`, cursor: 'pointer' }}
+                    >
                       <td style={{ padding: '12px', fontSize: '13px', color: c.texte, fontWeight: 600 }}>
                         {user.nom || '-'}
                       </td>
@@ -279,7 +323,7 @@ export default function SuperadminUsersPage() {
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>
                         <button
-                          onClick={() => deleteUser(user)}
+                          onClick={(e) => { e.stopPropagation(); deleteUser(user) }}
                           disabled={!!deletingId || isSelf}
                           title={isSelf ? 'Suppression de votre propre compte interdite' : 'Supprimer cet utilisateur'}
                           style={{
@@ -300,7 +344,7 @@ export default function SuperadminUsersPage() {
                     </tr>
                   )
                 })}
-                {users.length === 0 && (
+                {filteredUsers.length === 0 && (
                   <tr>
                     <td colSpan={6} style={{ padding: '20px', fontSize: '13px', color: c.texteMuted, textAlign: 'center' }}>
                       Aucun utilisateur trouvé.
