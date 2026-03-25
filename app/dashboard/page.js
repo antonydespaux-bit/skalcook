@@ -346,7 +346,11 @@ export default function DashboardPage() {
             <div style={{ fontSize: '18px', fontWeight: '600', color: '#2C1810', fontFamily: 'Georgia, serif' }}>{params['nom_etablissement'] || 'La Fantaisie'}</div>
             <div style={{ fontSize: '9px', color: '#8B7355', marginTop: '2px' }}>Imprimé le {today} — {fichesFiltreesAllergenes.length} fiche{fichesFiltreesAllergenes.length > 1 ? 's' : ''}</div>
           </div>
-          <img src="https://uvmslpdcywephdneciwd.supabase.co/storage/v1/object/public/fiches-photos/logo-la-fantaisie.png" alt="La Fantaisie" style={{ height: '60px', objectFit: 'contain' }} />
+          <img
+            src={params['logo_url'] || '/skalcook_logo.svg'}
+            alt={params['nom_etablissement'] || 'Skalcook'}
+            style={{ height: '60px', objectFit: 'contain' }}
+          />
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px', tableLayout: 'fixed' }}>
           <thead>
