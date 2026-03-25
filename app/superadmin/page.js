@@ -222,28 +222,41 @@ export default function SuperAdminPage() {
     let logoUrl = logoExistant
     if (logoFile) logoUrl = await uploadLogo(clientSelectionne.id)
 
+    const payload = {
+      nom,
+      nom_etablissement: nomEtablissement,
+      slug: slug.toLowerCase().replace(/\s+/g, '-'),
+      adresse,
+      actif,
+      logo_url: logoUrl,
+      couleur_principale: couleurPrincipale,
+      couleur_accent: couleurAccent,
+      couleur_fond: couleurFond,
+      modules_actifs: modulesActifs,
+      seuil_vert_cuisine: parseFloat(seuilVertCuisine),
+      seuil_orange_cuisine: parseFloat(seuilOrangeCuisine),
+      seuil_vert_boissons: parseFloat(seuilVertBoissons),
+      seuil_orange_boissons: parseFloat(seuilOrangeBoissons),
+    }
+
+    console.log('Données envoyées:', payload)
+
     const { error: errUpdate } = await supabase
       .from('clients')
-      .update({
-        nom, nom_etablissement: nomEtablissement,
-        slug: slug.toLowerCase().replace(/\s+/g, '-'),
-        adresse, actif, logo_url: logoUrl,
-        couleur_principale: couleurPrincipale,
-        couleur_accent: couleurAccent,
-        couleur_fond: couleurFond,
-        modules_actifs: modulesActifs,
-        seuil_vert_cuisine: parseFloat(seuilVertCuisine),
-        seuil_orange_cuisine: parseFloat(seuilOrangeCuisine),
-        seuil_vert_boissons: parseFloat(seuilVertBoissons),
-        seuil_orange_boissons: parseFloat(seuilOrangeBoissons),
-      })
+      .update(payload)
       .eq('id', clientSelectionne.id)
 
-    if (errUpdate) { setError('Erreur : ' + errUpdate.message); setSaving(false); return }
+    if (errUpdate) {
+      console.log('Erreur Supabase:', errUpdate)
+      setError('Erreur : ' + errUpdate.message)
+      setSaving(false)
+      return
+    }
 
     setSuccess(`✓ Établissement "${nomEtablissement}" mis à jour !`)
     await loadClients()
     try { window.dispatchEvent(new Event('tenant_refresh')) } catch (e) { /* no-op */ }
+    try { router.refresh() } catch (e) { /* no-op */ }
     setSaving(false)
   }
 
