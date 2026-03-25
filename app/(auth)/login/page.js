@@ -55,6 +55,15 @@ export default function LoginPage() {
 
     const acces = (accesRows || []).filter(r => r?.client_id)
 
+    // Règle impérative multi-etablissements :
+    // dès qu'il y a plusieurs accès, on force le passage par /choix-etablissement,
+    // même si un client_id existe dans le profil.
+    if (acces.length > 1) {
+      try { localStorage.removeItem('client_id') } catch (e) {}
+      router.push('/choix-etablissement')
+      return
+    }
+
     // 3) Pré-définir client_id pour éviter des undefined plus tard
     // - si un seul accès multi-etablissements -> on le fixe
     // - sinon fallback ancien comportement via profil.client_id
@@ -73,17 +82,9 @@ export default function LoginPage() {
     const role = profil?.role
 
     if (role === 'cuisine') {
-      if (acces.length > 1) {
-        router.push('/choix-etablissement')
-      } else {
-        router.push('/dashboard')
-      }
+      router.push('/dashboard')
     } else if (role === 'bar') {
-      if (acces.length > 1) {
-        router.push('/choix-etablissement')
-      } else {
-        router.push('/bar/dashboard')
-      }
+      router.push('/bar/dashboard')
     } else {
       if (acces.length >= 1) {
         router.push('/choix-etablissement')
