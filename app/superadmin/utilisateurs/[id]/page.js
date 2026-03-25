@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../../../lib/supabase'
 import { theme, Logo, LogoBand } from '../../../../lib/theme.jsx'
 
+// Gestion des acces multi-etablissements par utilisateur
 const SUPERADMIN_EMAILS = ['antony.despaux@hotmail.fr', 'antony@skalcook.com']
 
 export default function SuperadminUserAccessPage() {

@@ -4,6 +4,7 @@ import { supabase } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo, LogoBand } from '../../../lib/theme.jsx'
 
+// Login compatible multi-etablissements (acces_clients)
 const SUPERADMIN_EMAILS = ['antony.despaux@hotmail.fr', 'antony@skalcook.com']
 
 export default function LoginPage() {

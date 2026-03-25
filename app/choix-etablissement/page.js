@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { theme, Logo, LogoBand } from '../../lib/theme.jsx'
 
+// Hub multi-etablissements (selection explicite du client actif)
 export default function ChoixEtablissementPage() {
   const router = useRouter()
   const c = theme.couleurs
