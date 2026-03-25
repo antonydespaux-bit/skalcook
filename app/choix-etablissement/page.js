@@ -21,7 +21,7 @@ export default function ChoixEtablissementPage() {
           router.push('/login')
           return
         }
-
+ 
         const { data, error: accesErr } = await supabase
           .from('acces_clients')
           .select('client_id, role, clients(id, nom_etablissement, nom, slug)')
