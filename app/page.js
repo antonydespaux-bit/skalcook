@@ -29,6 +29,13 @@ export default function LoginPage() {
       return
     }
 
+    // Redirection superadmin prioritaire : ne pas laisser la logique profil/role interférer.
+    const loginEmail = (email || '').toLowerCase().trim()
+    if (SUPERADMIN_EMAILS.includes(loginEmail)) {
+      router.push('/superadmin')
+      return
+    }
+
     const { data: sessionData } = await supabase.auth.getSession()
     const user = sessionData?.session?.user
 
@@ -49,16 +56,6 @@ export default function LoginPage() {
     }
 
     const role = profil?.role
-
-    // 3) Redirection superadmin (après set client_id)
-    const userEmail =
-      (user?.email || email || '')
-        .toLowerCase()
-        .trim()
-    if (SUPERADMIN_EMAILS.includes(userEmail)) {
-      router.push('/superadmin')
-      return
-    }
 
     if (role === 'cuisine') {
       router.push('/dashboard')
