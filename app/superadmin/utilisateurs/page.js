@@ -55,16 +55,24 @@ export default function SuperadminUsersPage() {
   const [currentUserId, setCurrentUserId] = useState(null)
 
   const loadUsers = async () => {
-    const { data, error: profilsErr } = await supabase
-      .from('profils')
-      .select('id, nom, email, role, created_at')
-      .order('created_at', { ascending: false })
-
-    if (profilsErr) {
-      setError(`Impossible de charger les utilisateurs : ${profilsErr.message}`)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData?.session?.access_token
+    if (!token) {
+      setError('Session expirée. Reconnectez-vous.')
       return
     }
-    setUsers(data || [])
+
+    const res = await fetch('/api/superadmin/list-users', {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setError(`Impossible de charger les utilisateurs : ${data?.error || 'Erreur inconnue'}`)
+      return
+    }
+    setUsers(Array.isArray(data?.users) ? data.users : [])
   }
 
   useEffect(() => {
@@ -234,6 +242,7 @@ export default function SuperadminUsersPage() {
                   <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase' }}>Nom</th>
                   <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase' }}>Email</th>
                   <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase' }}>Role</th>
+                  <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase' }}>Etablissements</th>
                   <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase' }}>Date de création</th>
                   <th style={{ textAlign: 'right', padding: '12px', fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase' }}>Actions</th>
                 </tr>
@@ -261,6 +270,9 @@ export default function SuperadminUsersPage() {
                         }}>
                           {user.role || '-'}
                         </span>
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '13px', color: c.texte, fontWeight: 600 }}>
+                        {user.etablissement_count ?? 0}
                       </td>
                       <td style={{ padding: '12px', fontSize: '13px', color: c.texteMuted }}>
                         {formatDate(user.created_at)}
@@ -290,7 +302,7 @@ export default function SuperadminUsersPage() {
                 })}
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan={5} style={{ padding: '20px', fontSize: '13px', color: c.texteMuted, textAlign: 'center' }}>
+                    <td colSpan={6} style={{ padding: '20px', fontSize: '13px', color: c.texteMuted, textAlign: 'center' }}>
                       Aucun utilisateur trouvé.
                     </td>
                   </tr>
