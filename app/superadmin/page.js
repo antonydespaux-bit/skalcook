@@ -61,6 +61,10 @@ export default function SuperAdminPage() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteNomComplet, setInviteNomComplet] = useState('')
   const [inviteSending, setInviteSending] = useState(false)
+  const [accessLoadingClientId, setAccessLoadingClientId] = useState(null)
+  const [showAccessModal, setShowAccessModal] = useState(false)
+  const [accessClient, setAccessClient] = useState(null)
+  const [accessUsers, setAccessUsers] = useState([])
 
   useEffect(() => {
     checkAuth()
@@ -279,6 +283,61 @@ export default function SuperAdminPage() {
     setInviteEmail('')
     setInviteNomComplet('')
     setInviteSending(false)
+  }
+
+  const ouvrirGestionAcces = async (client) => {
+    if (!client?.id) return
+    setAccessLoadingClientId(client.id)
+    try {
+      const { data: userProfils, error: profilErr } = await supabase
+        .from('profils')
+        .select('id, nom, role, email')
+        .eq('client_id', client.id)
+        .in('role', ['admin', 'directeur', 'cuisine', 'bar'])
+        .order('created_at', { ascending: true })
+
+      if (profilErr) {
+        setError(`Impossible de charger l'utilisateur du client: ${profilErr.message}`)
+        return
+      }
+
+      const rolesOrder = { admin: 0, directeur: 1, cuisine: 2, bar: 3 }
+      const users = (userProfils || []).sort((a, b) => {
+        const ra = rolesOrder[a.role] ?? 99
+        const rb = rolesOrder[b.role] ?? 99
+        if (ra !== rb) return ra - rb
+        return (a.nom || '').localeCompare(b.nom || '')
+      })
+
+      if (users.length === 0) {
+        setError("Aucun utilisateur trouvé pour cet établissement. Invitez d'abord un Admin.")
+        return
+      }
+
+      if (users.length === 1) {
+        router.push(`/superadmin/utilisateurs/${users[0].id}`)
+        return
+      }
+
+      // Plusieurs profils : laisser le superadmin choisir explicitement le bon utilisateur.
+      setAccessClient(client)
+      setAccessUsers(users)
+      setShowAccessModal(true)
+    } finally {
+      setAccessLoadingClientId(null)
+    }
+  }
+
+  const fermerAccessModal = () => {
+    setShowAccessModal(false)
+    setAccessClient(null)
+    setAccessUsers([])
+  }
+
+  const ouvrirAccessForUser = (userId) => {
+    if (!userId) return
+    fermerAccessModal()
+    router.push(`/superadmin/utilisateurs/${userId}`)
   }
 
   const handleInviteAdmin = async () => {
@@ -535,6 +594,22 @@ export default function SuperAdminPage() {
                     >
                       <span>✉️</span>
                       Inviter Admin
+                    </button>
+                    <button
+                      onClick={() => ouvrirGestionAcces(client)}
+                      disabled={accessLoadingClientId === client.id}
+                      style={{
+                        background: '#F8FAFC', color: '#0F172A',
+                        border: '0.5px solid #CBD5E1', borderRadius: '8px',
+                        padding: '7px 12px', fontSize: '12px',
+                        cursor: accessLoadingClientId === client.id ? 'not-allowed' : 'pointer',
+                        fontWeight: '500',
+                        display: 'flex', alignItems: 'center', gap: '6px',
+                        opacity: accessLoadingClientId === client.id ? 0.7 : 1
+                      }}
+                    >
+                      <span>🔑</span>
+                      {accessLoadingClientId === client.id ? 'Ouverture…' : 'Gérer les accès'}
                     </button>
                   </div>
                 </div>
@@ -880,6 +955,74 @@ export default function SuperAdminPage() {
                 }}
               >
                 {inviteSending ? 'Envoi…' : 'Inviter'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modale choix utilisateur pour gestion des accès */}
+      {showAccessModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 210,
+          background: 'rgba(9,9,11,0.45)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '16px'
+        }}>
+          <div style={{
+            width: '100%', maxWidth: '560px',
+            background: 'white', borderRadius: '14px',
+            border: '0.5px solid #E4E4E7', boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+            padding: '20px'
+          }}>
+            <div style={{ fontSize: '17px', fontWeight: '600', color: '#18181B', marginBottom: '6px' }}>
+              Choisir un utilisateur
+            </div>
+            <div style={{ fontSize: '13px', color: '#71717A', marginBottom: '14px' }}>
+              Établissement: <strong style={{ color: '#18181B' }}>{accessClient?.nom_etablissement || accessClient?.nom || '-'}</strong>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '320px', overflowY: 'auto' }}>
+              {accessUsers.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => ouvrirAccessForUser(u.id)}
+                  style={{
+                    border: '0.5px solid #E4E4E7',
+                    background: 'white',
+                    borderRadius: '10px',
+                    padding: '10px 12px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '8px'
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#18181B' }}>{u.nom || u.id}</div>
+                    {u.email && (
+                      <div style={{ fontSize: '12px', color: '#64748B' }}>{u.email}</div>
+                    )}
+                    <div style={{ fontSize: '12px', color: '#71717A' }}>Role: {u.role || 'utilisateur'}</div>
+                  </div>
+                  <span style={{ fontSize: '13px', color: '#6366F1', fontWeight: '600' }}>Gérer →</span>
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '14px' }}>
+              <button
+                onClick={fermerAccessModal}
+                style={{
+                  background: 'white', color: '#71717A',
+                  border: '0.5px solid #E4E4E7', borderRadius: '8px',
+                  padding: '10px 14px', fontSize: '13px',
+                  cursor: 'pointer'
+                }}
+              >
+                Fermer
               </button>
             </div>
           </div>
