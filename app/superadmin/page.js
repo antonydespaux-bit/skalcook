@@ -426,6 +426,11 @@ export default function SuperAdminPage() {
            border: '0.5px solid rgba(99,102,241,0.3)',
            borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer'
           }}>👥 Prospects</button>
+          <button onClick={() => router.push('/superadmin/utilisateurs/nouveau')} style={{
+            background: 'rgba(16,185,129,0.2)', color: '#A7F3D0',
+            border: '0.5px solid rgba(16,185,129,0.35)',
+            borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer'
+          }}>➕ Utilisateur global</button>
           <button onClick={() => router.push('/dashboard')} style={{
             background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.6)',
             border: '0.5px solid rgba(255,255,255,0.1)',
