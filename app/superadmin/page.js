@@ -490,7 +490,8 @@ export default function SuperAdminPage() {
                     >Modifier</button>
                     <button
                       onClick={() => {
-                        const clientId = client.client_id || client.id
+                        try { localStorage.clear() } catch (e) { /* no-op */ }
+                        const clientId = client.id
                         try { localStorage.setItem('client_id', clientId) } catch (e) { /* no-op */ }
                         router.push('/dashboard')
                       }}
