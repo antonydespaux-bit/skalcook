@@ -31,6 +31,26 @@ export default function LoginPage() {
 
     const { data: sessionData } = await supabase.auth.getSession()
     const user = sessionData?.session?.user
+
+    // 1) Récupérer le profil juste après login
+    const { data: profil } = await supabase
+      .from('profils')
+      .select('role, client_id')
+      .eq('id', user?.id || data?.user?.id)
+      .single()
+
+    // 2) Pré-définir client_id pour éviter des undefined plus tard
+    if (profil?.client_id) {
+      try {
+        localStorage.setItem('client_id', profil.client_id)
+      } catch (e) {
+        // no-op (localStorage peut être indisponible dans certains contextes)
+      }
+    }
+
+    const role = profil?.role
+
+    // 3) Redirection superadmin (après set client_id)
     const userEmail =
       (user?.email || email || '')
         .toLowerCase()
@@ -39,14 +59,6 @@ export default function LoginPage() {
       router.push('/superadmin')
       return
     }
-
-    const { data: profil } = await supabase
-      .from('profils')
-      .select('role')
-      .eq('id', user?.id || data?.user?.id)
-      .single()
-
-    const role = profil?.role
 
     if (role === 'cuisine') {
       router.push('/dashboard')
