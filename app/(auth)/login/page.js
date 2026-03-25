@@ -46,8 +46,22 @@ export default function LoginPage() {
       .eq('id', user?.id || data?.user?.id)
       .single()
 
-    // 2) Pré-définir client_id pour éviter des undefined plus tard
-    if (profil?.client_id) {
+    // 2) Multi-etablissements : vérifier les accès explicites sur `acces_clients`
+    const { data: accesRows } = await supabase
+      .from('acces_clients')
+      .select('client_id')
+      .eq('user_id', user?.id || data?.user?.id)
+
+    const acces = (accesRows || []).filter(r => r?.client_id)
+
+    // 3) Pré-définir client_id pour éviter des undefined plus tard
+    // - si un seul accès multi-etablissements -> on le fixe
+    // - sinon fallback ancien comportement via profil.client_id
+    if (acces.length === 1) {
+      try {
+        localStorage.setItem('client_id', acces[0].client_id)
+      } catch (e) {}
+    } else if (profil?.client_id) {
       try {
         localStorage.setItem('client_id', profil.client_id)
       } catch (e) {
@@ -58,11 +72,23 @@ export default function LoginPage() {
     const role = profil?.role
 
     if (role === 'cuisine') {
-      router.push('/dashboard')
+      if (acces.length > 1) {
+        router.push('/choix-etablissement')
+      } else {
+        router.push('/dashboard')
+      }
     } else if (role === 'bar') {
-      router.push('/bar/dashboard')
+      if (acces.length > 1) {
+        router.push('/choix-etablissement')
+      } else {
+        router.push('/bar/dashboard')
+      }
     } else {
-      router.push('/choix')
+      if (acces.length >= 1) {
+        router.push('/choix-etablissement')
+      } else {
+        router.push('/choix')
+      }
     }
   }
 
