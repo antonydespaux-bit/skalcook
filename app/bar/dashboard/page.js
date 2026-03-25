@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase, getParametres } from '../../../lib/supabase'
+import { supabase, getClientId, getParametres } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
@@ -35,12 +35,14 @@ export default function BarDashboardPage() {
   }
 
   const loadData = async () => {
+    const clientId = await getClientId()
+    if (!clientId) { setLoading(false); return }
     const p = await getParametres()
     setParams(p)
     const { data: fichesData } = await supabase
-      .from('fiches_bar').select('*').neq('categorie', 'Sous-fiche').eq('archive', false)
+      .from('fiches_bar').select('*').eq('client_id', clientId).neq('categorie', 'Sous-fiche').eq('archive', false)
     const { data: prixData } = await supabase
-      .from('ingredients_bar').select('*')
+      .from('ingredients_bar').select('*').eq('client_id', clientId)
       .not('prix_precedent', 'is', null)
       .order('prix_updated_at', { ascending: false })
       .limit(20)

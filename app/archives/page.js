@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase, getClientId } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../lib/theme.jsx'
 import { useIsMobile } from '../../lib/useIsMobile'
@@ -27,25 +27,31 @@ export default function ArchivesPage() {
   }
 
   const loadData = async () => {
+    const clientId = await getClientId()
+    if (!clientId) { setLoading(false); return }
     const { data: fichesData } = await supabase
-      .from('fiches').select('*').eq('archive', true).order('nom')
+      .from('fiches').select('*').eq('client_id', clientId).eq('archive', true).order('nom')
     const { data: menusData } = await supabase
-      .from('menus').select('*').eq('archive', true).order('nom')
+      .from('menus').select('*').eq('client_id', clientId).eq('archive', true).order('nom')
     setFiches(fichesData || [])
     setMenus(menusData || [])
     setLoading(false)
   }
 
   const restaurer = async (id, type) => {
-    if (type === 'fiche') await supabase.from('fiches').update({ archive: false }).eq('id', id)
-    else await supabase.from('menus').update({ archive: false }).eq('id', id)
+    const clientId = await getClientId()
+    if (!clientId) return
+    if (type === 'fiche') await supabase.from('fiches').update({ archive: false }).eq('id', id).eq('client_id', clientId)
+    else await supabase.from('menus').update({ archive: false }).eq('id', id).eq('client_id', clientId)
     loadData()
   }
 
   const supprimer = async (id, type) => {
     if (!confirm('Supprimer définitivement ? Cette action est irréversible.')) return
-    if (type === 'fiche') await supabase.from('fiches').delete().eq('id', id)
-    else await supabase.from('menus').delete().eq('id', id)
+    const clientId = await getClientId()
+    if (!clientId) return
+    if (type === 'fiche') await supabase.from('fiches').delete().eq('id', id).eq('client_id', clientId)
+    else await supabase.from('menus').delete().eq('id', id).eq('client_id', clientId)
     loadData()
   }
 

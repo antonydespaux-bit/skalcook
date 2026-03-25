@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase, getParametres } from '../../lib/supabase'
+import { supabase, getClientId, getParametres } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme } from '../../lib/theme.jsx'
 import { useIsMobile } from '../../lib/useIsMobile'
@@ -34,14 +34,16 @@ export default function DashboardPage() {
   }
 
   const loadData = async () => {
+    const clientId = await getClientId()
+    if (!clientId) { setLoading(false); return }
     const p = await getParametres()
     setParams(p)
     const { data: fichesData } = await supabase
-      .from('fiches').select('*').neq('categorie', 'Sous-fiche').eq('archive', false)
+      .from('fiches').select('*').eq('client_id', clientId).neq('categorie', 'Sous-fiche').eq('archive', false)
     const { data: menusData } = await supabase
-      .from('menus').select('*').eq('archive', false)
+      .from('menus').select('*').eq('client_id', clientId).eq('archive', false)
     const { data: prixData } = await supabase
-      .from('ingredients').select('*')
+      .from('ingredients').select('*').eq('client_id', clientId)
       .not('prix_precedent', 'is', null)
       .order('prix_updated_at', { ascending: false })
       .limit(20)

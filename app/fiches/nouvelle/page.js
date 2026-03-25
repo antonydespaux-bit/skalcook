@@ -65,7 +65,9 @@ export default function NouvelleFiche() {
   }
 
   const loadIngredients = async () => {
-    const { data } = await supabase.from('ingredients').select('*').order('nom').limit(5000)
+    const clientId = await getClientId()
+    if (!clientId) return
+    const { data } = await supabase.from('ingredients').select('*').eq('client_id', clientId).order('nom').limit(5000)
     setListeIngredients(data || [])
   }
 

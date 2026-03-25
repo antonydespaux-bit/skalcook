@@ -75,7 +75,7 @@ export default function ModifierFiche() {
       supabase.from('fiches').select('*').eq('id', params_route.id).single(),
       supabase.from('lieux').select('*').eq('client_id', clientId).eq('section', 'cuisine').order('ordre'),
       supabase.from('categories_plats').select('*').eq('client_id', clientId).eq('section', 'cuisine').order('ordre'),
-      supabase.from('ingredients').select('*').order('nom').limit(5000)
+      supabase.from('ingredients').select('*').eq('client_id', clientId).order('nom').limit(5000)
     ])
 
     if (!ficheData) { router.push('/fiches'); return }
