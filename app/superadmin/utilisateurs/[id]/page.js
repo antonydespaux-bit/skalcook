@@ -5,9 +5,6 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../../../lib/supabase'
 import { theme, Logo, LogoBand } from '../../../../lib/theme.jsx'
 
-// Gestion des acces multi-etablissements par utilisateur
-const SUPERADMIN_EMAILS = ['antony.despaux@hotmail.fr', 'antony@skalcook.com']
-
 export default function SuperadminUserAccessPage() {
   const params = useParams()
   const router = useRouter()
@@ -38,64 +35,32 @@ export default function SuperadminUserAccessPage() {
           router.push('/login')
           return
         }
-
-        const sessionEmail = (session?.user?.email || '').toLowerCase().trim()
-        let isAllowed = SUPERADMIN_EMAILS.includes(sessionEmail)
-
-        if (!isAllowed) {
-          const { data: meProfil } = await supabase
-            .from('profils')
-            .select('is_superadmin')
-            .eq('id', session.user.id)
-            .single()
-          isAllowed = !!meProfil?.is_superadmin
+        const token = session?.access_token
+        if (!token) {
+          setError('Session expirée. Reconnectez-vous.')
+          return
         }
 
-        if (!isAllowed) {
-          router.push('/dashboard')
+        const res = await fetch(`/api/superadmin/user-detail?user_id=${encodeURIComponent(userId)}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` }
+        })
+
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          if (res.status === 403) {
+            router.push('/dashboard')
+            return
+          }
+          setError(typeof data.error === 'string' ? data.error : 'Erreur chargement utilisateur.')
           return
         }
 
         setAuthorized(true)
+        setProfil(data?.profil || null)
+        setClients(Array.isArray(data?.clients) ? data.clients : [])
 
-        const [profilRes, clientsRes, accesRes] = await Promise.all([
-          supabase
-            .from('profils')
-            .select('id, nom, role, client_id')
-            .eq('id', userId)
-            .maybeSingle(),
-          supabase
-            .from('clients')
-            .select('id, nom_etablissement, nom, slug, actif')
-            .order('nom_etablissement', { ascending: true }),
-          supabase
-            .from('acces_clients')
-            .select('client_id')
-            .eq('user_id', userId),
-        ])
-
-        if (profilRes.error) {
-          setError(`Erreur profil: ${profilRes.error.message}`)
-          return
-        }
-        if (clientsRes.error) {
-          setError(`Erreur clients: ${clientsRes.error.message}`)
-          return
-        }
-        if (accesRes.error) {
-          setError(`Erreur acces: ${accesRes.error.message}`)
-          return
-        }
-
-        setProfil(profilRes.data || null)
-        setClients(clientsRes.data || [])
-
-        const fromAcces = (accesRes.data || [])
-          .map((row) => row.client_id)
-          .filter(Boolean)
-
-        // Compat: si l'utilisateur a un `profil.client_id` historique, on le préselectionne.
-        const seeded = profilRes.data?.client_id ? Array.from(new Set([...fromAcces, profilRes.data.client_id])) : fromAcces
+        const seeded = Array.isArray(data?.selectedClientIds) ? data.selectedClientIds : []
         setInitialClientIds(seeded)
         setSelectedClientIds(seeded)
       } finally {
@@ -220,7 +185,8 @@ export default function SuperadminUserAccessPage() {
             Etablissements autorises
           </div>
           <div style={{ fontSize: '13px', color: c.texteMuted }}>
-            Utilisateur: <strong style={{ color: c.texte }}>{profil?.nom || userId}</strong>
+            Utilisateur: <strong style={{ color: c.texte }}>{profil?.nom || profil?.email || userId}</strong>
+            {profil?.email ? <span> · Email: <strong style={{ color: c.texte }}>{profil.email}</strong></span> : null}
             {profil?.role ? <span> · Role: <strong style={{ color: c.texte }}>{profil.role}</strong></span> : null}
           </div>
         </div>
