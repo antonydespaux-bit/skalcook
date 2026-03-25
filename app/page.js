@@ -33,17 +33,23 @@ export default function LoginPage() {
       .eq('id', data.user.id)
       .single()
 
-    const role = profil?.role
+      const role = profil?.role
 
-    if (role === 'cuisine') {
-      router.push('/dashboard')
-    } else if (role === 'bar') {
-      router.push('/bar/dashboard')
-    } else {
-      router.push('/choix')
+      // 👑 AJOUT DU ROLE SUPER ADMIN
+      if (role === 'super_admin') {
+        router.push('/superadmin')
+        return // On s'arrête ici pour toi
+      }
+  
+      // Logique existante pour les autres
+      if (role === 'cuisine') {
+        router.push('/dashboard')
+      } else if (role === 'bar') {
+        router.push('/bar/dashboard')
+      } else {
+        router.push('/choix')
+      }
     }
-  }
-
   return (
     <div style={{
       minHeight: '100vh', background: c.fond,
