@@ -1,4 +1,5 @@
 import './globals.css'
+import './landing.css'
 import Providers from '../components/Providers'
 
 export const metadata = {
@@ -12,6 +13,13 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="fr">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body>
         <Providers>
           {children}
