@@ -1,6 +1,6 @@
 'use client'
 import { useRouter, usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../lib/useTheme'
 import { useRole } from '../lib/useRole'
@@ -16,6 +16,8 @@ export default function NavbarCuisine() {
   const isMobile = useIsMobile()
   const [menuOuvert, setMenuOuvert] = useState(false)
   const [groupeOuvert, setGroupeOuvert] = useState(null)
+  const SUPERADMIN_EMAIL = 'antony.despaux@hotmail.fr'
+  const [showReturnSuperAdmin, setShowReturnSuperAdmin] = useState(false)
 
   const NAV = c.principal || '#18181B'
   const ACCENT = c.accent || '#6366F1'
@@ -30,6 +32,19 @@ export default function NavbarCuisine() {
     await supabase.auth.signOut()
     router.push('/')
   }
+
+  useEffect(() => {
+    let alive = true
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!alive) return
+      const email = (user?.email || '').toLowerCase().trim()
+      setShowReturnSuperAdmin(email === SUPERADMIN_EMAIL)
+    }).catch(() => {
+      if (!alive) return
+      setShowReturnSuperAdmin(false)
+    })
+    return () => { alive = false }
+  }, [])
 
   const isActive = (paths) => {
     const arr = Array.isArray(paths) ? paths : [paths]
@@ -216,6 +231,23 @@ export default function NavbarCuisine() {
               borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer',
             }}>Déconnexion</button>
           )}
+          {!isMobile && showReturnSuperAdmin && (
+            <button
+              onClick={() => router.push('/superadmin')}
+              style={{
+                background: 'rgba(99,102,241,0.2)',
+                color: 'rgba(165,180,252,1)',
+                border: '0.5px solid rgba(99,102,241,0.35)',
+                borderRadius: '8px',
+                padding: '7px 12px',
+                fontSize: '13px',
+                cursor: 'pointer',
+                fontWeight: '500'
+              }}
+            >
+              ← Retour SuperAdmin
+            </button>
+          )}
           {isMobile && (
             <button onClick={() => setMenuOuvert(!menuOuvert)} style={{
               background: menuOuvert ? 'rgba(255,255,255,0.1)' : 'transparent',
@@ -234,6 +266,20 @@ export default function NavbarCuisine() {
           borderBottom: '0.5px solid rgba(255,255,255,0.06)',
           position: 'sticky', top: '56px', zIndex: 99
         }}>
+          {showReturnSuperAdmin && (
+            <button
+              onClick={() => { setMenuOuvert(false); router.push('/superadmin') }}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left',
+                background: 'rgba(99,102,241,0.2)', color: '#A5B4FC',
+                border: '0.5px solid rgba(99,102,241,0.3)',
+                borderRadius: '8px', padding: '12px 16px',
+                fontSize: '14px', cursor: 'pointer', marginBottom: '8px'
+              }}
+            >
+              ← Retour SuperAdmin
+            </button>
+          )}
           {peutModifier && (
             <button onClick={() => { setMenuOuvert(false); router.push('/fiches/nouvelle') }}
               style={{

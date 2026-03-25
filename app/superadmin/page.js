@@ -489,6 +489,20 @@ export default function SuperAdminPage() {
                       }}
                     >Modifier</button>
                     <button
+                      onClick={() => {
+                        const clientId = client.client_id || client.id
+                        try { localStorage.setItem('client_id', clientId) } catch (e) { /* no-op */ }
+                        router.push('/dashboard')
+                      }}
+                      style={{
+                        background: '#EEF2FF', color: '#4338CA',
+                        border: '0.5px solid #C7D2FE', borderRadius: '8px',
+                        padding: '7px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: '500',
+                      }}
+                    >
+                      Accéder au Dashboard
+                    </button>
+                    <button
                       onClick={() => ouvrirInviteAdmin(client)}
                       style={{
                         background: '#EEF2FF', color: '#4338CA',
