@@ -490,18 +490,16 @@ export default function SuperAdminPage() {
                     >Modifier</button>
                     <button
                       onClick={() => {
-                        // Nettoyage ciblé : ne pas casser les tokens Supabase.
-                        try {
-                          localStorage.removeItem('client_id')
-                          localStorage.removeItem('tenant')
-                        } catch (e) { /* no-op */ }
+                        const selectedId = client.id
+                        console.log('FORCE SET:', selectedId)
+                        window.localStorage.removeItem('client_id')
+                        window.localStorage.removeItem('tenant')
+                        window.localStorage.setItem('client_id', selectedId)
 
-                        const selectedId = client.id // ID unique de l’itération
-                        console.log('Clic sur :', client.nom_etablissement, 'ID:', selectedId)
-                        try { localStorage.setItem('client_id', selectedId) } catch (e) { /* no-op */ }
-
-                        // Forcer un reload pour que TenantProvider relise localStorage immédiatement.
-                        window.location.href = '/dashboard'
+                        // Micro-pause pour être sûr que le navigateur a écrit l'ID
+                        setTimeout(() => {
+                          window.location.href = '/dashboard'
+                        }, 100)
                       }}
                       style={{
                         background: '#EEF2FF', color: '#4338CA',
