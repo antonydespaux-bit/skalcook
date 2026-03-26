@@ -23,12 +23,18 @@ export default function BarIngredientsPage() {
   const router = useRouter()
   const isMobile = useIsMobile()
   const { c } = useTheme()
-  const { role } = useRole()
+  const { role, loading: roleLoading } = useRole()
 
   useEffect(() => {
     checkUser()
     loadIngredients()
   }, [])
+
+  useEffect(() => {
+    if (!roleLoading && role && !['admin', 'bar', 'directeur'].includes(role)) {
+      router.push('/dashboard')
+    }
+  }, [role, roleLoading])
 
   const checkUser = async () => {
     const { data: { session } } = await supabase.auth.getSession()

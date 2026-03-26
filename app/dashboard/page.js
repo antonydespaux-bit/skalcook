@@ -28,6 +28,12 @@ export default function DashboardPage() {
     loadData()
   }, [])
 
+  useEffect(() => {
+    if (!roleLoading && role && !['admin', 'cuisine', 'directeur'].includes(role)) {
+      router.push(role === 'bar' ? '/bar/dashboard' : '/dashboard')
+    }
+  }, [role, roleLoading])
+
   const checkUser = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) router.push('/')

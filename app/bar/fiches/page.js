@@ -27,12 +27,18 @@ export default function BarFichesPage() {
   const router = useRouter()
   const isMobile = useIsMobile()
   const { c } = useTheme()
-  const { role } = useRole()
+  const { role, loading: roleLoading } = useRole()
 
   const peutModifier = role === 'admin' || role === 'bar'
 
   useEffect(() => { checkUser() }, [])
   useEffect(() => { loadFiches() }, [showArchives])
+
+  useEffect(() => {
+    if (!roleLoading && role && !['admin', 'bar', 'directeur'].includes(role)) {
+      router.push('/dashboard')
+    }
+  }, [role, roleLoading])
 
   const checkUser = async () => {
     try {

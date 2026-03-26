@@ -27,13 +27,19 @@ export default function RecapPage() {
   const router = useRouter()
   const isMobile = useIsMobile()
   const { c } = useTheme()
-  const { role } = useRole()
+  const { role, loading: roleLoading } = useRole()
   const peutModifier = role === 'admin' || role === 'cuisine'
 
   useEffect(() => {
     checkUser()
     loadData()
   }, [])
+
+  useEffect(() => {
+    if (!roleLoading && role && !['admin', 'cuisine', 'directeur'].includes(role)) {
+      router.push(role === 'bar' ? '/bar/dashboard' : '/dashboard')
+    }
+  }, [role, roleLoading])
 
   const checkUser = async () => {
     try {

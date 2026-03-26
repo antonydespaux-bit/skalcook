@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase, getClientId } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
@@ -48,7 +48,7 @@ export default function AdminPage() {
     setSuccess('')
 
     const { data: { session } } = await supabase.auth.getSession()
-    const clientId = session?.user?.user_metadata?.client_id
+    const clientId = await getClientId()
 
     if (!clientId) {
       setError('Erreur : client_id introuvable')
@@ -58,7 +58,10 @@ export default function AdminPage() {
 
     const res = await fetch('/api/create-user', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.access_token || ''}`
+      },
       body: JSON.stringify({
         email: newEmail,
         password: newPassword,
