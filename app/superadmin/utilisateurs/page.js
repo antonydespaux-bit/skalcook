@@ -6,6 +6,7 @@ import { supabase } from '../../../lib/supabase'
 import { isSuperadminEmail } from '../../../lib/superadmin'
 import { theme, Logo, LogoBand } from '../../../lib/theme.jsx'
 import ChefLoader from '../../../components/ChefLoader'
+import { useIsMobile } from '../../../lib/useIsMobile'
 
 function formatDate(value) {
   if (!value) return '-'
@@ -46,6 +47,7 @@ function roleBadgeStyle(role) {
 export default function SuperadminUsersPage() {
   const router = useRouter()
   const c = theme.couleurs
+  const isMobile = useIsMobile()
 
   const [authorized, setAuthorized] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -317,7 +319,7 @@ export default function SuperadminUsersPage() {
           background: 'white', borderRadius: '14px', border: `0.5px solid ${c.bordure}`,
           padding: '18px', marginBottom: '12px'
         }}>
-          <div style={{ fontSize: '20px', fontWeight: 700, color: c.texte, marginBottom: '4px' }}>
+          <div style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)', fontWeight: 700, color: c.texte, marginBottom: '4px' }}>
             Utilisateurs
           </div>
           <div style={{ fontSize: '13px', color: c.texteMuted }}>
@@ -373,14 +375,15 @@ export default function SuperadminUsersPage() {
           </div>
         )}
 
-        <div style={{
-          background: 'white',
-          borderRadius: '14px',
-          border: `0.5px solid ${c.bordure}`,
-          overflow: 'hidden'
-        }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
+        {!isMobile ? (
+          <div style={{
+            background: 'white',
+            borderRadius: '14px',
+            border: `0.5px solid ${c.bordure}`,
+            overflow: 'hidden'
+          }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
               <thead>
                 <tr style={{ background: '#FAFAFA', borderBottom: `0.5px solid ${c.bordure}` }}>
                   <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase' }}>Nom</th>
@@ -475,9 +478,82 @@ export default function SuperadminUsersPage() {
                   </tr>
                 )}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {filteredUsers.map((user) => {
+              const badge = roleBadgeStyle(user.role)
+              const isSelf = user.id === currentUserId
+              return (
+                <div
+                  key={user.id}
+                  onClick={() => router.push(`/superadmin/utilisateurs/${user.id}`)}
+                  style={{
+                    background: 'white',
+                    borderRadius: '12px',
+                    border: `0.5px solid ${c.bordure}`,
+                    padding: '12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: c.texte }}>{user.nom || '-'}</div>
+                    <span style={{ ...badge, borderRadius: '999px', padding: '3px 8px', fontSize: '11px', fontWeight: 700, textTransform: 'capitalize', alignSelf: 'flex-start' }}>
+                      {user.role || '-'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '4px' }}>{user.email || '-'}</div>
+                  <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '8px' }}>
+                    Établissements: <strong style={{ color: c.texte }}>{user.etablissement_count ?? 0}</strong> · Créé le {formatDate(user.created_at)}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openEditModal(user) }}
+                      disabled={!!deletingId || !!updatingId}
+                      style={{
+                        flex: 1,
+                        border: '0.5px solid #CBD5E1',
+                        background: 'white',
+                        color: '#334155',
+                        borderRadius: '8px',
+                        padding: '7px 10px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: (!!deletingId || !!updatingId) ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      ✏️ Modifier
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteUser(user) }}
+                      disabled={!!deletingId || isSelf}
+                      style={{
+                        flex: 1,
+                        border: 'none',
+                        background: isSelf ? '#E4E4E7' : '#EF4444',
+                        color: isSelf ? '#71717A' : 'white',
+                        borderRadius: '8px',
+                        padding: '7px 10px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: (!!deletingId || isSelf) ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      {deletingId === user.id ? 'Suppression...' : 'Supprimer'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+            {filteredUsers.length === 0 && (
+              <div style={{ background: 'white', borderRadius: '12px', border: `0.5px solid ${c.bordure}`, padding: '20px', fontSize: '13px', color: c.texteMuted, textAlign: 'center' }}>
+                Aucun utilisateur trouvé.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {editingUser && (

@@ -61,6 +61,7 @@ export default function SuperAdminPage() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteNomComplet, setInviteNomComplet] = useState('')
   const [inviteSending, setInviteSending] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   useEffect(() => {
     checkAuth()
@@ -361,51 +362,114 @@ export default function SuperAdminPage() {
             <span style={{ fontSize: '11px', color: '#A5B4FC', fontWeight: '500' }}>Skalcook</span>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {vue !== 'liste' && (
-            <button onClick={() => { setVue('liste'); resetForm() }} style={{
-              background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.6)',
-              border: '0.5px solid rgba(255,255,255,0.1)',
-              borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer'
-            }}>← Retour</button>
-          )}
+        {isMobile ? (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setMobileNavOpen((v) => !v)}
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                color: 'rgba(255,255,255,0.9)',
+                border: '0.5px solid rgba(255,255,255,0.2)',
+                borderRadius: '8px',
+                padding: '6px 10px',
+                fontSize: '16px',
+                cursor: 'pointer'
+              }}
+            >
+              ☰
+            </button>
+            {mobileNavOpen && (
+              <div style={{
+                position: 'absolute',
+                right: 0,
+                top: 'calc(100% + 8px)',
+                background: '#111827',
+                border: '0.5px solid rgba(255,255,255,0.15)',
+                borderRadius: '10px',
+                padding: '8px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                minWidth: '220px',
+                zIndex: 120
+              }}>
+                {vue !== 'liste' && (
+                  <button onClick={() => { setVue('liste'); resetForm(); setMobileNavOpen(false) }} style={{
+                    background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.75)',
+                    border: '0.5px solid rgba(255,255,255,0.1)',
+                    borderRadius: '8px', padding: '7px 10px', fontSize: '12px', cursor: 'pointer', textAlign: 'left'
+                  }}>← Retour</button>
+                )}
+                <button onClick={() => { setMobileNavOpen(false); router.push('/superadmin/prospects') }} style={{
+                  background: 'rgba(99,102,241,0.2)', color: '#A5B4FC',
+                  border: '0.5px solid rgba(99,102,241,0.3)',
+                  borderRadius: '8px', padding: '7px 10px', fontSize: '12px', cursor: 'pointer', textAlign: 'left'
+                }}>👥 Prospects</button>
+                <button onClick={() => { setMobileNavOpen(false); router.push('/superadmin/utilisateurs') }} style={{
+                  background: 'rgba(14,165,233,0.2)', color: '#BAE6FD',
+                  border: '0.5px solid rgba(14,165,233,0.35)',
+                  borderRadius: '8px', padding: '7px 10px', fontSize: '12px', cursor: 'pointer', textAlign: 'left'
+                }}>🧑‍💼 Utilisateurs</button>
+                <button onClick={() => { setMobileNavOpen(false); router.push('/superadmin/utilisateurs/nouveau') }} style={{
+                  background: 'rgba(16,185,129,0.2)', color: '#A7F3D0',
+                  border: '0.5px solid rgba(16,185,129,0.35)',
+                  borderRadius: '8px', padding: '7px 10px', fontSize: '12px', cursor: 'pointer', textAlign: 'left'
+                }}>➕ Utilisateur global</button>
+                <button onClick={async () => { setMobileNavOpen(false); await handleLogout() }} style={{
+                  background: 'transparent',
+                  color: '#E11D48',
+                  border: '0.5px solid #FDA4AF',
+                  borderRadius: '8px',
+                  padding: '7px 10px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  textAlign: 'left'
+                }}>🚪 Déconnexion</button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {vue !== 'liste' && (
+              <button onClick={() => { setVue('liste'); resetForm() }} style={{
+                background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.6)',
+                border: '0.5px solid rgba(255,255,255,0.1)',
+                borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer'
+              }}>← Retour</button>
+            )}
             <button onClick={() => router.push('/superadmin/prospects')} style={{
-           background: 'rgba(99,102,241,0.2)', color: '#A5B4FC',
-           border: '0.5px solid rgba(99,102,241,0.3)',
-           borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer'
-          }}>👥 Prospects</button>
-          <button onClick={() => router.push('/superadmin/utilisateurs')} style={{
-            background: 'rgba(14,165,233,0.2)', color: '#BAE6FD',
-            border: '0.5px solid rgba(14,165,233,0.35)',
-            borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer'
-          }}>🧑‍💼 Utilisateurs</button>
-          <button onClick={() => router.push('/superadmin/utilisateurs/nouveau')} style={{
-            background: 'rgba(16,185,129,0.2)', color: '#A7F3D0',
-            border: '0.5px solid rgba(16,185,129,0.35)',
-            borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer'
-          }}>➕ Utilisateur global</button>
-          <button onClick={() => router.push('/dashboard')} style={{
-            background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.6)',
-            border: '0.5px solid rgba(255,255,255,0.1)',
-            borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer'
-          }}>App →</button>
-          <button
-            onClick={handleLogout}
-            style={{
-              background: 'transparent',
-              color: '#E11D48',
-              border: '0.5px solid #FDA4AF',
-              borderRadius: '8px',
-              padding: '6px 12px',
-              fontSize: '13px',
-              cursor: 'pointer'
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#FFF1F2' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-          >
-            🚪 Déconnexion
-          </button>
-        </div>
+              background: 'rgba(99,102,241,0.2)', color: '#A5B4FC',
+              border: '0.5px solid rgba(99,102,241,0.3)',
+              borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer'
+            }}>👥 Prospects</button>
+            <button onClick={() => router.push('/superadmin/utilisateurs')} style={{
+              background: 'rgba(14,165,233,0.2)', color: '#BAE6FD',
+              border: '0.5px solid rgba(14,165,233,0.35)',
+              borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer'
+            }}>🧑‍💼 Utilisateurs</button>
+            <button onClick={() => router.push('/superadmin/utilisateurs/nouveau')} style={{
+              background: 'rgba(16,185,129,0.2)', color: '#A7F3D0',
+              border: '0.5px solid rgba(16,185,129,0.35)',
+              borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer'
+            }}>➕ Utilisateur global</button>
+            <button
+              onClick={handleLogout}
+              style={{
+                background: 'transparent',
+                color: '#E11D48',
+                border: '0.5px solid #FDA4AF',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontSize: '13px',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#FFF1F2' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            >
+              🚪 Déconnexion
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ padding: isMobile ? '16px' : '32px', maxWidth: '1000px', margin: '0 auto' }}>
@@ -422,7 +486,7 @@ export default function SuperAdminPage() {
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <div>
-                <h1 style={{ fontSize: '22px', fontWeight: '600', color: '#18181B', marginBottom: '4px' }}>
+                <h1 style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)', fontWeight: '600', color: '#18181B', marginBottom: '4px' }}>
                   Établissements
                 </h1>
                 <p style={{ fontSize: '14px', color: '#71717A' }}>
@@ -509,7 +573,13 @@ export default function SuperAdminPage() {
                       </div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <div style={{
+                    display: 'flex',
+                    gap: '8px',
+                    alignItems: isMobile ? 'stretch' : 'center',
+                    flexDirection: isMobile ? 'column' : 'row',
+                    width: isMobile ? '100%' : 'auto'
+                  }}>
                     {/* Aperçu couleurs */}
                     <div style={{ display: 'flex', gap: '4px' }}>
                       {[client.couleur_principale, client.couleur_accent, client.couleur_fond].map((col, i) => (
@@ -525,7 +595,8 @@ export default function SuperAdminPage() {
                         background: client.actif ? '#FEE2E2' : '#DCFCE7',
                         color: client.actif ? '#DC2626' : '#16A34A',
                         border: 'none', borderRadius: '8px',
-                        padding: '7px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: '500'
+                        padding: isMobile ? '6px 10px' : '7px 12px', fontSize: isMobile ? '11px' : '12px', cursor: 'pointer', fontWeight: '500',
+                        width: isMobile ? '100%' : 'auto'
                       }}
                     >{client.actif ? 'Désactiver' : 'Activer'}</button>
                     <button
@@ -533,7 +604,8 @@ export default function SuperAdminPage() {
                       style={{
                         background: '#18181B', color: 'white',
                         border: 'none', borderRadius: '8px',
-                        padding: '7px 14px', fontSize: '13px', cursor: 'pointer', fontWeight: '500'
+                        padding: isMobile ? '6px 10px' : '7px 14px', fontSize: isMobile ? '11px' : '13px', cursor: 'pointer', fontWeight: '500',
+                        width: isMobile ? '100%' : 'auto'
                       }}
                     >Modifier</button>
                     <button
@@ -541,7 +613,8 @@ export default function SuperAdminPage() {
                       style={{
                         background: '#F8FAFC', color: '#0F172A',
                         border: '0.5px solid #CBD5E1', borderRadius: '8px',
-                        padding: '7px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: '500'
+                        padding: isMobile ? '6px 10px' : '7px 12px', fontSize: isMobile ? '11px' : '12px', cursor: 'pointer', fontWeight: '500',
+                        width: isMobile ? '100%' : 'auto'
                       }}
                     >
                       KYC & Légal
@@ -562,7 +635,8 @@ export default function SuperAdminPage() {
                       style={{
                         background: '#EEF2FF', color: '#4338CA',
                         border: '0.5px solid #C7D2FE', borderRadius: '8px',
-                        padding: '7px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: '500',
+                        padding: isMobile ? '6px 10px' : '7px 12px', fontSize: isMobile ? '11px' : '12px', cursor: 'pointer', fontWeight: '500',
+                        width: isMobile ? '100%' : 'auto'
                       }}
                     >
                       Accéder au Dashboard
@@ -572,7 +646,8 @@ export default function SuperAdminPage() {
                       style={{
                         background: '#EEF2FF', color: '#4338CA',
                         border: '0.5px solid #C7D2FE', borderRadius: '8px',
-                        padding: '7px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: '500',
+                        padding: isMobile ? '6px 10px' : '7px 12px', fontSize: isMobile ? '11px' : '12px', cursor: 'pointer', fontWeight: '500',
+                        width: isMobile ? '100%' : 'auto',
                         display: 'flex', alignItems: 'center', gap: '6px'
                       }}
                     >
@@ -599,7 +674,7 @@ export default function SuperAdminPage() {
         {/* ── VUE FORMULAIRE (Nouveau / Modifier) ── */}
         {(vue === 'nouveau' || vue === 'modifier') && (
           <>
-            <h1 style={{ fontSize: '22px', fontWeight: '600', color: '#18181B', marginBottom: '8px' }}>
+            <h1 style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)', fontWeight: '600', color: '#18181B', marginBottom: '8px' }}>
               {vue === 'nouveau' ? 'Nouvel établissement' : `Modifier — ${clientSelectionne?.nom_etablissement}`}
             </h1>
             <p style={{ fontSize: '14px', color: '#71717A', marginBottom: '28px' }}>
