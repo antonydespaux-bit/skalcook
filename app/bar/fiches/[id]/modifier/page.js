@@ -252,6 +252,7 @@ export default function ModifierBarFiche() {
       if (!errPhoto) {
         const { data: urlData } = supabase.storage.from('fiches-photos').getPublicUrl(path)
         photoUrl = urlData.publicUrl
+        console.log('[photo upload bar] public URL generated:', photoUrl)
       }
     }
 
@@ -269,6 +270,9 @@ export default function ModifierBarFiche() {
       perte: perte ? parseFloat(perte) : 0,
       updated_at: new Date().toISOString()
     }).eq('id', params_route.id).eq('client_id', clientId)
+    if (photoUrl) {
+      console.log('[photo upload bar] photo_url saved for fiche_bar:', params_route.id)
+    }
 
     await supabase.from('fiche_bar_ingredients').delete().eq('fiche_bar_id', params_route.id).eq('client_id', clientId)
 

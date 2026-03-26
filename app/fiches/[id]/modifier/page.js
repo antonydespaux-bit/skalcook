@@ -223,6 +223,7 @@ export default function ModifierFiche() {
       if (!errPhoto) {
         const { data: urlData } = supabase.storage.from('fiches-photos').getPublicUrl(path)
         photoUrl = urlData.publicUrl
+        console.log('[photo upload cuisine] public URL generated:', photoUrl)
       }
     }
 
@@ -242,6 +243,9 @@ export default function ModifierFiche() {
       perte: perte ? parseFloat(perte) : 0,
       updated_at: new Date().toISOString()
     }).eq('id', params_route.id).eq('client_id', clientId)
+    if (photoUrl) {
+      console.log('[photo upload cuisine] photo_url saved for fiche:', params_route.id)
+    }
 
     await supabase.from('fiche_ingredients').delete().eq('fiche_id', params_route.id).eq('client_id', clientId)
 

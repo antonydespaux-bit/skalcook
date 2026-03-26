@@ -211,7 +211,9 @@ export default function NouvelleFiche() {
         })
       if (!errPhoto) {
         const { data: urlData } = supabase.storage.from('fiches-photos').getPublicUrl(path)
+        console.log('[photo upload cuisine] public URL generated:', urlData.publicUrl)
         await supabase.from('fiches').update({ photo_url: urlData.publicUrl }).eq('id', fiche.id).eq('client_id', clientId)
+        console.log('[photo upload cuisine] photo_url saved for fiche:', fiche.id)
       }
     }
 

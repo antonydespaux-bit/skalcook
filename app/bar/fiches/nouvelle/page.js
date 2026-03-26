@@ -231,7 +231,9 @@ export default function NouvelleBarFiche() {
       })
       if (!errPhoto) {
         const { data: urlData } = supabase.storage.from('fiches-photos').getPublicUrl(path)
+        console.log('[photo upload bar] public URL generated:', urlData.publicUrl)
         await supabase.from('fiches_bar').update({ photo_url: urlData.publicUrl }).eq('id', fiche.id).eq('client_id', clientId)
+        console.log('[photo upload bar] photo_url saved for fiche_bar:', fiche.id)
       }
     }
 
