@@ -104,6 +104,13 @@ export default function SuperAdminPage() {
     setLoading(false)
   }
 
+  const handleLogout = async () => {
+    const ok = window.confirm('Êtes-vous sûr de vouloir vous déconnecter ?')
+    if (!ok) return
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
   const resetForm = () => {
     setNom(''); setNomEtablissement(''); setSlug(''); setAdresse('')
     setModulesActifs(['fiches', 'sous-fiches', 'menus', 'bar', 'avis', 'recap', 'ingredients'])
@@ -382,6 +389,22 @@ export default function SuperAdminPage() {
             border: '0.5px solid rgba(255,255,255,0.1)',
             borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer'
           }}>App →</button>
+          <button
+            onClick={handleLogout}
+            style={{
+              background: 'transparent',
+              color: '#E11D48',
+              border: '0.5px solid #FDA4AF',
+              borderRadius: '8px',
+              padding: '6px 12px',
+              fontSize: '13px',
+              cursor: 'pointer'
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#FFF1F2' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+          >
+            🚪 Déconnexion
+          </button>
         </div>
       </div>
 
