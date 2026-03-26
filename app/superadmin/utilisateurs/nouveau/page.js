@@ -21,7 +21,6 @@ export default function NouveauUtilisateurPage() {
   const [email, setEmail] = useState('')
   const [nom, setNom] = useState('')
   const [role, setRole] = useState('consultant')
-  const [passwordTemp, setPasswordTemp] = useState('')
   const [selectedClientIds, setSelectedClientIds] = useState([])
   const [createdUserId, setCreatedUserId] = useState(null)
 
@@ -109,7 +108,6 @@ export default function NouveauUtilisateurPage() {
           email: email.trim(),
           nom: nom.trim(),
           role,
-          password_temporaire: passwordTemp.trim(),
           client_ids: selectedClientIds
         })
       })
@@ -124,7 +122,6 @@ export default function NouveauUtilisateurPage() {
       setCreatedUserId(data.user_id || null)
       setEmail('')
       setNom('')
-      setPasswordTemp('')
       setSelectedClientIds([])
     } finally {
       setSaving(false)
@@ -248,10 +245,6 @@ export default function NouveauUtilisateurPage() {
               <select value={role} onChange={(e) => setRole(e.target.value)} style={inputStyle}>
                 {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Mot de passe temporaire (optionnel)</label>
-              <input value={passwordTemp} onChange={(e) => setPasswordTemp(e.target.value)} placeholder="Laisser vide pour génération auto" style={inputStyle} />
             </div>
           </div>
 

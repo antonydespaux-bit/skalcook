@@ -14,7 +14,6 @@ const createGlobalUserSchema = z.object({
   email: z.string().trim().email(),
   nom: z.string().trim().min(2),
   role: z.string().trim().min(1),
-  password_temporaire: z.string().min(8).optional(),
   client_ids: z.array(z.string().uuid()).optional()
 })
 
@@ -83,11 +82,10 @@ export async function POST(request) {
       email,
       nom,
       role,
-      password_temporaire: tempPasswordInput = '',
       client_ids: clientIds = []
     } = parsed.data
 
-    const password = tempPasswordInput || temporaryPassword()
+    const password = temporaryPassword()
     const redirectTo = `${appOrigin(request)}/nouveau-mot-de-passe`
 
     let createResult = await supabaseServiceRole.auth.admin.createUser({
