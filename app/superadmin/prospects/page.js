@@ -56,20 +56,27 @@ export default function ProspectsPage() {
 
   const loadProspects = async () => {
     setLoading(true)
-    // Superadmin: charger tous les prospects, y compris client_id NULL.
-    const { data, error } = await supabase
-      .from('prospects')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error('Error loading prospects:', error)
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) {
       setProspects([])
       setLoading(false)
       return
     }
 
-    setProspects(data || [])
+    const res = await fetch('/api/superadmin/list-prospects', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    const json = await res.json()
+
+    if (!res.ok) {
+      console.error('Error loading prospects:', json)
+      setProspects([])
+      setLoading(false)
+      return
+    }
+
+    setProspects(json.prospects || [])
     setLoading(false)
   }
 
