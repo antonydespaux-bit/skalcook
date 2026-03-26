@@ -51,44 +51,20 @@ export default function AdminPage() {
         setProfils([])
         return
       }
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) throw new Error('Session expirée')
 
-      // Source de vérité par établissement: acces_clients.
-      const { data: accessRows, error: accessErr } = await supabase
-        .from('acces_clients')
-        .select('user_id, role, created_at')
-        .eq('client_id', clientId)
-        .order('created_at', { ascending: true })
-
-      if (accessErr) throw accessErr
-
-      const userIds = Array.from(new Set((accessRows || []).map((row) => row?.user_id).filter(Boolean)))
-      if (userIds.length === 0) {
-        setProfils([])
-        return
+      const res = await fetch(`/api/admin/list-users?client_id=${encodeURIComponent(clientId)}`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data?.error || 'Erreur chargement utilisateurs')
       }
 
-      const { data: profilsRows, error: profilsErr } = await supabase
-        .from('profils')
-        .select('id, nom, email, created_at')
-        .in('id', userIds)
-
-      if (profilsErr) throw profilsErr
-
-      const profilsMap = new Map((profilsRows || []).map((p) => [p.id, p]))
-      const merged = (accessRows || [])
-        .map((access) => {
-          const profil = profilsMap.get(access.user_id)
-          return {
-            id: access.user_id,
-            nom: profil?.nom || null,
-            email: profil?.email || null,
-            created_at: profil?.created_at || access.created_at || null,
-            role: access.role || null
-          }
-        })
-        .filter((row) => row.id)
-
-      setProfils(merged)
+      setProfils(Array.isArray(data?.users) ? data.users : [])
     } catch (err) {
       console.error('Erreur chargement utilisateurs établissement:', err)
       setError('Impossible de charger les utilisateurs de cet établissement.')
