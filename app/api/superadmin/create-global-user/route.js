@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { randomBytes } from 'crypto'
 import { isSuperadminEmail } from '../../../../lib/superadmin'
+import { z } from 'zod'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -8,6 +9,14 @@ const supabaseServiceRole = createClient(
   supabaseUrl,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
+
+const createGlobalUserSchema = z.object({
+  email: z.string().trim().email(),
+  nom: z.string().trim().min(2),
+  role: z.string().trim().min(1),
+  password_temporaire: z.string().min(8).optional(),
+  client_ids: z.array(z.string().uuid()).optional()
+})
 
 
 function temporaryPassword() {
@@ -54,16 +63,20 @@ export async function POST(request) {
     const gate = await requireSuperAdmin(request)
     if (gate.response) return gate.response
 
-    const body = await request.json()
-    const email = typeof body.email === 'string' ? body.email.trim() : ''
-    const nom = typeof body.nom === 'string' ? body.nom.trim() : ''
-    const role = typeof body.role === 'string' ? body.role.trim() : ''
-    const tempPasswordInput = typeof body.password_temporaire === 'string' ? body.password_temporaire.trim() : ''
-    const clientIds = Array.isArray(body.client_ids) ? body.client_ids.filter(Boolean) : []
-
-    if (!email || !nom || !role) {
-      return Response.json({ error: 'Paramètres manquants (email, nom, role).' }, { status: 400 })
+    const parsed = createGlobalUserSchema.safeParse(await request.json())
+    if (!parsed.success) {
+      return Response.json(
+        { error: 'Payload invalide.', details: parsed.error.flatten() },
+        { status: 400 }
+      )
     }
+    const {
+      email,
+      nom,
+      role,
+      password_temporaire: tempPasswordInput = '',
+      client_ids: clientIds = []
+    } = parsed.data
 
     const password = tempPasswordInput || temporaryPassword()
 

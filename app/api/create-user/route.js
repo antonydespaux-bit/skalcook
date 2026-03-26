@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { isSuperadminEmail } from '../../../lib/superadmin'
+import { z } from 'zod'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -9,6 +10,14 @@ const supabaseAnon = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 )
+
+const createUserSchema = z.object({
+  email: z.string().trim().email(),
+  password: z.string().min(8),
+  nom: z.string().trim().min(2),
+  role: z.string().trim().min(1).optional(),
+  client_id: z.string().uuid()
+})
 
 async function requireSuperAdmin(request) {
   const authHeader = request.headers.get('Authorization')
@@ -45,15 +54,14 @@ export async function POST(request) {
     const gate = await requireSuperAdmin(request)
     if (gate.response) return gate.response
 
-    const { email, password, nom, role, client_id } = await request.json()
-
-    if (!email || !password || !nom) {
-      return Response.json({ error: 'Paramètres manquants' }, { status: 400 })
+    const parsed = createUserSchema.safeParse(await request.json())
+    if (!parsed.success) {
+      return Response.json(
+        { error: 'Payload invalide.', details: parsed.error.flatten() },
+        { status: 400 }
+      )
     }
-
-    if (!client_id) {
-      return Response.json({ error: 'client_id manquant' }, { status: 400 })
-    }
+    const { email, password, nom, role, client_id } = parsed.data
 
     // Créer l'utilisateur avec client_id dans le JWT
     const { data, error: errCreate } = await supabaseAdmin.auth.admin.createUser({

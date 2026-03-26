@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { randomBytes } from 'crypto'
 import { isSuperadminEmail } from '../../../lib/superadmin'
+import { z } from 'zod'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -9,6 +10,12 @@ const supabaseServiceRole = createClient(
   supabaseUrl,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
+
+const inviteAdminSchema = z.object({
+  email: z.string().trim().email(),
+  nom_complet: z.string().trim().min(2),
+  client_id: z.string().uuid()
+})
 
 function appOrigin(request) {
   const envUrl = process.env.NEXT_PUBLIC_SITE_URL
@@ -64,14 +71,14 @@ export async function POST(request) {
     const gate = await requireSuperAdmin(request)
     if (gate.response) return gate.response
 
-    const body = await request.json()
-    const email = typeof body.email === 'string' ? body.email.trim() : ''
-    const nom_complet = typeof body.nom_complet === 'string' ? body.nom_complet.trim() : ''
-    const client_id = body.client_id
-
-    if (!email || !nom_complet || !client_id) {
-      return Response.json({ error: 'Paramètres manquants (email, nom_complet, client_id).' }, { status: 400 })
+    const parsed = inviteAdminSchema.safeParse(await request.json())
+    if (!parsed.success) {
+      return Response.json(
+        { error: 'Payload invalide.', details: parsed.error.flatten() },
+        { status: 400 }
+      )
     }
+    const { email, nom_complet, client_id } = parsed.data
 
     const redirectTo = `${appOrigin(request)}/nouveau-mot-de-passe`
 
