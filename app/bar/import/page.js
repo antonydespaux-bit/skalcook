@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { supabase, getClientId } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
@@ -18,6 +18,8 @@ export default function BarImportPage() {
   const [donnees, setDonnees] = useState([])
   const [progression, setProgression] = useState(0)
   const [etape, setEtape] = useState('')
+  const [categoriesFichier, setCategoriesFichier] = useState([])
+  const [categoriesSelectionnees, setCategoriesSelectionnees] = useState([])
   const router = useRouter()
   const isMobile = useIsMobile()
   const { c } = useTheme()
@@ -29,11 +31,26 @@ export default function BarImportPage() {
     return isNaN(num) ? null : num
   }
 
+  const categorieLabel = (ing) => (ing?.categorieNom && ing.categorieNom.trim()) ? ing.categorieNom.trim() : 'Sans catégorie'
+
+  const donneesSelectionnees = useMemo(() => {
+    if (!donnees.length || !categoriesSelectionnees.length) return []
+    return donnees.filter((ing) => categoriesSelectionnees.includes(categorieLabel(ing)))
+  }, [donnees, categoriesSelectionnees])
+
+  const toggleCategorie = (cat) => {
+    setCategoriesSelectionnees((prev) => (
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+    ))
+  }
+
   const handleFichier = (e) => {
     const fichier = e.target.files[0]
     if (!fichier) return
     setResultat(null)
     setProgression(0)
+    setCategoriesFichier([])
+    setCategoriesSelectionnees([])
 
     const reader = new FileReader()
     reader.onload = (evt) => {
@@ -49,12 +66,16 @@ export default function BarImportPage() {
         ingredients.push({
           nom: row[0]?.toString().trim(),
           prix_kg: normaliserPrix(row[1]),
-          unite: row[2]?.toString().trim() || 'cl'
+          unite: row[2]?.toString().trim() || 'cl',
+          categorieNom: row[3]?.toString().trim() || ''
         })
       }
 
       setDonnees(ingredients)
       setApercu(ingredients.slice(0, 5))
+      const uniques = Array.from(new Set(ingredients.map((ing) => categorieLabel(ing)))).sort((a, b) => a.localeCompare(b))
+      setCategoriesFichier(uniques)
+      setCategoriesSelectionnees(uniques)
       setFichierPret(true)
     }
     reader.readAsBinaryString(fichier)
@@ -69,14 +90,39 @@ export default function BarImportPage() {
     const clientId = await getClientId()
     if (!clientId) { setLoading(false); return }
 
+    const totalTrouves = donnees.length
+    const totalSelectionnes = donneesSelectionnees.length
+    const ignores = totalTrouves - totalSelectionnes
+
+    if (totalSelectionnes === 0) {
+      setLoading(false)
+      setResultat({ importes: 0, misAJour: 0, erreurs: 0, total: 0, ignores })
+      return
+    }
+
+    const { count: dejaPresents, error: errCount } = await supabase
+      .from('ingredients_bar')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+    if (errCount) {
+      setLoading(false)
+      alert(`Impossible de vérifier le quota : ${errCount.message}`)
+      return
+    }
+    if ((dejaPresents || 0) + totalSelectionnes > 5000) {
+      setLoading(false)
+      alert(`Quota dépassé : ${(dejaPresents || 0)} existants + ${totalSelectionnes} sélectionnés > 5000.`)
+      return
+    }
+
     const batchSize = 50
     let importes = 0
     let misAJour = 0
     let erreurs = 0
-    const total = donnees.length
+    const total = totalSelectionnes
 
-    for (let i = 0; i < donnees.length; i += batchSize) {
-      const batch = donnees.slice(i, i + batchSize)
+    for (let i = 0; i < donneesSelectionnees.length; i += batchSize) {
+      const batch = donneesSelectionnees.slice(i, i + batchSize)
       for (const ing of batch) {
         try {
           const { data: existing } = await supabase
@@ -119,11 +165,11 @@ export default function BarImportPage() {
       entite: 'ingredients_bar',
       entite_nom: `${importes} nouveaux, ${misAJour} mis à jour`,
       section: 'bar',
-      details: `${total} ingrédients bar traités`
+      details: `${total} ingrédients bar traités, ${ignores} ignorés`
     })
 
     setLoading(false)
-    setResultat({ importes, misAJour, erreurs, total })
+    setResultat({ importes, misAJour, erreurs, total, ignores })
     setEtape('')
   }
 
@@ -175,12 +221,49 @@ export default function BarImportPage() {
             <strong style={{ color: c.texte }}>Colonne A</strong> — Nom de l'article<br />
             <strong style={{ color: c.texte }}>Colonne B</strong> — Prix HT (avec . ou ,)<br />
             <strong style={{ color: c.texte }}>Colonne C</strong> — Unité (cl, ml, L...)<br />
+            <strong style={{ color: c.texte }}>Colonne D</strong> — Catégorie (optionnelle, pour filtrage)<br />
             <div style={{ marginTop: '8px', color: '#4A7B6F', fontSize: '12px' }}>✓ Les prix existants seront mis à jour automatiquement</div>
           </div>
 
           <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFichier}
             style={{ width: '100%', padding: '12px', border: '0.5px solid #7F77DD', borderRadius: '8px', fontSize: '13px', background: '#EEEDFE', cursor: 'pointer', color: c.texte, marginBottom: '16px' }}
           />
+
+          {categoriesFichier.length > 0 && (
+            <div style={{ marginBottom: '18px', border: `0.5px solid ${c.bordure}`, borderRadius: '10px', padding: '12px' }}>
+              <div style={{ fontSize: '13px', fontWeight: '600', color: c.texte, marginBottom: '8px' }}>
+                Filtrer les produits à importer
+              </div>
+              <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '10px' }}>
+                {donneesSelectionnees.length} ingrédients sélectionnés sur {donnees.length} trouvés dans le fichier
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {categoriesFichier.map((cat) => {
+                  const checked = categoriesSelectionnees.includes(cat)
+                  return (
+                    <label
+                      key={cat}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        borderRadius: '999px',
+                        padding: '6px 10px',
+                        border: `0.5px solid ${checked ? '#7F77DD' : c.bordure}`,
+                        background: checked ? '#EEEDFE' : c.blanc,
+                        color: checked ? '#7F77DD' : c.texteMuted,
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <input type="checkbox" checked={checked} onChange={() => toggleCategorie(cat)} />
+                      {cat}
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {apercu.length > 0 && (
             <div style={{ marginBottom: '20px' }}>
@@ -226,7 +309,7 @@ export default function BarImportPage() {
               color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px',
               fontWeight: '600', textTransform: 'uppercase', cursor: loading ? 'not-allowed' : 'pointer'
             }}>
-              {loading ? `Import en cours... ${progression}%` : `Importer / Mettre à jour ${donnees.length} ingrédients`}
+              {loading ? `Import en cours... ${progression}%` : `Importer / Mettre à jour ${donneesSelectionnees.length} ingrédients`}
             </button>
           )}
         </div>
@@ -234,6 +317,9 @@ export default function BarImportPage() {
         {resultat && (
           <div style={{ background: '#E8F2EF', border: '0.5px solid #4A7B6F40', borderRadius: '12px', padding: '20px' }}>
             <div style={{ fontWeight: '600', marginBottom: '10px', color: '#4A7B6F' }}>Import terminé !</div>
+            <div style={{ fontSize: '13px', color: c.texte, marginBottom: '10px' }}>
+              Succès : {resultat.importes + resultat.misAJour} ingrédients traités, {resultat.ignores || 0} ignorés (car décochés).
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '14px' }}>
               <div style={{ background: c.blanc, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
                 <div style={{ fontSize: '24px', fontWeight: '500', color: '#4A7B6F' }}>{resultat.importes}</div>

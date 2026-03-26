@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { supabase, getClientId } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useIsMobile } from '../../lib/useIsMobile'
@@ -18,6 +18,8 @@ export default function ImportPage() {
   const [progression, setProgression] = useState(0)
   const [etape, setEtape] = useState('')
   const [categoriesInconnues, setCategoriesInconnues] = useState([])
+  const [categoriesFichier, setCategoriesFichier] = useState([])
+  const [categoriesSelectionnees, setCategoriesSelectionnees] = useState([])
   const router = useRouter()
   const isMobile = useIsMobile()
   const { c } = useTheme()
@@ -29,12 +31,27 @@ export default function ImportPage() {
     return isNaN(num) ? null : num
   }
 
+  const categorieLabel = (ing) => (ing?.categorieNom && ing.categorieNom.trim()) ? ing.categorieNom.trim() : 'Sans catégorie'
+
+  const donneesSelectionnees = useMemo(() => {
+    if (!donnees.length || !categoriesSelectionnees.length) return []
+    return donnees.filter((ing) => categoriesSelectionnees.includes(categorieLabel(ing)))
+  }, [donnees, categoriesSelectionnees])
+
+  const toggleCategorie = (cat) => {
+    setCategoriesSelectionnees((prev) => (
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+    ))
+  }
+
   const handleFichier = async (e) => {
     const fichier = e.target.files[0]
     if (!fichier) return
     setResultat(null)
     setProgression(0)
     setCategoriesInconnues([])
+    setCategoriesFichier([])
+    setCategoriesSelectionnees([])
 
     // Charger les catégories existantes pour le matching
     const clientId = await getClientId()
@@ -89,6 +106,9 @@ export default function ImportPage() {
       setCategoriesInconnues([...inconnues])
       setDonnees(ingredients)
       setApercu(ingredients.slice(0, 5))
+      const uniques = Array.from(new Set(ingredients.map((ing) => categorieLabel(ing)))).sort((a, b) => a.localeCompare(b))
+      setCategoriesFichier(uniques)
+      setCategoriesSelectionnees(uniques)
       setFichierPret(true)
     }
     reader.readAsBinaryString(fichier)
@@ -103,15 +123,40 @@ export default function ImportPage() {
     const clientId = await getClientId()
     if (!clientId) { setLoading(false); return }
 
+    const totalTrouves = donnees.length
+    const totalSelectionnes = donneesSelectionnees.length
+    const ignores = totalTrouves - totalSelectionnes
+
+    if (totalSelectionnes === 0) {
+      setLoading(false)
+      setResultat({ importes: 0, misAJour: 0, erreurs: 0, total: 0, categoriesAssignees: 0, ignores })
+      return
+    }
+
+    const { count: dejaPresents, error: errCount } = await supabase
+      .from('ingredients')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+    if (errCount) {
+      setLoading(false)
+      alert(`Impossible de vérifier le quota : ${errCount.message}`)
+      return
+    }
+    if ((dejaPresents || 0) + totalSelectionnes > 5000) {
+      setLoading(false)
+      alert(`Quota dépassé : ${(dejaPresents || 0)} existants + ${totalSelectionnes} sélectionnés > 5000.`)
+      return
+    }
+
     const batchSize = 50
     let importes = 0
     let misAJour = 0
     let erreurs = 0
     let categoriesAssignees = 0
-    const total = donnees.length
+    const total = totalSelectionnes
 
-    for (let i = 0; i < donnees.length; i += batchSize) {
-      const batch = donnees.slice(i, i + batchSize)
+    for (let i = 0; i < donneesSelectionnees.length; i += batchSize) {
+      const batch = donneesSelectionnees.slice(i, i + batchSize)
       for (const ing of batch) {
         try {
           const { data: existing } = await supabase
@@ -169,11 +214,11 @@ export default function ImportPage() {
       entite: 'ingredients',
       entite_nom: `${importes} nouveaux, ${misAJour} mis à jour`,
       section: 'cuisine',
-      details: `${total} traités, ${categoriesAssignees} catégories assignées`
+      details: `${total} traités, ${ignores} ignorés, ${categoriesAssignees} catégories assignées`
     })
 
     setLoading(false)
-    setResultat({ importes, misAJour, erreurs, total, categoriesAssignees })
+    setResultat({ importes, misAJour, erreurs, total, categoriesAssignees, ignores })
     setEtape('')
   }
 
@@ -281,6 +326,42 @@ export default function ImportPage() {
             </div>
           )}
 
+          {categoriesFichier.length > 0 && (
+            <div style={{ marginBottom: '18px', border: `0.5px solid ${c.bordure}`, borderRadius: '10px', padding: '12px' }}>
+              <div style={{ fontSize: '13px', fontWeight: '600', color: c.texte, marginBottom: '8px' }}>
+                Filtrer les produits à importer
+              </div>
+              <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '10px' }}>
+                {donneesSelectionnees.length} ingrédients sélectionnés sur {donnees.length} trouvés dans le fichier
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {categoriesFichier.map((cat) => {
+                  const checked = categoriesSelectionnees.includes(cat)
+                  return (
+                    <label
+                      key={cat}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        borderRadius: '999px',
+                        padding: '6px 10px',
+                        border: `0.5px solid ${checked ? c.accent : c.bordure}`,
+                        background: checked ? c.accentClair : c.blanc,
+                        color: checked ? c.accent : c.texteMuted,
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <input type="checkbox" checked={checked} onChange={() => toggleCategorie(cat)} />
+                      {cat}
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Aperçu */}
           {apercu.length > 0 && (
             <div style={{ marginBottom: '20px' }}>
@@ -340,7 +421,7 @@ export default function ImportPage() {
               color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px',
               fontWeight: '600', textTransform: 'uppercase', cursor: loading ? 'not-allowed' : 'pointer'
             }}>
-              {loading ? `Import en cours... ${progression}%` : `Importer / Mettre à jour ${donnees.length} ingrédients`}
+              {loading ? `Import en cours... ${progression}%` : `Importer / Mettre à jour ${donneesSelectionnees.length} ingrédients`}
             </button>
           )}
         </div>
@@ -349,6 +430,9 @@ export default function ImportPage() {
         {resultat && (
           <div style={{ background: c.vertClair, border: `0.5px solid ${c.vert}40`, borderRadius: '12px', padding: '20px' }}>
             <div style={{ fontWeight: '600', marginBottom: '10px', color: c.vert }}>Import terminé !</div>
+            <div style={{ fontSize: '13px', color: c.texte, marginBottom: '10px' }}>
+              Succès : {resultat.importes + resultat.misAJour} ingrédients traités, {resultat.ignores || 0} ignorés (car décochés).
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '14px' }}>
               {[
                 { label: 'Nouveaux', value: resultat.importes, color: c.vert },
