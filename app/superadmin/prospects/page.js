@@ -5,6 +5,7 @@ import { supabase } from '../../../lib/supabase'
 import { isSuperadminEmail } from '../../../lib/superadmin'
 import { useRouter } from 'next/navigation'
 import ChefLoader from '../../../components/ChefLoader'
+import { useIsMobile } from '../../../lib/useIsMobile'
 
 const STATUTS = [
   { id: 'nouveau', label: 'Nouveau', color: '#6366F1', bg: '#EEF2FF' },
@@ -25,7 +26,9 @@ export default function ProspectsPage() {
   const [selected, setSelected] = useState(null)
   const [notes, setNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
   const router = useRouter()
+  const isMobile = useIsMobile()
 
   useEffect(() => { checkAuth() }, [])
 
@@ -88,6 +91,29 @@ export default function ProspectsPage() {
     setNotes(prospect.notes || '')
   }
 
+  const convertirEnClient = async (prospect) => {
+    if (!prospect?.id) return
+    await updateStatut(prospect.id, 'signe')
+  }
+
+  const supprimerProspect = async (prospect) => {
+    if (!prospect?.id) return
+    const ok = window.confirm(`Supprimer le prospect "${prospect.nom || prospect.email || prospect.id}" ?`)
+    if (!ok) return
+    setDeletingId(prospect.id)
+    try {
+      const { error } = await supabase.from('prospects').delete().eq('id', prospect.id)
+      if (error) return
+      setProspects((prev) => prev.filter((p) => p.id !== prospect.id))
+      if (selected?.id === prospect.id) {
+        setSelected(null)
+        setNotes('')
+      }
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const filtres = prospects.reduce((acc, p) => {
     acc[p.statut] = (acc[p.statut] || 0) + 1
     return acc
@@ -132,6 +158,101 @@ export default function ProspectsPage() {
         </div>
       </div>
 
+      {isMobile ? (
+        <div style={{ padding: '14px' }}>
+          <div style={{ marginBottom: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <input
+              type="text"
+              placeholder="Rechercher un prospect..."
+              value={recherche}
+              onChange={e => setRecherche(e.target.value)}
+              style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '0.5px solid #E4E4E7', fontSize: '14px', outline: 'none', background: 'white' }}
+            />
+            <div style={{ fontSize: '13px', color: '#71717A' }}>{prospectsFiltres.length} prospect{prospectsFiltres.length > 1 ? 's' : ''}</div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {prospectsFiltres.map((p) => {
+              const st = statutInfo(p.statut)
+              return (
+                <div
+                  key={p.id}
+                  style={{
+                    background: 'white',
+                    borderRadius: '12px',
+                    border: '0.5px solid #E4E4E7',
+                    boxShadow: '0 4px 14px rgba(0,0,0,0.04)',
+                    padding: '14px'
+                  }}
+                >
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: '#18181B', marginBottom: '6px' }}>
+                    {p.nom_etablissement || p.nom || 'Prospect'}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#334155', marginBottom: '4px' }}>
+                    📧 {p.email || '-'}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#334155', marginBottom: '10px' }}>
+                    📞 {p.telephone ? <a href={`tel:${p.telephone}`} style={{ color: '#334155', textDecoration: 'underline' }}>{p.telephone}</a> : '-'}
+                  </div>
+                  <div style={{ marginBottom: '10px' }}>
+                    <span style={{ background: st.bg, color: st.color, border: `0.5px solid ${st.color}33`, borderRadius: '999px', padding: '4px 10px', fontSize: '12px', fontWeight: 600 }}>
+                      {st.label}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <button
+                      onClick={() => ouvrirDetail(p)}
+                      style={{ width: '100%', padding: '9px 10px', borderRadius: '8px', border: '0.5px solid #CBD5E1', background: 'white', color: '#334155', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      Modifier
+                    </button>
+                    <button
+                      onClick={() => convertirEnClient(p)}
+                      style={{ width: '100%', padding: '9px 10px', borderRadius: '8px', border: '0.5px solid #86EFAC', background: '#DCFCE7', color: '#166534', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      Convertir en Client
+                    </button>
+                    <button
+                      onClick={() => supprimerProspect(p)}
+                      disabled={deletingId === p.id}
+                      style={{ width: '100%', padding: '9px 10px', borderRadius: '8px', border: '0.5px solid #FCA5A5', background: '#FEE2E2', color: '#B91C1C', fontSize: '12px', fontWeight: 600, cursor: deletingId === p.id ? 'not-allowed' : 'pointer' }}
+                    >
+                      {deletingId === p.id ? 'Suppression...' : 'Supprimer'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+            {prospectsFiltres.length === 0 && (
+              <div style={{ background: 'white', borderRadius: '12px', border: '0.5px solid #E4E4E7', padding: '40px', textAlign: 'center', color: '#71717A', fontSize: '14px' }}>
+                {recherche ? 'Aucun prospect trouvé pour cette recherche.' : 'Aucun prospect pour ce filtre.'}
+              </div>
+            )}
+          </div>
+
+          {selected && (
+            <div style={{ marginTop: '12px', background: 'white', borderRadius: '12px', border: '0.5px solid #E4E4E7', padding: '14px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', marginBottom: '8px' }}>
+                Notes internes
+              </div>
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Ajouter des notes sur ce prospect..."
+                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '0.5px solid #E4E4E7', fontSize: '13px', outline: 'none', resize: 'vertical', minHeight: '90px', fontFamily: 'inherit', color: '#18181B', background: '#FAFAFA', lineHeight: '1.5' }}
+              />
+              <button onClick={saveNotes} disabled={savingNotes} style={{
+                width: '100%', marginTop: '8px', padding: '10px',
+                background: savingNotes ? '#A5B4FC' : '#6366F1', color: 'white',
+                border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '500',
+                cursor: savingNotes ? 'not-allowed' : 'pointer', fontFamily: 'inherit'
+              }}>
+                {savingNotes ? 'Sauvegarde...' : '💾 Sauvegarder les notes'}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
       <div style={{ display: 'flex', flex: 1 }}>
 
         {/* SIDEBAR GAUCHE */}
@@ -212,81 +333,61 @@ export default function ProspectsPage() {
             <div style={{ fontSize: '13px', color: '#71717A' }}>{prospectsFiltres.length} prospect{prospectsFiltres.length > 1 ? 's' : ''}</div>
           </div>
 
-          {/* Cards prospects */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {prospectsFiltres.map(p => {
-              const st = statutInfo(p.statut)
-              const isSelected = selected?.id === p.id
-              return (
-                <div key={p.id}
-                  onClick={() => ouvrirDetail(p)}
-                  style={{
-                    background: 'white', borderRadius: '12px',
-                    border: `0.5px solid ${isSelected ? '#6366F1' : '#E4E4E7'}`,
-                    padding: '18px 20px', cursor: 'pointer',
-                    transition: 'all 0.15s',
-                    boxShadow: isSelected ? '0 0 0 2px rgba(99,102,241,0.15)' : 'none'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: '600', color: '#6366F1', flexShrink: 0 }}>
-                          {p.nom?.charAt(0)?.toUpperCase() || '?'}
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '15px', fontWeight: '500', color: '#18181B' }}>{p.nom}</div>
-                          <div style={{ fontSize: '12px', color: '#71717A' }}>{p.email}</div>
-                        </div>
-                        <span style={{ fontSize: '16px', marginLeft: '4px' }}>{LANGUES[p.langue] || '🌍'}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                        {p.nom_etablissement && (
-                          <span style={{ fontSize: '12px', color: '#71717A' }}>🏨 {p.nom_etablissement}</span>
-                        )}
-                        {p.telephone && (
-                          <span style={{ fontSize: '12px', color: '#71717A' }}>📞 {p.telephone}</span>
-                        )}
-                        <span style={{ fontSize: '12px', color: '#71717A' }}>
-                          🏢 {p.nb_etablissements === 11 ? '10+' : p.nb_etablissements === 6 ? '6-10' : p.nb_etablissements === 2 ? '2-5' : '1'} établissement{p.nb_etablissements > 1 ? 's' : ''}
-                        </span>
-                        <span style={{ fontSize: '12px', color: '#71717A' }}>
-                          📅 {new Date(p.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </span>
-                      </div>
-                      {p.message && (
-                        <div style={{ marginTop: '8px', fontSize: '12px', color: '#71717A', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '400px' }}>
-                          "{p.message}"
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Statut selector */}
-                    <div onClick={e => e.stopPropagation()}>
-                      <select
-                        value={p.statut}
-                        onChange={e => updateStatut(p.id, e.target.value)}
-                        style={{
-                          padding: '6px 10px', borderRadius: '20px',
-                          border: `0.5px solid ${st.color}40`,
-                          background: st.bg, color: st.color,
-                          fontSize: '12px', fontWeight: '500', cursor: 'pointer',
-                          outline: 'none', fontFamily: 'inherit'
-                        }}
-                      >
-                        {STATUTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-
-            {prospectsFiltres.length === 0 && (
-              <div style={{ background: 'white', borderRadius: '12px', border: '0.5px solid #E4E4E7', padding: '60px', textAlign: 'center', color: '#71717A', fontSize: '14px' }}>
-                {recherche ? 'Aucun prospect trouvé pour cette recherche.' : 'Aucun prospect pour ce filtre.'}
-              </div>
-            )}
+          {/* Tableau prospects */}
+          <div style={{ background: 'white', borderRadius: '12px', border: '0.5px solid #E4E4E7', boxShadow: '0 4px 14px rgba(0,0,0,0.04)' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
+                <thead>
+                  <tr style={{ background: '#FAFAFA', borderBottom: '0.5px solid #E4E4E7' }}>
+                    <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', color: '#71717A', textTransform: 'uppercase' }}>Établissement</th>
+                    <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', color: '#71717A', textTransform: 'uppercase' }}>Contact</th>
+                    <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', color: '#71717A', textTransform: 'uppercase' }}>Statut</th>
+                    <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', color: '#71717A', textTransform: 'uppercase' }}>Date</th>
+                    <th style={{ textAlign: 'right', padding: '12px', fontSize: '11px', color: '#71717A', textTransform: 'uppercase' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {prospectsFiltres.map((p) => {
+                    const st = statutInfo(p.statut)
+                    const isSelected = selected?.id === p.id
+                    return (
+                      <tr key={p.id} onClick={() => ouvrirDetail(p)} style={{ borderBottom: '0.5px solid #E4E4E7', cursor: 'pointer', background: isSelected ? '#EEF2FF44' : 'white' }}>
+                        <td style={{ padding: '12px' }}>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#18181B' }}>{p.nom_etablissement || p.nom || '-'}</div>
+                          <div style={{ fontSize: '12px', color: '#71717A', marginTop: '3px' }}>{p.nb_etablissements === 11 ? '10+' : p.nb_etablissements === 6 ? '6-10' : p.nb_etablissements === 2 ? '2-5' : '1'} établissement{p.nb_etablissements > 1 ? 's' : ''}</div>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          <div style={{ fontSize: '13px', color: '#334155' }}>{p.email || '-'}</div>
+                          <div style={{ fontSize: '13px', color: '#334155', marginTop: '3px' }}>
+                            {p.telephone ? <a href={`tel:${p.telephone}`} style={{ color: '#334155', textDecoration: 'underline' }}>{p.telephone}</a> : '-'}
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          <span style={{ background: st.bg, color: st.color, border: `0.5px solid ${st.color}33`, borderRadius: '999px', padding: '4px 10px', fontSize: '12px', fontWeight: 600 }}>{st.label}</span>
+                        </td>
+                        <td style={{ padding: '12px', fontSize: '12px', color: '#71717A' }}>
+                          {new Date(p.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </td>
+                        <td style={{ padding: '12px', textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                          <div style={{ display: 'inline-flex', gap: '8px' }}>
+                            <button onClick={() => ouvrirDetail(p)} style={{ border: '0.5px solid #CBD5E1', background: 'white', color: '#334155', borderRadius: '8px', padding: '7px 10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>Modifier</button>
+                            <button onClick={() => convertirEnClient(p)} style={{ border: '0.5px solid #86EFAC', background: '#DCFCE7', color: '#166534', borderRadius: '8px', padding: '7px 10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>Convertir</button>
+                            <button onClick={() => supprimerProspect(p)} disabled={deletingId === p.id} style={{ border: '0.5px solid #FCA5A5', background: '#FEE2E2', color: '#B91C1C', borderRadius: '8px', padding: '7px 10px', fontSize: '12px', fontWeight: 600, cursor: deletingId === p.id ? 'not-allowed' : 'pointer' }}>{deletingId === p.id ? 'Suppression...' : 'Supprimer'}</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {prospectsFiltres.length === 0 && (
+                    <tr>
+                      <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#71717A', fontSize: '14px' }}>
+                        {recherche ? 'Aucun prospect trouvé pour cette recherche.' : 'Aucun prospect pour ce filtre.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -392,6 +493,7 @@ export default function ProspectsPage() {
           </div>
         )}
       </div>
+      )}
     </div>
   )
 }
