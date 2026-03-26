@@ -572,6 +572,16 @@ export default function SuperAdminPage() {
                       }}
                     >Modifier</button>
                     <button
+                      onClick={() => router.push(`/superadmin/etablissements/${client.id}`)}
+                      style={{
+                        background: '#F8FAFC', color: '#0F172A',
+                        border: '0.5px solid #CBD5E1', borderRadius: '8px',
+                        padding: '7px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: '500'
+                      }}
+                    >
+                      KYC & Légal
+                    </button>
+                    <button
                       onClick={() => {
                         const selectedId = client.id
                         console.log('FORCE SET:', selectedId)
