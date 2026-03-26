@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { isSuperadminEmail } from '../../../lib/superadmin'
 import { useRouter } from 'next/navigation'
+import ChefLoader from '../../../components/ChefLoader'
 
 const STATUTS = [
   { id: 'nouveau', label: 'Nouveau', color: '#6366F1', bg: '#EEF2FF' },
@@ -105,7 +106,7 @@ export default function ProspectsPage() {
 
   if (!authorized || loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F4F4F5' }}>
-      <div style={{ fontSize: '14px', color: '#71717A' }}>Chargement...</div>
+      <ChefLoader />
     </div>
   )
 

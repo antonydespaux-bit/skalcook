@@ -7,6 +7,7 @@ import { useTheme } from '../../lib/useTheme'
 import { log } from '../../lib/useLog'
 import * as XLSX from 'xlsx'
 import NavbarCuisine from '../../components/NavbarCuisine'
+import ChefLoader from '../../components/ChefLoader'
 
 export default function ImportPage() {
   const [loading, setLoading] = useState(false)
@@ -407,6 +408,7 @@ export default function ImportPage() {
           {/* Progression */}
           {loading && (
             <div style={{ marginBottom: '16px' }}>
+              <ChefLoader message="Le chef analyse vos ingrédients..." size={120} />
               <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '6px' }}>{etape}</div>
               <div style={{ background: c.fond, borderRadius: '20px', height: '8px', overflow: 'hidden', border: `0.5px solid ${c.bordure}` }}>
                 <div style={{ background: c.accent, height: '100%', borderRadius: '20px', width: `${progression}%`, transition: 'width 0.3s ease' }} />

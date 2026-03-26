@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../../../lib/supabase'
 import { theme, Logo, LogoBand } from '../../../../lib/theme.jsx'
+import ChefLoader from '../../../../components/ChefLoader'
 
 export default function SuperadminUserAccessPage() {
   const params = useParams()
@@ -130,7 +131,7 @@ export default function SuperadminUserAccessPage() {
   if (!authorized || loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
-        <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
+        <ChefLoader />
       </div>
     )
   }

@@ -5,6 +5,7 @@ import { supabase, getClientId } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '../../../lib/useTheme'
 import NavbarCuisine from '../../../components/NavbarCuisine'
+import ChefLoader from '../../../components/ChefLoader'
 
 export const dynamic = 'force-dynamic'
 export default function ArdoisePage() {
@@ -112,7 +113,7 @@ export default function ArdoisePage() {
 
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ fontSize: '14px', color: '#71717A' }}>Chargement...</div>
+      <ChefLoader />
     </div>
   )
 

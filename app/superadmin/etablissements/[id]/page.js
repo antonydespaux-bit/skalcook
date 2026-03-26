@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../../../lib/supabase'
 import { isSuperadminEmail } from '../../../../lib/superadmin'
 import { theme, Logo } from '../../../../lib/theme.jsx'
+import ChefLoader from '../../../../components/ChefLoader'
 
 const inputStyle = {
   width: '100%',
@@ -34,6 +35,7 @@ export default function SuperadminEtablissementDetailPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [showSlowSavingLoader, setShowSlowSavingLoader] = useState(false)
   const [uploadingKbis, setUploadingKbis] = useState(false)
   const [uploadingRib, setUploadingRib] = useState(false)
   const [error, setError] = useState('')
@@ -160,8 +162,10 @@ export default function SuperadminEtablissementDetailPage() {
 
   const save = async () => {
     setSaving(true)
+    setShowSlowSavingLoader(false)
     setError('')
     setSuccess('')
+    const timer = setTimeout(() => setShowSlowSavingLoader(true), 500)
     try {
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData?.session?.access_token
@@ -193,14 +197,16 @@ export default function SuperadminEtablissementDetailPage() {
       }
       setSuccess('Informations légales mises à jour.')
     } finally {
+      clearTimeout(timer)
       setSaving(false)
+      setShowSlowSavingLoader(false)
     }
   }
 
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
+        <ChefLoader />
       </div>
     )
   }
@@ -400,6 +406,11 @@ export default function SuperadminEtablissementDetailPage() {
               {saving ? 'Enregistrement...' : 'Enregistrer'}
             </button>
           </div>
+          {showSlowSavingLoader && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+              <ChefLoader size={100} message="Sauvegarde en cours…" />
+            </div>
+          )}
         </div>
       </div>
     </div>

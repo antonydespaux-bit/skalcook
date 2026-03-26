@@ -8,6 +8,7 @@ import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
 import { isSuperadminEmail } from '../../lib/superadmin'
 import NavbarCuisine from '../../components/NavbarCuisine'
+import ChefLoader from '../../components/ChefLoader'
 
 export default function AdminPage() {
   const [profils, setProfils] = useState([])
@@ -169,7 +170,7 @@ export default function AdminPage() {
 
   if (roleLoading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
-      <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
+      <ChefLoader />
     </div>
   )
 
@@ -270,7 +271,7 @@ export default function AdminPage() {
           </div>
 
           {loading ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: c.texteMuted }}>Chargement...</div>
+            <ChefLoader size={120} message="Chargement des utilisateurs..." />
           ) : (
             profils.map((profil, i) => {
               const r = roleLabel(profil.role)

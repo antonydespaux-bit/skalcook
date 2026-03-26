@@ -5,6 +5,7 @@ import { isSuperadminEmail } from '../../lib/superadmin'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '../../lib/useTheme'
 import { useIsMobile } from '../../lib/useIsMobile'
+import ChefLoader from '../../components/ChefLoader'
 
 const MODULES_DISPONIBLES = [
   { id: 'fiches', label: 'Fiches techniques', emoji: '📝' },
@@ -374,7 +375,7 @@ export default function SuperAdminPage() {
 
   if (!authorized || loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F4F4F5' }}>
-      <div style={{ fontSize: '14px', color: '#71717A' }}>Vérification des accès...</div>
+      <ChefLoader message="Vérification des accès..." />
     </div>
   )
 

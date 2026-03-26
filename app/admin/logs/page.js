@@ -8,6 +8,7 @@ import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
 import NavbarCuisine from '../../../components/NavbarCuisine'
+import ChefLoader from '../../../components/ChefLoader'
 
 export default function LogsPage() {
   const [logs, setLogs] = useState([])
@@ -88,7 +89,7 @@ export default function LogsPage() {
 
   if (roleLoading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
-      <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
+      <ChefLoader />
     </div>
   )
 
@@ -176,7 +177,7 @@ export default function LogsPage() {
 
         {/* Liste des logs */}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px', color: c.texteMuted }}>Chargement...</div>
+          <ChefLoader size={120} message="Chargement des logs..." />
         ) : logsFiltres.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px', background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}` }}>
             <div style={{ fontSize: '14px', color: c.texteMuted }}>Aucune activité pour le moment</div>
