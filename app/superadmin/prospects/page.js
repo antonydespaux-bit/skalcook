@@ -110,8 +110,20 @@ export default function ProspectsPage() {
     if (!ok) return
     setDeletingId(prospect.id)
     try {
-      const { error } = await supabase.from('prospects').delete().eq('id', prospect.id)
-      if (error) return
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) return
+
+      const res = await fetch('/api/superadmin/delete-prospect', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ id: prospect.id })
+      })
+
+      if (!res.ok) return
       setProspects((prev) => prev.filter((p) => p.id !== prospect.id))
       if (selected?.id === prospect.id) {
         setSelected(null)
