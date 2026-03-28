@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server'
 
 /**
- * Rate limiter en mémoire — sliding window par IP.
- * Note : se réinitialise à chaque redémarrage du serveur (sans Redis).
- * Pour la production, remplacer par @upstash/ratelimit + Redis.
+ * Middleware unifié : détection du tenant + security headers + rate limiting.
+ *
+ * Fusionné depuis proxy.js (détection tenant) et l'ancien middleware.js
+ * (security headers + rate limiting).
  */
+
+// ── Rate limiter en mémoire — sliding window par IP ─────────────────────────
+// Note : se réinitialise à chaque redémarrage du serveur.
+// Pour la production, remplacer par @upstash/ratelimit + Redis.
 const RATE_LIMIT_WINDOW_MS = 60_000  // 1 minute
 const RATE_LIMIT_MAX = 60            // requêtes max par fenêtre
 
@@ -41,11 +46,81 @@ if (typeof setInterval !== 'undefined') {
   }, RATE_LIMIT_WINDOW_MS)
 }
 
+// ── Détection du tenant depuis le sous-domaine ───────────────────────────────
+function detectTenantSlug(req) {
+  const { hostname, searchParams } = req.nextUrl
+  const parts = hostname.split('.')
+
+  let tenantSlug = null
+
+  if (hostname.includes('localhost')) {
+    // Dev : sous-domaine local ex: lafantaisie.localhost
+    if (parts.length >= 2 && parts[0] !== 'localhost') {
+      tenantSlug = parts[0]
+    }
+  } else if (hostname.includes('vercel.app')) {
+    // Vercel preview : pas de sous-domaine client → cookie tenant_slug en fallback
+    tenantSlug = req.cookies.get('tenant_slug')?.value || null
+  } else {
+    // Production : lafantaisie.skalcook.com
+    if (parts.length >= 3) {
+      tenantSlug = parts[0]
+    }
+  }
+
+  // Fallback : paramètre URL ?tenant=lafantaisie
+  if (!tenantSlug) {
+    tenantSlug = searchParams.get('tenant') || null
+  }
+
+  return tenantSlug
+}
+
 export function middleware(req) {
   const { pathname } = req.nextUrl
+  let rateLimitHeaders = {}
+
+  // ── 1. Rate limiting (routes API uniquement) ─────────────────────────────
+  if (pathname.startsWith('/api/')) {
+    const ip =
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      req.headers.get('x-real-ip') ||
+      '127.0.0.1'
+
+    const { allowed, remaining, retryAfter } = checkRateLimit(ip)
+    rateLimitHeaders = { remaining }
+
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'Trop de requêtes. Veuillez patienter.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(retryAfter),
+            'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
+            'X-RateLimit-Remaining': '0',
+          },
+        }
+      )
+    }
+  }
+
+  // ── 2. Détection du tenant ───────────────────────────────────────────────
+  const tenantSlug = detectTenantSlug(req)
   const res = NextResponse.next()
 
-  // ── Security headers (toutes les routes) ────────────────────────────────────
+  if (tenantSlug) {
+    // Cookie persistant 7 jours (lecture côté client autorisée)
+    res.cookies.set('tenant_slug', tenantSlug, {
+      httpOnly: false,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
+    })
+    // Header pour les Server Components
+    res.headers.set('x-tenant-slug', tenantSlug)
+  }
+
+  // ── 3. Security headers ──────────────────────────────────────────────────
   res.headers.set('X-Frame-Options', 'DENY')
   res.headers.set('X-Content-Type-Options', 'nosniff')
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
@@ -66,31 +141,9 @@ export function middleware(req) {
     ].join('; ')
   )
 
-  // ── Rate limiting (routes API uniquement) ────────────────────────────────────
-  if (pathname.startsWith('/api/')) {
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      '127.0.0.1'
-
-    const { allowed, remaining, retryAfter } = checkRateLimit(ip)
-
-    if (!allowed) {
-      return NextResponse.json(
-        { error: 'Trop de requêtes. Veuillez patienter.' },
-        {
-          status: 429,
-          headers: {
-            'Retry-After': String(retryAfter),
-            'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
-            'X-RateLimit-Remaining': '0',
-          },
-        }
-      )
-    }
-
+  if (pathname.startsWith('/api/') && rateLimitHeaders.remaining !== undefined) {
     res.headers.set('X-RateLimit-Limit', String(RATE_LIMIT_MAX))
-    res.headers.set('X-RateLimit-Remaining', String(remaining))
+    res.headers.set('X-RateLimit-Remaining', String(rateLimitHeaders.remaining))
   }
 
   return res
