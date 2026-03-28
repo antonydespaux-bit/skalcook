@@ -17,6 +17,7 @@ const MODULES_DISPONIBLES = [
   { id: 'recap', label: 'Récap food cost', emoji: '📊' },
   { id: 'ingredients', label: 'Ingrédients', emoji: '🥦' },
   { id: 'ardoise', label: 'Ardoise', emoji: '🖊️' },
+  { id: 'cartes', label: 'Cartes', emoji: '🍽️' },
 ]
 
 const COULEURS_PRESETS = [
