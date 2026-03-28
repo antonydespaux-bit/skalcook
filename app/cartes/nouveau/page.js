@@ -16,7 +16,7 @@ export default function NouvelleCarte() {
   const [saison, setSaison] = useState('Printemps 2026')
   const [prixBase, setPrixBase] = useState('')
   const [description, setDescription] = useState('')
-  const [sections, setSections] = useState([{ _id: genId(), titre: '', items: [{ _id: genId(), ficheId: '', description: '', supplement: '' }] }])
+  const [sections, setSections] = useState([{ _id: genId(), titre: '', items: [{ _id: genId(), ficheId: '', description: '', supplement: '', relation: 'et' }] }])
   const [fiches, setFiches] = useState([])
   const [params, setParams] = useState({})
   const [loading, setLoading] = useState(false)
@@ -57,7 +57,7 @@ export default function NouvelleCarte() {
   // ── Sections / Items helpers ──
 
   const addSection = () => {
-    setSections([...sections, { _id: genId(), titre: '', items: [{ _id: genId(), ficheId: '', description: '', supplement: '' }] }])
+    setSections([...sections, { _id: genId(), titre: '', items: [{ _id: genId(), ficheId: '', description: '', supplement: '', relation: 'et' }] }])
   }
 
   const removeSection = (sIdx) => {
@@ -73,7 +73,7 @@ export default function NouvelleCarte() {
 
   const addItem = (sIdx) => {
     const copy = [...sections]
-    copy[sIdx].items = [...copy[sIdx].items, { _id: genId(), ficheId: '', description: '', supplement: '' }]
+    copy[sIdx].items = [...copy[sIdx].items, { _id: genId(), ficheId: '', description: '', supplement: '', relation: 'et' }]
     setSections(copy)
   }
 
@@ -98,13 +98,14 @@ export default function NouvelleCarte() {
   const getFiche = (ficheId) => fiches.find(f => f.id === ficheId)
 
   const coutBase = allItems
-    .filter(i => !i.supplement || Number(i.supplement) === 0)
+    .filter(i => i.relation !== 'ou')
     .reduce((s, i) => s + (getFiche(i.ficheId)?.cout_portion || 0), 0)
 
   const coutTotal = allItems
     .reduce((s, i) => s + (getFiche(i.ficheId)?.cout_portion || 0), 0)
 
   const totalSupplements = allItems
+    .filter(i => i.relation === 'ou')
     .reduce((s, i) => s + (Number(i.supplement) || 0), 0)
 
   const prix = parseFloat(prixBase) || 0
@@ -175,6 +176,7 @@ export default function NouvelleCarte() {
           nom: getFiche(i.ficheId)?.nom || '',
           description: i.description || null,
           supplement: i.supplement ? parseFloat(i.supplement) : 0,
+          relation: i.relation || 'et',
           ordre: iIdx
         }))
 
@@ -299,47 +301,68 @@ export default function NouvelleCarte() {
 
             {section.items.map((item, iIdx) => {
               const fiche = getFiche(item.ficheId)
+              const isOu = item.relation === 'ou'
               const hasSup = Number(item.supplement) > 0
               return (
-                <div key={item._id} style={{
-                  background: hasSup ? '#FFF7ED' : c.fond, borderRadius: '8px', padding: '12px',
-                  marginBottom: '8px', border: `0.5px solid ${hasSup ? '#FDBA7440' : c.bordure}`
-                }}>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
-                    <select value={item.ficheId} onChange={e => updateItem(sIdx, iIdx, 'ficheId', e.target.value)} style={{
-                      flex: 1, padding: '8px 10px', borderRadius: '8px',
-                      border: `0.5px solid ${c.bordure}`, fontSize: '13px',
-                      background: 'white', outline: 'none', color: c.texte
-                    }}>
-                      <option value="">-- Choisir une fiche --</option>
-                      {fiches.map(f => (
-                        <option key={f.id} value={f.id}>{f.nom} {f.categorie ? `(${f.categorie})` : ''}</option>
-                      ))}
-                    </select>
-                    <div style={{ width: '100px' }}>
-                      <input type="number" value={item.supplement} onChange={e => updateItem(sIdx, iIdx, 'supplement', e.target.value)}
-                        placeholder="Suppl. €" step="0.01" min="0"
-                        style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${hasSup ? '#FDBA74' : c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, boxSizing: 'border-box' }}
-                      />
-                    </div>
-                    {section.items.length > 1 && (
-                      <button onClick={() => removeItem(sIdx, iIdx)} style={{
-                        background: 'transparent', border: 'none', color: '#A32D2D',
-                        fontSize: '16px', cursor: 'pointer', padding: '2px 6px'
-                      }}>&times;</button>
-                    )}
-                  </div>
-                  <textarea value={item.description} onChange={e => updateItem(sIdx, iIdx, 'description', e.target.value)}
-                    placeholder="Description gastronomique (optionnel)"
-                    rows={1}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', fontStyle: 'italic', color: c.texteMuted, boxSizing: 'border-box' }}
-                  />
-                  {fiche && (
-                    <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px', display: 'flex', gap: '12px' }}>
-                      <span>Co&ucirc;t portion : <strong>{(fiche.cout_portion || 0).toFixed(2)} &euro;</strong></span>
-                      {hasSup && <span style={{ color: '#D97706' }}>Suppl. : +{Number(item.supplement).toFixed(0)} &euro;</span>}
+                <div key={item._id}>
+                  {/* Sélecteur et/ou (sauf premier item) */}
+                  {iIdx > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0' }}>
+                      <div style={{ display: 'flex', borderRadius: '6px', overflow: 'hidden', border: `1px solid ${c.bordure}` }}>
+                        <button onClick={() => updateItem(sIdx, iIdx, 'relation', 'et')} style={{
+                          padding: '3px 12px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', border: 'none',
+                          background: !isOu ? c.accent : 'white', color: !isOu ? 'white' : c.texteMuted
+                        }}>ET</button>
+                        <button onClick={() => updateItem(sIdx, iIdx, 'relation', 'ou')} style={{
+                          padding: '3px 12px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', border: 'none',
+                          background: isOu ? '#D97706' : 'white', color: isOu ? 'white' : c.texteMuted
+                        }}>OU</button>
+                      </div>
                     </div>
                   )}
+                  <div style={{
+                    background: isOu ? '#FFF7ED' : c.fond, borderRadius: '8px', padding: '12px',
+                    marginBottom: '4px', border: `0.5px solid ${isOu ? '#FDBA7440' : c.bordure}`
+                  }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                      <select value={item.ficheId} onChange={e => updateItem(sIdx, iIdx, 'ficheId', e.target.value)} style={{
+                        flex: 1, padding: '8px 10px', borderRadius: '8px',
+                        border: `0.5px solid ${c.bordure}`, fontSize: '13px',
+                        background: 'white', outline: 'none', color: c.texte
+                      }}>
+                        <option value="">-- Choisir une fiche --</option>
+                        {fiches.map(f => (
+                          <option key={f.id} value={f.id}>{f.nom} {f.categorie ? `(${f.categorie})` : ''}</option>
+                        ))}
+                      </select>
+                      {isOu && (
+                        <div style={{ width: '100px' }}>
+                          <input type="number" value={item.supplement} onChange={e => updateItem(sIdx, iIdx, 'supplement', e.target.value)}
+                            placeholder="Suppl. €" step="0.01" min="0"
+                            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${hasSup ? '#FDBA74' : c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, boxSizing: 'border-box' }}
+                          />
+                        </div>
+                      )}
+                      {section.items.length > 1 && (
+                        <button onClick={() => removeItem(sIdx, iIdx)} style={{
+                          background: 'transparent', border: 'none', color: '#A32D2D',
+                          fontSize: '16px', cursor: 'pointer', padding: '2px 6px'
+                        }}>×</button>
+                      )}
+                    </div>
+                    <textarea value={item.description} onChange={e => updateItem(sIdx, iIdx, 'description', e.target.value)}
+                      placeholder="Description gastronomique (optionnel)"
+                      rows={1}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', fontStyle: 'italic', color: c.texteMuted, boxSizing: 'border-box' }}
+                    />
+                    {fiche && (
+                      <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px', display: 'flex', gap: '12px' }}>
+                        <span>{isOu ? 'Alternative' : 'Inclus'} — coût : <strong>{(fiche.cout_portion || 0).toFixed(2)} €</strong></span>
+                        {isOu && hasSup && <span style={{ color: '#D97706' }}>Suppl. : +{Number(item.supplement).toFixed(0)} €</span>}
+                        {isOu && !hasSup && <span style={{ color: '#D97706' }}>Choix libre (sans supplément)</span>}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )
             })}

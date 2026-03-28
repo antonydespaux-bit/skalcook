@@ -28,7 +28,7 @@ export default function CartesPage() {
     if (!clientId) { setLoading(false); router.push('/'); return }
     const { data } = await supabase
       .from('cartes')
-      .select(`*, carte_sections(id, titre, ordre, carte_items(id, nom, supplement, fiche_id, fiches(id, nom, cout_portion)))`)
+      .select(`*, carte_sections(id, titre, ordre, carte_items(id, nom, supplement, relation, ordre, fiche_id, fiches(id, nom, cout_portion)))`)
       .eq('client_id', clientId)
       .eq('archive', false)
       .order('created_at', { ascending: false })
@@ -39,22 +39,21 @@ export default function CartesPage() {
   const getAllItems = (carte) =>
     (carte.carte_sections || []).flatMap(s => s.carte_items || [])
 
-  const coutBase = (carte) => {
-    const items = getAllItems(carte)
-    return items
-      .filter(i => !i.supplement || Number(i.supplement) === 0)
+  // FC base = seulement les items "et" (inclus)
+  const coutBase = (carte) =>
+    getAllItems(carte)
+      .filter(i => i.relation !== 'ou')
       .reduce((s, i) => s + (i.fiches?.cout_portion || 0), 0)
-  }
 
-  const coutTotal = (carte) => {
-    const items = getAllItems(carte)
-    return items.reduce((s, i) => s + (i.fiches?.cout_portion || 0), 0)
-  }
+  // FC total = tous les items (et + ou)
+  const coutTotal = (carte) =>
+    getAllItems(carte)
+      .reduce((s, i) => s + (i.fiches?.cout_portion || 0), 0)
 
-  const totalSupplements = (carte) => {
-    const items = getAllItems(carte)
-    return items.reduce((s, i) => s + (Number(i.supplement) || 0), 0)
-  }
+  const totalSupplements = (carte) =>
+    getAllItems(carte)
+      .filter(i => i.relation === 'ou')
+      .reduce((s, i) => s + (Number(i.supplement) || 0), 0)
 
   const fcBase = (carte) => {
     const cb = coutBase(carte)
@@ -115,28 +114,28 @@ export default function CartesPage() {
               background: c.accent, color: 'white', border: 'none',
               borderRadius: '8px', padding: '10px 20px', fontSize: '13px',
               cursor: 'pointer', fontWeight: '600'
-            }}>Cr&eacute;er la premi&egrave;re carte</button>
+            }}>Créer la première carte</button>
           </div>
         ) : (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(320px, 1fr))',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(340px, 1fr))',
             gap: isMobile ? '10px' : '16px'
           }}>
             {cartes.map(carte => {
               const fc1 = fcBase(carte)
               const fc2 = fcAvecSupp(carte)
               const ts = totalSupplements(carte)
-              const nbSections = (carte.carte_sections || []).length
-              const nbItems = getAllItems(carte).length
               const c1 = fcColor(fc1)
               const c2 = fcColor(fc2)
+              const hasOu = getAllItems(carte).some(i => i.relation === 'ou')
 
               return (
                 <div key={carte.id} style={{
                   background: 'white', borderRadius: '12px', padding: '18px',
                   border: `0.5px solid ${c.bordure}`
                 }}>
+                  {/* Header */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                     <div>
                       <div style={{ fontSize: isMobile ? '15px' : '16px', fontWeight: '500', color: c.texte }}>{carte.nom}</div>
@@ -154,28 +153,51 @@ export default function CartesPage() {
                         borderRadius: '8px', padding: '6px 12px', textAlign: 'center', flexShrink: 0
                       }}>
                         <div style={{ fontSize: '10px', opacity: 0.7 }}>Prix base</div>
-                        <div style={{ fontSize: '15px', fontWeight: '500' }}>{Number(carte.prix_base).toFixed(0)} &euro;</div>
+                        <div style={{ fontSize: '15px', fontWeight: '500' }}>{Number(carte.prix_base).toFixed(0)} €</div>
                       </div>
                     )}
                   </div>
 
+                  {/* Sections with items detail */}
                   <div style={{ borderTop: `0.5px solid ${c.bordure}`, paddingTop: '10px', marginBottom: '12px' }}>
-                    <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '4px' }}>
-                      {nbSections} section{nbSections > 1 ? 's' : ''} &middot; {nbItems} plat{nbItems > 1 ? 's' : ''}
-                      {ts > 0 && <span style={{ color: c.accent }}> &middot; {ts.toFixed(0)} &euro; de suppl.</span>}
-                    </div>
                     {(carte.carte_sections || [])
                       .sort((a, b) => a.ordre - b.ordre)
-                      .slice(0, 4)
-                      .map(s => (
-                        <div key={s.id} style={{ fontSize: '12px', color: c.texte, marginBottom: '2px' }}>
-                          <span style={{ fontWeight: '500' }}>{s.titre}</span>
-                          <span style={{ color: c.texteMuted }}> &mdash; {(s.carte_items || []).length} plat{(s.carte_items || []).length > 1 ? 's' : ''}</span>
-                        </div>
-                      ))}
-                    {nbSections > 4 && <div style={{ fontSize: '11px', color: c.texteMuted, fontStyle: 'italic' }}>+{nbSections - 4} autres sections...</div>}
+                      .map(section => {
+                        const items = (section.carte_items || []).sort((a, b) => a.ordre - b.ordre)
+                        return (
+                          <div key={section.id} style={{ marginBottom: '10px' }}>
+                            <div style={{ fontSize: '11px', color: c.accent, textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600', marginBottom: '4px' }}>
+                              {section.titre}
+                            </div>
+                            {items.map((item, idx) => {
+                              const isOu = item.relation === 'ou'
+                              const hasSup = Number(item.supplement) > 0
+                              return (
+                                <div key={item.id}>
+                                  {isOu && (
+                                    <div style={{ fontSize: '10px', color: '#D97706', fontStyle: 'italic', paddingLeft: '8px', marginBottom: '1px' }}>ou</div>
+                                  )}
+                                  <div style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    padding: '3px 0', borderBottom: idx < items.length - 1 && items[idx + 1]?.relation !== 'ou' ? `0.5px solid ${c.bordure}20` : 'none'
+                                  }}>
+                                    <div style={{ fontSize: '13px', color: isOu ? c.texteMuted : c.texte, fontWeight: isOu ? '400' : '500' }}>
+                                      {item.nom}
+                                      {hasSup && <span style={{ color: '#D97706', fontSize: '11px', marginLeft: '6px' }}>(Suppl. {Number(item.supplement).toFixed(0)} €)</span>}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: c.texteMuted, flexShrink: 0 }}>
+                                      {(item.fiches?.cout_portion || 0).toFixed(2)} €
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })}
                   </div>
 
+                  {/* Food cost */}
                   <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
                     {fc1 && (
                       <div style={{ flex: 1, borderRadius: '8px', padding: '8px', textAlign: 'center', background: c1.bg }}>
@@ -183,7 +205,7 @@ export default function CartesPage() {
                         <div style={{ fontSize: '14px', fontWeight: '500', color: c1.color }}>{fc1} %</div>
                       </div>
                     )}
-                    {fc2 && ts > 0 && (
+                    {fc2 && hasOu && (
                       <div style={{ flex: 1, borderRadius: '8px', padding: '8px', textAlign: 'center', background: c2.bg }}>
                         <div style={{ fontSize: '10px', textTransform: 'uppercase', color: c2.color }}>FC + suppl.</div>
                         <div style={{ fontSize: '14px', fontWeight: '500', color: c2.color }}>{fc2} %</div>
@@ -191,6 +213,7 @@ export default function CartesPage() {
                     )}
                   </div>
 
+                  {/* Actions */}
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <button onClick={() => router.push(`/cartes/${carte.id}`)} style={{
                       flex: 1, padding: '8px', background: c.accentClair, color: c.principal,
@@ -200,7 +223,7 @@ export default function CartesPage() {
                     <button onClick={() => handleDelete(carte.id)} style={{
                       padding: '8px 12px', background: 'transparent', color: '#A32D2D',
                       border: `0.5px solid ${c.bordure}`, borderRadius: '8px', fontSize: '12px', cursor: 'pointer'
-                    }}>&times;</button>
+                    }}>×</button>
                   </div>
                 </div>
               )
