@@ -7,6 +7,9 @@ import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
 import { log } from '../../lib/useLog'
 import NavbarCuisine from '../../components/NavbarCuisine'
+import Pagination from '../../components/Pagination'
+
+const PAGE_SIZE = 30
 
 const UNITES = ['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce']
 
@@ -21,6 +24,7 @@ export default function IngredientsPage() {
   const [selection, setSelection] = useState([])
   const [supprimant, setSupprimant] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [page, setPage] = useState(1)
 
   // Formulaire ajout ingrédient
   const [ajoutVisible, setAjoutVisible] = useState(false)
@@ -117,6 +121,15 @@ export default function IngredientsPage() {
       (filterUsage === 'uncategorized' ? isUncategorized : false)
     return matchRecherche && matchCat && matchUsage
   }), [ingredients, recherche, filtreCategorie, filterUsage])
+
+  // Remettre à la page 1 quand les filtres changent
+  useEffect(() => { setPage(1) }, [recherche, filtreCategorie, filterUsage])
+
+  const totalPages = Math.max(1, Math.ceil(ingredientsFiltres.length / PAGE_SIZE))
+  const ingredientsPagines = useMemo(
+    () => ingredientsFiltres.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [ingredientsFiltres, page]
+  )
 
   // ── Stats inflation par catégorie ─────────────────────────────────────────
   const statsParCategorie = useMemo(() => {
@@ -396,7 +409,7 @@ export default function IngredientsPage() {
                   <input type="checkbox" checked={selection.length === ingredientsFiltres.length && ingredientsFiltres.length > 0} onChange={toggleTout} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: c.accent }} />
                   <span style={{ fontSize: '13px', color: c.texteMuted }}>{selection.length === ingredientsFiltres.length ? 'Tout désélectionner' : 'Tout sélectionner'}</span>
                 </div>
-                {ingredientsFiltres.map(ing => (
+                {ingredientsPagines.map(ing => (
                   <div key={ing.id} style={{ background: selection.includes(ing.id) ? c.accentClair : c.blanc, borderRadius: '8px', padding: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <input type="checkbox" checked={selection.includes(ing.id)} onChange={() => toggleSelection(ing.id)} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: c.accent, flexShrink: 0 }} />
                     <div style={{ flex: 1 }}>
@@ -439,8 +452,8 @@ export default function IngredientsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {ingredientsFiltres.map((ing, i) => (
-                      <tr key={ing.id} style={{ borderBottom: i < ingredientsFiltres.length - 1 ? `0.5px solid ${c.bordure}` : 'none', background: selection.includes(ing.id) ? c.accentClair : c.blanc }}>
+                    {ingredientsPagines.map((ing, i) => (
+                      <tr key={ing.id} style={{ borderBottom: i < ingredientsPagines.length - 1 ? `0.5px solid ${c.bordure}` : 'none', background: selection.includes(ing.id) ? c.accentClair : c.blanc }}>
                         <td style={{ padding: '10px 16px' }}>
                           <input type="checkbox" checked={selection.includes(ing.id)} onChange={() => toggleSelection(ing.id)} style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: c.accent }} />
                         </td>
@@ -500,6 +513,7 @@ export default function IngredientsPage() {
                 </table>
               </div>
             )}
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
           </>
         )}
 

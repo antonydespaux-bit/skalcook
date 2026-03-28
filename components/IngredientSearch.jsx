@@ -26,6 +26,13 @@ export default function IngredientSearch({ ingredients, value, onChange, placeho
       ).slice(0, 20)
     : []
 
+  // Liste ordonnée dans le même ordre que le rendu (ingrédients normaux, puis sous-fiches).
+  // Utilisée pour la navigation clavier afin que l'index corresponde à ce qui est affiché.
+  const itemsAffiches = [
+    ...ingredientsFiltres.filter(i => !i.est_sous_fiche),
+    ...ingredientsFiltres.filter(i => i.est_sous_fiche),
+  ]
+
   const handleInput = (e) => {
     setRecherche(e.target.value)
     setOuvert(true)
@@ -44,13 +51,13 @@ export default function IngredientSearch({ ingredients, value, onChange, placeho
     if (!ouvert) return
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setSurbrillance(prev => Math.min(prev + 1, ingredientsFiltres.length - 1))
+      setSurbrillance(prev => Math.min(prev + 1, itemsAffiches.length - 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setSurbrillance(prev => Math.max(prev - 1, 0))
     } else if (e.key === 'Enter' && surbrillance >= 0) {
       e.preventDefault()
-      handleSelect(ingredientsFiltres[surbrillance])
+      handleSelect(itemsAffiches[surbrillance])
     } else if (e.key === 'Escape') {
       setOuvert(false)
     }
@@ -61,6 +68,9 @@ export default function IngredientSearch({ ingredients, value, onChange, placeho
   }
 
   const estSousFiche = ingSelectione?.est_sous_fiche
+
+  const normaux = ingredientsFiltres.filter(i => !i.est_sous_fiche)
+  const sousFichesItems = ingredientsFiltres.filter(i => i.est_sous_fiche)
 
   return (
     <div style={{ position: 'relative', width: '100%' }}>
@@ -82,7 +92,7 @@ export default function IngredientSearch({ ingredients, value, onChange, placeho
         }}
       />
 
-      {ouvert && ingredientsFiltres.length > 0 && (
+      {ouvert && itemsAffiches.length > 0 && (
         <div
           ref={listeRef}
           style={{
@@ -94,49 +104,57 @@ export default function IngredientSearch({ ingredients, value, onChange, placeho
             marginTop: '4px'
           }}
         >
-          {ingredientsFiltres.filter(i => !i.est_sous_fiche).map((ing, i) => (
-            <div
-              key={ing.id}
-              onMouseDown={() => handleSelect(ing)}
-              style={{
-                padding: '10px 14px', cursor: 'pointer', fontSize: '13px',
-                color: c.texte,
-                background: surbrillance === i ? c.accentClair : 'white',
-                borderBottom: `0.5px solid ${c.bordure}`
-              }}
-              onMouseEnter={() => setSurbrillance(i)}
-            >
-              <div style={{ fontWeight: '500' }}>{ing.nom}</div>
-              {ing.prix_kg && (
-                <div style={{ fontSize: '11px', color: c.texteMuted }}>
-                  {Number(ing.prix_kg).toFixed(2)} € / {ing.unite || 'kg'}
-                </div>
-              )}
-            </div>
-          ))}
-          {ingredientsFiltres.filter(i => i.est_sous_fiche).length > 0 && (
+          {normaux.map((ing) => {
+            const idx = itemsAffiches.indexOf(ing)
+            return (
+              <div
+                key={ing.id}
+                onMouseDown={() => handleSelect(ing)}
+                onMouseEnter={() => setSurbrillance(idx)}
+                style={{
+                  padding: '10px 14px', cursor: 'pointer', fontSize: '13px',
+                  color: c.texte,
+                  background: surbrillance === idx ? c.accentClair : 'white',
+                  borderBottom: `0.5px solid ${c.bordure}`
+                }}
+              >
+                <div style={{ fontWeight: '500' }}>{ing.nom}</div>
+                {ing.prix_kg && (
+                  <div style={{ fontSize: '11px', color: c.texteMuted }}>
+                    {Number(ing.prix_kg).toFixed(2)} € / {ing.unite || 'kg'}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          {sousFichesItems.length > 0 && (
             <>
               <div style={{ padding: '6px 14px', fontSize: '11px', color: c.texteMuted, background: c.fond, fontWeight: '500', textTransform: 'uppercase' }}>
                 Sous-fiches
               </div>
-              {ingredientsFiltres.filter(i => i.est_sous_fiche).map((ing) => (
-                <div
-                  key={ing.id}
-                  onMouseDown={() => handleSelect(ing)}
-                  style={{
-                    padding: '10px 14px', cursor: 'pointer', fontSize: '13px',
-                    color: '#3C3489', background: 'white',
-                    borderBottom: `0.5px solid ${c.bordure}`
-                  }}
-                >
-                  <div style={{ fontWeight: '500' }}>[SF] {ing.nom}</div>
-                  {ing.prix_kg && (
-                    <div style={{ fontSize: '11px', color: '#7F77DD' }}>
-                      {Number(ing.prix_kg).toFixed(4)} € / {ing.unite || 'kg'}
-                    </div>
-                  )}
-                </div>
-              ))}
+              {sousFichesItems.map((ing) => {
+                const idx = itemsAffiches.indexOf(ing)
+                return (
+                  <div
+                    key={ing.id}
+                    onMouseDown={() => handleSelect(ing)}
+                    onMouseEnter={() => setSurbrillance(idx)}
+                    style={{
+                      padding: '10px 14px', cursor: 'pointer', fontSize: '13px',
+                      color: '#3C3489',
+                      background: surbrillance === idx ? '#EEEDFE' : 'white',
+                      borderBottom: `0.5px solid ${c.bordure}`
+                    }}
+                  >
+                    <div style={{ fontWeight: '500' }}>[SF] {ing.nom}</div>
+                    {ing.prix_kg && (
+                      <div style={{ fontSize: '11px', color: '#7F77DD' }}>
+                        {Number(ing.prix_kg).toFixed(4)} € / {ing.unite || 'kg'}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </>
           )}
         </div>

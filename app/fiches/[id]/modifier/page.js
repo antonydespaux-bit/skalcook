@@ -70,19 +70,29 @@ export default function ModifierFiche() {
       { data: ficheData },
       { data: lieuxData },
       { data: catsData },
-      { data: liste }
+      { data: liste },
+      { data: sousFiches }
     ] = await Promise.all([
       supabase.from('fiches').select('*').eq('id', params_route.id).eq('client_id', clientId).single(),
       supabase.from('lieux').select('*').eq('client_id', clientId).eq('section', 'cuisine').order('ordre'),
       supabase.from('categories_plats').select('*').eq('client_id', clientId).eq('section', 'cuisine').order('ordre'),
-      supabase.from('ingredients').select('*').eq('client_id', clientId).order('nom').limit(5000)
+      supabase.from('ingredients').select('*').eq('client_id', clientId).order('nom').limit(5000),
+      supabase.from('fiches').select('id, nom, cout_portion').eq('client_id', clientId).eq('is_sub_fiche', true).eq('archive', false).order('nom')
     ])
 
     if (!ficheData) { router.push('/fiches'); return }
 
     setLieux(lieuxData || [])
     setCategoriesDyn(catsData || [])
-    setListeIngredients(liste || [])
+
+    const sousFichesFormatees = (sousFiches || []).map(sf => ({
+      id: sf.id,
+      nom: sf.nom,
+      prix_kg: sf.cout_portion,
+      unite: 'portion',
+      est_sous_fiche: true
+    }))
+    setListeIngredients([...(liste || []), ...sousFichesFormatees])
 
     setNom(ficheData.nom)
     setCategoriePlat(ficheData.categorie_plat_id || '')
@@ -142,7 +152,11 @@ export default function ModifierFiche() {
 
   const supprimerPhoto = async () => {
     if (photoExistante) {
-      const path = photoExistante.split('/').pop()
+      // Extraire le chemin complet "clientId/ficheId.ext" depuis l'URL publique Supabase Storage
+      const bucketBase = '/storage/v1/object/public/fiches-photos/'
+      const path = photoExistante.includes(bucketBase)
+        ? photoExistante.split(bucketBase)[1]
+        : photoExistante.split('/').slice(-2).join('/')
       await supabase.storage.from('fiches-photos').remove([path])
       const clientId = await getClientId()
       if (clientId) await supabase.from('fiches').update({ photo_url: null }).eq('id', params_route.id).eq('client_id', clientId)

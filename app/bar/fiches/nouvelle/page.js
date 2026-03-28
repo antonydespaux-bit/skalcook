@@ -47,8 +47,9 @@ export default function NouvelleBarFiche() {
   const optionsRecherche = [
     ...listeIngredients.map(i => ({ ...i, type: 'ing' })),
     ...listeSousFiches.map(sf => ({
-      id: sf.id, nom: `(SF) ${sf.nom}`,
-      prix_kg: sf.cout_portion, unite: sf.unite_production || 'cl', type: 'sf'
+      id: sf.id, nom: sf.nom,
+      prix_kg: sf.cout_portion, unite: sf.unite_production || 'cl', type: 'sf',
+      est_sous_fiche: true
     }))
   ]
 

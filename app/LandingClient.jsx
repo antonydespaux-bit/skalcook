@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo } from 'react'
+import DOMPurify from 'isomorphic-dompurify'
 import { supabase } from '../lib/supabase'
 import { isSuperadminEmail } from '../lib/superadmin'
 import { useRouter } from 'next/navigation'
@@ -658,6 +659,6 @@ export default function LandingClient({ markup }) {
     }
   }, [])
 
-  return <div dangerouslySetInnerHTML={{ __html: html }} />
+  return <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />
 }
 

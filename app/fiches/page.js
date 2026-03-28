@@ -8,6 +8,9 @@ import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
 import { log } from '../../lib/useLog'
 import NavbarCuisine from '../../components/NavbarCuisine'
+import Pagination from '../../components/Pagination'
+
+const FICHES_PAGE_SIZE = 24
 
 export default function FichesPage() {
   const [fiches, setFiches] = useState([])
@@ -22,6 +25,7 @@ export default function FichesPage() {
   const [selection, setSelection] = useState([])
   const [saving, setSaving] = useState(false)
   const [showArchives, setShowArchives] = useState(false)
+  const [page, setPage] = useState(1)
   const router = useRouter()
   const isMobile = useIsMobile()
   const { c } = useTheme()
@@ -123,6 +127,11 @@ export default function FichesPage() {
     const matchSaison = saison === 'toutes' || f.saison === saison
     return matchRecherche && matchLieu && matchCat && matchSaison
   })
+
+  const totalPagesFiches = Math.max(1, Math.ceil(fichesFiltrees.length / FICHES_PAGE_SIZE))
+  const fichesPaginees = fichesFiltrees.slice((page - 1) * FICHES_PAGE_SIZE, page * FICHES_PAGE_SIZE)
+
+  useEffect(() => { setPage(1) }, [recherche, filtreLieu, filtreCat, saison, showArchives])
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
@@ -292,7 +301,7 @@ export default function FichesPage() {
             gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
             gap: isMobile ? '10px' : '14px'
           }}>
-            {fichesFiltrees.map(fiche => {
+            {fichesPaginees.map(fiche => {
               const isSelected = selection.includes(fiche.id)
               const isSousFiche = !!fiche.is_sub_fiche
               const fc = fiche.cout_portion > 0 && fiche.prix_ttc
@@ -384,6 +393,7 @@ export default function FichesPage() {
             })}
           </div>
         )}
+        <Pagination page={page} totalPages={totalPagesFiches} onPageChange={setPage} />
       </div>
     </div>
   )

@@ -169,7 +169,10 @@ export default function ModifierBarFiche() {
 
   const supprimerPhoto = async () => {
     if (photoExistante) {
-      const path = photoExistante.split('/').pop()
+      const bucketBase = '/storage/v1/object/public/fiches-photos/'
+      const path = photoExistante.includes(bucketBase)
+        ? photoExistante.split(bucketBase)[1]
+        : photoExistante.split('/').slice(-2).join('/')
       await supabase.storage.from('fiches-photos').remove([path])
       const clientId = await getClientId()
       if (clientId) await supabase.from('fiches_bar').update({ photo_url: null }).eq('id', params_route.id).eq('client_id', clientId)
