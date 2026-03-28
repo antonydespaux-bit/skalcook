@@ -362,7 +362,7 @@ export default function ModifierFiche() {
               <div>
                 <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{isSousFiche ? 'Quantité produite' : 'Nombre de portions'}</label>
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <input type="number" value={nbPortions} onChange={e => setNbPortions(e.target.value)}
+                  <input type="text" inputMode="decimal" value={nbPortions} onChange={e => setNbPortions(e.target.value.replace(',', '.'))}
                     style={{ flex: 1, padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
                   />
                   {isSousFiche && (
