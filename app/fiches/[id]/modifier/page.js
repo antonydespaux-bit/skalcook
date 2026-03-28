@@ -206,7 +206,7 @@ export default function ModifierFiche() {
 
     const cout = calculerCoutAvecPerte()
     const coutPortion = nbPortions ? (cout / parseFloat(nbPortions)) : null
-    await supabase.from('fiches').update({
+    const { error: updateError } = await supabase.from('fiches').update({
       nom,
       categorie: catSelectionnee?.nom || '',
       categorie_plat_id: categoriePlat || null,
@@ -222,6 +222,7 @@ export default function ModifierFiche() {
       perte: perte ? parseFloat(perte) : 0,
       updated_at: new Date().toISOString()
     }).eq('id', params_route.id).eq('client_id', clientId)
+    if (updateError) { setError('Erreur sauvegarde : ' + updateError.message); setSaving(false); return }
     await supabase.from('fiche_ingredients').delete().eq('fiche_id', params_route.id).eq('client_id', clientId)
 
     const ingredientsAInserer = ingredients
@@ -238,7 +239,7 @@ export default function ModifierFiche() {
       await supabase.from('fiche_ingredients').insert(ingredientsAInserer)
     }
 
-    if (isIngredientPossible(catSelectionnee?.nom || '') && coutPortion) {
+    if (isIngredientPossible(catSelectionnee?.nom || '') && coutPortion !== null) {
       const { data: ingExistant } = await supabase
         .from('ingredients').select('id').eq('fiche_id', params_route.id).eq('client_id', clientId).single()
       if (ingExistant) {
@@ -258,6 +259,7 @@ export default function ModifierFiche() {
       details: `Catégorie: ${catSelectionnee?.nom || ''}, Saison: ${saison}${perte > 0 ? `, Perte: ${perte}%` : ''}`
     })
 
+    setSaving(false)
     clearDraft()
     router.push(`/fiches/${params_route.id}`)
   }
