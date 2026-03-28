@@ -203,9 +203,10 @@ export default function NouvelleFiche() {
       if (!fileToUpload) { setError('Photo invalide (fichier non reconnu).'); setLoading(false); return }
       const ext = photo.name.split('.').pop()
       const path = `${clientId}/${fiche.id}.${ext}`
+      await supabase.storage.from('fiches-photos').remove([path])
       const { error: errPhoto } = await supabase.storage
         .from('fiches-photos').upload(path, fileToUpload, {
-          upsert: true,
+          upsert: false,
           contentType: ({ jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic', heif: 'image/heif' })[ext.toLowerCase()] || 'image/jpeg',
           cacheControl: '3600'
         })
