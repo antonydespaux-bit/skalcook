@@ -39,9 +39,9 @@ export default function CartesPage() {
   const getAllItems = (carte) =>
     (carte.carte_sections || []).flatMap(s => s.carte_items || [])
 
-  // Calcul des coûts par groupes (et + ou)
+  // Calcul unique du coût matière avec logique ou
   const calculerCouts = (carte) => {
-    let coutBase = 0, coutSupp = 0, totalSuppPrix = 0
+    let coutMatiere = 0, totalSuppPrix = 0
     for (const section of (carte.carte_sections || []).sort((a, b) => a.ordre - b.ordre)) {
       const items = (section.carte_items || []).sort((a, b) => a.ordre - b.ordre)
       let groups = [], current = null
@@ -56,37 +56,30 @@ export default function CartesPage() {
       if (current) groups.push(current)
       for (const g of groups) {
         const etCost = g.et.fiches?.cout_portion || 0
-        coutBase += etCost
         if (g.ous.length === 0) {
-          coutSupp += etCost
+          coutMatiere += etCost
         } else {
           const ouAvecSupp = g.ous.find(o => Number(o.supplement) > 0)
           if (ouAvecSupp) {
-            // ou avec supplément : remplace le coût du plat précédent
-            coutSupp += (ouAvecSupp.fiches?.cout_portion || 0)
+            // ou avec supplément : on retient le coût du plat ou
+            coutMatiere += (ouAvecSupp.fiches?.cout_portion || 0)
             totalSuppPrix += Number(ouAvecSupp.supplement)
           } else {
             // ou sans supplément : moyenne des plats liés
             const costs = [etCost, ...g.ous.map(o => o.fiches?.cout_portion || 0)]
-            coutSupp += costs.reduce((a, b) => a + b, 0) / costs.length
+            coutMatiere += costs.reduce((a, b) => a + b, 0) / costs.length
           }
         }
       }
     }
-    return { coutBase, coutSupp, totalSuppPrix }
+    return { coutMatiere, totalSuppPrix }
   }
 
-  const ratioBase = (carte) => {
-    const { coutBase } = calculerCouts(carte)
-    if (!carte.prix_base || !coutBase) return null
-    return (coutBase / (carte.prix_base / 1.10) * 100).toFixed(1)
-  }
-
-  const ratioAvecSupp = (carte) => {
-    const { coutSupp, totalSuppPrix } = calculerCouts(carte)
+  const getRatio = (carte) => {
+    const { coutMatiere, totalSuppPrix } = calculerCouts(carte)
     const prixTotal = (Number(carte.prix_base) || 0) + totalSuppPrix
-    if (!prixTotal || !coutSupp) return null
-    return (coutSupp / (prixTotal / 1.10) * 100).toFixed(1)
+    if (!prixTotal || !coutMatiere) return null
+    return (coutMatiere / (prixTotal / 1.10) * 100).toFixed(1)
   }
 
   const handleDelete = async (id) => {
@@ -143,12 +136,9 @@ export default function CartesPage() {
             gap: isMobile ? '10px' : '16px'
           }}>
             {cartes.map(carte => {
-              const r1 = ratioBase(carte)
-              const r2 = ratioAvecSupp(carte)
-              const { totalSuppPrix } = calculerCouts(carte)
-              const c1 = fcColor(r1)
-              const c2 = fcColor(r2)
-              const hasOu = getAllItems(carte).some(i => i.relation === 'ou')
+              const ratio = getRatio(carte)
+              const { coutMatiere, totalSuppPrix } = calculerCouts(carte)
+              const rc = fcColor(ratio)
 
               return (
                 <div key={carte.id} style={{
@@ -218,20 +208,20 @@ export default function CartesPage() {
                   </div>
 
                   {/* Ratio */}
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                    {r1 && (
-                      <div style={{ flex: 1, borderRadius: '8px', padding: '8px', textAlign: 'center', background: c1.bg }}>
-                        <div style={{ fontSize: '10px', textTransform: 'uppercase', color: c1.color }}>Ratio base</div>
-                        <div style={{ fontSize: '14px', fontWeight: '500', color: c1.color }}>{r1} %</div>
+                  {ratio && (
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                      <div style={{ flex: 1, borderRadius: '8px', padding: '8px', textAlign: 'center', background: rc.bg }}>
+                        <div style={{ fontSize: '10px', textTransform: 'uppercase', color: rc.color }}>Ratio</div>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: rc.color }}>{ratio} %</div>
                       </div>
-                    )}
-                    {r2 && hasOu && (
-                      <div style={{ flex: 1, borderRadius: '8px', padding: '8px', textAlign: 'center', background: c2.bg }}>
-                        <div style={{ fontSize: '10px', textTransform: 'uppercase', color: c2.color }}>Ratio + suppl.</div>
-                        <div style={{ fontSize: '14px', fontWeight: '500', color: c2.color }}>{r2} %</div>
-                      </div>
-                    )}
-                  </div>
+                      {coutMatiere > 0 && (
+                        <div style={{ flex: 1, borderRadius: '8px', padding: '8px', textAlign: 'center', background: c.fond }}>
+                          <div style={{ fontSize: '10px', textTransform: 'uppercase', color: c.texteMuted }}>Coût matière</div>
+                          <div style={{ fontSize: '14px', fontWeight: '500', color: c.texte }}>{coutMatiere.toFixed(2)} €</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Actions */}
                   <div style={{ display: 'flex', gap: '6px' }}>
