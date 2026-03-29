@@ -128,21 +128,50 @@ export default function CarteDetailPage() {
   }
 
   const calculs = (src) => {
-    const items = getAllItems(src)
     const isSrc = src === 'edit'
+    const secs = isSrc ? sections : (carte?.carte_sections || []).sort((a, b) => a.ordre - b.ordre)
 
-    const rel = (i) => isSrc ? (i.relation || 'et') : (i.relation || 'et')
-    const cp = (i) => isSrc ? (getFiche(i.ficheId)?.cout_portion || 0) : (i.fiches?.cout_portion || 0)
+    let coutBase = 0, coutSupp = 0, totalSupp = 0
 
-    const coutBase = items.filter(i => rel(i) !== 'ou').reduce((s, i) => s + cp(i), 0)
-    const coutTotal = items.reduce((s, i) => s + cp(i), 0)
-    const totalSupp = items.filter(i => rel(i) === 'ou').reduce((s, i) => s + (Number(i.supplement) || 0), 0)
+    for (const section of secs) {
+      const items = isSrc ? section.items : (section.carte_items || []).sort((a, b) => a.ordre - b.ordre)
+      let groups = [], current = null
+      for (const item of items) {
+        const r = isSrc ? (item.relation || 'et') : (item.relation || 'et')
+        if (r === 'et') {
+          if (current) groups.push(current)
+          current = { et: item, ous: [] }
+        } else if (current) {
+          current.ous.push(item)
+        }
+      }
+      if (current) groups.push(current)
+
+      for (const g of groups) {
+        const etCost = isSrc ? (getFiche(g.et.ficheId)?.cout_portion || 0) : (g.et.fiches?.cout_portion || 0)
+        coutBase += etCost
+        if (g.ous.length === 0) {
+          coutSupp += etCost
+        } else {
+          const ouAvecSup = g.ous.find(o => Number(o.supplement) > 0)
+          if (ouAvecSup) {
+            // ou avec supplément : remplace le coût du plat précédent
+            coutSupp += isSrc ? (getFiche(ouAvecSup.ficheId)?.cout_portion || 0) : (ouAvecSup.fiches?.cout_portion || 0)
+            totalSupp += Number(ouAvecSup.supplement)
+          } else {
+            // ou sans supplément : moyenne des plats liés
+            const costs = [etCost, ...g.ous.map(o => isSrc ? (getFiche(o.ficheId)?.cout_portion || 0) : (o.fiches?.cout_portion || 0))]
+            coutSupp += costs.reduce((a, b) => a + b, 0) / costs.length
+          }
+        }
+      }
+    }
 
     const prix = isSrc ? (parseFloat(prixBase) || 0) : (Number(carte?.prix_base) || 0)
-    const fcBase = prix > 0 && coutBase > 0 ? (coutBase / (prix / 1.10) * 100).toFixed(1) : null
-    const fcSupp = (prix + totalSupp) > 0 && coutTotal > 0 ? (coutTotal / ((prix + totalSupp) / 1.10) * 100).toFixed(1) : null
+    const ratioBase = prix > 0 && coutBase > 0 ? (coutBase / (prix / 1.10) * 100).toFixed(1) : null
+    const ratioSupp = (prix + totalSupp) > 0 && coutSupp > 0 ? (coutSupp / ((prix + totalSupp) / 1.10) * 100).toFixed(1) : null
 
-    return { coutBase, coutTotal, totalSupp, fcBase, fcSupp }
+    return { coutBase, coutSupp, totalSupp, ratioBase, ratioSupp }
   }
 
   const seuilVert = parseFloat(params['seuil_vert_cuisine'] || 28)
@@ -395,25 +424,25 @@ export default function CarteDetailPage() {
               </div>
               {calc.totalSupp > 0 && (
                 <div>
-                  <div style={{ fontSize: '11px', color: '#D97706', fontWeight: '500', textTransform: 'uppercase' }}>Co&ucirc;t total</div>
-                  <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: '#D97706' }}>{calc.coutTotal.toFixed(2)} &euro;</div>
+                  <div style={{ fontSize: '11px', color: '#D97706', fontWeight: '500', textTransform: 'uppercase' }}>Co&ucirc;t avec suppl.</div>
+                  <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: '#D97706' }}>{calc.coutSupp.toFixed(2)} &euro;</div>
                 </div>
               )}
-              {calc.fcBase && (() => {
-                const s = fcColor(calc.fcBase)
+              {calc.ratioBase && (() => {
+                const s = fcColor(calc.ratioBase)
                 return (
                   <div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}>
-                    <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>FC base</div>
-                    <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{calc.fcBase} %</div>
+                    <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>Ratio base</div>
+                    <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{calc.ratioBase} %</div>
                   </div>
                 )
               })()}
-              {calc.fcSupp && calc.totalSupp > 0 && (() => {
-                const s = fcColor(calc.fcSupp)
+              {calc.ratioSupp && calc.totalSupp > 0 && (() => {
+                const s = fcColor(calc.ratioSupp)
                 return (
                   <div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}>
-                    <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>FC + suppl.</div>
-                    <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{calc.fcSupp} %</div>
+                    <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>Ratio + suppl.</div>
+                    <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{calc.ratioSupp} %</div>
                   </div>
                 )
               })()}
@@ -500,8 +529,8 @@ export default function CarteDetailPage() {
                 <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Co&ucirc;t base</div>
                 <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{calc.coutBase.toFixed(2)} &euro;</div>
               </div>
-              {calc.fcBase && (() => { const s = fcColor(calc.fcBase); return (<div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}><div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>FC base</div><div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{calc.fcBase} %</div></div>) })()}
-              {calc.fcSupp && calc.totalSupp > 0 && (() => { const s = fcColor(calc.fcSupp); return (<div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}><div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>FC + suppl.</div><div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{calc.fcSupp} %</div></div>) })()}
+              {calc.ratioBase && (() => { const s = fcColor(calc.ratioBase); return (<div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}><div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>Ratio base</div><div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{calc.ratioBase} %</div></div>) })()}
+              {calc.ratioSupp && calc.totalSupp > 0 && (() => { const s = fcColor(calc.ratioSupp); return (<div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}><div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>Ratio + suppl.</div><div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{calc.ratioSupp} %</div></div>) })()}
             </div>
           </>
         )}

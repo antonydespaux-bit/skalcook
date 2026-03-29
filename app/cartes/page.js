@@ -39,34 +39,54 @@ export default function CartesPage() {
   const getAllItems = (carte) =>
     (carte.carte_sections || []).flatMap(s => s.carte_items || [])
 
-  // FC base = seulement les items "et" (inclus)
-  const coutBase = (carte) =>
-    getAllItems(carte)
-      .filter(i => i.relation !== 'ou')
-      .reduce((s, i) => s + (i.fiches?.cout_portion || 0), 0)
-
-  // FC total = tous les items (et + ou)
-  const coutTotal = (carte) =>
-    getAllItems(carte)
-      .reduce((s, i) => s + (i.fiches?.cout_portion || 0), 0)
-
-  const totalSupplements = (carte) =>
-    getAllItems(carte)
-      .filter(i => i.relation === 'ou')
-      .reduce((s, i) => s + (Number(i.supplement) || 0), 0)
-
-  const fcBase = (carte) => {
-    const cb = coutBase(carte)
-    if (!carte.prix_base || !cb) return null
-    return (cb / (carte.prix_base / 1.10) * 100).toFixed(1)
+  // Calcul des coûts par groupes (et + ou)
+  const calculerCouts = (carte) => {
+    let coutBase = 0, coutSupp = 0, totalSuppPrix = 0
+    for (const section of (carte.carte_sections || []).sort((a, b) => a.ordre - b.ordre)) {
+      const items = (section.carte_items || []).sort((a, b) => a.ordre - b.ordre)
+      let groups = [], current = null
+      for (const item of items) {
+        if ((item.relation || 'et') === 'et') {
+          if (current) groups.push(current)
+          current = { et: item, ous: [] }
+        } else if (current) {
+          current.ous.push(item)
+        }
+      }
+      if (current) groups.push(current)
+      for (const g of groups) {
+        const etCost = g.et.fiches?.cout_portion || 0
+        coutBase += etCost
+        if (g.ous.length === 0) {
+          coutSupp += etCost
+        } else {
+          const ouAvecSupp = g.ous.find(o => Number(o.supplement) > 0)
+          if (ouAvecSupp) {
+            // ou avec supplément : remplace le coût du plat précédent
+            coutSupp += (ouAvecSupp.fiches?.cout_portion || 0)
+            totalSuppPrix += Number(ouAvecSupp.supplement)
+          } else {
+            // ou sans supplément : moyenne des plats liés
+            const costs = [etCost, ...g.ous.map(o => o.fiches?.cout_portion || 0)]
+            coutSupp += costs.reduce((a, b) => a + b, 0) / costs.length
+          }
+        }
+      }
+    }
+    return { coutBase, coutSupp, totalSuppPrix }
   }
 
-  const fcAvecSupp = (carte) => {
-    const ct = coutTotal(carte)
-    const ts = totalSupplements(carte)
-    const prixTotal = (Number(carte.prix_base) || 0) + ts
-    if (!prixTotal || !ct) return null
-    return (ct / (prixTotal / 1.10) * 100).toFixed(1)
+  const ratioBase = (carte) => {
+    const { coutBase } = calculerCouts(carte)
+    if (!carte.prix_base || !coutBase) return null
+    return (coutBase / (carte.prix_base / 1.10) * 100).toFixed(1)
+  }
+
+  const ratioAvecSupp = (carte) => {
+    const { coutSupp, totalSuppPrix } = calculerCouts(carte)
+    const prixTotal = (Number(carte.prix_base) || 0) + totalSuppPrix
+    if (!prixTotal || !coutSupp) return null
+    return (coutSupp / (prixTotal / 1.10) * 100).toFixed(1)
   }
 
   const handleDelete = async (id) => {
@@ -123,11 +143,11 @@ export default function CartesPage() {
             gap: isMobile ? '10px' : '16px'
           }}>
             {cartes.map(carte => {
-              const fc1 = fcBase(carte)
-              const fc2 = fcAvecSupp(carte)
-              const ts = totalSupplements(carte)
-              const c1 = fcColor(fc1)
-              const c2 = fcColor(fc2)
+              const r1 = ratioBase(carte)
+              const r2 = ratioAvecSupp(carte)
+              const { totalSuppPrix } = calculerCouts(carte)
+              const c1 = fcColor(r1)
+              const c2 = fcColor(r2)
               const hasOu = getAllItems(carte).some(i => i.relation === 'ou')
 
               return (
@@ -197,18 +217,18 @@ export default function CartesPage() {
                       })}
                   </div>
 
-                  {/* Food cost */}
+                  {/* Ratio */}
                   <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                    {fc1 && (
+                    {r1 && (
                       <div style={{ flex: 1, borderRadius: '8px', padding: '8px', textAlign: 'center', background: c1.bg }}>
-                        <div style={{ fontSize: '10px', textTransform: 'uppercase', color: c1.color }}>FC base</div>
-                        <div style={{ fontSize: '14px', fontWeight: '500', color: c1.color }}>{fc1} %</div>
+                        <div style={{ fontSize: '10px', textTransform: 'uppercase', color: c1.color }}>Ratio base</div>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: c1.color }}>{r1} %</div>
                       </div>
                     )}
-                    {fc2 && hasOu && (
+                    {r2 && hasOu && (
                       <div style={{ flex: 1, borderRadius: '8px', padding: '8px', textAlign: 'center', background: c2.bg }}>
-                        <div style={{ fontSize: '10px', textTransform: 'uppercase', color: c2.color }}>FC + suppl.</div>
-                        <div style={{ fontSize: '14px', fontWeight: '500', color: c2.color }}>{fc2} %</div>
+                        <div style={{ fontSize: '10px', textTransform: 'uppercase', color: c2.color }}>Ratio + suppl.</div>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: c2.color }}>{r2} %</div>
                       </div>
                     )}
                   </div>
