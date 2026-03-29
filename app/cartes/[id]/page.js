@@ -282,23 +282,38 @@ export default function CarteDetailPage() {
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
 
-      {/* ── HEADER (no-print) ── */}
+      {/* ── HEADER (no-print) — flexWrap + ellipsis pour petits écrans ── */}
       <div className="no-print" style={{
         background: c.principal, borderBottom: `0.5px solid ${c.accent}40`,
-        padding: '0 24px', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', height: '56px'
+        padding: isMobile ? '10px 12px' : '0 24px',
+        display: 'flex', flexWrap: 'wrap', alignItems: 'center',
+        justifyContent: 'space-between', gap: '10px', rowGap: '10px',
+        minHeight: isMobile ? 'auto' : '56px',
+        position: 'sticky', top: 0, zIndex: 100,
+        boxSizing: 'border-box', maxWidth: '100%',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Logo height={30} couleur="white" nom={nomEtablissement} onClick={() => router.push('/fiches')} />
-          <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px' }}>|</span>
-          <button onClick={() => router.push('/cartes')} style={{
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 12,
+          minWidth: 0, flex: '1 1 160px', maxWidth: '100%',
+        }}>
+          <div style={{ flexShrink: 0 }}>
+            <Logo height={isMobile ? 26 : 30} couleur="white" nom={nomEtablissement} onClick={() => router.push('/fiches')} />
+          </div>
+          {!isMobile && <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px' }}>|</span>}
+          <button type="button" onClick={() => router.push('/cartes')} style={{
             background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: '6px 12px', fontSize: '13px',
-            cursor: 'pointer', color: 'rgba(255,255,255,0.7)'
+            borderRadius: '8px', padding: isMobile ? '6px 10px' : '6px 12px', fontSize: isMobile ? '12px' : '13px',
+            cursor: 'pointer', color: 'rgba(255,255,255,0.7)', flexShrink: 0,
           }}>&larr; Cartes</button>
-          <span style={{ fontSize: '15px', fontWeight: '500', color: 'white' }}>{carte.nom}</span>
+          <span style={{
+            fontSize: isMobile ? '14px' : '15px', fontWeight: '500', color: 'white',
+            minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }} title={carte.nom}>{carte.nom}</span>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
+          justifyContent: 'flex-end', flex: isMobile ? '1 1 100%' : '0 1 auto',
+        }}>
           {!editing && (
             <>
               <button onClick={() => setVueSupp(!vueSupp)} style={{

@@ -141,28 +141,35 @@ export default function Navbar({ section = 'cuisine' }) {
       {/* ─── Barre principale ─────────────────────────────────────────────── */}
       <div className="no-print" style={{
         background: NAV, borderBottom: '0.5px solid rgba(255,255,255,0.06)',
-        padding: '0 20px', display: 'flex', alignItems: 'center',
+        padding: isMobile ? '0 12px' : '0 20px', display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', height: '56px',
-        position: 'sticky', top: 0, zIndex: 100
+        position: 'sticky', top: 0, zIndex: 100,
+        maxWidth: '100%', boxSizing: 'border-box', minWidth: 0, overflowX: 'hidden',
       }}
         onClick={() => groupeOuvert && setGroupeOuvert(null)}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0, flex: '1 1 auto', overflow: 'hidden' }}>
 
           {/* Logo / Nom établissement */}
           <button
             onClick={(e) => { e.stopPropagation(); router.push(DASHBOARD_PATH) }}
-            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px 10px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer', padding: isMobile ? '6px 6px' : '6px 10px', borderRadius: '8px',
+              display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, maxWidth: '100%',
+            }}
           >
             {logoUrl ? (
-              <img src={logoUrl} alt={nomEtablissement} style={{ height: '28px', width: 'auto', objectFit: 'contain', borderRadius: '4px' }} />
+              <img src={logoUrl} alt={nomEtablissement} style={{ height: '28px', maxWidth: isMobile ? '120px' : 'none', width: 'auto', objectFit: 'contain', borderRadius: '4px' }} />
             ) : (
               <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: ACCENT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: '14px' }}>{LOGO_EMOJI}</span>
               </div>
             )}
             {!isMobile && (
-              <span style={{ fontSize: '14px', fontWeight: '600', color: 'white', letterSpacing: '0.3px' }}>{nomEtablissement}</span>
+              <span style={{
+                fontSize: '14px', fontWeight: '600', color: 'white', letterSpacing: '0.3px',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{nomEtablissement}</span>
             )}
           </button>
 
@@ -249,7 +256,7 @@ export default function Navbar({ section = 'cuisine' }) {
         </div>
 
         {/* Droite */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
           {!isMobile && peutModifier && (
             <button
               onClick={(e) => { e.stopPropagation(); router.push(NOUVELLE_FICHE_PATH) }}
