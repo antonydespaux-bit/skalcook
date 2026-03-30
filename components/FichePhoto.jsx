@@ -112,9 +112,13 @@ export default function FichePhoto({ ficheId, clientId, photoPath, peutModifier,
         await supabase.storage.from(BUCKET).remove([oldPath])
       }
 
-      const { error: uploadErr } = await supabase.storage
-        .from(BUCKET)
-        .upload(storagePath, file, { contentType: file.type, upsert: true })
+      console.log('Fichier envoyé:', file)
+      const { data, error: uploadErr } = await supabase.storage
+        .from('fiches-photos')
+        .upload(storagePath, file, {
+          contentType: 'image/jpeg', // On force le type ici
+          upsert: true,
+        })
 
       if (uploadErr) throw uploadErr
 
