@@ -30,7 +30,9 @@ function extractStoragePath(raw) {
  */
 function normalizePath(path) {
   if (!path) return null
-  return path.startsWith('cuisine/') ? path : `cuisine/${path}`
+  // Retire les slashes multiples, puis ajoute cuisine/ si absent
+  const clean = path.replace(/\/+/g, '/')
+  return /^cuisine\//.test(clean) ? clean : `cuisine/${clean}`
 }
 
 /**
@@ -108,7 +110,7 @@ export default function FichePhoto({ ficheId, clientId, photoPath, peutModifier,
         throw new Error('Le redimensionnement a produit un fichier invalide.')
       }
 
-      const storagePath = `cuisine/${clientId}/${ficheId}.jpg`
+      const storagePath = `cuisine/${clientId}/${ficheId}.jpg`.replace(/\/+/g, '/')
 
       // Supprime l'ancienne photo si elle existe
       const oldPath = normalizePath(extractStoragePath(photoPath))
