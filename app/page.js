@@ -15,6 +15,7 @@ export default function HomePage() {
 
   // Internal links for login
   raw = raw.replaceAll('https://app.skalcook.com', '/login')
+  raw = raw.replaceAll('href="/inscription"', 'href="/login?mode=signup"')
 
   // Extract <body>...</body> content
   const bodyMatch = raw.match(/<body[^>]*>([\s\S]*?)<\/body>/i)

@@ -23,6 +23,10 @@ export default function DashboardPage() {
   const [isPrixExpanded, setIsPrixExpanded] = useState(false)
   const [subscriptionPlan, setSubscriptionPlan] = useState('free')
   const [freemiumFicheCount, setFreemiumFicheCount] = useState(0)
+  const [clientIdResolved, setClientIdResolved] = useState(null)
+  const [ingredientTotal, setIngredientTotal] = useState(null)
+  const [seedingDemo, setSeedingDemo] = useState(false)
+  const [seedDemoError, setSeedDemoError] = useState('')
   const router = useRouter()
   const isMobile = useIsMobile()
   const { c } = useTheme()
@@ -46,7 +50,13 @@ export default function DashboardPage() {
 
   const loadData = async () => {
     const clientId = await getClientId()
-    if (!clientId) { setLoading(false); return }
+    if (!clientId) {
+      setClientIdResolved(null)
+      setIngredientTotal(null)
+      setLoading(false)
+      return
+    }
+    setClientIdResolved(clientId)
 
     const { data: sessionWrap } = await supabase.auth.getSession()
     const uid = sessionWrap?.session?.user?.id
@@ -65,9 +75,22 @@ export default function DashboardPage() {
       .not('prix_precedent', 'is', null)
       .order('prix_updated_at', { ascending: false })
       .limit(20)
-    setFiches(fichesData || [])
+
+    const { count: ingCountRaw } = await supabase
+      .from('ingredients')
+      .select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .eq('est_sous_fiche', false)
+
+    const ingTotal = ingCountRaw ?? 0
+    setIngredientTotal(ingTotal)
+
+    const fichesArr = fichesData || []
+    setFiches(fichesArr)
     setMenus(menusData || [])
     setIngredientsPrixHausse(prixData || [])
+
+    console.log('Données chargées - Ingrédients:', ingTotal, 'Fiches:', fichesArr.length)
 
     if (uid) {
       const plan = await getSubscriptionPlan(uid)
@@ -77,6 +100,43 @@ export default function DashboardPage() {
     }
 
     setLoading(false)
+  }
+
+  const handleGenerateDemo = async () => {
+    if (!clientIdResolved) return
+    setSeedDemoError('')
+    setSeedingDemo(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) {
+        setSeedDemoError('Session expirée, reconnectez-vous.')
+        return
+      }
+      const res = await fetch('/api/seed-starter-kit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ client_id: clientIdResolved }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSeedDemoError(json.error || 'Échec de la génération.')
+        return
+      }
+      try {
+        window.localStorage.removeItem(`sk_starter_kit_done_${clientIdResolved}`)
+      } catch {
+        // no-op
+      }
+      await loadData()
+    } catch (e) {
+      setSeedDemoError(e?.message || 'Erreur réseau.')
+    } finally {
+      setSeedingDemo(false)
+    }
   }
 
   const { seuilVert, seuilOrange, tva } = getSeuilsFromParams(params, 'cuisine')
@@ -166,6 +226,49 @@ export default function DashboardPage() {
                 style={{ width: `${Math.min(100, (freemiumFicheCount / 5) * 100)}%` }}
               />
             </div>
+          </div>
+        )}
+
+        {ingredientTotal !== null &&
+          ingredientTotal === 0 &&
+          fiches.length === 0 &&
+          ['admin', 'cuisine', 'directeur'].includes(role) && (
+          <div
+            style={{
+              marginBottom: '20px',
+              padding: '16px 18px',
+              borderRadius: '12px',
+              border: `0.5px solid ${c.bordure}`,
+              background: c.accentClair,
+            }}
+          >
+            <div style={{ fontSize: '14px', fontWeight: '600', color: c.texte, marginBottom: '6px' }}>
+              Aucune fiche ni ingrédient pour cet établissement
+            </div>
+            <p style={{ fontSize: '13px', color: c.texteMuted, margin: '0 0 12px', lineHeight: 1.5 }}>
+              Le kit de démarrage (ingrédients + fiche « Burger Signature ») peut être généré à la demande si
+              l’inscription ne l’a pas rempli correctement.
+            </p>
+            {seedDemoError && (
+              <div style={{ fontSize: '12px', color: c.rouge, marginBottom: '10px' }}>{seedDemoError}</div>
+            )}
+            <button
+              type="button"
+              disabled={seedingDemo}
+              onClick={handleGenerateDemo}
+              style={{
+                padding: '10px 18px',
+                borderRadius: '8px',
+                border: 'none',
+                background: seedingDemo ? c.texteMuted : c.principal,
+                color: c.accent,
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: seedingDemo ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {seedingDemo ? 'Génération…' : 'Générer les données de démonstration'}
+            </button>
           </div>
         )}
 

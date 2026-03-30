@@ -1,12 +1,19 @@
 'use client'
 import { useRouter, usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, getClientId } from '../lib/supabase'
 import { isSuperadminEmail } from '../lib/superadmin'
 import { useTheme } from '../lib/useTheme'
 import { useRole } from '../lib/useRole'
 import { useIsMobile } from '../lib/useIsMobile'
 import { useTenant } from '../lib/useTenant'
+
+function hrefWithClient(path, clientId) {
+  if (!clientId || typeof path !== 'string' || path.startsWith('http')) return path
+  if (path === '/' || path === '/superadmin') return path
+  const sep = path.includes('?') ? '&' : '?'
+  return `${path}${sep}client_id=${encodeURIComponent(clientId)}`
+}
 
 /**
  * Barre de navigation unifiée.
@@ -24,6 +31,19 @@ export default function Navbar({ section = 'cuisine' }) {
   const [menuOuvert, setMenuOuvert] = useState(false)
   const [groupeOuvert, setGroupeOuvert] = useState(null)
   const [showReturnSuperAdmin, setShowReturnSuperAdmin] = useState(false)
+  const [navClientId, setNavClientId] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      const id = await getClientId()
+      if (!alive) return
+      setNavClientId(id)
+      if (id) console.log("Navigation vers établissement :", id)
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('tenant_refresh'))
+    })()
+    return () => { alive = false }
+  }, [pathname])
 
   // ─── Couleurs ────────────────────────────────────────────────────────────────
   const NAV           = c.principal || '#18181B'
@@ -43,6 +63,12 @@ export default function Navbar({ section = 'cuisine' }) {
   const hasModule   = (id) => modules.includes(id)
   const hasBar      = typeof tenant?.has_bar === 'boolean' ? tenant.has_bar : hasModule('bar')
   const peutModifier = isBar ? (role === 'admin' || role === 'bar') : (role === 'admin' || role === 'cuisine')
+
+  const pushWithClient = (path) => {
+    const finalPath = hrefWithClient(path, navClientId)
+    console.log('Lien cliqué vers :', finalPath)
+    router.push(finalPath)
+  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -152,7 +178,7 @@ export default function Navbar({ section = 'cuisine' }) {
 
           {/* Logo / Nom établissement */}
           <button
-            onClick={(e) => { e.stopPropagation(); router.push(DASHBOARD_PATH) }}
+            onClick={(e) => { e.stopPropagation(); pushWithClient(DASHBOARD_PATH) }}
             style={{
               background: 'transparent', border: 'none', cursor: 'pointer', padding: isMobile ? '6px 6px' : '6px 10px', borderRadius: '8px',
               display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, maxWidth: '100%',
@@ -185,7 +211,7 @@ export default function Navbar({ section = 'cuisine' }) {
           {/* Dashboard */}
           {!isMobile && (
             <button
-              onClick={(e) => { e.stopPropagation(); router.push(DASHBOARD_PATH) }}
+              onClick={(e) => { e.stopPropagation(); pushWithClient(DASHBOARD_PATH) }}
               style={{
                 background: 'transparent', border: 'none',
                 borderBottom: isActive(DASHBOARD_PATH) ? `2px solid ${ACCENT}` : '2px solid transparent',
@@ -224,7 +250,7 @@ export default function Navbar({ section = 'cuisine' }) {
                   <div style={dropdownStyle} onClick={e => e.stopPropagation()}>
                     {groupe.items.map((item) => (
                       <button key={item.path}
-                        onClick={() => { setGroupeOuvert(null); router.push(item.path) }}
+                        onClick={() => { setGroupeOuvert(null); pushWithClient(item.path) }}
                         style={{
                           display: 'block', width: '100%', textAlign: 'left',
                           padding: '9px 12px', border: 'none', borderRadius: '6px',
@@ -243,7 +269,7 @@ export default function Navbar({ section = 'cuisine' }) {
           {/* Cross-section link (cuisine → bar / bar → cuisine) */}
           {!isMobile && (role === 'admin' || role === 'directeur') && (isBar || hasBar) && (
             <button
-              onClick={(e) => { e.stopPropagation(); router.push(CROSS_PATH) }}
+              onClick={(e) => { e.stopPropagation(); pushWithClient(CROSS_PATH) }}
               style={{
                 background: 'transparent', border: 'none', borderBottom: '2px solid transparent',
                 borderRadius: '0', padding: '0 12px', height: '56px',
@@ -259,7 +285,7 @@ export default function Navbar({ section = 'cuisine' }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
           {!isMobile && peutModifier && (
             <button
-              onClick={(e) => { e.stopPropagation(); router.push(NOUVELLE_FICHE_PATH) }}
+              onClick={(e) => { e.stopPropagation(); pushWithClient(NOUVELLE_FICHE_PATH) }}
               style={{
                 background: ACCENT, color: 'white', border: 'none',
                 borderRadius: '8px', padding: '7px 14px',
@@ -315,7 +341,7 @@ export default function Navbar({ section = 'cuisine' }) {
             >← Retour SuperAdmin</button>
           )}
           {peutModifier && (
-            <button onClick={() => { setMenuOuvert(false); router.push(NOUVELLE_FICHE_PATH) }}
+            <button onClick={() => { setMenuOuvert(false); pushWithClient(NOUVELLE_FICHE_PATH) }}
               style={{
                 display: 'block', width: '100%', textAlign: 'left',
                 background: ACCENT, color: 'white', border: 'none',
@@ -324,7 +350,7 @@ export default function Navbar({ section = 'cuisine' }) {
               }}
             >+ Nouvelle fiche{isBar ? ' bar' : ''}</button>
           )}
-          <button onClick={() => { setMenuOuvert(false); router.push(DASHBOARD_PATH) }}
+          <button onClick={() => { setMenuOuvert(false); pushWithClient(DASHBOARD_PATH) }}
             style={{
               display: 'block', width: '100%', textAlign: 'left',
               background: isActive(DASHBOARD_PATH) ? ACCENT_MOB_BG : 'transparent',
@@ -335,12 +361,12 @@ export default function Navbar({ section = 'cuisine' }) {
           >Dashboard</button>
           {groupes.flatMap(g => g.items).map((item) => (
             <button key={item.path}
-              onClick={() => { setMenuOuvert(false); router.push(item.path) }}
+              onClick={() => { setMenuOuvert(false); pushWithClient(item.path) }}
               style={mobileItemStyle(isActive(item.path))}
             >{item.label}</button>
           ))}
           {(role === 'admin' || role === 'directeur') && (isBar || hasBar) && (
-            <button onClick={() => { setMenuOuvert(false); router.push(CROSS_PATH) }}
+            <button onClick={() => { setMenuOuvert(false); pushWithClient(CROSS_PATH) }}
               style={mobileItemStyle(false)}
             >{CROSS_LABEL}</button>
           )}

@@ -478,6 +478,9 @@ function safeSetText(el, text) {
   el.textContent = text
 }
 
+/** Liens d’inscription landing → page login (évite /inscription qui redirige les anonymes). */
+const GUEST_SIGNUP_HREF = '/login?mode=signup'
+
 export default function LandingClient({ markup }) {
   const html = useMemo(() => markup || '', [markup])
   const router = useRouter()
@@ -488,6 +491,12 @@ export default function LandingClient({ markup }) {
     // Si un utilisateur est connecté, on force le CTA "Aller au Dashboard".
     // On mémorise la cible pour que le texte/href restent correct après changement de langue.
     let dashboardOverride = null // { target: string }
+
+    const applyGuestSignupHrefs = () => {
+      document.querySelectorAll('[data-landing="signup-hero"], [data-landing="signup-cta"], [data-landing="nav-signup"]').forEach((el) => {
+        if (el.tagName === 'A') el.setAttribute('href', GUEST_SIGNUP_HREF)
+      })
+    }
 
     const applyDashboardOverride = () => {
       if (!dashboardOverride) return
@@ -560,6 +569,7 @@ export default function LandingClient({ markup }) {
 
       // Re-apply override after language switch.
       applyDashboardOverride()
+      if (!dashboardOverride) applyGuestSignupHrefs()
     }
 
     // "contact form" (inline onclick="submitForm()")
@@ -636,19 +646,22 @@ export default function LandingClient({ markup }) {
     )
     document.querySelectorAll('.fade-up').forEach((el) => obs.observe(el))
 
-    // Emulate <Link>: route client-side for internal absolute URLs.
+    // Emulate <Link>: route client-side pour la plupart des URLs internes.
+    // Ne pas intercepter /login (y compris ?mode=signup) : navigation native = fiable avec href injectés / query string.
     const onDocClick = (e) => {
       const target = e.target
       const a = target instanceof Element ? target.closest('a') : null
       if (!a) return
       const href = a.getAttribute('href') || ''
       if (!href.startsWith('/') || href.startsWith('#')) return
-      // Let browser handle things like mailto:, external links, etc.
       if (href === '/favicon.ico') return
+      if (href === '/login' || href.startsWith('/login?')) return
       e.preventDefault()
       router.push(href)
     }
     document.addEventListener('click', onDocClick)
+
+    applyGuestSignupHrefs()
 
     // If user is already logged-in, swap landing CTA to dashboard.
     const swapLandingCta = async () => {
@@ -681,6 +694,8 @@ export default function LandingClient({ markup }) {
         applyDashboardOverride()
       } catch {
         // no-op
+      } finally {
+        if (!dashboardOverride) applyGuestSignupHrefs()
       }
     }
     swapLandingCta()
