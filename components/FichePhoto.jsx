@@ -113,12 +113,23 @@ export default function FichePhoto({ ficheId, clientId, photoPath, peutModifier,
       }
 
       console.log('Fichier envoyé:', file)
-      const { data, error: uploadErr } = await supabase.storage
+      let { data, error: uploadErr } = await supabase.storage
         .from('fiches-photos')
         .upload(storagePath, file, {
-          contentType: 'image/jpeg', // On force le type ici
-          upsert: true,
+          contentType: 'image/jpeg',
+          upsert: false,
         })
+
+      // Si le fichier existe déjà, on le supprime puis on réessaie
+      if (uploadErr?.statusCode === '409' || uploadErr?.message?.includes('already exists')) {
+        await supabase.storage.from('fiches-photos').remove([storagePath])
+        ;({ data, error: uploadErr } = await supabase.storage
+          .from('fiches-photos')
+          .upload(storagePath, file, {
+            contentType: 'image/jpeg',
+            upsert: false,
+          }))
+      }
 
       if (uploadErr) throw uploadErr
 
