@@ -26,6 +26,15 @@ function extractStoragePath(raw) {
 }
 
 /**
+ * S'assure que le chemin relatif commence toujours par "cuisine/".
+ * Les anciennes entrées en base ne contiennent parfois que "{clientId}/{ficheId}.jpg".
+ */
+function normalizePath(path) {
+  if (!path) return null
+  return path.startsWith('cuisine/') ? path : `cuisine/${path}`
+}
+
+/**
  * Redimensionne un fichier image côté client via <canvas> avant upload.
  * Produit un Blob JPEG ≤ ~500 Ko.
  */
@@ -58,7 +67,7 @@ async function resizeImage(file) {
  *
  * @param {string}   ficheId       - UUID de la fiche
  * @param {string}   clientId      - UUID du client (= dossier dans le bucket)
- * @param {string|null} photoPath  - Chemin stocké en DB (ex: "{clientId}/{ficheId}.jpg") ou null
+ * @param {string|null} photoPath  - Chemin stocké en DB (ex: "cuisine/{clientId}/{ficheId}.jpg") ou null
  * @param {boolean}  peutModifier  - Affiche les contrôles d'upload/suppression
  * @param {function} onPhotoChange - Callback(newPath|null) après upload ou suppression
  * @param {object}   c             - Couleurs du thème
@@ -71,7 +80,7 @@ export default function FichePhoto({ ficheId, clientId, photoPath, peutModifier,
 
   // Génère l'URL signée quand le chemin change
   useEffect(() => {
-    const path = extractStoragePath(photoPath)
+    const path = normalizePath(extractStoragePath(photoPath))
     if (!path) {
       setSignedUrl(null)
       onSignedUrlChange?.(null)
@@ -102,10 +111,10 @@ export default function FichePhoto({ ficheId, clientId, photoPath, peutModifier,
         throw new Error('Le redimensionnement a produit un fichier invalide.')
       }
 
-      const storagePath = `${clientId}/${ficheId}.jpg`
+      const storagePath = `cuisine/${clientId}/${ficheId}.jpg`
 
       // Supprime l'ancienne photo si elle existe
-      const oldPath = extractStoragePath(photoPath)
+      const oldPath = normalizePath(extractStoragePath(photoPath))
       if (oldPath) {
         await supabase.storage.from(BUCKET).remove([oldPath])
       }
@@ -140,7 +149,7 @@ export default function FichePhoto({ ficheId, clientId, photoPath, peutModifier,
     if (!confirm('Supprimer la photo de cette fiche ?')) return
     setUploading(true)
     try {
-      const path = extractStoragePath(photoPath)
+      const path = normalizePath(extractStoragePath(photoPath))
       if (path) await supabase.storage.from(BUCKET).remove([path])
       await supabase.from('fiches').update({ photo_url: null }).eq('id', ficheId).eq('client_id', clientId)
       setSignedUrl(null)
