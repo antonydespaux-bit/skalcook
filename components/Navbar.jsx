@@ -59,7 +59,8 @@ export default function Navbar({ section = 'cuisine' }) {
   const LOGO_EMOJI         = isBar ? '🍸'                   : '🍽️'
 
   // ─── Modules / Rôles ─────────────────────────────────────────────────────────
-  const modules     = tenant?.modules_actifs || (isBar ? ['fiches', 'sous-fiches', 'recap', 'ingredients'] : [])
+  const DEFAULT_CUISINE_MODULES = ['fiches', 'sous-fiches', 'recap', 'ingredients', 'menus', 'cartes', 'avis', 'ardoise']
+  const modules     = tenant?.modules_actifs || (isBar ? ['fiches', 'sous-fiches', 'recap', 'ingredients'] : DEFAULT_CUISINE_MODULES)
   const hasModule   = (id) => modules.includes(id)
   const hasBar      = typeof tenant?.has_bar === 'boolean' ? tenant.has_bar : hasModule('bar')
   const peutModifier = isBar ? (role === 'admin' || role === 'bar') : (role === 'admin' || role === 'cuisine')
