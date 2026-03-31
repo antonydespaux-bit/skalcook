@@ -2,6 +2,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
+console.log('--- VERSION MODIFIEE ---')
+
 const BUCKET = 'fiches-photos'
 const MAX_WIDTH = 1200
 const MAX_HEIGHT = 900
