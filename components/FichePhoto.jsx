@@ -2,9 +2,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
-console.log('--- VERSION MODIFIEE ---')
-azertyuiop // ERREUR VOLONTAIRE — à supprimer après test
-
 const BUCKET = 'fiches-photos'
 const MAX_WIDTH = 1200
 const MAX_HEIGHT = 900
@@ -119,7 +116,6 @@ export default function FichePhoto({ ficheId, clientId, photoPath, peutModifier,
         await supabase.storage.from(BUCKET).remove([oldPath])
       }
 
-      console.log('Fichier envoyé:', file, 'type:', file.type, 'taille:', file.size)
       const { data, error: uploadErr } = await supabase.storage
         .from('fiches-photos')
         .upload(storagePath, file, {
