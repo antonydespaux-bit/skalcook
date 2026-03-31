@@ -108,7 +108,7 @@ export default function FichePhoto({ ficheId, clientId, photoPath, peutModifier,
         throw new Error(`Type de fichier invalide : attendu File/Blob, reçu ${typeof file}`)
       }
 
-      const storagePath = `cuisine/${clientId}/${ficheId}.jpg`.replace(/\/+/g, '/')
+      const storagePath = `cuisine/${ficheId}.jpg`
 
       // Supprime l'ancienne photo si elle existe
       const oldPath = normalizePath(extractStoragePath(photoPath))
