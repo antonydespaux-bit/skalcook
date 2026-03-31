@@ -41,7 +41,17 @@ export default function CarteDetailPage() {
         .no-print { display: none !important; }
         .print-only { display: block !important; }
         .print-instructions { page-break-before: always; margin-top: 0 !important; }
+        html { background: white !important; }
         body { background: white !important; margin: 0; padding: 0; }
+        .carte-detail-print-root {
+          background: white !important;
+          min-height: auto !important;
+          height: auto !important;
+        }
+        .carte-detail-print-root .print-only {
+          background: white !important;
+          min-height: auto !important;
+        }
         @page { margin: 15mm 15mm 15mm 15mm; }
       }
       @media screen {
@@ -280,7 +290,7 @@ export default function CarteDetailPage() {
   const today = new Date().toLocaleDateString('fr-FR')
 
   return (
-    <div style={{ minHeight: '100vh', background: c.fond }}>
+    <div className="carte-detail-print-root" style={{ minHeight: '100vh', background: c.fond }}>
 
       {/* ── HEADER (no-print) — flexWrap + ellipsis pour petits écrans ── */}
       <div className="no-print" style={{

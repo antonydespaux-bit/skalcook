@@ -42,6 +42,10 @@ body {
     display: block !important;
   }
 
+  html {
+    background: white !important;
+  }
+
   body {
     background: white !important;
     margin: 0 !important;
