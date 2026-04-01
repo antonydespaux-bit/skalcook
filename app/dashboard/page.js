@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [params, setParams] = useState({})
   const [loading, setLoading] = useState(true)
   const [filtreCategorie, setFiltreCategorie] = useState('toutes')
+  const [filtreSaison, setFiltreSaison] = useState('toutes')
   const [isPrixExpanded, setIsPrixExpanded] = useState(false)
   const router = useRouter()
   const isMobile = useIsMobile()
@@ -81,9 +82,9 @@ export default function DashboardPage() {
   const maxFiches = Math.max(...fichesByCategorie.map(c => c.nb), 1)
 
   const fichesAvecAllergenes = fiches.filter(f => f.allergenes && f.allergenes.length > 0)
-  const fichesFiltreesAllergenes = filtreCategorie === 'toutes'
-    ? fichesAvecAllergenes
-    : fichesAvecAllergenes.filter(f => f.categorie === filtreCategorie)
+  const fichesFiltreesAllergenes = fichesAvecAllergenes
+    .filter(f => filtreCategorie === 'toutes' || f.categorie === filtreCategorie)
+    .filter(f => filtreSaison === 'toutes' || f.saison === filtreSaison)
 
   const exportAllergenesExcel = () => {
     const wb = XLSX.utils.book_new()
@@ -285,6 +286,13 @@ export default function DashboardPage() {
               }}>
                 <option value="toutes">Toutes les catégories</option>
                 {theme.categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
+              <select value={filtreSaison} onChange={e => setFiltreSaison(e.target.value)} style={{
+                padding: '6px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
+                fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer'
+              }}>
+                <option value="toutes">Toutes les saisons</option>
+                {theme.saisons.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
               <button onClick={exportAllergenesExcel} style={{ padding: '6px 12px', background: c.vert, color: 'white', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>📊 Excel</button>
               <button onClick={() => window.print()} style={{ padding: '6px 12px', background: c.accent, color: c.principal, border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>🖨️ Imprimer</button>
