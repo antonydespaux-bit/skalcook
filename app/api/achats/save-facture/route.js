@@ -20,13 +20,14 @@ export async function POST(request) {
     // ── Détection doublon sur numéro de facture ──────────────────────────────
     const numTrimmed = numeroFacture?.trim() || null
     if (numTrimmed && !body.forceInsert) {
-      const { data: existing } = await db
+      const { data: existingRows } = await db
         .from('achats_factures')
         .select('id, date_facture, fournisseur, total_ht, created_at')
         .eq('client_id', clientId)
         .ilike('numero_facture', numTrimmed)
-        .maybeSingle()
+        .limit(1)
 
+      const existing = existingRows?.[0] ?? null
       if (existing) {
         return Response.json(
           {
