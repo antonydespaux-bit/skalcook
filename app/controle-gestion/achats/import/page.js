@@ -140,23 +140,22 @@ export default function AchatsImportPage() {
   // Chargement mapping fournisseur + ingrédients une fois authentifié
   const loadReconciliation = useCallback(async () => {
     if (!clientId) return
-    const [{ data: mappings }, { data: ings }] = await Promise.all([
-      supabase
-        .from('fournisseur_mapping')
-        .select('designation_norm, ingredient_id, fournisseur')
-        .eq('client_id', clientId),
-      supabase
-        .from('ingredients')
-        .select('id, nom, prix_kg, unite')
-        .eq('client_id', clientId)
-        .eq('est_sous_fiche', false),
-    ])
-    setFournisseurMapping(
-      Object.fromEntries((mappings || []).map(m => [m.designation_norm, m]))
-    )
-    setIngredientsById(
-      Object.fromEntries((ings || []).map(i => [i.id, i]))
-    )
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/api/achats/reconciliation-data?clientId=${clientId}`, {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      })
+      if (!res.ok) return
+      const { mappings, ingredients } = await res.json()
+      setFournisseurMapping(
+        Object.fromEntries((mappings || []).map(m => [m.designation_norm, m]))
+      )
+      setIngredientsById(
+        Object.fromEntries((ingredients || []).map(i => [i.id, i]))
+      )
+    } catch (err) {
+      console.warn('loadReconciliation error:', err)
+    }
   }, [clientId])
 
   useEffect(() => {
