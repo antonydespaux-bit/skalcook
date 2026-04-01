@@ -124,14 +124,18 @@ export default function MargesVentesPage() {
     setLoading(true)
 
     const cleanJour = String(jour).trim()
+    const nextDay = new Date(cleanJour)
+    nextDay.setDate(nextDay.getDate() + 1)
+    const nextDayStr = nextDay.toISOString().slice(0, 10)
 
-    console.log("FETCH SQL : select * from ventes_journalieres where client_id =", cid, "and jour =", cleanJour)
+    console.log("FETCH SQL : select * from ventes_journalieres where client_id =", cid, "and jour >=", cleanJour, "and jour <", nextDayStr)
 
     const { data: ventesBrutes, error: qErr } = await supabase
       .from('ventes_journalieres')
       .select('id, fiche_id, quantite_vendue, prix_vente_net, created_at')
       .eq('client_id', cid)
-      .filter('jour', 'eq', cleanJour)
+      .gte('jour', cleanJour)
+      .lt('jour', nextDayStr)
       .order('created_at', { ascending: true })
 
     if (qErr) {
@@ -146,11 +150,19 @@ export default function MargesVentesPage() {
     console.log('Ventes journalières (brut) :', ventes.length, 'ligne(s)')
 
     if (ventes.length === 0) {
-      const { count } = await supabase
+      // Test 1 : count global sans filtre → détecte si RLS bloque tout
+      const { count: countGlobal } = await supabase
         .from('ventes_journalieres')
         .select('*', { count: 'exact', head: true })
-        .eq('jour', cleanJour)
-      console.log("TEST GLOBAL (sans filtre client) :", count, "lignes trouvées pour ce jour.")
+      console.log("TEST GLOBAL (sans aucun filtre) :", countGlobal, "lignes visibles.")
+
+      // Test 2 : range sur jour sans filtre client → détecte type mismatch
+      const { count: countJour } = await supabase
+        .from('ventes_journalieres')
+        .select('*', { count: 'exact', head: true })
+        .gte('jour', cleanJour)
+        .lt('jour', nextDayStr)
+      console.log("TEST range jour (sans filtre client) :", countJour, "lignes pour ce jour.")
     }
 
     const ficheIds = [...new Set(ventes.map((v) => v.fiche_id).filter(Boolean))]
