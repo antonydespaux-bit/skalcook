@@ -34,6 +34,11 @@ function formatPct(n) {
   return `${Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`
 }
 
+function formatQte(n) {
+  if (n == null || Number.isNaN(n)) return '—'
+  return Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 3 })
+}
+
 /**
  * Agrège les lignes ventes_journalieres par fiche pour la journée :
  * CA net = somme (quantite_vendue * prix_vente_net).
@@ -82,6 +87,33 @@ function aggregateByFiche(rows) {
     .sort((a, b) => a.designation.localeCompare(b.designation, 'fr'))
 }
 
+/**
+ * Calcule la consommation théorique par ingrédient à partir des fiches vendues.
+ * Formule : (quantiteVendue × fi.quantite) / fiche.nb_portions
+ * Les fiches sans nb_portions (null ou 0) sont ignorées.
+ */
+function computeConsoTheorique(lignes, ficheIngsMap, ficheNbPortions) {
+  const map = new Map()
+  for (const ligne of lignes) {
+    const nbPortions = ficheNbPortions[ligne.fiche_id]
+    if (!nbPortions || nbPortions <= 0) continue
+    for (const fi of (ficheIngsMap[ligne.fiche_id] || [])) {
+      const conso = (ligne.quantiteVendue * (Number(fi.quantite) || 0)) / nbPortions
+      const ingId = fi.ingredient_id
+      if (!map.has(ingId)) {
+        map.set(ingId, {
+          ingredient_id: ingId,
+          nom: fi.ingredients?.nom ?? `Ingrédient (${ingId})`,
+          unite: fi.unite ?? '—',
+          qteTotale: 0,
+        })
+      }
+      map.get(ingId).qteTotale += conso
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+}
+
 export default function MargesVentesPage() {
   const router = useRouter()
   const isMobile = useIsMobile()
@@ -92,6 +124,7 @@ export default function MargesVentesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [rawRows, setRawRows] = useState([])
+  const [ficheIngsMap, setFicheIngsMap] = useState({})
 
   useEffect(() => {
     let cancelled = false
@@ -124,20 +157,25 @@ export default function MargesVentesPage() {
     setLoading(true)
 
     const cleanJour = String(jour).trim()
+    const nextDay = new Date(cleanJour)
+    nextDay.setDate(nextDay.getDate() + 1)
+    const nextDayStr = nextDay.toISOString().slice(0, 10)
 
-    console.log("FETCH SQL : select * from ventes_journalieres where client_id =", cid, "and jour =", cleanJour)
+    console.log('FETCH SQL : select * from ventes_journalieres where client_id =', cid, 'and jour >=', cleanJour, 'and jour <', nextDayStr)
 
     const { data: ventesBrutes, error: qErr } = await supabase
       .from('ventes_journalieres')
       .select('id, fiche_id, quantite_vendue, prix_vente_net, created_at')
       .eq('client_id', cid)
-      .filter('jour', 'eq', cleanJour)
+      .gte('jour', cleanJour)
+      .lt('jour', nextDayStr)
       .order('created_at', { ascending: true })
 
     if (qErr) {
       console.error(qErr)
       setError(qErr.message || 'Impossible de charger les ventes.')
       setRawRows([])
+      setFicheIngsMap({})
       setLoading(false)
       return
     }
@@ -146,19 +184,29 @@ export default function MargesVentesPage() {
     console.log('Ventes journalières (brut) :', ventes.length, 'ligne(s)')
 
     if (ventes.length === 0) {
-      const { count } = await supabase
+      // Test 1 : count global sans filtre → détecte si RLS bloque tout
+      const { count: countGlobal } = await supabase
         .from('ventes_journalieres')
         .select('*', { count: 'exact', head: true })
-        .eq('jour', cleanJour)
-      console.log("TEST GLOBAL (sans filtre client) :", count, "lignes trouvées pour ce jour.")
+      console.log('TEST GLOBAL (sans aucun filtre) :', countGlobal, 'lignes visibles.')
+
+      // Test 2 : range sur jour sans filtre client → détecte type mismatch
+      const { count: countJour } = await supabase
+        .from('ventes_journalieres')
+        .select('*', { count: 'exact', head: true })
+        .gte('jour', cleanJour)
+        .lt('jour', nextDayStr)
+      console.log('TEST range jour (sans filtre client) :', countJour, 'lignes pour ce jour.')
     }
 
     const ficheIds = [...new Set(ventes.map((v) => v.fiche_id).filter(Boolean))]
     let ficheById = {}
+
     if (ficheIds.length > 0) {
+      // Fetch fiches (avec nb_portions pour le calcul des consommations)
       const { data: fichesRows, error: fErr } = await supabase
         .from('fiches')
-        .select('id, nom, cout_portion')
+        .select('id, nom, cout_portion, nb_portions')
         .in('id', ficheIds)
 
       if (fErr) {
@@ -166,6 +214,28 @@ export default function MargesVentesPage() {
       } else {
         ficheById = Object.fromEntries((fichesRows || []).map((f) => [f.id, f]))
       }
+
+      // Fetch compositions (fiche_ingredients + nom ingrédient)
+      const { data: fiRows, error: fiErr } = await supabase
+        .from('fiche_ingredients')
+        .select('fiche_id, ingredient_id, quantite, unite, ingredients(id, nom)')
+        .in('fiche_id', ficheIds)
+        .eq('client_id', cid)
+
+      if (fiErr) {
+        console.warn('Chargement fiche_ingredients :', fiErr.message)
+        setFicheIngsMap({})
+      } else {
+        console.log('fiche_ingredients chargés :', (fiRows || []).length, 'ligne(s)')
+        const grouped = {}
+        for (const fi of (fiRows || [])) {
+          if (!grouped[fi.fiche_id]) grouped[fi.fiche_id] = []
+          grouped[fi.fiche_id].push(fi)
+        }
+        setFicheIngsMap(grouped)
+      }
+    } else {
+      setFicheIngsMap({})
     }
 
     const merged = ventes.map((v) => ({
@@ -200,6 +270,22 @@ export default function MargesVentesPage() {
     return { quantiteVendue: q, caNet: ca, coutMatiere: hasCout ? cout : null, margeBrute: marge, margePct }
   }, [lignes])
 
+  // nb_portions par fiche_id, dérivé des rawRows (les fiches sont déjà embeddées)
+  const ficheNbPortions = useMemo(() => {
+    const map = {}
+    for (const row of rawRows) {
+      const fiche = normalizeFicheEmbed(row.fiches)
+      if (fiche?.nb_portions != null && row.fiche_id)
+        map[row.fiche_id] = Number(fiche.nb_portions)
+    }
+    return map
+  }, [rawRows])
+
+  const consoLignes = useMemo(
+    () => computeConsoTheorique(lignes, ficheIngsMap, ficheNbPortions),
+    [lignes, ficheIngsMap, ficheNbPortions]
+  )
+
   if (!authReady) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
@@ -224,6 +310,7 @@ export default function MargesVentesPage() {
     borderBottom: `1px solid ${c.bordure}`,
   }
   const tdNum = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
+  const tdMuted = { ...tdNum, color: c.texteMuted }
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
@@ -274,6 +361,7 @@ export default function MargesVentesPage() {
           <p style={{ color: c.texteMuted, fontSize: 14 }}>Aucune vente enregistrée pour cette date.</p>
         )}
 
+        {/* ── Tableau des marges ── */}
         {clientId && !loading && lignes.length > 0 && (
           <div style={{ overflowX: 'auto', borderRadius: 12, border: `1px solid ${c.bordure}`, background: c.blanc }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? 640 : 0 }}>
@@ -314,6 +402,53 @@ export default function MargesVentesPage() {
                 </tr>
               </tfoot>
             </table>
+          </div>
+        )}
+
+        {/* ── Section Consommations Théoriques ── */}
+        {clientId && !loading && (
+          <div style={{ marginTop: 40 }}>
+            <h2 style={{ margin: '0 0 6px', fontSize: isMobile ? 18 : 22, fontWeight: 600, color: c.texte }}>
+              Analyse des consommations théoriques
+            </h2>
+            <p style={{ margin: '0 0 16px', fontSize: 14, color: c.texteMuted, maxWidth: '720px' }}>
+              Consommation calculée d&apos;après les recettes (
+              <code style={{ fontSize: 12 }}>fiche_ingredients</code>) et les ventes du jour.
+              Formule&nbsp;: <em>qté vendue × quantité recette / nb&nbsp;portions</em>.
+            </p>
+
+            {consoLignes.length === 0 ? (
+              <p style={{ color: c.texteMuted, fontSize: 14 }}>
+                {lignes.length === 0
+                  ? 'Aucune vente pour cette date.'
+                  : 'Aucune composition de fiche disponible pour calculer les consommations (vérifiez que les fiches ont des ingrédients et un nombre de portions renseigné).'}
+              </p>
+            ) : (
+              <div style={{ overflowX: 'auto', borderRadius: 12, border: `1px solid ${c.bordure}`, background: c.blanc }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? 560 : 0 }}>
+                  <thead>
+                    <tr style={{ background: c.fond }}>
+                      <th style={th}>Ingrédient</th>
+                      <th style={{ ...th, textAlign: 'right' }}>Qté théorique</th>
+                      <th style={th}>Unité</th>
+                      <th style={{ ...th, textAlign: 'right', color: c.texteMuted }}>Achats réels</th>
+                      <th style={{ ...th, textAlign: 'right', color: c.texteMuted }}>Écart</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {consoLignes.map((L) => (
+                      <tr key={L.ingredient_id}>
+                        <td style={td}>{L.nom}</td>
+                        <td style={tdNum}>{formatQte(L.qteTotale)}</td>
+                        <td style={td}>{L.unite}</td>
+                        <td style={tdMuted}>—</td>
+                        <td style={tdMuted}>—</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
