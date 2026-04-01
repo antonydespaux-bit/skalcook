@@ -236,6 +236,19 @@ export default function AchatsImportPage() {
         })
       )
       setLignes(enriched)
+
+      // Vérification doublon dès l'extraction, avant que l'utilisateur clique sur Enregistrer
+      if (result.numero_facture?.trim()) {
+        const dupRes = await fetch(
+          `/api/achats/check-duplicate?clientId=${clientId}&numeroFacture=${encodeURIComponent(result.numero_facture.trim())}`,
+          { headers: { 'Authorization': `Bearer ${session.access_token}` } }
+        )
+        if (dupRes.ok) {
+          const { existing } = await dupRes.json()
+          if (existing) setDuplicateWarning(existing)
+        }
+      }
+
       setStep('review')
     } catch (err) {
       console.error('Extraction IA échouée :', err)
