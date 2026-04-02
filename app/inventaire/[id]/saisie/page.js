@@ -33,8 +33,7 @@ export default function SaisieInventairePage() {
       .from('inventaires')
       .select('*')
       .eq('id', inventaireId)
-      .eq('client_id', clientId)
-      .single()
+      .maybeSingle()
 
     if (!inv) { router.push('/inventaire'); return }
     if (inv.statut === 'valide') { router.push(`/inventaire/${inventaireId}`); return }
