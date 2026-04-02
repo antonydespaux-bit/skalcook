@@ -130,6 +130,7 @@ export default function MargesDashboardPage() {
   // Données
   const [rawVentes, setRawVentes] = useState([])
   const [ficheById, setFicheById] = useState({})
+  const [ficheIngsMap, setFicheIngsMap] = useState({})
   const [totalAchatsHT, setTotalAchatsHT] = useState(null)
 
   const [loading, setLoading] = useState(true)
@@ -140,7 +141,7 @@ export default function MargesDashboardPage() {
   const [triColonne, setTriColonne] = useState('designation')
   const [triSens, setTriSens] = useState('asc')
 
-  // ── Auth ─────────────────────────────────────────────────────────────────────
+  // ── Auth ────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     let cancelled = false
@@ -157,7 +158,7 @@ export default function MargesDashboardPage() {
     return () => { cancelled = true }
   }, [router])
 
-  // ── Changement de période ─────────────────────────────────────────────────────
+  // ── Changement de période ────────────────────────────────────────────────────
 
   function handlePeriode(p) {
     setPeriode(p)
@@ -168,7 +169,7 @@ export default function MargesDashboardPage() {
     }
   }
 
-  // ── Chargement des données ────────────────────────────────────────────────────
+  // ── Chargement des données ───────────────────────────────────────────────────
 
   const loadData = useCallback(async (debut, fin) => {
     setError('')
@@ -183,7 +184,7 @@ export default function MargesDashboardPage() {
     const p = await getParametres()
     setParams(p)
 
-    // 1. Ventes sur la période (inclut `jour` pour le graphique)
+    // 1. Ventes sur la période
     const { data: ventesRaw, error: vErr } = await supabase
       .from('ventes_journalieres')
       .select('fiche_id, quantite_vendue, prix_vente_net, jour')
@@ -195,6 +196,7 @@ export default function MargesDashboardPage() {
       setError(vErr.message || 'Impossible de charger les ventes.')
       setRawVentes([])
       setFicheById({})
+      setFicheIngsMap({})
       setTotalAchatsHT(null)
       setLoading(false)
       return
@@ -204,18 +206,31 @@ export default function MargesDashboardPage() {
     const ficheIds = [...new Set(ventes.map((v) => v.fiche_id).filter(Boolean))]
 
     let ficheMap = {}
+    let ingsMap = {}
 
     if (ficheIds.length > 0) {
-      // 2. Fiches (avec catégorie pour le filtre)
+      // 2. Fiches (avec catégorie)
       const { data: fichesRows } = await supabase
         .from('fiches')
         .select('id, nom, cout_portion, nb_portions, categorie')
         .in('id', ficheIds)
 
       ficheMap = Object.fromEntries((fichesRows || []).map((f) => [f.id, f]))
+
+      // 3. Compositions
+      const { data: fiRows } = await supabase
+        .from('fiche_ingredients')
+        .select('fiche_id, ingredient_id, quantite, unite, ingredients(id, nom)')
+        .in('fiche_id', ficheIds)
+        .eq('client_id', cid)
+
+      for (const fi of (fiRows || [])) {
+        if (!ingsMap[fi.fiche_id]) ingsMap[fi.fiche_id] = []
+        ingsMap[fi.fiche_id].push(fi)
+      }
     }
 
-    // 3. Achats sur la période via achats_factures
+    // 4. Achats sur la période
     const { data: achatsRows } = await supabase
       .from('achats_lignes')
       .select('montant_ht, achats_factures!inner(date_facture)')
@@ -227,6 +242,7 @@ export default function MargesDashboardPage() {
 
     setRawVentes(ventes)
     setFicheById(ficheMap)
+    setFicheIngsMap(ingsMap)
     setTotalAchatsHT(sumAchats)
     setLoading(false)
   }, [])
@@ -236,7 +252,7 @@ export default function MargesDashboardPage() {
     loadData(dateDebut, dateFin)
   }, [authReady, dateDebut, dateFin, loadData])
 
-  // ── Données calculées ─────────────────────────────────────────────────────────
+  // ── Données calculées ────────────────────────────────────────────────────────
 
   const lignes = useMemo(() => aggregateByFiche(rawVentes, ficheById), [rawVentes, ficheById])
 
@@ -247,7 +263,7 @@ export default function MargesDashboardPage() {
       ca += L.caNet
       if (L.coutMatiere != null) { cout += L.coutMatiere; caAvecCout += L.caNet }
     }
-    const margeBrute = caAvecCout > 0 ? caAvecCout - cout : null
+    const margeBrute = ca > 0 && caAvecCout > 0 ? caAvecCout - cout : null
     const margePct = margeBrute != null && caAvecCout > 0 ? (margeBrute / caAvecCout) * 100 : null
     return { quantiteVendue: q, caNet: ca, coutMatiere: cout > 0 ? cout : null, margeBrute, margePct, caAvecCout }
   }, [lignes])
@@ -269,27 +285,32 @@ export default function MargesDashboardPage() {
   }, [lignes])
 
   const categories = useMemo(() => {
-    return [...new Set(lignes.map((L) => L.categorie).filter(Boolean))].sort()
+    const cats = [...new Set(lignes.map((L) => L.categorie).filter(Boolean))]
+    return cats.sort()
   }, [lignes])
 
   const lignesFiltrees = useMemo(() => {
-    const rows = filtreCategorie === 'all' ? lignes : lignes.filter((L) => L.categorie === filtreCategorie)
+    let rows = filtreCategorie === 'all' ? lignes : lignes.filter((L) => L.categorie === filtreCategorie)
     return [...rows].sort((a, b) => {
+      let va = a[triColonne], vb = b[triColonne]
       if (triColonne === 'designation') {
-        const cmp = (a.designation ?? '').localeCompare(b.designation ?? '', 'fr')
+        va = va ?? ''
+        vb = vb ?? ''
+        const cmp = va.localeCompare(vb, 'fr')
         return triSens === 'asc' ? cmp : -cmp
       }
-      const va = a[triColonne] ?? -Infinity
-      const vb = b[triColonne] ?? -Infinity
+      va = va ?? -Infinity
+      vb = vb ?? -Infinity
       return triSens === 'asc' ? va - vb : vb - va
     })
   }, [lignes, filtreCategorie, triColonne, triSens])
 
-  // ── Seuils couleur (food cost → marge inversée) ───────────────────────────────
+  // ── Seuils couleur (food cost = 100 - marge) ─────────────────────────────────
 
   const { seuilVert, seuilOrange } = getSeuilsFromParams(params, 'cuisine')
-  const margeSeuilVert = 100 - seuilVert
-  const margeSeuilOrange = 100 - seuilOrange
+  // Seuils food cost → seuils marge (inverser)
+  const margeSeuilVert = 100 - seuilVert     // ex : 100 - 28 = 72%
+  const margeSeuilOrange = 100 - seuilOrange  // ex : 100 - 35 = 65%
 
   function margeColor(pct) {
     if (pct == null) return { bg: null, color: c.texte }
@@ -304,7 +325,7 @@ export default function MargesDashboardPage() {
     return '#A32D2D'
   }
 
-  // ── Tri tableau ───────────────────────────────────────────────────────────────
+  // ── Tri tableau ─────────────────────────────────────────────────────────────
 
   function handleTri(col) {
     if (triColonne === col) {
@@ -320,7 +341,7 @@ export default function MargesDashboardPage() {
     return triSens === 'asc' ? ' ▲' : ' ▼'
   }
 
-  // ── Rendu ─────────────────────────────────────────────────────────────────────
+  // ── Rendu ────────────────────────────────────────────────────────────────────
 
   if (!authReady) {
     return (
@@ -352,9 +373,9 @@ export default function MargesDashboardPage() {
     { id: 'custom', label: 'Personnalisé' },
   ]
 
-  const margeCardColors = margeColor(totaux.margePct)
-  const coverageCardColors = coveragePct == null
-    ? { bg: null, color: c.texte }
+  const margePctVal = totaux.margePct
+  const margeCardColors = margeColor(margePctVal)
+  const coverageCardColors = coveragePct == null ? { bg: null, color: c.texte }
     : coveragePct >= 80 ? { bg: '#EAF3DE', color: '#3B6D11' }
     : { bg: '#FAEEDA', color: '#854F0B' }
 
@@ -443,7 +464,7 @@ export default function MargesDashboardPage() {
               <div style={{ background: margeCardColors.bg ?? c.blanc, borderRadius: 12, padding: isMobile ? 14 : 20, border: `0.5px solid ${c.bordure}` }}>
                 <div style={{ fontSize: 11, color: c.texteMuted, fontWeight: 500, textTransform: 'uppercase', marginBottom: 8 }}>Marge Théorique</div>
                 <div style={{ fontSize: isMobile ? 24 : 32, fontWeight: 600, color: margeCardColors.color }}>
-                  {formatPct(totaux.margePct)}
+                  {formatPct(margePctVal)}
                 </div>
                 <div style={{ fontSize: 11, color: c.texteMuted, marginTop: 4 }}>Basée sur les fiches techniques</div>
               </div>
@@ -455,9 +476,7 @@ export default function MargesDashboardPage() {
                   {formatEuro(totaux.coutMatiere)}
                 </div>
                 <div style={{ fontSize: 11, color: c.texteMuted, marginTop: 4 }}>
-                  {totalAchatsHT != null && totalAchatsHT > 0
-                    ? `Achats réels : ${formatEuro(totalAchatsHT)}`
-                    : 'Depuis les fiches techniques'}
+                  {totalAchatsHT != null && totalAchatsHT > 0 ? `Achats réels : ${formatEuro(totalAchatsHT)}` : 'Depuis les fiches techniques'}
                 </div>
               </div>
 
@@ -475,7 +494,7 @@ export default function MargesDashboardPage() {
             {chartData.length > 0 && (
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : top10Data.length > 0 ? '1fr 1fr' : '1fr',
+                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
                 gap: isMobile ? 12 : 16,
                 marginBottom: 24,
               }}>
@@ -544,7 +563,7 @@ export default function MargesDashboardPage() {
               <p style={{ color: c.texteMuted, fontSize: 14 }}>Aucune vente enregistrée sur cette période.</p>
             ) : (
               <div style={{ background: c.blanc, borderRadius: 12, border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
-                {/* En-tête avec filtres catégorie */}
+                {/* En-tête tableau avec filtres */}
                 <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 13, fontWeight: 500, color: c.texte, marginRight: 4 }}>Détail par plat</span>
                   <button
@@ -583,7 +602,7 @@ export default function MargesDashboardPage() {
                         <th style={thSort} onClick={() => handleTri('designation')}>
                           Désignation{sortIndicator('designation')}
                         </th>
-                        <th style={thNum} onClick={() => handleTri('quantiteVendue')}>
+                        <th style={{ ...thNum }} onClick={() => handleTri('quantiteVendue')}>
                           Qté{sortIndicator('quantiteVendue')}
                         </th>
                         <th style={thNum} onClick={() => handleTri('caNet')}>
@@ -622,9 +641,7 @@ export default function MargesDashboardPage() {
                     </tbody>
                     <tfoot>
                       <tr style={{ fontWeight: 600, background: c.fond }}>
-                        <td style={{ ...td, color: c.texte }}>
-                          Total ({lignesFiltrees.length} plat{lignesFiltrees.length !== 1 ? 's' : ''})
-                        </td>
+                        <td style={{ ...td, color: c.texte }}>Total ({lignesFiltrees.length} plat{lignesFiltrees.length !== 1 ? 's' : ''})</td>
                         <td style={{ ...tdNum, color: c.texte }}>
                           {Number(lignesFiltrees.reduce((s, L) => s + L.quantiteVendue, 0)).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}
                         </td>
@@ -632,24 +649,19 @@ export default function MargesDashboardPage() {
                           {formatEuro(lignesFiltrees.reduce((s, L) => s + L.caNet, 0))}
                         </td>
                         <td style={{ ...tdNum, color: c.texte }}>
-                          {formatEuro(
-                            lignesFiltrees.some((L) => L.coutMatiere != null)
-                              ? lignesFiltrees.reduce((s, L) => s + (L.coutMatiere ?? 0), 0)
-                              : null
-                          )}
+                          {formatEuro(lignesFiltrees.some((L) => L.coutMatiere != null)
+                            ? lignesFiltrees.reduce((s, L) => s + (L.coutMatiere ?? 0), 0)
+                            : null)}
                         </td>
                         <td style={{ ...tdNum, color: c.texte }}>
-                          {formatEuro(
-                            lignesFiltrees.some((L) => L.margeBrute != null)
-                              ? lignesFiltrees.reduce((s, L) => s + (L.margeBrute ?? 0), 0)
-                              : null
-                          )}
+                          {formatEuro(lignesFiltrees.some((L) => L.margeBrute != null)
+                            ? lignesFiltrees.reduce((s, L) => s + (L.margeBrute ?? 0), 0)
+                            : null)}
                         </td>
                         <td style={{ ...tdNum, color: c.texte }}>
                           {(() => {
                             const totalCa = lignesFiltrees.reduce((s, L) => s + L.caNet, 0)
-                            const hasMarge = lignesFiltrees.some((L) => L.margeBrute != null)
-                            const totalMarge = hasMarge
+                            const totalMarge = lignesFiltrees.some((L) => L.margeBrute != null)
                               ? lignesFiltrees.reduce((s, L) => s + (L.margeBrute ?? 0), 0)
                               : null
                             return totalMarge != null && totalCa > 0 ? formatPct((totalMarge / totalCa) * 100) : '—'
