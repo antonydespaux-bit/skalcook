@@ -225,9 +225,26 @@ export async function POST(request) {
       }
     }
 
-    allIngredients = allIngredients
+    const allIngredientsBeforeFilter = allIngredients
       .map(ing => ({ ...ing, est_critique: criticalIds.has(ing.ingredient_id) }))
-      .filter(ing => ing.est_critique)
+    allIngredients = allIngredientsBeforeFilter.filter(ing => ing.est_critique)
+
+    // Limiter le Flash à 20-25 ingrédients
+    const FLASH_MIN = 20
+    const FLASH_MAX = 25
+    if (allIngredients.length > FLASH_MAX) {
+      allIngredients = allIngredients
+        .sort((a, b) => (b.prix_kg || 0) - (a.prix_kg || 0))
+        .slice(0, FLASH_MAX)
+    } else if (allIngredients.length < FLASH_MIN) {
+      const includedIds = new Set(allIngredients.map(i => i.ingredient_id))
+      const extras = allIngredientsBeforeFilter
+        .filter(ing => !includedIds.has(ing.ingredient_id))
+        .sort((a, b) => (b.prix_kg || 0) - (a.prix_kg || 0))
+        .slice(0, FLASH_MIN - allIngredients.length)
+        .map(ing => ({ ...ing, est_critique: false }))
+      allIngredients = [...allIngredients, ...extras]
+    }
   }
 
   // Créer l'inventaire

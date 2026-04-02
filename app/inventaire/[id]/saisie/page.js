@@ -24,6 +24,7 @@ export default function SaisieInventairePage() {
   const [catFiltre, setCatFiltre] = useState('tous')
   const [showAddPanel, setShowAddPanel] = useState(false)
   const [addingIngredient, setAddingIngredient] = useState(false)
+  const [validating, setValidating] = useState(false)
   const debounceTimers = useRef({})
 
   useEffect(() => { loadData() }, [])
@@ -123,6 +124,30 @@ export default function SaisieInventairePage() {
     debounceTimers.current[ligneId] = setTimeout(() => {
       saveLigne(ligneId, value)
     }, 500)
+  }
+
+  const handleValider = async () => {
+    if (!window.confirm('Valider définitivement cet inventaire ? Cette action est irréversible.')) return
+    setValidating(true)
+    try {
+      const clientId = await getClientId()
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/inventaire/valider', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ inventaire_id: inventaireId, client_id: clientId })
+      })
+      if (res.ok) {
+        router.push(`/inventaire/${inventaireId}`)
+      } else {
+        const json = await res.json()
+        alert(json.error || 'Erreur lors de la validation.')
+        setValidating(false)
+      }
+    } catch {
+      alert('Erreur réseau.')
+      setValidating(false)
+    }
   }
 
   const handleAddIngredient = async (ingredientId) => {
@@ -376,22 +401,36 @@ export default function SaisieInventairePage() {
           )}
         </div>
 
-        {/* Bouton récap */}
-        {nbSaisis > 0 && (
-          <div style={{ position: 'sticky', bottom: '16px', padding: '12px 0', marginTop: '16px' }}>
+        {/* Actions sticky */}
+        <div style={{ position: 'sticky', bottom: '16px', padding: '12px 0', marginTop: '16px' }}>
+          <div style={{ display: 'flex', gap: '8px' }}>
             <button
-              onClick={() => router.push(`/inventaire/${inventaireId}`)}
+              onClick={() => router.push('/inventaire')}
               style={{
-                width: '100%', padding: '14px', background: pctProgress === 100 ? '#16A34A' : c.accent,
+                flex: 1, padding: '14px', background: c.blanc,
+                border: `0.5px solid ${c.bordure}`, borderRadius: '12px',
+                color: c.texte, fontSize: '14px', cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
+              }}
+            >
+              Enregistrer et quitter
+            </button>
+            <button
+              onClick={handleValider}
+              disabled={validating}
+              style={{
+                flex: 2, padding: '14px', background: '#16A34A',
                 color: 'white', border: 'none', borderRadius: '12px',
-                fontSize: '14px', fontWeight: '500', cursor: 'pointer',
+                fontSize: '14px', fontWeight: '500',
+                cursor: validating ? 'not-allowed' : 'pointer',
+                opacity: validating ? 0.7 : 1,
                 boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
               }}
             >
-              {pctProgress === 100 ? 'Voir le récapitulatif →' : `Continuer plus tard (${pctProgress}%)`}
+              {validating ? 'Validation...' : 'Valider l\'inventaire →'}
             </button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   )
