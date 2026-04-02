@@ -11,6 +11,7 @@ export default function InventairePage() {
   const [inventaires, setInventaires] = useState([])
   const [loading, setLoading] = useState(true)
   const [filtre, setFiltre] = useState('tous') // tous | tournant | complet
+  const [deleting, setDeleting] = useState(null)
   const router = useRouter()
   const { c } = useTheme()
   const { role } = useRole()
@@ -30,6 +31,28 @@ export default function InventairePage() {
 
     setInventaires(data || [])
     setLoading(false)
+  }
+
+  const deleteInventaire = async (inv, e) => {
+    e.stopPropagation()
+    if (!window.confirm(`Supprimer cet inventaire brouillon (${inv.type === 'tournant' ? 'Flash' : 'Complet'} — ${inv.section}) ?`)) return
+
+    setDeleting(inv.id)
+    try {
+      const clientId = await getClientId()
+      const { data: { session } } = await supabase.auth.getSession()
+      await fetch('/api/inventaire/delete', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ inventaire_id: inv.id, client_id: clientId })
+      })
+      await loadInventaires()
+    } finally {
+      setDeleting(null)
+    }
   }
 
   const brouillon = inventaires.find(i => i.statut === 'brouillon')
@@ -146,7 +169,24 @@ export default function InventairePage() {
                     {inv.date_validation && ` — validé le ${formatDate(inv.date_validation)}`}
                   </div>
                 </div>
-                <span style={{ fontSize: '16px', color: c.texteMuted }}>›</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {inv.statut === 'brouillon' && (
+                    <button
+                      onClick={(e) => deleteInventaire(inv, e)}
+                      disabled={deleting === inv.id}
+                      style={{
+                        padding: '6px 10px', background: 'none',
+                        border: `0.5px solid ${c.bordure}`, borderRadius: '8px',
+                        fontSize: '13px', color: deleting === inv.id ? c.texteMuted : '#DC2626',
+                        cursor: deleting === inv.id ? 'not-allowed' : 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {deleting === inv.id ? '...' : 'Supprimer'}
+                    </button>
+                  )}
+                  <span style={{ fontSize: '16px', color: c.texteMuted }}>›</span>
+                </div>
               </div>
             ))}
           </div>

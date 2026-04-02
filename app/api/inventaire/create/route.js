@@ -78,8 +78,8 @@ export async function POST(request) {
 
     // Achats
     let achats = {}
-    const factureQuery = db.from('achats_factures').select('id').eq('client_id', client_id)
-    if (pd) factureQuery.gt('date_facture', pd)
+    let factureQuery = db.from('achats_factures').select('id').eq('client_id', client_id)
+    if (pd) factureQuery = factureQuery.gt('date_facture', pd)
     const { data: factures } = await factureQuery
     if (factures && factures.length > 0) {
       const { data: lignesAchat } = await db
@@ -108,8 +108,8 @@ export async function POST(request) {
     const ficheIngTable = isBar ? 'fiche_bar_ingredients' : 'fiche_ingredients'
     const ficheFK = isBar ? 'fiche_bar_id' : 'fiche_id'
 
-    const ventesQuery = db.from('ventes_journalieres').select('fiche_id, quantite_vendue').eq('client_id', client_id)
-    if (pd) ventesQuery.gt('jour', pd)
+    let ventesQuery = db.from('ventes_journalieres').select('fiche_id, quantite_vendue').eq('client_id', client_id)
+    if (pd) ventesQuery = ventesQuery.gt('jour', pd)
     const { data: ventes } = await ventesQuery
 
     if (ventes && ventes.length > 0) {
@@ -206,6 +206,12 @@ export async function POST(request) {
     allIngredients = allIngredients
       .map(ing => ({ ...ing, est_critique: criticalIds.has(ing.ingredient_id) }))
       .filter(ing => ing.est_critique)
+
+    if (allIngredients.length === 0) {
+      return Response.json({
+        error: 'Aucun ingrédient critique trouvé (Pareto). Vérifiez que des achats ont été saisis dans les 3 derniers mois.'
+      }, { status: 422 })
+    }
   }
 
   // Créer l'inventaire
