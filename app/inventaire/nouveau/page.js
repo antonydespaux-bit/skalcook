@@ -20,7 +20,7 @@ export default function NouvelInventairePage() {
 
   const canChooseSection = role === 'admin' || role === 'directeur'
 
-  const handleCreate = async (chosenSection) => {
+  const handleCreate = async (chosenSection, chosenType) => {
     setCreating(true)
     setError('')
     try {
@@ -36,7 +36,7 @@ export default function NouvelInventairePage() {
         },
         body: JSON.stringify({
           client_id: clientId,
-          type,
+          type: chosenType,
           section: chosenSection,
         })
       })
@@ -59,8 +59,9 @@ export default function NouvelInventairePage() {
     setType(t)
     if (!canChooseSection) {
       // Déterminer automatiquement la section selon le rôle
+      // Passer t directement : setType est asynchrone, le state n'est pas encore mis à jour
       const sec = role === 'bar' ? 'bar' : 'cuisine'
-      handleCreate(sec)
+      handleCreate(sec, t)
     } else {
       setStep(2)
     }
@@ -68,7 +69,7 @@ export default function NouvelInventairePage() {
 
   const selectSection = (s) => {
     setSection(s)
-    handleCreate(s)
+    handleCreate(s, type)
   }
 
   const cardStyle = (selected) => ({
