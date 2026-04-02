@@ -26,7 +26,7 @@ export default function DetailInventairePage() {
     if (!clientId) { router.push('/'); return }
 
     const [{ data: inv }, { data: lig }] = await Promise.all([
-      supabase.from('inventaires').select('*').eq('id', inventaireId).maybeSingle(),
+      supabase.from('inventaires').select('*').eq('id', inventaireId).eq('client_id', clientId).maybeSingle(),
       supabase.from('inventaire_lignes').select('*').eq('inventaire_id', inventaireId).eq('client_id', clientId).order('nom_ingredient'),
     ])
 

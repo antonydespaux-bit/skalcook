@@ -33,6 +33,7 @@ export default function SaisieInventairePage() {
       .from('inventaires')
       .select('*')
       .eq('id', inventaireId)
+      .eq('client_id', clientId)
       .maybeSingle()
 
     if (!inv) { router.push('/inventaire'); return }
