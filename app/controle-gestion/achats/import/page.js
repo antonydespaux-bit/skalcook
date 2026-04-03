@@ -597,10 +597,10 @@ export default function AchatsImportPage() {
 
         {/* ══ STEP : REVIEW ══════════════════════════════════════════════════ */}
         {(step === 'review' || step === 'saving') && (
-          <div style={isMobile ? { display: 'flex', flexDirection: 'column', gap: 20 } : { display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 0, alignItems: 'start', minHeight: 'calc(100vh - 140px)' }}>
+          <div style={isMobile ? { display: 'flex', flexDirection: 'column', gap: 20 } : { display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 0, alignItems: 'start' }}>
 
             {/* ── Colonne gauche : métadonnées + lignes ── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: isMobile ? 0 : '0 24px 0 0', overflowY: isMobile ? 'visible' : 'auto', maxHeight: isMobile ? 'none' : 'calc(100vh - 140px)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: isMobile ? 0 : '0 24px 0 0' }}>
 
               {/* Aperçu fichier — mobile uniquement */}
               {isMobile && previewUrl && (
@@ -892,7 +892,7 @@ export default function AchatsImportPage() {
 
             {/* ── Colonne droite : aperçu PDF ── */}
             {!isMobile && (
-              <div style={{ position: 'sticky', top: 80, height: 'calc(100vh - 140px)', display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${c.bordure}`, paddingLeft: 24 }}>
+              <div style={{ position: 'sticky', top: 76, height: 'calc(100vh - 90px)', display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${c.bordure}`, paddingLeft: 24 }}>
                 {previewUrl && (
                   isPdf ? (
                     <iframe
