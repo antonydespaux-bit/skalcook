@@ -171,6 +171,7 @@ export default function Navbar({ section = 'cuisine' }) {
             { label: 'Inventaire',       path: '/inventaire' },
             ...(role === 'admin' || role === 'directeur' ? [{ label: 'Achats',        path: '/controle-gestion/achats' }] : []),
             ...(role === 'admin' || role === 'directeur' ? [{ label: 'Fournisseurs',  path: '/controle-gestion/fournisseurs' }] : []),
+            ...(role === 'admin' || role === 'directeur' ? [{ label: 'Mercuriale',    path: '/controle-gestion/mercuriale' }] : []),
             ...(role === 'admin' || role === 'directeur' ? [{ label: 'Marges',        path: '/controle-gestion/marges' }] : []),
             ...(role === 'admin' ? [{ label: 'Import ventes', path: '/controle-gestion/import' }] : []),
           ]
