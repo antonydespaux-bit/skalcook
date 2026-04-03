@@ -118,6 +118,9 @@ export default function AchatsImportPage() {
   // Création d'ingrédient inline : _id de la ligne en cours | null
   const [creatingIngFor, setCreatingIngFor] = useState(null)
   const [newIngNom, setNewIngNom] = useState('')
+  // Liaison à un ingrédient existant : _id de la ligne en cours | null
+  const [linkingIngFor, setLinkingIngFor] = useState(null)
+  const [linkSearch, setLinkSearch] = useState('')
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const fileInputRef = useRef(null)
@@ -380,6 +383,25 @@ export default function AchatsImportPage() {
       setError(err.message)
     }
   }, [clientId, newIngNom])
+
+  const handleLinkIngredient = useCallback((ligne, ing) => {
+    const prixEff = Number(ligne.prix_unitaire_ht) * (1 - (Number(ligne.remise) || 0) / 100)
+    const prixActuel = ing.prix_kg ? Number(ing.prix_kg) : null
+    const deltaPrix = prixActuel && prixEff ? ((prixEff - prixActuel) / prixActuel) * 100 : null
+    setLignes(prev => prev.map(l =>
+      l._id !== ligne._id ? l : {
+        ...l,
+        ingredient_id:  ing.id,
+        ingredient_nom: ing.nom,
+        prix_actuel:    prixActuel,
+        deltaPrix,
+        reconnu:        true,
+        updatePrice:    false,
+      }
+    ))
+    setLinkingIngFor(null)
+    setLinkSearch('')
+  }, [])
 
   const handleSave = useCallback(async (forceInsert = false) => {
     if (!fournisseur.trim()) { setError('Le nom du fournisseur est requis.'); return }
@@ -778,9 +800,13 @@ export default function AchatsImportPage() {
                               </td>
                               <td style={{ ...td, textAlign: 'center' }}>
                                 {l.reconnu ? (
-                                  <span style={badgeVert}>✓ Reconnu</span>
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                    <span style={badgeVert}>✓ Reconnu</span>
+                                    {l.ingredient_nom && <span style={{ fontSize: 10, color: c.texteMuted }}>{l.ingredient_nom}</span>}
+                                    <button onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }} style={{ fontSize: 10, padding: '1px 5px', background: 'transparent', border: `1px solid ${c.bordure}`, color: c.texteMuted, borderRadius: 4, cursor: 'pointer', marginTop: 2 }}>Changer</button>
+                                  </div>
                                 ) : creatingIngFor === l._id ? (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 160 }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
                                     <input
                                       autoFocus
                                       style={{ ...inputS, fontSize: 12, padding: '3px 6px' }}
@@ -794,11 +820,42 @@ export default function AchatsImportPage() {
                                       <button onClick={() => { setCreatingIngFor(null); setNewIngNom('') }} style={{ padding: '2px 6px', fontSize: 11, background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 4, cursor: 'pointer' }}>✕</button>
                                     </div>
                                   </div>
+                                ) : linkingIngFor === l._id ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 200 }}>
+                                    <input
+                                      autoFocus
+                                      style={{ ...inputS, fontSize: 12, padding: '3px 6px' }}
+                                      value={linkSearch}
+                                      placeholder="Rechercher un ingrédient…"
+                                      onChange={e => setLinkSearch(e.target.value)}
+                                      onKeyDown={e => { if (e.key === 'Escape') { setLinkingIngFor(null); setLinkSearch('') } }}
+                                    />
+                                    <div style={{ maxHeight: 140, overflowY: 'auto', border: `1px solid ${c.bordure}`, borderRadius: 6, background: c.blanc }}>
+                                      {Object.values(ingredientsById)
+                                        .filter(ing => !linkSearch.trim() || normDesig(ing.nom).includes(normDesig(linkSearch)))
+                                        .sort((a, b) => a.nom.localeCompare(b.nom))
+                                        .slice(0, 20)
+                                        .map(ing => (
+                                          <button key={ing.id} onClick={() => handleLinkIngredient(l, ing)}
+                                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '5px 8px', fontSize: 11, background: 'transparent', border: 'none', borderBottom: `1px solid ${c.bordure}`, cursor: 'pointer', color: c.texte }}
+                                          >{ing.nom}</button>
+                                        ))
+                                      }
+                                      {Object.values(ingredientsById).filter(ing => !linkSearch.trim() || normDesig(ing.nom).includes(normDesig(linkSearch))).length === 0 && (
+                                        <p style={{ margin: 0, padding: '6px 8px', fontSize: 11, color: c.texteMuted }}>Aucun résultat</p>
+                                      )}
+                                    </div>
+                                    <button onClick={() => { setLinkingIngFor(null); setLinkSearch('') }} style={{ padding: '2px 6px', fontSize: 11, background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 4, cursor: 'pointer' }}>✕ Annuler</button>
+                                  </div>
                                 ) : (
                                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
                                     <span style={badgeGris}>Inconnu</span>
                                     <button
-                                      onClick={() => { setCreatingIngFor(l._id); setNewIngNom(l.designation) }}
+                                      onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }}
+                                      style={{ fontSize: 10, padding: '2px 6px', background: '#EFF6FF', border: `1px solid #BFDBFE`, color: '#1D4ED8', borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                    >🔗 Lier un ingrédient</button>
+                                    <button
+                                      onClick={() => { setCreatingIngFor(l._id); setNewIngNom(l.designation); setLinkingIngFor(null) }}
                                       style={{ fontSize: 10, padding: '2px 6px', background: 'transparent', border: `1px solid ${c.accent}`, color: c.accent, borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap' }}
                                     >＋ Créer l'ingrédient</button>
                                   </div>
@@ -857,7 +914,7 @@ export default function AchatsImportPage() {
                           {l.ingredient_nom && (
                             <p style={{ margin: '0 0 8px', fontSize: 12, color: c.texteMuted }}>→ {l.ingredient_nom}</p>
                           )}
-                          {!l.reconnu && creatingIngFor === l._id ? (
+                          {creatingIngFor === l._id ? (
                             <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
                               <input
                                 autoFocus
@@ -870,12 +927,50 @@ export default function AchatsImportPage() {
                               <button onClick={() => handleCreateIngredient(l)} style={{ padding: '6px 10px', background: c.vert, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Créer</button>
                               <button onClick={() => { setCreatingIngFor(null); setNewIngNom('') }} style={{ padding: '6px 8px', background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>✕</button>
                             </div>
+                          ) : linkingIngFor === l._id ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+                              <input
+                                autoFocus
+                                style={{ ...inputS, fontSize: 13 }}
+                                value={linkSearch}
+                                placeholder="Rechercher un ingrédient…"
+                                onChange={e => setLinkSearch(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Escape') { setLinkingIngFor(null); setLinkSearch('') } }}
+                              />
+                              <div style={{ maxHeight: 160, overflowY: 'auto', border: `1px solid ${c.bordure}`, borderRadius: 8, background: c.blanc }}>
+                                {Object.values(ingredientsById)
+                                  .filter(ing => !linkSearch.trim() || normDesig(ing.nom).includes(normDesig(linkSearch)))
+                                  .sort((a, b) => a.nom.localeCompare(b.nom))
+                                  .slice(0, 20)
+                                  .map(ing => (
+                                    <button key={ing.id} onClick={() => handleLinkIngredient(l, ing)}
+                                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 13, background: 'transparent', border: 'none', borderBottom: `1px solid ${c.bordure}`, cursor: 'pointer', color: c.texte }}
+                                    >{ing.nom}</button>
+                                  ))
+                                }
+                                {Object.values(ingredientsById).filter(ing => !linkSearch.trim() || normDesig(ing.nom).includes(normDesig(linkSearch))).length === 0 && (
+                                  <p style={{ margin: 0, padding: '8px 12px', fontSize: 13, color: c.texteMuted }}>Aucun résultat</p>
+                                )}
+                              </div>
+                              <button onClick={() => { setLinkingIngFor(null); setLinkSearch('') }} style={{ alignSelf: 'flex-start', padding: '5px 10px', fontSize: 12, background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 6, cursor: 'pointer' }}>✕ Annuler</button>
+                            </div>
                           ) : !l.reconnu ? (
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                              <button
+                                onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }}
+                                style={{ fontSize: 12, padding: '5px 10px', background: '#EFF6FF', border: `1px solid #BFDBFE`, color: '#1D4ED8', borderRadius: 6, cursor: 'pointer' }}
+                              >🔗 Lier</button>
+                              <button
+                                onClick={() => { setCreatingIngFor(l._id); setNewIngNom(l.designation); setLinkingIngFor(null) }}
+                                style={{ fontSize: 12, padding: '5px 10px', background: 'transparent', border: `1px solid ${c.accent}`, color: c.accent, borderRadius: 6, cursor: 'pointer' }}
+                              >＋ Créer</button>
+                            </div>
+                          ) : (
                             <button
-                              onClick={() => { setCreatingIngFor(l._id); setNewIngNom(l.designation) }}
-                              style={{ fontSize: 12, padding: '5px 10px', background: 'transparent', border: `1px solid ${c.accent}`, color: c.accent, borderRadius: 6, cursor: 'pointer', marginBottom: 8 }}
-                            >＋ Créer l'ingrédient</button>
-                          ) : null}
+                              onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }}
+                              style={{ fontSize: 11, padding: '3px 8px', background: 'transparent', border: `1px solid ${c.bordure}`, color: c.texteMuted, borderRadius: 6, cursor: 'pointer', marginBottom: 6 }}
+                            >Changer l'ingrédient lié</button>
+                          )}
                           {/* Ligne 2 : Qté / Unité / Prix */}
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
                             <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }}>
