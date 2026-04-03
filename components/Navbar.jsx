@@ -166,10 +166,11 @@ export default function Navbar({ section = 'cuisine' }) {
         }] : []),
         ...(hasModule('controle-gestion') ? [{
           label: 'Gestion',
-          paths: ['/controle-gestion/marges', '/controle-gestion/import'],
+          paths: ['/controle-gestion/marges', '/controle-gestion/import', '/controle-gestion/achats'],
           items: [
             { label: 'Dashboard Marges', path: '/controle-gestion/marges' },
             { label: 'Import ventes',    path: '/controle-gestion/import' },
+            { label: 'Achats',           path: '/controle-gestion/achats/import' },
           ]
         }] : []),
       ].filter(g => g.items.length > 0)
