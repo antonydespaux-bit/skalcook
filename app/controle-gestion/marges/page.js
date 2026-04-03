@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase, getClientId, getParametres } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
+import { useRole } from '../../../lib/useRole'
 import { getSeuilsFromParams } from '../../../lib/foodCost'
 import Navbar from '../../../components/Navbar'
 import * as XLSX from 'xlsx'
@@ -150,6 +151,8 @@ export default function MargesDashboardPage() {
   const isMobile = useIsMobile()
   const { c } = useTheme()
 
+  const { role, loading: roleLoading } = useRole()
+
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
   const [params, setParams] = useState({})
@@ -189,6 +192,11 @@ export default function MargesDashboardPage() {
     })()
     return () => { cancelled = true }
   }, [router])
+
+  useEffect(() => {
+    if (roleLoading || !role) return
+    if (role !== 'admin' && role !== 'directeur') router.replace('/dashboard')
+  }, [role, roleLoading, router])
 
   // ── Changement de période ────────────────────────────────────────────────────
 
@@ -520,15 +528,17 @@ export default function MargesDashboardPage() {
 
         {/* ── Boutons d'action ── */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-          <button
-            onClick={() => router.push('/controle-gestion/import')}
-            style={{
-              padding: '7px 14px', borderRadius: 8, fontSize: 13,
-              border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
-            }}
-          >
-            ⬆ Importer les ventes
-          </button>
+          {role === 'admin' && (
+            <button
+              onClick={() => router.push('/controle-gestion/import')}
+              style={{
+                padding: '7px 14px', borderRadius: 8, fontSize: 13,
+                border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
+              }}
+            >
+              ⬆ Importer les ventes
+            </button>
+          )}
           {lignes.length > 0 && (
             <button
               onClick={exportMenuEngineering}

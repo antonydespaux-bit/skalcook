@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase, getClientId } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
+import { useRole } from '../../../lib/useRole'
 import Navbar from '../../../components/Navbar'
 
 const CHAMPS = [
@@ -22,6 +23,8 @@ export default function FournisseursPage() {
   const router = useRouter()
   const isMobile = useIsMobile()
   const { c } = useTheme()
+
+  const { role, loading: roleLoading } = useRole()
 
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
@@ -54,6 +57,11 @@ export default function FournisseursPage() {
     })()
     return () => { cancelled = true }
   }, [router])
+
+  useEffect(() => {
+    if (roleLoading || !role) return
+    if (role !== 'admin' && role !== 'directeur') router.replace('/dashboard')
+  }, [role, roleLoading, router])
 
   const loadFournisseurs = useCallback(async () => {
     setLoading(true)
@@ -180,17 +188,19 @@ export default function FournisseursPage() {
             >
               ← Achats
             </button>
-            <button
-              onClick={openCreate}
-              style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, border: 'none', background: c.accent, color: '#fff', cursor: 'pointer', fontWeight: 500 }}
-            >
-              + Nouveau fournisseur
-            </button>
+            {role === 'admin' && (
+              <button
+                onClick={openCreate}
+                style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, border: 'none', background: c.accent, color: '#fff', cursor: 'pointer', fontWeight: 500 }}
+              >
+                + Nouveau fournisseur
+              </button>
+            )}
           </div>
         </div>
 
         {/* Formulaire création / édition */}
-        {mode && (
+        {mode && role === 'admin' && (
           <div style={{
             background: c.blanc, borderRadius: 12, border: `0.5px solid ${c.accent}`,
             padding: isMobile ? 16 : 24, marginBottom: 20,
@@ -288,37 +298,39 @@ export default function FournisseursPage() {
                         <div style={{ marginTop: 6, fontSize: 12, color: c.texteMuted, fontStyle: 'italic' }}>{f.notes}</div>
                       )}
                     </div>
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                      <button
-                        onClick={() => openEdit(f)}
-                        style={{ padding: '6px 12px', borderRadius: 7, fontSize: 12, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}
-                      >
-                        Modifier
-                      </button>
-                      {confirmDelete === f.id ? (
-                        <>
-                          <button
-                            onClick={() => handleDelete(f.id)}
-                            style={{ padding: '6px 12px', borderRadius: 7, fontSize: 12, border: 'none', background: '#A32D2D', color: '#fff', cursor: 'pointer', fontWeight: 500 }}
-                          >
-                            Confirmer
-                          </button>
-                          <button
-                            onClick={() => setConfirmDelete(null)}
-                            style={{ padding: '6px 12px', borderRadius: 7, fontSize: 12, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}
-                          >
-                            ✕
-                          </button>
-                        </>
-                      ) : (
+                    {role === 'admin' && (
+                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                         <button
-                          onClick={() => setConfirmDelete(f.id)}
-                          style={{ padding: '6px 12px', borderRadius: 7, fontSize: 12, border: `1px solid ${c.bordure}`, background: c.blanc, color: '#A32D2D', cursor: 'pointer' }}
+                          onClick={() => openEdit(f)}
+                          style={{ padding: '6px 12px', borderRadius: 7, fontSize: 12, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}
                         >
-                          Supprimer
+                          Modifier
                         </button>
-                      )}
-                    </div>
+                        {confirmDelete === f.id ? (
+                          <>
+                            <button
+                              onClick={() => handleDelete(f.id)}
+                              style={{ padding: '6px 12px', borderRadius: 7, fontSize: 12, border: 'none', background: '#A32D2D', color: '#fff', cursor: 'pointer', fontWeight: 500 }}
+                            >
+                              Confirmer
+                            </button>
+                            <button
+                              onClick={() => setConfirmDelete(null)}
+                              style={{ padding: '6px 12px', borderRadius: 7, fontSize: 12, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}
+                            >
+                              ✕
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDelete(f.id)}
+                            style={{ padding: '6px 12px', borderRadius: 7, fontSize: 12, border: `1px solid ${c.bordure}`, background: c.blanc, color: '#A32D2D', cursor: 'pointer' }}
+                          >
+                            Supprimer
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

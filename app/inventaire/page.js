@@ -22,6 +22,11 @@ export default function InventairePage() {
   const { role } = useRole()
   const isMobile = useIsMobile()
 
+  useEffect(() => {
+    if (!role) return
+    if (role !== 'admin' && role !== 'directeur') router.replace('/dashboard')
+  }, [role, router])
+
   useEffect(() => { loadInventaires() }, [])
 
   const loadInventaires = async () => {
@@ -132,12 +137,14 @@ export default function InventairePage() {
               {hasDashboardData ? `Dernier inventaire validé · ${formatDate(inventaires.find(i => i.statut === 'valide')?.date_inventaire)}` : 'Aucun inventaire validé'}
             </p>
           </div>
-          <button
-            onClick={() => router.push('/inventaire/nouveau')}
-            style={{ padding: '10px 20px', background: c.accent, color: 'white', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}
-          >
-            + Nouvel inventaire
-          </button>
+          {role === 'admin' && (
+            <button
+              onClick={() => router.push('/inventaire/nouveau')}
+              style={{ padding: '10px 20px', background: c.accent, color: 'white', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}
+            >
+              + Nouvel inventaire
+            </button>
+          )}
         </div>
 
         {/* ── KPI Cards ── */}
@@ -297,7 +304,7 @@ export default function InventairePage() {
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {inv.statut === 'brouillon' && (
+                  {role === 'admin' && inv.statut === 'brouillon' && (
                     <button
                       onClick={(e) => { e.stopPropagation(); router.push(`/inventaire/${inv.id}/saisie`) }}
                       style={{
@@ -310,19 +317,21 @@ export default function InventairePage() {
                       Modifier
                     </button>
                   )}
-                  <button
-                    onClick={(e) => deleteInventaire(inv, e)}
-                    disabled={deleting === inv.id}
-                    style={{
-                      padding: '6px 10px', background: 'none',
-                      border: `0.5px solid ${c.bordure}`, borderRadius: '8px',
-                      fontSize: '13px', color: deleting === inv.id ? c.texteMuted : '#DC2626',
-                      cursor: deleting === inv.id ? 'not-allowed' : 'pointer',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {deleting === inv.id ? '...' : 'Supprimer'}
-                  </button>
+                  {role === 'admin' && (
+                    <button
+                      onClick={(e) => deleteInventaire(inv, e)}
+                      disabled={deleting === inv.id}
+                      style={{
+                        padding: '6px 10px', background: 'none',
+                        border: `0.5px solid ${c.bordure}`, borderRadius: '8px',
+                        fontSize: '13px', color: deleting === inv.id ? c.texteMuted : '#DC2626',
+                        cursor: deleting === inv.id ? 'not-allowed' : 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {deleting === inv.id ? '...' : 'Supprimer'}
+                    </button>
+                  )}
                   <span style={{ fontSize: '16px', color: c.texteMuted }}>›</span>
                 </div>
               </div>

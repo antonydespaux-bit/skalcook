@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase, getClientId } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
+import { useRole } from '../../../lib/useRole'
 import Navbar from '../../../components/Navbar'
 
 function formatEuro(n) {
@@ -22,6 +23,7 @@ export default function AchatsListPage() {
   const isMobile = useIsMobile()
   const { c } = useTheme()
 
+  const { role, loading: roleLoading } = useRole()
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
   const [factures, setFactures] = useState([])
@@ -44,6 +46,11 @@ export default function AchatsListPage() {
     })()
     return () => { cancelled = true }
   }, [router])
+
+  useEffect(() => {
+    if (roleLoading || !role) return
+    if (role !== 'admin' && role !== 'directeur') router.replace('/dashboard')
+  }, [role, roleLoading, router])
 
   const loadFactures = useCallback(async () => {
     setLoading(true)
@@ -146,15 +153,17 @@ export default function AchatsListPage() {
             >
               🏢 Fournisseurs
             </button>
-            <button
-              onClick={() => router.push('/controle-gestion/achats/import')}
-              style={{
-                padding: '8px 14px', borderRadius: 8, fontSize: 13,
-                border: 'none', background: c.accent, color: '#fff', cursor: 'pointer', fontWeight: 500,
-              }}
-            >
-              + Nouvelle facture
-            </button>
+            {role === 'admin' && (
+              <button
+                onClick={() => router.push('/controle-gestion/achats/import')}
+                style={{
+                  padding: '8px 14px', borderRadius: 8, fontSize: 13,
+                  border: 'none', background: c.accent, color: '#fff', cursor: 'pointer', fontWeight: 500,
+                }}
+              >
+                + Nouvelle facture
+              </button>
+            )}
           </div>
         </div>
 

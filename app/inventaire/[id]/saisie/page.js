@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase, getClientId } from '../../../../lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import { useTheme } from '../../../../lib/useTheme'
+import { useRole } from '../../../../lib/useRole'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import Navbar from '../../../../components/Navbar'
 import IngredientSearch from '../../../../components/IngredientSearch'
@@ -12,6 +13,7 @@ export default function SaisieInventairePage() {
   const inventaireId = params.id
   const router = useRouter()
   const { c } = useTheme()
+  const { role } = useRole()
   const isMobile = useIsMobile()
 
   const [inventaire, setInventaire] = useState(null)
@@ -26,6 +28,11 @@ export default function SaisieInventairePage() {
   const [addingIngredient, setAddingIngredient] = useState(false)
   const [validating, setValidating] = useState(false)
   const debounceTimers = useRef({})
+
+  useEffect(() => {
+    if (!role) return
+    if (role !== 'admin') router.replace('/inventaire')
+  }, [role, router])
 
   useEffect(() => { loadData() }, [])
 

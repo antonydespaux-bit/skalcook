@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import { useTheme } from '../../../../lib/useTheme'
+import { useRole } from '../../../../lib/useRole'
 import Navbar from '../../../../components/Navbar'
 
 function formatEuro(n) {
@@ -28,6 +29,8 @@ export default function AchatsDetailPage() {
   const isMobile = useIsMobile()
   const { c } = useTheme()
 
+  const { role, loading: roleLoading } = useRole()
+
   const [authReady, setAuthReady] = useState(false)
   const [facture, setFacture] = useState(null)
   const [lignes, setLignes] = useState([])
@@ -48,6 +51,11 @@ export default function AchatsDetailPage() {
     })()
     return () => { cancelled = true }
   }, [router])
+
+  useEffect(() => {
+    if (roleLoading || !role) return
+    if (role !== 'admin' && role !== 'directeur') router.replace('/dashboard')
+  }, [role, roleLoading, router])
 
   useEffect(() => {
     if (!authReady || !id) return
