@@ -61,7 +61,7 @@ export default function AchatsListPage() {
 
     const { data: rows, error: fErr } = await supabase
       .from('achats_factures')
-      .select('id, fournisseur, fournisseur_id, numero_facture, date_facture, total_ht, taux_tva, created_at')
+      .select('id, fournisseur, numero_facture, date_facture, total_ht, created_at')
       .eq('client_id', cid)
       .order('date_facture', { ascending: false })
 
@@ -204,8 +204,6 @@ export default function AchatsListPage() {
                         <th style={th}>Date</th>
                         <th style={thR}>Articles</th>
                         <th style={thR}>Total HT</th>
-                        <th style={thR}>TVA</th>
-                        <th style={thR}>Total TTC</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -234,16 +232,6 @@ export default function AchatsListPage() {
                             <td style={tdM}>{formatDate(f.date_facture)}</td>
                             <td style={tdM}>{nb}</td>
                             <td style={tdR}>{formatEuro(ht)}</td>
-                            <td style={tdM}>
-                              {tva != null
-                                ? `${tva} %`
-                                : <span style={{ color: c.bordure }}>—</span>}
-                            </td>
-                            <td style={tdR}>
-                              {ttc != null
-                                ? formatEuro(ttc)
-                                : <span style={{ color: c.bordure }}>—</span>}
-                            </td>
                           </tr>
                         )
                       })}
@@ -255,7 +243,6 @@ export default function AchatsListPage() {
                         </td>
                         <td style={td} colSpan={3} />
                         <td style={{ ...tdR, color: c.texte }}>{formatEuro(totalHT)}</td>
-                        <td style={td} colSpan={2} />
                       </tr>
                     </tfoot>
                   </table>
