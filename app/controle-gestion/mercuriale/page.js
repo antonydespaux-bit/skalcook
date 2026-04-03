@@ -46,6 +46,10 @@ export default function MercurialePage() {
   const [addingFor, setAddingFor] = useState(null) // { ingredientId, fourn }
   const [addQty, setAddQty] = useState('')
 
+  // ── Article hors mercuriale ────────────────────────────────────────────────
+  const [showLibre, setShowLibre] = useState(false)
+  const [libreForm, setLibreForm] = useState({ fourn: '', designation: '', quantite: '', unite: '', prix_ref: '' })
+
   // ─── Auth ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
@@ -137,6 +141,28 @@ export default function MercurialePage() {
       return { ...prev, [fourn]: updated }
     })
   }, [])
+
+  const confirmAddLibre = useCallback((overrideForm) => {
+    const form = overrideForm ?? libreForm
+    const fourn = form.fourn === '__nouveau__' ? (form.fournCustom?.trim() || '') : form.fourn
+    const { designation, quantite, unite, prix_ref } = form
+    if (!fourn || !designation.trim() || !quantite) return
+    const qty = parseFloat(String(quantite).replace(',', '.'))
+    if (!qty || qty <= 0) return
+    const prix = prix_ref ? parseFloat(String(prix_ref).replace(',', '.')) : null
+    const item = {
+      ingredient_id:  `libre_${Date.now()}`,
+      ingredient_nom: designation.trim(),
+      unite:          unite.trim() || '—',
+      prix_ref:       prix ?? 0,
+      quantite:       qty,
+      fournisseur_id: null,
+      libre:          true,
+    }
+    setPanier(prev => ({ ...prev, [fourn]: [...(prev[fourn] ?? []), item] }))
+    setLibreForm({ fourn: '', designation: '', quantite: '', unite: '', prix_ref: '' })
+    setShowLibre(false)
+  }, [libreForm])
 
   // ─── Filtres ──────────────────────────────────────────────────────────────
   const filteredRows = rows.filter(row => {
@@ -434,6 +460,102 @@ export default function MercurialePage() {
             </div>
           </div>
         )}
+
+        {/* ── Article hors mercuriale ── */}
+        <div style={{ marginTop: 20 }}>
+          {!showLibre ? (
+            <button
+              onClick={() => { setShowLibre(true); setLibreForm(f => ({ ...f, fourn: fournisseurs[0] ?? '' })) }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer',
+                background: 'transparent', border: `1px dashed ${c.bordure}`,
+                color: c.texteMuted, width: '100%', justifyContent: 'center',
+              }}
+            >
+              + Ajouter un article hors mercuriale
+            </button>
+          ) : (
+            <div style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 10, padding: 16 }}>
+              <p style={{ margin: '0 0 12px', fontWeight: 600, fontSize: 14, color: c.texte }}>Article hors mercuriale</p>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 2fr 1fr 1fr 1fr', gap: 10, alignItems: 'end' }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
+                  Fournisseur *
+                  <select
+                    value={libreForm.fourn}
+                    onChange={e => setLibreForm(f => ({ ...f, fourn: e.target.value }))}
+                    style={{ padding: '7px 10px', borderRadius: 7, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 13 }}
+                  >
+                    <option value="">— choisir —</option>
+                    {fournisseurs.map(fn => <option key={fn} value={fn}>{fn}</option>)}
+                    <option value="__nouveau__">+ Autre fournisseur…</option>
+                  </select>
+                  {libreForm.fourn === '__nouveau__' && (
+                    <input
+                      autoFocus
+                      placeholder="Nom du fournisseur"
+                      value={libreForm.fournCustom ?? ''}
+                      onChange={e => setLibreForm(f => ({ ...f, fournCustom: e.target.value }))}
+                      style={{ marginTop: 4, padding: '7px 10px', borderRadius: 7, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 13 }}
+                    />
+                  )}
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
+                  Désignation *
+                  <input
+                    placeholder="Nom du produit"
+                    value={libreForm.designation}
+                    onChange={e => setLibreForm(f => ({ ...f, designation: e.target.value }))}
+                    style={{ padding: '7px 10px', borderRadius: 7, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 13 }}
+                  />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
+                  Quantité *
+                  <input
+                    type="number" min="0" step="0.1"
+                    placeholder="ex. 5"
+                    value={libreForm.quantite}
+                    onChange={e => setLibreForm(f => ({ ...f, quantite: e.target.value }))}
+                    style={{ padding: '7px 10px', borderRadius: 7, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 13 }}
+                  />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
+                  Unité
+                  <input
+                    placeholder="kg, L, pce…"
+                    value={libreForm.unite}
+                    onChange={e => setLibreForm(f => ({ ...f, unite: e.target.value }))}
+                    style={{ padding: '7px 10px', borderRadius: 7, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 13 }}
+                  />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
+                  Prix réf. (€)
+                  <input
+                    type="number" min="0" step="0.01"
+                    placeholder="optionnel"
+                    value={libreForm.prix_ref}
+                    onChange={e => setLibreForm(f => ({ ...f, prix_ref: e.target.value }))}
+                    style={{ padding: '7px 10px', borderRadius: 7, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 13 }}
+                  />
+                </label>
+              </div>
+              <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+                <button
+                  onClick={() => confirmAddLibre()}
+                  style={{ padding: '8px 20px', background: c.vert, color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
+                >
+                  + Ajouter au panier
+                </button>
+                <button
+                  onClick={() => { setShowLibre(false); setLibreForm({ fourn: '', designation: '', quantite: '', unite: '', prix_ref: '' }) }}
+                  style={{ padding: '8px 14px', background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 7, cursor: 'pointer', fontSize: 13, color: c.texteMuted }}
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
