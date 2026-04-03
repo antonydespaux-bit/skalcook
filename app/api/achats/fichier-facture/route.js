@@ -3,19 +3,27 @@ import { requireAdminOrSuperadmin, getServiceClient } from '../../../../lib/apiG
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
-    const clientId   = searchParams.get('clientId')
-    const factureId  = searchParams.get('factureId')
+    const clientId  = searchParams.get('clientId')
+    const factureId = searchParams.get('factureId')
 
     if (!clientId || !factureId) {
-      return Response.json({ error: 'clientId et factureId requis.' }, { status: 400 })
+      return new Response('clientId et factureId requis.', { status: 400 })
     }
 
-    const { response: authError } = await requireAdminOrSuperadmin(request, clientId)
+    // Le token peut venir du header Authorization OU du query param (pour les iframes)
+    const tokenParam = searchParams.get('token')
+    let authRequest = request
+    if (tokenParam && !request.headers.get('authorization')) {
+      const headers = new Headers(request.headers)
+      headers.set('authorization', `Bearer ${tokenParam}`)
+      authRequest = new Request(request.url, { headers, method: request.method })
+    }
+
+    const { response: authError } = await requireAdminOrSuperadmin(authRequest, clientId)
     if (authError) return authError
 
     const db = getServiceClient()
 
-    // Récupère le chemin du fichier
     const { data: facture, error: fErr } = await db
       .from('achats_factures')
       .select('fichier_url')
@@ -23,19 +31,35 @@ export async function GET(request) {
       .eq('client_id', clientId)
       .single()
 
-    if (fErr || !facture) return Response.json({ error: 'Facture introuvable.' }, { status: 404 })
-    if (!facture.fichier_url) return Response.json({ url: null })
+    if (fErr || !facture) return new Response('Facture introuvable.', { status: 404 })
+    if (!facture.fichier_url) return new Response('Aucun fichier.', { status: 404 })
 
-    // Génère une URL signée valable 1 heure
-    const { data: signed, error: sErr } = await db.storage
+    // Télécharge le fichier depuis Storage et le renvoie directement
+    // → même origine, pas de problème CSP
+    const { data: fileData, error: dErr } = await db.storage
       .from('factures')
-      .createSignedUrl(facture.fichier_url, 3600)
+      .download(facture.fichier_url)
 
-    if (sErr) return Response.json({ error: sErr.message }, { status: 500 })
+    if (dErr || !fileData) return new Response('Fichier introuvable dans le storage.', { status: 404 })
 
-    return Response.json({ url: signed.signedUrl, path: facture.fichier_url })
+    const ext = facture.fichier_url.split('.').pop().toLowerCase()
+    const mime = ext === 'pdf' ? 'application/pdf'
+      : ext === 'png'  ? 'image/png'
+      : ext === 'webp' ? 'image/webp'
+      : 'image/jpeg'
+
+    const buffer = Buffer.from(await fileData.arrayBuffer())
+
+    return new Response(buffer, {
+      status: 200,
+      headers: {
+        'Content-Type': mime,
+        'Content-Disposition': 'inline',
+        'Cache-Control': 'private, max-age=3600',
+      },
+    })
   } catch (err) {
     console.error('fichier-facture error:', err)
-    return Response.json({ error: err.message }, { status: 500 })
+    return new Response(err.message, { status: 500 })
   }
 }
