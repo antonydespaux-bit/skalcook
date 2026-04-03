@@ -679,15 +679,15 @@ export default function AchatsImportPage() {
                 {lignes.length > 0 && !isMobile && (
                   /* ── Tableau desktop ── */
                   <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 950 }}>
                       <thead>
                         <tr style={{ background: c.fond }}>
-                          <th style={{ ...th, width: '36%' }}>Désignation</th>
+                          <th style={{ ...th, width: '32%' }}>Désignation</th>
                           <th style={{ ...th, width: '7%', textAlign: 'right' }}>Qté</th>
                           <th style={{ ...th, width: '6%' }}>Unité</th>
-                          <th style={{ ...th, width: '9%', textAlign: 'right' }}>Prix HT/u</th>
-                          <th style={{ ...th, width: '9%', textAlign: 'right' }}>Total HT</th>
-                          <th style={{ ...th, width: '9%', textAlign: 'center' }}>Reconnu</th>
+                          <th style={{ ...th, width: '10%', textAlign: 'right' }}>Prix HT/u</th>
+                          <th style={{ ...th, width: '10%', textAlign: 'right' }}>Total HT</th>
+                          <th style={{ ...th, width: '13%', textAlign: 'center' }}>Reconnu</th>
                           <th style={{ ...th, width: '8%', textAlign: 'center' }}>Δ Prix</th>
                           <th style={{ ...th, width: '8%', textAlign: 'center' }}>MAJ prix</th>
                           <th style={{ ...th, width: '8%' }} />
