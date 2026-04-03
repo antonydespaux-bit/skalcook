@@ -83,7 +83,11 @@ export async function POST(request) {
           }
         })
       )
-    if (lErr) throw new Error(lErr.message)
+    if (lErr) {
+      // Rollback : supprimer la facture header déjà insérée
+      await db.from('achats_factures').delete().eq('id', facture.id)
+      throw new Error(lErr.message)
+    }
 
     // c) Mise à jour ingredients.prix_kg pour les lignes cochées
     const toUpdate = lignes.filter(l => l.updatePrice && l.ingredient_id)
