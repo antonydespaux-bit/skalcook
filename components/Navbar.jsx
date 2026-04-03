@@ -169,7 +169,8 @@ export default function Navbar({ section = 'cuisine' }) {
           paths: ['/inventaire', '/controle-gestion'],
           items: [
             { label: 'Inventaire',       path: '/inventaire' },
-            ...(role === 'admin' ? [{ label: 'Achats',         path: '/controle-gestion/achats/import' }] : []),
+            ...(role === 'admin' ? [{ label: 'Achats',         path: '/controle-gestion/achats' }] : []),
+            ...(role === 'admin' ? [{ label: 'Fournisseurs',   path: '/controle-gestion/fournisseurs' }] : []),
             ...(role === 'admin' ? [{ label: 'Marges',         path: '/controle-gestion/marges' }] : []),
             ...(role === 'admin' ? [{ label: 'Import ventes',  path: '/controle-gestion/import' }] : []),
           ]
