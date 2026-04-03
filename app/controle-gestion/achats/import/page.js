@@ -83,6 +83,8 @@ export default function AchatsImportPage() {
   // ── Fichier ───────────────────────────────────────────────────────────────
   const [previewUrl, setPreviewUrl] = useState(null)
   const [isPdf, setIsPdf] = useState(false)
+  const [fileBase64, setFileBase64] = useState(null)
+  const [fileMime, setFileMime] = useState(null)
 
   // ── Métadonnées facture ───────────────────────────────────────────────────
   const [fournisseur, setFournisseur] = useState('')
@@ -217,6 +219,8 @@ export default function AchatsImportPage() {
   const extractFromImage = useCallback(async (file) => {
     try {
       const base64 = await fileToBase64(file)
+      setFileBase64(base64)
+      setFileMime(file.type)
       const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/achats/parse-facture', {
         method: 'POST',
@@ -330,6 +334,8 @@ export default function AchatsImportPage() {
     setStep('upload')
     setPreviewUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null })
     setIsPdf(false)
+    setFileBase64(null)
+    setFileMime(null)
     setFournisseur('')
     setDateFacture(yesterdayIso())
     setNumeroFacture('')
@@ -419,7 +425,7 @@ export default function AchatsImportPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ clientId, fournisseur, numeroFacture, dateFacture, statut, lignes, forceInsert }),
+        body: JSON.stringify({ clientId, fournisseur, numeroFacture, dateFacture, statut, lignes, forceInsert, fileBase64, fileMime }),
       })
       const result = await res.json()
 
@@ -438,7 +444,7 @@ export default function AchatsImportPage() {
       setError(err.message || 'Erreur lors de l\'enregistrement.')
       setStep('review')
     }
-  }, [clientId, fournisseur, numeroFacture, dateFacture, statut, lignes])
+  }, [clientId, fournisseur, numeroFacture, dateFacture, statut, lignes, fileBase64, fileMime])
 
   // ─── Styles partagés ─────────────────────────────────────────────────────
 

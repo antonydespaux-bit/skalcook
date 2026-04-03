@@ -3,7 +3,7 @@ import { requireAdminOrSuperadmin, getServiceClient } from '../../../../lib/apiG
 export async function POST(request) {
   try {
     const body = await request.json()
-    const { clientId, fournisseur, numeroFacture, dateFacture, statut, lignes } = body ?? {}
+    const { clientId, fournisseur, numeroFacture, dateFacture, statut, lignes, fileBase64, fileMime } = body ?? {}
 
     if (!clientId || !fournisseur || !dateFacture || !Array.isArray(lignes)) {
       return Response.json(
@@ -66,7 +66,30 @@ export async function POST(request) {
       if (newF) fournisseurId = newF.id
     }
 
-    // b) Insertion achats_factures
+    // b) Upload fichier dans Storage (si fourni)
+    let fichierUrl = null
+    if (fileBase64 && fileMime) {
+      try {
+        const ext = fileMime === 'application/pdf' ? 'pdf'
+          : fileMime === 'image/png' ? 'png'
+          : fileMime === 'image/webp' ? 'webp'
+          : 'jpg'
+        const path = `${clientId}/${Date.now()}.${ext}`
+        const buffer = Buffer.from(fileBase64, 'base64')
+        const { error: upErr } = await db.storage
+          .from('factures')
+          .upload(path, buffer, { contentType: fileMime, upsert: false })
+        if (upErr) {
+          console.warn('Storage upload échoué (non bloquant) :', upErr.message)
+        } else {
+          fichierUrl = path
+        }
+      } catch (upEx) {
+        console.warn('Storage upload exception (non bloquant) :', upEx.message)
+      }
+    }
+
+    // c) Insertion achats_factures
     const totalHt = lignes.reduce((s, l) => {
       const r = Number(l.remise) || 0
       return s + (Number(l.quantite) || 0) * Number(l.prix_unitaire_ht) * (1 - r / 100)
@@ -81,12 +104,13 @@ export async function POST(request) {
         date_facture:   dateFacture,
         total_ht:       totalHt,
         statut:         statut === 'bl' ? 'bl' : 'facture',
+        fichier_url:    fichierUrl,
       })
       .select()
       .single()
     if (fErr) throw new Error(fErr.message)
 
-    // b) Insertion achats_lignes
+    // d) Insertion achats_lignes
     const { error: lErr } = await db
       .from('achats_lignes')
       .insert(
