@@ -597,6 +597,7 @@ export default function AchatsImportPage() {
 
         {/* ══ STEP : REVIEW ══════════════════════════════════════════════════ */}
         {(step === 'review' || step === 'saving') && (
+          <>
           <div style={isMobile ? { display: 'flex', flexDirection: 'column', gap: 20 } : { display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 0, alignItems: 'start' }}>
 
             {/* ── Colonne gauche : métadonnées + lignes ── */}
@@ -922,6 +923,7 @@ export default function AchatsImportPage() {
               </button>
             </div>
           </div>
+          </>
         )}
 
         {/* ══ STEP : DONE ════════════════════════════════════════════════════ */}
