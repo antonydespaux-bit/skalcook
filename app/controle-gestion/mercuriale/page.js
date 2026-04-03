@@ -293,9 +293,9 @@ export default function MercurialePage() {
         {/* ── Tableau mercuriale ── */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: 40, color: c.texteMuted, fontSize: 14 }}>Chargement…</div>
-        ) : filteredRows.length === 0 ? (
+        ) : filteredRows.length === 0 && ghostRows.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40, color: c.texteMuted, fontSize: 14 }}>
-            {rows.length === 0
+            {rows.length === 0 && allIngredients.length === 0
               ? 'Aucune donnée — importez des factures avec des ingrédients liés pour voir la mercuriale.'
               : 'Aucun résultat pour ce filtre.'}
           </div>
