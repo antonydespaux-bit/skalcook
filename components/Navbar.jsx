@@ -173,6 +173,17 @@ export default function Navbar({ section = 'cuisine' }) {
             ...(hasModule('ardoise') ? [{ label: 'Ardoise', path: '/admin/ardoise' }] : []),
           ]
         }] : []),
+        ...(hasModule('gestion') ? [{
+          label: 'Gestion',
+          paths: ['/inventaire', '/controle-gestion'],
+          items: [
+            { label: 'Inventaire',       path: '/inventaire' },
+            ...(role === 'admin' ? [{ label: 'Achats',         path: '/controle-gestion/achats' }] : []),
+            ...(role === 'admin' ? [{ label: 'Fournisseurs',   path: '/controle-gestion/fournisseurs' }] : []),
+            ...(role === 'admin' ? [{ label: 'Marges',         path: '/controle-gestion/marges' }] : []),
+            ...(role === 'admin' ? [{ label: 'Import ventes',  path: '/controle-gestion/import' }] : []),
+          ]
+        }] : []),
       ].filter(g => g.items.length > 0)
 
   // ─── Styles réutilisés ───────────────────────────────────────────────────────
