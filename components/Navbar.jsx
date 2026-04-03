@@ -154,7 +154,7 @@ export default function Navbar({ section = 'cuisine' }) {
             ...(hasModule('avis')                      ? [{ label: 'Avis clients',    path: '/avis' }]         : []),
           ]
         },
-        ...(hasModule('gestion') && (role === 'admin' || role === 'directeur') ? [{
+        ...(role === 'admin' ? [{
           label: 'Admin',
           paths: ['/parametres', '/admin', '/admin/logs', '/admin/ardoise'],
           items: [
