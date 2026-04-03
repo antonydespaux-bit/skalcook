@@ -71,7 +71,7 @@ export default function Navbar({ section = 'cuisine' }) {
   const LOGO_EMOJI         = isBar ? '🍸'                   : '🍽️'
 
   // ─── Modules / Rôles ─────────────────────────────────────────────────────────
-  const DEFAULT_CUISINE_MODULES = ['fiches', 'sous-fiches', 'recap', 'ingredients', 'menus', 'cartes', 'avis', 'ardoise']
+  const DEFAULT_CUISINE_MODULES = ['fiches', 'sous-fiches', 'recap', 'ingredients', 'menus', 'cartes', 'avis', 'ardoise', 'gestion']
   const modules     = tenant?.modules_actifs || (isBar ? ['fiches', 'sous-fiches', 'recap', 'ingredients'] : DEFAULT_CUISINE_MODULES)
   const hasModule   = (id) => modules.includes(id)
   const hasBar      = typeof tenant?.has_bar === 'boolean' ? tenant.has_bar : hasModule('bar')
@@ -164,13 +164,14 @@ export default function Navbar({ section = 'cuisine' }) {
             ...(hasModule('ardoise') ? [{ label: 'Ardoise', path: '/admin/ardoise' }] : []),
           ]
         }] : []),
-        ...(hasModule('controle-gestion') ? [{
+        ...(hasModule('gestion') ? [{
           label: 'Gestion',
-          paths: ['/controle-gestion/marges', '/controle-gestion/import', '/controle-gestion/achats'],
+          paths: ['/inventaire', '/controle-gestion'],
           items: [
-            { label: 'Dashboard Marges', path: '/controle-gestion/marges' },
-            { label: 'Import ventes',    path: '/controle-gestion/import' },
-            { label: 'Achats',           path: '/controle-gestion/achats/import' },
+            { label: 'Inventaire',       path: '/inventaire' },
+            ...(role === 'admin' ? [{ label: 'Achats',         path: '/controle-gestion/achats/import' }] : []),
+            ...(role === 'admin' ? [{ label: 'Marges',         path: '/controle-gestion/marges' }] : []),
+            ...(role === 'admin' ? [{ label: 'Import ventes',  path: '/controle-gestion/import' }] : []),
           ]
         }] : []),
       ].filter(g => g.items.length > 0)

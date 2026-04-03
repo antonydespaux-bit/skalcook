@@ -18,7 +18,7 @@ const MODULES_DISPONIBLES = [
   { id: 'ingredients', label: 'Ingrédients', emoji: '🥦' },
   { id: 'ardoise', label: 'Ardoise', emoji: '🖊️' },
   { id: 'cartes', label: 'Cartes', emoji: '🍽️' },
-  { id: 'controle-gestion', label: 'Contrôle de Gestion', emoji: '📈' },
+  { id: 'gestion', label: 'Gestion (stocks, achats, marges)', emoji: '📦' },
 ]
 
 const COULEURS_PRESETS = [
