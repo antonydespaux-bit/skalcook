@@ -640,16 +640,49 @@ export default function AchatsImportPage() {
                 </div>
               </div>
 
-              {/* ── Lignes : Desktop tableau / Mobile cards ── */}
-              <div style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 12, overflow: 'hidden' }}>
-                <div style={{ padding: '12px 16px', borderBottom: `1px solid ${c.bordure}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: c.texte }}>
-                    Lignes de la facture{lignes.length > 0 && ` (${lignes.length})`}
-                  </p>
-                  <button style={{ ...btnSecondary, padding: '6px 12px', fontSize: 13, width: 'auto' }} onClick={addLigne}>
-                    + Ajouter une ligne
-                  </button>
-                </div>
+            </div>
+
+            {/* ── Colonne droite : aperçu PDF ── */}
+            {!isMobile && (
+              <div style={{ position: 'sticky', top: 76, height: 'calc(100vh - 90px)', display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${c.bordure}`, paddingLeft: 24 }}>
+                {previewUrl && (
+                  isPdf ? (
+                    <iframe
+                      src={previewUrl}
+                      title="Aperçu facture PDF"
+                      style={{ width: '100%', flex: 1, borderRadius: 10, border: `1px solid ${c.bordure}` }}
+                    />
+                  ) : (
+                    <img
+                      src={previewUrl}
+                      alt="Aperçu facture"
+                      style={{ width: '100%', flex: 1, objectFit: 'contain', borderRadius: 10, border: `1px solid ${c.bordure}`, background: c.blanc }}
+                    />
+                  )
+                )}
+                {!previewUrl && (
+                  <div style={{ flex: 1, background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
+                    Aucun fichier
+                  </div>
+                )}
+                <button style={{ ...btnSecondary, marginTop: 10, width: '100%' }} onClick={resetForm}>
+                  ↩ Changer de fichier
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ── Lignes pleine largeur ── */}
+          <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ padding: '12px 16px', borderBottom: `1px solid ${c.bordure}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: c.texte }}>
+                  Lignes de la facture{lignes.length > 0 && ` (${lignes.length})`}
+                </p>
+                <button style={{ ...btnSecondary, padding: '6px 12px', fontSize: 13, width: 'auto' }} onClick={addLigne}>
+                  + Ajouter une ligne
+                </button>
+              </div>
 
                 {lignes.length === 0 && (
                   <p style={{ padding: 20, margin: 0, fontSize: 13, color: c.texteMuted, textAlign: 'center' }}>
@@ -866,58 +899,28 @@ export default function AchatsImportPage() {
                     })}
                   </div>
                 )}
-              </div>
-
-              {/* Récapitulatif total */}
-              {lignes.length > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12, fontSize: 14, color: c.texteMuted }}>
-                  <span>Total HT :</span>
-                  <span style={{ fontWeight: 700, fontSize: 16, color: c.texte }}>
-                    {fmtPrix(lignes.reduce((s, l) => s + (Number(l.quantite) || 0) * (Number(l.prix_unitaire_ht) || 0), 0))}
-                  </span>
-                </div>
-              )}
-
-              {/* Bouton enregistrer */}
-              <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10, justifyContent: 'flex-end' }}>
-                <button
-                  style={{ ...btnPrimary, opacity: step === 'saving' ? 0.6 : 1 }}
-                  disabled={step === 'saving'}
-                  onClick={() => handleSave()}
-                >
-                  {step === 'saving' ? 'Enregistrement…' : '💾 Enregistrer les achats et mettre à jour les prix'}
-                </button>
-              </div>
             </div>
 
-            {/* ── Colonne droite : aperçu PDF ── */}
-            {!isMobile && (
-              <div style={{ position: 'sticky', top: 76, height: 'calc(100vh - 90px)', display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${c.bordure}`, paddingLeft: 24 }}>
-                {previewUrl && (
-                  isPdf ? (
-                    <iframe
-                      src={previewUrl}
-                      title="Aperçu facture PDF"
-                      style={{ width: '100%', flex: 1, borderRadius: 10, border: `1px solid ${c.bordure}` }}
-                    />
-                  ) : (
-                    <img
-                      src={previewUrl}
-                      alt="Aperçu facture"
-                      style={{ width: '100%', flex: 1, objectFit: 'contain', borderRadius: 10, border: `1px solid ${c.bordure}`, background: c.blanc }}
-                    />
-                  )
-                )}
-                {!previewUrl && (
-                  <div style={{ flex: 1, background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
-                    Aucun fichier
-                  </div>
-                )}
-                <button style={{ ...btnSecondary, marginTop: 10, width: '100%' }} onClick={resetForm}>
-                  ↩ Changer de fichier
-                </button>
+            {/* Récapitulatif total */}
+            {lignes.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12, fontSize: 14, color: c.texteMuted }}>
+                <span>Total HT :</span>
+                <span style={{ fontWeight: 700, fontSize: 16, color: c.texte }}>
+                  {fmtPrix(lignes.reduce((s, l) => s + (Number(l.quantite) || 0) * (Number(l.prix_unitaire_ht) || 0), 0))}
+                </span>
               </div>
             )}
+
+            {/* Bouton enregistrer */}
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                style={{ ...btnPrimary, opacity: step === 'saving' ? 0.6 : 1 }}
+                disabled={step === 'saving'}
+                onClick={() => handleSave()}
+              >
+                {step === 'saving' ? 'Enregistrement…' : '💾 Enregistrer les achats et mettre à jour les prix'}
+              </button>
+            </div>
           </div>
         )}
 
