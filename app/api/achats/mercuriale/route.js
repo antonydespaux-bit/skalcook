@@ -47,6 +47,15 @@ export async function GET(request) {
       if (ings) ingredientsById = Object.fromEntries(ings.map(i => [i.id, i]))
     }
 
+    // Tous les ingrédients du client (pour la recherche "hors mercuriale")
+    const { data: allIngs } = await db
+      .from('ingredients')
+      .select('id, nom, unite')
+      .eq('client_id', clientId)
+      .eq('est_sous_fiche', false)
+      .order('nom')
+    const allIngredients = (allIngs ?? []).map(i => ({ id: i.id, nom: i.nom, unite: i.unite ?? '' }))
+
     // Agrège par (ingredient_id, fournisseur)
     // Structure : { [ingredientId]: { [fournisseur]: [{ prix, date }] } }
     const agg = {}
@@ -104,7 +113,7 @@ export async function GET(request) {
       }
     }).sort((a, b) => a.ingredient_nom.localeCompare(b.ingredient_nom))
 
-    return Response.json({ rows, fournisseurs })
+    return Response.json({ rows, fournisseurs, allIngredients })
   } catch (err) {
     console.error('mercuriale error:', err)
     return Response.json({ error: err.message }, { status: 500 })

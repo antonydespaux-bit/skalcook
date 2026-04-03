@@ -34,6 +34,7 @@ export default function MercurialePage() {
   const [clientId, setClientId] = useState(null)
   const [rows, setRows] = useState([])
   const [fournisseurs, setFournisseurs] = useState([])
+  const [allIngredients, setAllIngredients] = useState([]) // tous les ingrédients du client
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -41,14 +42,14 @@ export default function MercurialePage() {
   const [search, setSearch] = useState('')
   const [filterFourn, setFilterFourn] = useState('all')
 
-  // ── Panier (step 2 : prêt côté UI) ────────────────────────────────────────
+  // ── Panier ─────────────────────────────────────────────────────────────────
   const [panier, setPanier] = useState({}) // { fournisseur: [{...}] }
-  const [addingFor, setAddingFor] = useState(null) // { ingredientId, fourn }
+  const [addingFor, setAddingFor] = useState(null) // { ingredientId, fourn } — article mercuriale
   const [addQty, setAddQty] = useState('')
-
-  // ── Article hors mercuriale ────────────────────────────────────────────────
-  const [showLibre, setShowLibre] = useState(false)
-  const [libreForm, setLibreForm] = useState({ fourn: '', designation: '', quantite: '', unite: '', prix_ref: '' })
+  // Article hors mercuriale : { ingredientId, nom, unite } | null
+  const [ghostAdding, setGhostAdding] = useState(null)
+  const [ghostQty, setGhostQty] = useState('')
+  const [ghostFourn, setGhostFourn] = useState('')
 
   // ─── Auth ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -89,6 +90,7 @@ export default function MercurialePage() {
       if (!res.ok) throw new Error(result.error || 'Erreur chargement mercuriale')
       setRows(result.rows ?? [])
       setFournisseurs(result.fournisseurs ?? [])
+      setAllIngredients(result.allIngredients ?? [])
     } catch (err) {
       setError(err.message)
     } finally {
@@ -142,27 +144,27 @@ export default function MercurialePage() {
     })
   }, [])
 
-  const confirmAddLibre = useCallback((overrideForm) => {
-    const form = overrideForm ?? libreForm
-    const fourn = form.fourn === '__nouveau__' ? (form.fournCustom?.trim() || '') : form.fourn
-    const { designation, quantite, unite, prix_ref } = form
-    if (!fourn || !designation.trim() || !quantite) return
-    const qty = parseFloat(String(quantite).replace(',', '.'))
-    if (!qty || qty <= 0) return
-    const prix = prix_ref ? parseFloat(String(prix_ref).replace(',', '.')) : null
+  const confirmGhostAdd = useCallback(() => {
+    const qty = parseFloat(ghostQty.replace(',', '.'))
+    if (!qty || qty <= 0 || !ghostFourn || !ghostAdding) return
     const item = {
-      ingredient_id:  `libre_${Date.now()}`,
-      ingredient_nom: designation.trim(),
-      unite:          unite.trim() || '—',
-      prix_ref:       prix ?? 0,
+      ingredient_id:  ghostAdding.ingredientId,
+      ingredient_nom: ghostAdding.nom,
+      unite:          ghostAdding.unite || '—',
+      prix_ref:       0,
       quantite:       qty,
       fournisseur_id: null,
-      libre:          true,
     }
-    setPanier(prev => ({ ...prev, [fourn]: [...(prev[fourn] ?? []), item] }))
-    setLibreForm({ fourn: '', designation: '', quantite: '', unite: '', prix_ref: '' })
-    setShowLibre(false)
-  }, [libreForm])
+    setPanier(prev => {
+      const existing = prev[ghostFourn] ?? []
+      const idx = existing.findIndex(x => x.ingredient_id === ghostAdding.ingredientId)
+      const updated = idx >= 0 ? existing.map((x, i) => i === idx ? item : x) : [...existing, item]
+      return { ...prev, [ghostFourn]: updated }
+    })
+    setGhostAdding(null)
+    setGhostQty('')
+    setGhostFourn('')
+  }, [ghostAdding, ghostQty, ghostFourn])
 
   // ─── Filtres ──────────────────────────────────────────────────────────────
   const filteredRows = rows.filter(row => {
@@ -170,6 +172,15 @@ export default function MercurialePage() {
     const matchFourn = filterFourn === 'all' || row.cols[filterFourn] !== undefined
     return matchSearch && matchFourn
   })
+
+  // Ingrédients connus mais absents de la mercuriale, affichés uniquement si recherche active
+  const mercurialeIds = new Set(rows.map(r => r.ingredient_id))
+  const ghostRows = search.trim()
+    ? allIngredients.filter(ing =>
+        !mercurialeIds.has(ing.id) &&
+        ing.nom.toLowerCase().includes(search.toLowerCase())
+      )
+    : []
 
   // ─── Rendu ────────────────────────────────────────────────────────────────
   if (!authReady) {
@@ -351,6 +362,54 @@ export default function MercurialePage() {
                 })}
               </div>
             ))}
+            {/* Ghost rows mobile */}
+            {ghostRows.map(ing => {
+              const isGhostAdding = ghostAdding?.ingredientId === ing.id
+              const inPanier = Object.values(panier).flat().find(x => x.ingredient_id === ing.id)
+              return (
+                <div key={ing.id} style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 10, overflow: 'hidden', opacity: 0.8 }}>
+                  <div style={{ padding: '10px 14px', borderBottom: `1px solid ${c.bordure}`, background: c.fond, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: c.texte }}>{ing.nom}</p>
+                    <span style={{ fontSize: 10, background: '#F3F4F6', color: c.texteMuted, padding: '1px 6px', borderRadius: 4 }}>Jamais commandé</span>
+                  </div>
+                  <div style={{ padding: '10px 14px' }}>
+                    {isGhostAdding ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input
+                            autoFocus type="number" min="0" step="0.1"
+                            value={ghostQty} onChange={e => setGhostQty(e.target.value)}
+                            placeholder={`qté (${ing.unite || '—'})`}
+                            style={{ flex: 1, padding: '7px 10px', borderRadius: 7, border: `1px solid ${c.bordure}`, fontSize: 13 }}
+                          />
+                          <select
+                            value={ghostFourn} onChange={e => setGhostFourn(e.target.value)}
+                            style={{ flex: 2, padding: '7px 10px', borderRadius: 7, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 13 }}
+                          >
+                            <option value="">— fournisseur —</option>
+                            {fournisseurs.map(fn => <option key={fn} value={fn}>{fn}</option>)}
+                          </select>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button onClick={confirmGhostAdd} style={{ flex: 1, padding: '8px', background: c.vert, color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 13 }}>✓ Ajouter</button>
+                          <button onClick={() => { setGhostAdding(null); setGhostQty(''); setGhostFourn('') }} style={{ padding: '8px 12px', background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 7, cursor: 'pointer', fontSize: 13, color: c.texteMuted }}>✕</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setGhostAdding({ ingredientId: ing.id, nom: ing.nom, unite: ing.unite }); setGhostQty(''); setGhostFourn(fournisseurs[0] ?? '') }}
+                        style={{
+                          padding: '7px 14px', borderRadius: 7, fontSize: 13, cursor: 'pointer', fontWeight: 500,
+                          background: inPanier ? '#DCFCE7' : c.fond,
+                          color: inPanier ? '#16A34A' : c.texte,
+                          border: `1px solid ${inPanier ? '#86EFAC' : c.bordure}`,
+                        }}
+                      >{inPanier ? `✓ ${inPanier.quantite} ${inPanier.unite}` : '+ Commander'}</button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         ) : (
           /* ── Desktop : tableau ── */
@@ -452,110 +511,67 @@ export default function MercurialePage() {
                       })}
                     </tr>
                   ))}
+                  {/* ── Ghost rows : ingrédients hors mercuriale ── */}
+                  {ghostRows.map((ing, idx) => {
+                    const isGhostAdding = ghostAdding?.ingredientId === ing.id
+                    const inPanier = Object.values(panier).flat().find(x => x.ingredient_id === ing.id)
+                    const rowIdx = filteredRows.length + idx
+                    return (
+                      <tr key={ing.id} style={{ borderBottom: `1px solid ${c.bordure}`, background: rowIdx % 2 === 0 ? c.blanc : c.fond, opacity: 0.75 }}>
+                        <td style={{ padding: '10px 16px', color: c.texte, position: 'sticky', left: 0, background: rowIdx % 2 === 0 ? c.blanc : c.fond, zIndex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {ing.nom}
+                            <span style={{ fontSize: 10, background: '#F3F4F6', color: c.texteMuted, padding: '1px 6px', borderRadius: 4 }}>Jamais commandé</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center', color: c.texteMuted, fontSize: 12 }}>{ing.unite}</td>
+                        <td colSpan={fournisseursAffiches.length} style={{ padding: '8px 16px', borderLeft: `1px solid ${c.bordure}` }}>
+                          {isGhostAdding ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <input
+                                autoFocus
+                                type="number" min="0" step="0.1"
+                                value={ghostQty}
+                                onChange={e => setGhostQty(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') confirmGhostAdd(); if (e.key === 'Escape') setGhostAdding(null) }}
+                                placeholder={`qté (${ing.unite || '—'})`}
+                                style={{ width: 100, padding: '5px 8px', borderRadius: 6, border: `1px solid ${c.bordure}`, fontSize: 13 }}
+                              />
+                              <select
+                                value={ghostFourn}
+                                onChange={e => setGhostFourn(e.target.value)}
+                                style={{ padding: '5px 8px', borderRadius: 6, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 13 }}
+                              >
+                                <option value="">— fournisseur —</option>
+                                {fournisseurs.map(fn => <option key={fn} value={fn}>{fn}</option>)}
+                              </select>
+                              <button onClick={confirmGhostAdd} style={{ padding: '5px 10px', background: c.vert, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>✓</button>
+                              <button onClick={() => { setGhostAdding(null); setGhostQty(''); setGhostFourn('') }} style={{ padding: '5px 8px', background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 6, cursor: 'pointer', fontSize: 13, color: c.texteMuted }}>✕</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { setGhostAdding({ ingredientId: ing.id, nom: ing.nom, unite: ing.unite }); setGhostQty(''); setGhostFourn(fournisseurs[0] ?? '') }}
+                              style={{
+                                padding: '5px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer', fontWeight: 500,
+                                background: inPanier ? '#DCFCE7' : c.fond,
+                                color: inPanier ? '#16A34A' : c.texte,
+                                border: `1px solid ${inPanier ? '#86EFAC' : c.bordure}`,
+                              }}
+                            >{inPanier ? `✓ ${inPanier.quantite} ${inPanier.unite}` : '+ Commander'}</button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
             <div style={{ padding: '10px 16px', borderTop: `1px solid ${c.bordure}`, color: c.texteMuted, fontSize: 12 }}>
-              {filteredRows.length} ingrédient{filteredRows.length > 1 ? 's' : ''} · {fournisseurs.length} fournisseur{fournisseurs.length > 1 ? 's' : ''}
+              {filteredRows.length + ghostRows.length} ingrédient{filteredRows.length + ghostRows.length > 1 ? 's' : ''} · {fournisseurs.length} fournisseur{fournisseurs.length > 1 ? 's' : ''}
+              {ghostRows.length > 0 && <span style={{ marginLeft: 8, color: c.texteMuted }}>({ghostRows.length} jamais commandé{ghostRows.length > 1 ? 's' : ''})</span>}
             </div>
           </div>
         )}
-
-        {/* ── Article hors mercuriale ── */}
-        <div style={{ marginTop: 20 }}>
-          {!showLibre ? (
-            <button
-              onClick={() => { setShowLibre(true); setLibreForm(f => ({ ...f, fourn: fournisseurs[0] ?? '' })) }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '8px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer',
-                background: 'transparent', border: `1px dashed ${c.bordure}`,
-                color: c.texteMuted, width: '100%', justifyContent: 'center',
-              }}
-            >
-              + Ajouter un article hors mercuriale
-            </button>
-          ) : (
-            <div style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 10, padding: 16 }}>
-              <p style={{ margin: '0 0 12px', fontWeight: 600, fontSize: 14, color: c.texte }}>Article hors mercuriale</p>
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 2fr 1fr 1fr 1fr', gap: 10, alignItems: 'end' }}>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                  Fournisseur *
-                  <select
-                    value={libreForm.fourn}
-                    onChange={e => setLibreForm(f => ({ ...f, fourn: e.target.value }))}
-                    style={{ padding: '7px 10px', borderRadius: 7, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 13 }}
-                  >
-                    <option value="">— choisir —</option>
-                    {fournisseurs.map(fn => <option key={fn} value={fn}>{fn}</option>)}
-                    <option value="__nouveau__">+ Autre fournisseur…</option>
-                  </select>
-                  {libreForm.fourn === '__nouveau__' && (
-                    <input
-                      autoFocus
-                      placeholder="Nom du fournisseur"
-                      value={libreForm.fournCustom ?? ''}
-                      onChange={e => setLibreForm(f => ({ ...f, fournCustom: e.target.value }))}
-                      style={{ marginTop: 4, padding: '7px 10px', borderRadius: 7, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 13 }}
-                    />
-                  )}
-                </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                  Désignation *
-                  <input
-                    placeholder="Nom du produit"
-                    value={libreForm.designation}
-                    onChange={e => setLibreForm(f => ({ ...f, designation: e.target.value }))}
-                    style={{ padding: '7px 10px', borderRadius: 7, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 13 }}
-                  />
-                </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                  Quantité *
-                  <input
-                    type="number" min="0" step="0.1"
-                    placeholder="ex. 5"
-                    value={libreForm.quantite}
-                    onChange={e => setLibreForm(f => ({ ...f, quantite: e.target.value }))}
-                    style={{ padding: '7px 10px', borderRadius: 7, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 13 }}
-                  />
-                </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                  Unité
-                  <input
-                    placeholder="kg, L, pce…"
-                    value={libreForm.unite}
-                    onChange={e => setLibreForm(f => ({ ...f, unite: e.target.value }))}
-                    style={{ padding: '7px 10px', borderRadius: 7, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 13 }}
-                  />
-                </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                  Prix réf. (€)
-                  <input
-                    type="number" min="0" step="0.01"
-                    placeholder="optionnel"
-                    value={libreForm.prix_ref}
-                    onChange={e => setLibreForm(f => ({ ...f, prix_ref: e.target.value }))}
-                    style={{ padding: '7px 10px', borderRadius: 7, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 13 }}
-                  />
-                </label>
-              </div>
-              <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-                <button
-                  onClick={() => confirmAddLibre()}
-                  style={{ padding: '8px 20px', background: c.vert, color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
-                >
-                  + Ajouter au panier
-                </button>
-                <button
-                  onClick={() => { setShowLibre(false); setLibreForm({ fourn: '', designation: '', quantite: '', unite: '', prix_ref: '' }) }}
-                  style={{ padding: '8px 14px', background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 7, cursor: 'pointer', fontSize: 13, color: c.texteMuted }}
-                >
-                  Annuler
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   )
