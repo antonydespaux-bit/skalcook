@@ -96,21 +96,12 @@ export default function AchatsDetailPage() {
     setLignes(rows || [])
     setLoading(false)
 
-    // Charge l'URL signée du fichier si disponible
+    // Construit l'URL proxy (même origine → pas de CSP)
     if (fac.fichier_url) {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        const res = await fetch(`/api/achats/fichier-facture?clientId=${clientId}&factureId=${fac.id}`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        })
-        const result = await res.json()
-        if (result.url) {
-          setFichierUrl(result.url)
-          setFichierIsPdf(fac.fichier_url.endsWith('.pdf'))
-        }
-      } catch (e) {
-        console.warn('Impossible de charger le fichier :', e.message)
-      }
+      const { data: { session } } = await supabase.auth.getSession()
+      // On passe le token en query param car l'iframe ne peut pas envoyer de header Authorization
+      setFichierUrl(`/api/achats/fichier-facture?clientId=${clientId}&factureId=${fac.id}&token=${session.access_token}`)
+      setFichierIsPdf(fac.fichier_url.endsWith('.pdf'))
     }
   }, [authReady, id, clientId])
 
