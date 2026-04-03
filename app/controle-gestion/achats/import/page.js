@@ -410,7 +410,7 @@ export default function AchatsImportPage() {
       if (!res.ok) throw new Error(result.error || 'Erreur lors de l\'enregistrement.')
 
       setPrixMajCount(result.prix_maj ?? 0)
-      setStep('done')
+      router.push('/controle-gestion/achats')
     } catch (err) {
       console.error('handleSave error:', err)
       setError(err.message || 'Erreur lors de l\'enregistrement.')
