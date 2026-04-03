@@ -45,7 +45,28 @@ export async function POST(request) {
       }
     }
 
-    // a) Insertion achats_factures
+    // a) Upsert fournisseur dans la table fournisseurs (créé si inconnu)
+    let fournisseurId = null
+    const nomFournisseur = fournisseur.trim()
+    const { data: existingF } = await db
+      .from('fournisseurs')
+      .select('id')
+      .eq('client_id', clientId)
+      .ilike('nom', nomFournisseur)
+      .maybeSingle()
+
+    if (existingF) {
+      fournisseurId = existingF.id
+    } else {
+      const { data: newF } = await db
+        .from('fournisseurs')
+        .insert({ client_id: clientId, nom: nomFournisseur })
+        .select('id')
+        .single()
+      if (newF) fournisseurId = newF.id
+    }
+
+    // b) Insertion achats_factures
     const totalHt = lignes.reduce((s, l) => {
       const r = Number(l.remise) || 0
       return s + (Number(l.quantite) || 0) * Number(l.prix_unitaire_ht) * (1 - r / 100)
@@ -54,7 +75,8 @@ export async function POST(request) {
       .from('achats_factures')
       .insert({
         client_id:      clientId,
-        fournisseur:    fournisseur.trim(),
+        fournisseur:    nomFournisseur,
+        fournisseur_id: fournisseurId,
         numero_facture: numeroFacture?.trim() || null,
         date_facture:   dateFacture,
         total_ht:       totalHt,
