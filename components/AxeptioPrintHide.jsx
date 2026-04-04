@@ -13,6 +13,14 @@ export default function AxeptioPrintHide() {
     // Axeptio peut ré-appliquer ses styles inline après notre premier passage.
     // On observe à la fois les mutations DOM (injection du widget) ET les
     // changements d'attribut style sur l'élément lui-même.
+    // Un setInterval de secours rattrape tout ce que le MutationObserver raterait.
+
+    const getAxeptioEl = () =>
+      document.getElementById('axeptio_overlay') ||
+      document.getElementById('axeptio_btn') ||
+      document.querySelector('.axeptio-button') ||
+      null
+
     const applyPos = (el) => {
       if (!el || window.innerWidth >= 768) return
       // Si déjà correct → ne rien faire (empêche la boucle infinie avec styleObserver)
@@ -26,10 +34,17 @@ export default function AxeptioPrintHide() {
       el.style.setProperty('left', 'auto', 'important')
     }
 
+    // Secours toutes les 500 ms — rattrape les ré-applications Axeptio que l'observer manquerait
+    const intervalId = setInterval(() => {
+      if (window.innerWidth >= 768) return
+      const el = getAxeptioEl()
+      if (el) applyPos(el)
+    }, 500)
+
     // Observe les re-styles Axeptio sur l'overlay lui-même
     const styleObserver = new MutationObserver(() => {
       if (window.innerWidth >= 768) return
-      const el = document.getElementById('axeptio_overlay')
+      const el = getAxeptioEl()
       if (el) applyPos(el)
     })
 
@@ -41,7 +56,7 @@ export default function AxeptioPrintHide() {
     // Observe le DOM body pour détecter l'injection initiale du widget
     const observer = new MutationObserver(() => {
       if (window.innerWidth >= 768) return
-      const el = document.getElementById('axeptio_overlay')
+      const el = getAxeptioEl()
       if (!el) return
       applyPos(el)
       attachStyleObserver(el)
@@ -49,7 +64,7 @@ export default function AxeptioPrintHide() {
     observer.observe(document.body, { childList: true, subtree: true })
 
     // Au cas où le widget est déjà présent
-    const existing = document.getElementById('axeptio_overlay')
+    const existing = getAxeptioEl()
     if (existing && window.innerWidth < 768) {
       applyPos(existing)
       attachStyleObserver(existing)
@@ -63,7 +78,7 @@ export default function AxeptioPrintHide() {
       } catch {
         /* ignore */
       }
-      const el = document.getElementById('axeptio_overlay')
+      const el = getAxeptioEl()
       if (el) {
         savedDisplay = el.style.getPropertyValue('display')
         el.style.setProperty('display', 'none', 'important')
@@ -76,7 +91,7 @@ export default function AxeptioPrintHide() {
       } catch {
         /* ignore */
       }
-      const el = document.getElementById('axeptio_overlay')
+      const el = getAxeptioEl()
       if (el) {
         if (savedDisplay) el.style.setProperty('display', savedDisplay)
         else el.style.removeProperty('display')
@@ -96,6 +111,7 @@ export default function AxeptioPrintHide() {
     mql?.addListener?.(onPrintMediaChange)
 
     return () => {
+      clearInterval(intervalId)
       observer.disconnect()
       styleObserver.disconnect()
       window.removeEventListener('beforeprint', hide)

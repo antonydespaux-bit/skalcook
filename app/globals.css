@@ -8,7 +8,11 @@
 
 /* ── Axeptio : repositionner le badge en bas-droite sur mobile ── */
 @media (max-width: 767px) {
-  #axeptio_overlay {
+  #axeptio_overlay,
+  #axeptio_btn,
+  .axeptio-button,
+  [id^="axeptio"][style*="position: fixed"],
+  [id^="axeptio"][style*="position:fixed"] {
     bottom: 72px !important;
     right: 16px !important;
     left: auto !important;
@@ -46,57 +50,4 @@ body {
     display: none !important;
     visibility: hidden !important;
   }
-
-  .print-only {
-    display: block !important;
-  }
-
-  html {
-    background: white !important;
-  }
-
-  body {
-    background: white !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  /* --- RÈGLE PAR DÉFAUT : PORTRAIT (Fiches techniques) --- */
-  @page {
-    size: portrait;
-    margin: 10mm;
-  }
-
-  /* --- RÈGLE SPÉCIFIQUE : PAYSAGE (Allergènes) --- */
-  /* On utilise le nom de page "landscape" */
-  .dashboard-allergenes-print {
-    page: landscape-page;
-  }
-
-  .fiche-photo {
-    max-height: 280px !important;
-    width: 100% !important;
-    object-fit: cover !important;
-    display: block !important;
-    page-break-after: avoid;
-    break-after: avoid;
-  }
-
-  table {
-    page-break-inside: auto;
-  }
-
-  thead {
-    display: table-header-group;
-  }
-
-  tr {
-    page-break-inside: avoid;
-  }
-}
-
-/* Définition du format paysage nommé pour le navigateur */
-@page landscape-page {
-  size: landscape;
-  margin: 5mm;
 }
