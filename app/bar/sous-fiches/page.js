@@ -6,6 +6,7 @@ import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
 import Navbar from '../../../components/Navbar'
+import { ALLERGENES } from '../../../lib/allergenes'
 
 export default function BarSousFichesPage() {
   const [fiches, setFiches] = useState([])
@@ -51,73 +52,39 @@ export default function BarSousFichesPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-
       <Navbar section="bar" />
-
       <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '1000px', margin: '0 auto' }}>
-
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: isMobile ? '8px' : '12px', marginBottom: isMobile ? '16px' : '24px'
-        }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: isMobile ? '8px' : '12px', marginBottom: isMobile ? '16px' : '24px' }}>
           {[
             { label: 'Sous-fiches totales', value: fiches.length },
             { label: 'Coût moyen / unité', value: coutMoyen ? `${coutMoyen.toFixed(2)} €` : '—' },
             { label: 'Utilisées comme ingrédient', value: fiches.length },
           ].map((stat, i) => (
-            <div key={i} style={{
-              background: c.blanc, borderRadius: '10px',
-              padding: isMobile ? '12px' : '16px', border: `0.5px solid ${c.bordure}`
-            }}>
-              <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
-                {stat.label}
-              </div>
+            <div key={i} style={{ background: c.blanc, borderRadius: '10px', padding: isMobile ? '12px' : '16px', border: `0.5px solid ${c.bordure}` }}>
+              <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>{stat.label}</div>
               <div style={{ fontSize: isMobile ? '20px' : '26px', fontWeight: '500', color: c.texte }}>{stat.value}</div>
             </div>
           ))}
         </div>
-
         <input type="text" placeholder="Rechercher une sous-fiche bar..."
           value={recherche} onChange={e => setRecherche(e.target.value)}
-          style={{
-            width: '100%', padding: '10px 14px', borderRadius: '8px',
-            border: `0.5px solid ${c.bordure}`, fontSize: '14px',
-            background: c.blanc, outline: 'none', color: c.texte, marginBottom: '16px'
-          }}
+          style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: c.blanc, outline: 'none', color: c.texte, marginBottom: '16px' }}
         />
-
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px', color: c.texteMuted }}>Chargement...</div>
         ) : fichesFiltrees.length === 0 ? (
-          <div style={{
-            textAlign: 'center', padding: '60px', background: c.blanc,
-            borderRadius: '12px', border: `0.5px solid ${c.bordure}`
-          }}>
+          <div style={{ textAlign: 'center', padding: '60px', background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}` }}>
             <div style={{ fontSize: '14px', color: c.texteMuted, marginBottom: '16px' }}>Aucune sous-fiche bar pour le moment</div>
             {peutModifier && (
-              <button onClick={() => router.push('/bar/fiches/nouvelle')} style={{
-                background: '#C4956A', color: '#3C3489', border: 'none',
-                borderRadius: '8px', padding: '10px 20px', fontSize: '13px',
-                cursor: 'pointer', fontWeight: '600'
-              }}>Créer la première sous-fiche bar</button>
+              <button onClick={() => router.push('/bar/fiches/nouvelle')} style={{ background: '#C4956A', color: '#3C3489', border: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>Créer la première sous-fiche bar</button>
             )}
           </div>
         ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: isMobile ? '10px' : '14px'
-          }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))', gap: isMobile ? '10px' : '14px' }}>
             {fichesFiltrees.map(fiche => {
-              const uniteLabel = (fiche.unite_production && fiche.unite_production !== 'portions')
-                ? fiche.unite_production
-                : 'portion'
-
+              const uniteLabel = (fiche.unite_production && fiche.unite_production !== 'portions') ? fiche.unite_production : 'portion'
               return (
-                <div key={fiche.id} style={{
-                  background: c.blanc, borderRadius: '12px', padding: '18px',
-                  border: `0.5px solid ${c.bordure}`
-                }}>
+                <div key={fiche.id} style={{ background: c.blanc, borderRadius: '12px', padding: '18px', border: `0.5px solid ${c.bordure}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ background: '#7F77DD', color: 'white', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: '500', flexShrink: 0 }}>SF</span>
@@ -130,20 +97,26 @@ export default function BarSousFichesPage() {
                       </div>
                     )}
                   </div>
-                  <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '14px' }}>
+                  <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: fiche.allergenes?.length > 0 ? '8px' : '14px' }}>
                     {fiche.nb_portions} {uniteLabel}{fiche.nb_portions > 1 && uniteLabel === 'portion' ? 's' : ''}
                     {fiche.saison && ` — ${fiche.saison}`}
                   </div>
+                  {fiche.allergenes && fiche.allergenes.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '14px' }}>
+                      {fiche.allergenes.map(id => {
+                        const a = ALLERGENES.find(al => al.id === id)
+                        return a ? (
+                          <span key={id} title={a.label} style={{ background: '#FCEBEB', color: '#A32D2D', border: '0.5px solid #F09595', borderRadius: '20px', padding: '2px 8px', fontSize: '11px', fontWeight: '500' }}>
+                            {a.emoji} {a.label}
+                          </span>
+                        ) : null
+                      })}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => router.push(`/bar/fiches/${fiche.id}`)} style={{
-                      flex: 1, padding: '8px', background: '#EEEDFE', color: '#3C3489',
-                      border: '0.5px solid #AFA9EC', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', fontWeight: '500'
-                    }}>Voir</button>
+                    <button onClick={() => router.push(`/bar/fiches/${fiche.id}`)} style={{ flex: 1, padding: '8px', background: '#EEEDFE', color: '#3C3489', border: '0.5px solid #AFA9EC', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}>Voir</button>
                     {peutModifier && (
-                      <button onClick={() => router.push(`/bar/fiches/${fiche.id}/modifier`)} style={{
-                        flex: 1, padding: '8px', background: 'transparent', color: c.texteMuted,
-                        border: `0.5px solid ${c.bordure}`, borderRadius: '8px', fontSize: '12px', cursor: 'pointer'
-                      }}>Modifier</button>
+                      <button onClick={() => router.push(`/bar/fiches/${fiche.id}/modifier`)} style={{ flex: 1, padding: '8px', background: 'transparent', color: c.texteMuted, border: `0.5px solid ${c.bordure}`, borderRadius: '8px', fontSize: '12px', cursor: 'pointer' }}>Modifier</button>
                     )}
                   </div>
                 </div>

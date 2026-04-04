@@ -18,6 +18,7 @@ export default function FicheDetail() {
   const [clientId, setClientId] = useState(null)
   const [photoPath, setPhotoPath] = useState(null)
   const [signedUrl, setSignedUrl] = useState(null)
+  const [allergenesCascade, setAllergenesCascade] = useState([])
   const router = useRouter()
   const params_route = useParams()
   const isMobile = useIsMobile()
@@ -82,12 +83,25 @@ export default function FicheDetail() {
       // Chargement ingrédients SANS filtre client_id sur la table de jointure
       const { data: ingsData, error: errIngs } = await supabase
         .from('fiche_ingredients')
-        .select(`quantite, unite, ingredients (id, nom, prix_kg, unite)`)
+        .select(`quantite, unite, ingredients (id, nom, prix_kg, unite, est_sous_fiche, fiche_id)`)
         .eq('fiche_id', params_route.id)
         .eq('client_id', cId)
 
       if (errIngs) console.error('Ingrédients error:', errIngs)
       setIngredients(ingsData || [])
+
+      const sousFicheIds = (ingsData || [])
+        .filter(ing => ing.ingredients?.est_sous_fiche && ing.ingredients?.fiche_id)
+        .map(ing => ing.ingredients.fiche_id)
+      if (sousFicheIds.length > 0) {
+        const { data: sfFiches } = await supabase
+          .from('fiches')
+          .select('allergenes')
+          .in('id', sousFicheIds)
+          .eq('client_id', cId)
+        const sfAllergs = (sfFiches || []).flatMap(sf => sf.allergenes || [])
+        setAllergenesCascade([...new Set(sfAllergs)])
+      }
     } catch (err) {
       console.error('Load fiche error:', err)
       router.push('/fiches')
@@ -243,20 +257,38 @@ export default function FicheDetail() {
             </FicheHeaderInfo>
           )}
 
-          {fiche.allergenes && fiche.allergenes.length > 0 && (
+          {((fiche.allergenes && fiche.allergenes.length > 0) || allergenesCascade.length > 0) && (
             <div style={{ background: '#FCEBEB', borderRadius: '8px', padding: '12px', marginTop: '12px', border: '0.5px solid #F09595' }}>
               <div style={{ fontSize: '11px', color: '#A32D2D', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>Allergènes présents</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {fiche.allergenes.map(id => {
-                  const allergene = ALLERGENES.find(a => a.id === id)
-                  if (!allergene) return null
-                  return (
-                    <span key={id} style={{ background: 'white', color: '#A32D2D', border: '0.5px solid #F09595', borderRadius: '20px', padding: '4px 10px', fontSize: '12px', fontWeight: '500' }}>
-                      {allergene.emoji} {allergene.label}
-                    </span>
-                  )
-                })}
-              </div>
+              {fiche.allergenes && fiche.allergenes.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: allergenesCascade.filter(id => !(fiche.allergenes || []).includes(id)).length > 0 ? '10px' : '0' }}>
+                  {fiche.allergenes.map(id => {
+                    const allergene = ALLERGENES.find(a => a.id === id)
+                    if (!allergene) return null
+                    return (
+                      <span key={id} style={{ background: 'white', color: '#A32D2D', border: '0.5px solid #F09595', borderRadius: '20px', padding: '4px 10px', fontSize: '12px', fontWeight: '500' }}>
+                        {allergene.emoji} {allergene.label}
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
+              {allergenesCascade.filter(id => !(fiche.allergenes || []).includes(id)).length > 0 && (
+                <>
+                  <div style={{ fontSize: '10px', color: '#A32D2D', opacity: 0.7, marginBottom: '6px' }}>Issus des sous-fiches</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {allergenesCascade.filter(id => !(fiche.allergenes || []).includes(id)).map(id => {
+                      const allergene = ALLERGENES.find(a => a.id === id)
+                      if (!allergene) return null
+                      return (
+                        <span key={id} style={{ background: 'white', color: '#A32D2D', border: '0.5px solid #F09595', borderRadius: '20px', padding: '4px 10px', fontSize: '12px', fontWeight: '500', opacity: 0.85 }}>
+                          {allergene.emoji} {allergene.label}
+                        </span>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           )}
           {peutModifier && isMobile && (
@@ -463,12 +495,22 @@ export default function FicheDetail() {
         </div>
 
         {/* Allergènes — sur la même page que le récap */}
-        {fiche.allergenes && fiche.allergenes.length > 0 && (
+        {((fiche.allergenes && fiche.allergenes.length > 0) || allergenesCascade.length > 0) && (
           <div style={{ background: '#FCEBEB', borderRadius: '6px', padding: '12px', marginBottom: '16px', border: '0.5px solid #F09595' }}>
             <div style={{ fontSize: '9px', color: '#A32D2D', textTransform: 'uppercase', letterSpacing: '2px', fontFamily: 'sans-serif', fontWeight: '600', marginBottom: '8px' }}>⚠ Allergènes présents</div>
-            <div style={{ fontSize: '11px', color: '#A32D2D', fontFamily: 'sans-serif', fontWeight: '500' }}>
-              {fiche.allergenes.map(id => { const a = ALLERGENES.find(a => a.id === id); return a ? `${a.emoji} ${a.label}` : null }).filter(Boolean).join('  •  ')}
-            </div>
+            {fiche.allergenes && fiche.allergenes.length > 0 && (
+              <div style={{ fontSize: '11px', color: '#A32D2D', fontFamily: 'sans-serif', fontWeight: '500', marginBottom: allergenesCascade.filter(id => !(fiche.allergenes || []).includes(id)).length > 0 ? '6px' : '0' }}>
+                {fiche.allergenes.map(id => { const a = ALLERGENES.find(a => a.id === id); return a ? `${a.emoji} ${a.label}` : null }).filter(Boolean).join('  •  ')}
+              </div>
+            )}
+            {allergenesCascade.filter(id => !(fiche.allergenes || []).includes(id)).length > 0 && (
+              <>
+                <div style={{ fontSize: '8px', color: '#A32D2D', opacity: 0.7, marginBottom: '4px', fontFamily: 'sans-serif' }}>Issus des sous-fiches</div>
+                <div style={{ fontSize: '11px', color: '#A32D2D', fontFamily: 'sans-serif', fontWeight: '500', opacity: 0.85 }}>
+                  {allergenesCascade.filter(id => !(fiche.allergenes || []).includes(id)).map(id => { const a = ALLERGENES.find(a => a.id === id); return a ? `${a.emoji} ${a.label}` : null }).filter(Boolean).join('  •  ')}
+                </div>
+              </>
+            )}
           </div>
         )}
 
