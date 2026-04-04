@@ -295,7 +295,7 @@ export default function MonCompte() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}` }}>
               <h2 style={{ fontSize: '16px', fontWeight: '600', color: c.texte, marginBottom: '16px' }}>Mon abonnement</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '10px' }}>
                 <div style={{ background: c.fond, borderRadius: '8px', padding: '12px' }}>
                   <div style={{ fontSize: '10px', color: c.texteMuted, textTransform: 'uppercase', fontWeight: '500' }}>Plan actif</div>
                   <div style={{ fontSize: '15px', fontWeight: '600', color: c.texte, marginTop: '4px' }}>{client.modules_actifs?.length ? `${client.modules_actifs.length} modules` : 'Standard'}</div>

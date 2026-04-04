@@ -5,6 +5,7 @@ import { supabase, getClientId } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
+import { useIsMobile } from '../../lib/useIsMobile'
 import { INVENTAIRE_FREQUENCES, JOURS_SEMAINE } from '../../lib/constants'
 import Navbar from '../../components/Navbar'
 
@@ -36,6 +37,7 @@ export default function SettingsPage() {
 
   const { c } = useTheme()
   const { role } = useRole()
+  const isMobile = useIsMobile()
   const router = useRouter()
 
   useEffect(() => {
@@ -348,15 +350,15 @@ export default function SettingsPage() {
             {/* Formulaire ajout */}
             <div style={{ background: c.blanc, borderRadius: '12px', padding: '20px', border: `0.5px solid ${c.bordure}` }}>
               <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Nouveau lieu de service</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 160px auto', gap: '10px', alignItems: 'end' }}>
-                <div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'flex-end' }}>
+                <div style={{ width: isMobile ? '64px' : '80px', flexShrink: 0 }}>
                   <label style={{ fontSize: '12px', color: c.texteMuted, display: 'block', marginBottom: '6px' }}>Emoji</label>
                   <select value={newLieuEmoji} onChange={e => setNewLieuEmoji(e.target.value)}
                     style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '20px', background: c.blanc, textAlign: 'center' }}>
                     {EMOJIS_LIEUX.map(e => <option key={e} value={e}>{e}</option>)}
                   </select>
                 </div>
-                <div>
+                <div style={{ flex: '1 1 160px' }}>
                   <label style={{ fontSize: '12px', color: c.texteMuted, display: 'block', marginBottom: '6px' }}>Nom *</label>
                   <input type="text" value={newLieuNom} onChange={e => setNewLieuNom(e.target.value)}
                     placeholder="Ex : Terrasse, Banquet, Spa..."
@@ -364,7 +366,7 @@ export default function SettingsPage() {
                     style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
                   />
                 </div>
-                <div>
+                <div style={{ flex: '1 1 120px' }}>
                   <label style={{ fontSize: '12px', color: c.texteMuted, display: 'block', marginBottom: '6px' }}>Section</label>
                   <select value={newLieuSection} onChange={e => setNewLieuSection(e.target.value)}
                     style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: c.blanc, outline: 'none', color: c.texte }}>
@@ -375,7 +377,7 @@ export default function SettingsPage() {
                 <button onClick={ajouterLieu} disabled={saving || !newLieuNom.trim()} style={{
                   padding: '10px 16px', background: saving || !newLieuNom.trim() ? c.texteMuted : c.accent,
                   color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px',
-                  fontWeight: '500', cursor: saving || !newLieuNom.trim() ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap'
+                  fontWeight: '500', cursor: saving || !newLieuNom.trim() ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}>+ Ajouter</button>
               </div>
             </div>
@@ -419,15 +421,15 @@ export default function SettingsPage() {
             {/* Formulaire ajout */}
             <div style={{ background: c.blanc, borderRadius: '12px', padding: '20px', border: `0.5px solid ${c.bordure}` }}>
               <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Nouvelle catégorie</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 160px auto', gap: '10px', alignItems: 'end' }}>
-                <div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'flex-end' }}>
+                <div style={{ width: isMobile ? '64px' : '80px', flexShrink: 0 }}>
                   <label style={{ fontSize: '12px', color: c.texteMuted, display: 'block', marginBottom: '6px' }}>Emoji</label>
                   <select value={newCatEmoji} onChange={e => setNewCatEmoji(e.target.value)}
                     style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '20px', background: c.blanc, textAlign: 'center' }}>
                     {EMOJIS_CATS.map(e => <option key={e} value={e}>{e}</option>)}
                   </select>
                 </div>
-                <div>
+                <div style={{ flex: '1 1 160px' }}>
                   <label style={{ fontSize: '12px', color: c.texteMuted, display: 'block', marginBottom: '6px' }}>Nom *</label>
                   <input type="text" value={newCatNom} onChange={e => setNewCatNom(e.target.value)}
                     placeholder="Ex : Amuse-bouches, Mignardises..."
@@ -435,7 +437,7 @@ export default function SettingsPage() {
                     style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
                   />
                 </div>
-                <div>
+                <div style={{ flex: '1 1 120px' }}>
                   <label style={{ fontSize: '12px', color: c.texteMuted, display: 'block', marginBottom: '6px' }}>Section</label>
                   <select value={newCatSection} onChange={e => setNewCatSection(e.target.value)}
                     style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: c.blanc, outline: 'none', color: c.texte }}>
@@ -446,7 +448,7 @@ export default function SettingsPage() {
                 <button onClick={ajouterCategorie} disabled={saving || !newCatNom.trim()} style={{
                   padding: '10px 16px', background: saving || !newCatNom.trim() ? c.texteMuted : c.accent,
                   color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px',
-                  fontWeight: '500', cursor: saving || !newCatNom.trim() ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap'
+                  fontWeight: '500', cursor: saving || !newCatNom.trim() ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}>+ Ajouter</button>
               </div>
             </div>

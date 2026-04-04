@@ -3,11 +3,26 @@
 import { useEffect } from 'react'
 
 /**
- * Axeptio injecte le badge dans un shadow DOM : le CSS global ne suffit pas toujours à l’impression.
- * On masque le conteneur #axeptio_overlay en JS à l’ouverture de l’aperçu d’impression, et on appelle l’API officielle.
+ * Axeptio injecte le badge dans un shadow DOM : le CSS global ne suffit pas toujours à l'impression.
+ * On masque le conteneur #axeptio_overlay en JS à l'ouverture de l'aperçu d'impression, et on appelle l'API officielle.
+ * Sur mobile, on repositionne le badge en bas-droite pour ne pas bloquer la navigation du navigateur.
  */
 export default function AxeptioPrintHide() {
   useEffect(() => {
+    // ── Repositionnement mobile ─────────────────────────────────────
+    const applyMobilePosition = () => {
+      if (typeof window === 'undefined' || window.innerWidth >= 768) return
+      const el = document.getElementById('axeptio_overlay')
+      if (!el) return
+      el.style.setProperty('bottom', '72px', 'important')
+      el.style.setProperty('right', '16px', 'important')
+      el.style.setProperty('left', 'auto', 'important')
+    }
+
+    const observer = new MutationObserver(applyMobilePosition)
+    observer.observe(document.body, { childList: true, subtree: true })
+    applyMobilePosition()
+
     let savedDisplay = ''
 
     const hide = () => {
@@ -49,6 +64,7 @@ export default function AxeptioPrintHide() {
     mql?.addListener?.(onPrintMediaChange)
 
     return () => {
+      observer.disconnect()
       window.removeEventListener('beforeprint', hide)
       window.removeEventListener('afterprint', show)
       mql?.removeEventListener?.('change', onPrintMediaChange)

@@ -4,10 +4,12 @@ import { supabase, getParametres, getClientId } from '../../../lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
 import { useTheme } from '../../../lib/useTheme'
+import { useIsMobile } from '../../../lib/useIsMobile'
 import { log } from '../../../lib/useLog'
 
 export default function MenuDetail() {
   const { nomEtablissement } = useTheme()
+  const isMobile = useIsMobile()
   const [menu, setMenu] = useState(null)
   const [menuFiches, setMenuFiches] = useState([])
   const [toutesLesFiches, setToutesLesFiches] = useState([])
@@ -176,60 +178,74 @@ useEffect(() => {
 
 <div className="no-print" style={{
         background: c.principal, borderBottom: `0.5px solid ${c.accent}40`,
-        padding: '0 24px', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', height: '56px'
+        padding: isMobile ? '0 10px' : '0 24px', display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', height: '56px', minWidth: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Logo height={30} couleur="white" nom={nomEtablissement} onClick={() => router.push("/fiches")} />
-          <span style={{ color: 'rgba(255,255,255,0.3)' }}>|</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '12px', minWidth: 0, flex: '1 1 auto', overflow: 'hidden' }}>
+          <Logo height={28} couleur="white" nom={nomEtablissement} onClick={() => router.push('/fiches')} />
+          {!isMobile && <span style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }}>|</span>}
           <button onClick={() => router.push('/menus')} style={{
             background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: '6px 12px', fontSize: '13px',
-            cursor: 'pointer', color: 'rgba(255,255,255,0.7)'
+            borderRadius: '8px', padding: isMobile ? '5px 8px' : '6px 12px', fontSize: '13px',
+            cursor: 'pointer', color: 'rgba(255,255,255,0.7)', flexShrink: 0,
           }}>← Retour</button>
-          <span style={{ fontSize: '15px', fontWeight: '500', color: 'white' }}>{menu.nom}</span>
+          <span style={{
+            fontSize: '14px', fontWeight: '500', color: 'white',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{menu.nom}</span>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '6px', flexShrink: 0, marginLeft: '8px' }}>
           {editing ? (
             <>
               <button onClick={handleSave} disabled={saving} style={{
                 background: saving ? c.texteMuted : c.accent, color: c.principal,
-                border: 'none', borderRadius: '8px', padding: '8px 16px',
-                fontSize: '13px', fontWeight: '600', cursor: 'pointer'
-              }}>{saving ? 'Enregistrement...' : 'Enregistrer'}</button>
+                border: 'none', borderRadius: '8px', padding: isMobile ? '7px 10px' : '8px 16px',
+                fontSize: '13px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap',
+              }}>{saving ? '…' : 'Enregistrer'}</button>
               <button onClick={() => setEditing(false)} style={{
                 background: 'transparent', color: 'rgba(255,255,255,0.7)',
                 border: '0.5px solid rgba(255,255,255,0.2)',
-                borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer'
+                borderRadius: '8px', padding: isMobile ? '7px 10px' : '8px 16px', fontSize: '13px', cursor: 'pointer',
               }}>Annuler</button>
             </>
           ) : (
             <>
               <button onClick={() => window.print()} style={{
                 background: c.accent, color: c.principal, border: 'none',
-                borderRadius: '8px', padding: '8px 16px', fontSize: '13px',
-                fontWeight: '600', cursor: 'pointer'
+                borderRadius: '8px', padding: isMobile ? '7px 10px' : '8px 16px', fontSize: '13px',
+                fontWeight: '600', cursor: 'pointer',
               }}>Imprimer</button>
-              <button onClick={() => setEditing(true)} style={{
-                background: 'transparent', color: 'rgba(255,255,255,0.7)',
-                border: '0.5px solid rgba(255,255,255,0.2)',
-                borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer'
-              }}>Modifier</button>
-              <button onClick={handleDelete} style={{
-                background: 'transparent', color: '#F09595',
-                border: '0.5px solid rgba(255,255,255,0.2)',
-                borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer'
-              }}>Supprimer</button>
+              {!isMobile && (
+                <button onClick={() => setEditing(true)} style={{
+                  background: 'transparent', color: 'rgba(255,255,255,0.7)',
+                  border: '0.5px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer',
+                }}>Modifier</button>
+              )}
+              {!isMobile && (
+                <button onClick={handleDelete} style={{
+                  background: 'transparent', color: '#F09595',
+                  border: '0.5px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer',
+                }}>Supprimer</button>
+              )}
+              {isMobile && (
+                <button onClick={() => setEditing(true)} style={{
+                  background: 'transparent', color: 'rgba(255,255,255,0.7)',
+                  border: '0.5px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px', padding: '7px 10px', fontSize: '13px', cursor: 'pointer',
+                }}>✏️</button>
+              )}
             </>
           )}
         </div>
       </div>
 
-      <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
+      <div style={{ padding: isMobile ? '16px 12px' : '24px', maxWidth: '800px', margin: '0 auto' }}>
 
         {/* Informations */}
         <div style={{
-          background: 'white', borderRadius: '12px', padding: '24px',
+          background: 'white', borderRadius: '12px', padding: isMobile ? '16px' : '24px',
           border: `0.5px solid ${c.bordure}`, marginBottom: '16px'
         }}>
           <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
@@ -237,7 +253,7 @@ useEffect(() => {
           </div>
 
           {editing ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom</label>
                 <input type="text" value={nom} onChange={e => setNom(e.target.value)}
@@ -300,7 +316,7 @@ useEffect(() => {
 
         {/* Composition */}
         <div style={{
-          background: 'white', borderRadius: '12px', padding: '24px',
+          background: 'white', borderRadius: '12px', padding: isMobile ? '16px' : '24px',
           border: `0.5px solid ${c.bordure}`, marginBottom: '16px'
         }}>
           <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
@@ -360,9 +376,9 @@ useEffect(() => {
 
         {/* Récapitulatif */}
         <div style={{
-          background: 'white', borderRadius: '12px', padding: '20px',
+          background: 'white', borderRadius: '12px', padding: isMobile ? '14px' : '20px',
           border: `0.5px solid ${c.bordure}`,
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px'
+          display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px'
         }}>
           <div style={{ background: c.fond, borderRadius: '8px', padding: '14px' }}>
             <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Coût total</div>
