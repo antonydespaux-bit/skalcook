@@ -243,7 +243,7 @@ export default function MonCompte() {
               background: tab === t.id ? c.accent : c.blanc,
               color:      tab === t.id ? 'white'  : c.texteMuted,
               boxShadow:  tab === t.id ? 'none'   : `0 0 0 0.5px ${c.bordure}`,
-            }}>{t.label}</button>
+            }}>{isMobile && t.id === 'donnees' ? 'Données' : t.label}</button>
           ))}
         </div>
 
