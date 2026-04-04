@@ -326,6 +326,13 @@ export default function Navbar({ section = 'cuisine' }) {
             ><span style={{ fontSize: '16px', lineHeight: 1 }}>+</span> Nouvelle fiche</button>
           )}
           {!isMobile && (
+            <button onClick={(e) => { e.stopPropagation(); pushWithClient('/mon-compte') }} style={{
+              background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.55)',
+              border: '0.5px solid rgba(255,255,255,0.1)',
+              borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer',
+            }}>Mon Compte</button>
+          )}
+          {!isMobile && (
             <button onClick={handleLogout} style={{
               background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.55)',
               border: '0.5px solid rgba(255,255,255,0.1)',
@@ -403,6 +410,9 @@ export default function Navbar({ section = 'cuisine' }) {
             >{CROSS_LABEL}</button>
           )}
           <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '8px 0' }} />
+          <button onClick={() => { setMenuOuvert(false); pushWithClient('/mon-compte') }}
+            style={mobileItemStyle(isActive('/mon-compte'))}
+          >Mon Compte</button>
           <button onClick={handleLogout}
             style={{
               display: 'block', width: '100%', textAlign: 'left',
