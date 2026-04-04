@@ -749,7 +749,7 @@ export default function MargesDashboardPage() {
                 </div>
 
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? 600 : 0 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? 440 : 0 }}>
                     <thead>
                       <tr style={{ background: c.fond }}>
                         <th style={thSort} onClick={() => handleTri('designation')}>
@@ -844,7 +844,7 @@ export default function MargesDashboardPage() {
                 </p>
               ) : (
                 <div style={{ overflowX: 'auto', borderRadius: 12, border: `0.5px solid ${c.bordure}`, background: c.blanc }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? 480 : 0 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? 340 : 0 }}>
                     <thead>
                       <tr style={{ background: c.fond }}>
                         <th style={{ ...th }}>Ingrédient</th>

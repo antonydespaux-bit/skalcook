@@ -211,10 +211,65 @@ export default function AchatsListPage() {
                   ? 'Aucune facture importée.'
                   : 'Aucune facture ne correspond à la recherche.'}
               </p>
+            ) : isMobile ? (
+              /* ── Vue cartes mobile ── */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {facturesFiltrees.map((f) => {
+                  const ht = Number(f.total_ht) || 0
+                  const nb = nbLignesByFacture[f.id] ?? 0
+                  const badgeStyle = f.statut === 'bl'
+                    ? { fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, background: '#FEF3C7', color: '#92400E' }
+                    : { fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, background: '#D1FAE5', color: '#065F46' }
+                  return (
+                    <div
+                      key={f.id}
+                      onClick={() => router.push(`/controle-gestion/achats/${f.id}`)}
+                      style={{
+                        background: c.blanc, borderRadius: 10, border: `0.5px solid ${c.bordure}`,
+                        padding: '14px 16px', cursor: 'pointer',
+                      }}
+                    >
+                      {/* Ligne 1 : fournisseur + badge */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <span style={{ fontSize: 15, fontWeight: 600, color: c.texte }}>
+                          {f.fournisseur || <span style={{ color: c.texteMuted, fontWeight: 400 }}>—</span>}
+                        </span>
+                        <span style={badgeStyle}>{f.statut === 'bl' ? 'BL' : 'Facture'}</span>
+                      </div>
+                      {/* Ligne 2 : n° facture · date */}
+                      <div style={{ fontSize: 13, color: c.texteMuted, marginBottom: 8 }}>
+                        {f.numero_facture ? `N° ${f.numero_facture}` : '—'}{f.date_facture ? ` · ${formatDate(f.date_facture)}` : ''}
+                      </div>
+                      {/* Ligne 3 : articles + total */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 13, color: c.texteMuted }}>{nb} article{nb !== 1 ? 's' : ''}</span>
+                        <span style={{ fontSize: 15, fontWeight: 600, color: c.texte, fontVariantNumeric: 'tabular-nums' }}>{formatEuro(ht)}</span>
+                      </div>
+                      {role === 'admin' && (
+                        <div style={{ marginTop: 10, textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={(e) => handleDelete(f, e)}
+                            disabled={deleting === f.id}
+                            style={{ background: 'none', border: `1px solid ${c.bordure}`, borderRadius: 6, padding: '4px 10px', fontSize: 12, color: '#B91C1C', cursor: 'pointer' }}
+                          >
+                            {deleting === f.id ? '…' : 'Supprimer'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                {/* Total mobile */}
+                <div style={{ background: c.fond, borderRadius: 10, border: `0.5px solid ${c.bordure}`, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, color: c.texteMuted }}>{facturesFiltrees.length} facture{facturesFiltrees.length !== 1 ? 's' : ''}</span>
+                  <span style={{ fontSize: 15, fontWeight: 600, color: c.texte }}>{formatEuro(totalHT)}</span>
+                </div>
+              </div>
             ) : (
+              /* ── Vue tableau desktop ── */
               <div style={{ background: c.blanc, borderRadius: 12, border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? 560 : 0 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: c.fond }}>
                         <th style={th}>Fournisseur</th>
@@ -229,9 +284,6 @@ export default function AchatsListPage() {
                     <tbody>
                       {facturesFiltrees.map((f, i) => {
                         const ht = Number(f.total_ht) || 0
-                        const tva = f.taux_tva != null ? Number(f.taux_tva) : null
-                        const montantTva = tva != null ? ht * (tva / 100) : null
-                        const ttc = montantTva != null ? ht + montantTva : null
                         const nb = nbLignesByFacture[f.id] ?? 0
                         return (
                           <tr
