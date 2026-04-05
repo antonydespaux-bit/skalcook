@@ -162,12 +162,14 @@ export async function middleware(req: NextRequest) {
   )
 
   // CSP: 'unsafe-inline' kept for TailwindCSS inline styles.
-  // 'unsafe-eval' REMOVED — was a security risk with no real benefit.
+  // 'unsafe-eval' only in dev (Turbopack needs it for HMR). Stripped in production.
+  const isDev = process.env.NODE_ENV === 'development'
+  const evalDirective = isDev ? " 'unsafe-eval'" : ''
   res.headers.set(
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://static.axept.io https://axept.io https://www.googletagmanager.com",
+      `script-src 'self' 'unsafe-inline'${evalDirective} https://cdn.jsdelivr.net https://unpkg.com https://static.axept.io https://axept.io https://www.googletagmanager.com`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://fonts.axept.io https://*.axept.io",
       "font-src 'self' https://fonts.gstatic.com https://fonts.axept.io",
       "img-src 'self' data: blob: https:",
