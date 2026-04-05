@@ -3,51 +3,74 @@ import { NextResponse, type NextRequest } from 'next/server'
 /**
  * Middleware unifié : détection du tenant + security headers + rate limiting.
  *
- * Changements V2 :
- * - Rate limiting en mémoire conservé (fonctionne sur Node.js runtime long-running).
- *   Pour Vercel Edge/Serverless, migrer vers @upstash/ratelimit + Redis.
- * - CSP renforcé : suppression de 'unsafe-eval', conservation de 'unsafe-inline'
- *   uniquement pour la compatibilité avec les styles inline (TailwindCSS).
- * - Tenant slug sanitisé contre les injections.
- * - Strict-Transport-Security ajouté.
+ * Rate limiting strategy:
+ * - If UPSTASH_REDIS_REST_URL is set → uses @upstash/ratelimit (production, serverless-safe)
+ * - Otherwise → falls back to in-memory sliding window (dev/single-instance)
  */
 
-// ── Rate limiter en mémoire — sliding window par IP ─────────────────────────
-// Fonctionne uniquement en mode Node.js (pas Edge). Pour la production serverless,
-// utiliser @upstash/ratelimit + Redis.
-const RATE_LIMIT_WINDOW_MS = 60_000
+// ── Rate limiting ───────────────────────────────────────────────────────────
 const RATE_LIMIT_MAX = 60
 
+// Upstash rate limiter (lazy init, production)
+let upstashRatelimit: { limit: (id: string) => Promise<{ success: boolean; remaining: number; reset: number }> } | null = null
+
+async function initUpstashRatelimit() {
+  if (upstashRatelimit) return upstashRatelimit
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) return null
+  try {
+    const { Ratelimit } = await import('@upstash/ratelimit')
+    const { Redis } = await import('@upstash/redis')
+    upstashRatelimit = new Ratelimit({
+      redis: Redis.fromEnv(),
+      limiter: Ratelimit.slidingWindow(RATE_LIMIT_MAX, '1 m'),
+      analytics: true,
+    })
+    return upstashRatelimit
+  } catch {
+    console.warn('[middleware] Failed to init Upstash ratelimit, falling back to in-memory')
+    return null
+  }
+}
+
+// In-memory fallback (dev / single instance)
+const RATE_LIMIT_WINDOW_MS = 60_000
 const ipRequests = new Map<string, { count: number; windowStart: number }>()
 
-function checkRateLimit(ip: string) {
+function checkRateLimitMemory(ip: string) {
   const now = Date.now()
   const entry = ipRequests.get(ip)
-
   if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
     ipRequests.set(ip, { count: 1, windowStart: now })
     return { allowed: true, remaining: RATE_LIMIT_MAX - 1, retryAfter: 0 }
   }
-
   if (entry.count >= RATE_LIMIT_MAX) {
     const retryAfter = Math.ceil((RATE_LIMIT_WINDOW_MS - (now - entry.windowStart)) / 1000)
     return { allowed: false, remaining: 0, retryAfter }
   }
-
   entry.count++
   return { allowed: true, remaining: RATE_LIMIT_MAX - entry.count, retryAfter: 0 }
 }
 
-// Cleanup to prevent memory leak
 if (typeof setInterval !== 'undefined') {
   setInterval(() => {
     const now = Date.now()
     for (const [ip, entry] of ipRequests.entries()) {
-      if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS * 2) {
-        ipRequests.delete(ip)
-      }
+      if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS * 2) ipRequests.delete(ip)
     }
   }, RATE_LIMIT_WINDOW_MS)
+}
+
+async function checkRateLimit(ip: string) {
+  const rl = await initUpstashRatelimit()
+  if (rl) {
+    const result = await rl.limit(ip)
+    return {
+      allowed: result.success,
+      remaining: result.remaining,
+      retryAfter: result.success ? 0 : Math.ceil((result.reset - Date.now()) / 1000),
+    }
+  }
+  return checkRateLimitMemory(ip)
 }
 
 // ── Tenant slug validation ──────────────────────────────────────────────────
@@ -85,7 +108,7 @@ function detectTenantSlug(req: NextRequest): string | null {
   return sanitizeSlug(tenantSlug)
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
   let rateLimitRemaining: number | undefined
 
@@ -96,7 +119,7 @@ export function middleware(req: NextRequest) {
       req.headers.get('x-real-ip') ||
       '127.0.0.1'
 
-    const { allowed, remaining, retryAfter } = checkRateLimit(ip)
+    const { allowed, remaining, retryAfter } = await checkRateLimit(ip)
     rateLimitRemaining = remaining
 
     if (!allowed) {
