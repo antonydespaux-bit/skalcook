@@ -4,7 +4,7 @@ import { updateClient } from '../../../../lib/services/admin.service'
 import { z } from 'zod'
 
 // GET: retrieve client legal info
-const getSchema = z.object({ clientId: z.string().uuid() })
+const getSchema = z.object({ id: z.string().uuid() })
 
 export const GET = apiHandler({
   schema: getSchema,
@@ -13,7 +13,7 @@ export const GET = apiHandler({
     const { data: client, error } = await db
       .from('clients')
       .select('*')
-      .eq('id', data.clientId)
+      .eq('id', data.id)
       .maybeSingle()
 
     if (error) throw new Error(error.message)
