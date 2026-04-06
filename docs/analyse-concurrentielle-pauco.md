@@ -290,6 +290,36 @@ Ne pas essayer de copier les modules RH/Marketing/Recrutement de Pauco — ce so
 - Checklists quotidiennes (ouverture, fermeture, nettoyage)
 - Obligation legale = retention client
 
+### V3 — Refonte landing page (se differencier du "template IA")
+
+**Constat** : Les landing pages de Skalcook et Pauco sont quasi identiques — meme layout
+genere par IA (badge vert, titre serif italic colore, sous-titre gris, 2 CTA, faux mockup
+navigateur avec 3 dots). Ce pattern est devenu le cliche universel des SaaS generes par IA
+en 2025-2026. Il faut s'en eloigner pour paraitre credible et professionnel.
+
+**Changements prevus** :
+
+| Priorite | Changement | Detail | Effort |
+|----------|-----------|--------|--------|
+| 1 | **Video/GIF du vrai produit** | Remplacer le faux mockup navigateur par une capture reelle de l'app (8-10s autoplay muette) : clic fiche > ingredients > ratio calcule > badge vert | Moyen |
+| 2 | **Titre hero oriente resultat** | Passer de "Les fiches techniques qui font la difference" a quelque chose comme "Vos marges en un coup d'oeil. Pour chaque plat, chaque service." | Faible |
+| 3 | **Social proof immediate** | Ajouter sous le hero : nombre de clients, nombre de fiches creees, temoignage court d'un chef. Pauco ne peut pas faire ca (pas de vrais clients). Nous si. | Faible |
+| 4 | **CTA unique et fort** | Remplacer les 2 boutons par un seul : "Essayer gratuitement" ou "Voir la demo en 2 min". Le double CTA cree de l'hesitation. | Faible |
+| 5 | **Palette chaude + ambiance food** | Quitter le blanc/gris froid generique. Fond creme chaud, photos reelles de cuisine en ambiance, couleurs qui evoquent la gastronomie. | Moyen |
+| 6 | **Section Avant/Apres** | Remplacer la liste de features generique par un contraste concret : "Je calcule mes couts sur Excel" vs "Le food cost se met a jour automatiquement" | Faible |
+| 7 | **Supprimer le faux navigateur** | Les 3 dots rouge/jaune/vert = signal "IA-generated" en 2026. Montrer le produit dans un cadre neutre ou en plein ecran. | Faible |
+
+**Erreurs a eviter** :
+- Le titre serif italic colore (Fraunces/Playfair) = cliche IA numero 1
+- Le fond blanc pur sans texture = generique, froid
+- Les sous-titres de 3 lignes en gris = personne ne les lit
+- Lister des features avant de montrer un resultat concret
+
+**Inspirations (vrais SaaS, pas generes par IA)** :
+- Linear.app : minimaliste mais avec video reelle du produit
+- Notion.so : social proof massive + templates concrets
+- Arc.net : personnalite forte, ton unique, pas de jargon
+
 ---
 
 ## 8. Annexe : Donnees techniques brutes
