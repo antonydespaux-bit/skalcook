@@ -190,7 +190,8 @@ export default function ModifierFiche() {
   const foodCost = () => {
     const cout = calculerCoutAvecPerte()
     if (!prixTTC || !cout || !nbPortions) return null
-    return (cout / parseFloat(nbPortions) / (parseFloat(prixTTC) / 1.10) * 100).toFixed(1)
+    const tva = 1 + parseFloat(params['tva_restauration'] || 10) / 100
+    return (cout / parseFloat(nbPortions) / (parseFloat(prixTTC) / tva) * 100).toFixed(1)
   }
 
   const prixIndicatif = () => {
