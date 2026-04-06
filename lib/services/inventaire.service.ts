@@ -110,7 +110,7 @@ async function loadAchats(
   periodeDebut: string | null,
   ingredients: IngredientRow[]
 ): Promise<Record<string, number>> {
-  let factureQuery = db.from('achats_factures').select('id').eq('client_id', clientId)
+  let factureQuery = db.from('achats_factures').select('id').eq('client_id', clientId).is('deleted_at', null)
   if (periodeDebut) factureQuery = factureQuery.gt('date_facture', periodeDebut)
   const { data: factures } = await factureQuery
 
@@ -210,6 +210,7 @@ export async function computePareto(
     .from('achats_factures')
     .select('id')
     .eq('client_id', clientId)
+    .is('deleted_at', null)
     .gte('date_facture', dateLimit)
 
   if (!factures || factures.length === 0) return { items: [], grandTotal: 0 }
@@ -364,6 +365,7 @@ async function filterPareto(
     .from('achats_factures')
     .select('id')
     .eq('client_id', clientId)
+    .is('deleted_at', null)
     .gte('date_facture', dateLimit)
 
   let criticalIds = new Set<string>()

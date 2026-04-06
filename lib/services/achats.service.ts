@@ -40,6 +40,7 @@ export async function checkDuplicateFacture(
     .from('achats_factures')
     .select('id, date_facture, fournisseur, total_ht, created_at')
     .eq('client_id', clientId)
+    .is('deleted_at', null)
     .ilike('numero_facture', numTrimmed)
     .limit(1)
 
@@ -254,16 +255,23 @@ export async function updateFacture(
 export async function deleteFacture(
   db: SupabaseClient,
   factureId: string,
-  clientId: string
+  clientId: string,
+  userId?: string
 ) {
+  // Soft-delete : marque la facture comme supprimée (rétention DGCCRF 10 ans)
+  // La facture reste en base mais n'apparaît plus dans les requêtes courantes.
   const { error } = await db
     .from('achats_factures')
-    .delete()
+    .update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: userId || null,
+    })
     .eq('id', factureId)
     .eq('client_id', clientId)
+    .is('deleted_at', null)
 
   if (error) throw new Error(error.message)
-  return { deleted: true }
+  return { deleted: true, soft: true }
 }
 
 export async function createIngredient(
@@ -295,6 +303,7 @@ export async function getMercuriale(db: SupabaseClient, clientId: string) {
       .from('achats_factures')
       .select('id, fournisseur, date_facture')
       .eq('client_id', clientId)
+      .is('deleted_at', null)
       .order('date_facture', { ascending: false }),
     db
       .from('ingredients')

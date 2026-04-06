@@ -171,13 +171,20 @@ export default function RecapView({ section = 'cuisine' }) {
       return { 'Lieu': `${lieu.emoji} ${lieu.nom}`, 'Nb fiches': stats.nb, 'Food cost moyen (%)': stats.ratioMoyen.toFixed(1), 'Bénéfice moyen (€)': stats.beneficeMoyen.toFixed(2) }
     }).filter(Boolean)
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rowsGlobal), 'Récap par lieu')
-    const rowsDetail = fichesFiltrees.map(f => ({
-      'Nom': f.nom, 'Lieu': f.lieux?.nom || '—', 'Catégorie': f.categories_plats?.nom || f.categorie || '—',
-      'Saison': f.saison || '—',
-      'Coût / portion (€)': f.cout_portion ? Number(f.cout_portion).toFixed(2) : '—',
-      'Prix TTC (€)': f.prix_ttc ? Number(f.prix_ttc).toFixed(2) : '—',
-      'Food cost (%)': f.prix_ttc && f.cout_portion ? (f.cout_portion / (f.prix_ttc / cfg.tvaFn(f)) * 100).toFixed(1) : '—'
-    }))
+    const rowsDetail = fichesFiltrees.map(f => {
+      const tva = cfg.tvaFn(f)
+      const tvaPercent = Math.round((tva - 1) * 100)
+      const prixHT = f.prix_ttc ? (f.prix_ttc / tva) : null
+      return {
+        'Nom': f.nom, 'Lieu': f.lieux?.nom || '—', 'Catégorie': f.categories_plats?.nom || f.categorie || '—',
+        'Saison': f.saison || '—',
+        'Coût / portion (€)': f.cout_portion ? Number(f.cout_portion).toFixed(2) : '—',
+        'Prix HT (€)': prixHT ? prixHT.toFixed(2) : '—',
+        'TVA (%)': tvaPercent,
+        'Prix TTC (€)': f.prix_ttc ? Number(f.prix_ttc).toFixed(2) : '—',
+        'Food cost (%)': prixHT && f.cout_portion ? (f.cout_portion / prixHT * 100).toFixed(1) : '—',
+      }
+    })
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rowsDetail), 'Détail fiches')
     XLSX.writeFile(wb, `${cfg.exportPrefix}_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.xlsx`)
   }

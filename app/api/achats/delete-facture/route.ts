@@ -6,8 +6,8 @@ export const DELETE = apiHandler({
   schema: deleteFactureSchema,
   guard: 'adminOrSuperadmin',
   clientIdFrom: 'body.clientId',
-  handler: async ({ data, db }) => {
-    const result = await deleteFacture(db, data.factureId, data.clientId)
+  handler: async ({ data, user, db }) => {
+    const result = await deleteFacture(db, data.factureId, data.clientId, user?.id)
     return Response.json(result)
   },
 })
