@@ -37,11 +37,12 @@ export default function ActivityDashboard({ activityData, activityLoading, isMob
       {!activityLoading && activityData && (
         <>
           {/* KPI Cards */}
+          {activityData.kpis && (
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
             {[
-              { label: 'Utilisateurs actifs (24h)', value: activityData.kpis.activeUsers24h, icon: '👤', color: '#6366F1', bg: '#EEF2FF' },
-              { label: 'Modifications aujourd\'hui', value: activityData.kpis.modificationsToday, icon: '✏️', color: '#D97706', bg: '#FEF3C7' },
-              { label: 'Établissement le plus actif', value: activityData.kpis.topClient || '—', icon: '🏆', color: '#16A34A', bg: '#DCFCE7' },
+              { label: 'Utilisateurs actifs (24h)', value: activityData.kpis?.activeUsers24h ?? '—', icon: '👤', color: '#6366F1', bg: '#EEF2FF' },
+              { label: 'Modifications aujourd\'hui', value: activityData.kpis?.modificationsToday ?? '—', icon: '✏️', color: '#D97706', bg: '#FEF3C7' },
+              { label: 'Établissement le plus actif', value: activityData.kpis?.topClient || '—', icon: '🏆', color: '#16A34A', bg: '#DCFCE7' },
             ].map((kpi) => (
               <div key={kpi.label} style={{ background: 'white', borderRadius: '12px', border: '0.5px solid #E4E4E7', padding: '20px 24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
@@ -52,6 +53,7 @@ export default function ActivityDashboard({ activityData, activityLoading, isMob
               </div>
             ))}
           </div>
+          )}
 
           {/* Filters */}
           <div style={{ background: 'white', borderRadius: '12px', border: '0.5px solid #E4E4E7', padding: '16px 20px', marginBottom: '16px', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -92,7 +94,7 @@ export default function ActivityDashboard({ activityData, activityLoading, isMob
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#18181B', marginBottom: '4px' }}>Volume d'actions — 7 derniers jours</div>
             <div style={{ fontSize: '12px', color: '#71717A', marginBottom: '20px' }}>Toutes actions confondues</div>
             <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={activityData.chartData} margin={{ top: 4, right: 16, left: -20, bottom: 0 }}>
+              <LineChart data={activityData.chartData || []} margin={{ top: 4, right: 16, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F4F4F5" />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#71717A' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#71717A' }} axisLine={false} tickLine={false} allowDecimals={false} />
@@ -106,7 +108,7 @@ export default function ActivityDashboard({ activityData, activityLoading, isMob
           <div style={{ background: 'white', borderRadius: '12px', border: '0.5px solid #E4E4E7', overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: '0.5px solid #E4E4E7', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ fontSize: '13px', fontWeight: '600', color: '#18181B' }}>Journal d'audit</div>
-              <span style={{ fontSize: '12px', color: '#71717A' }}>{activityData.recentLogs.length} dernières actions</span>
+              <span style={{ fontSize: '12px', color: '#71717A' }}>{(activityData.recentLogs || []).length} dernières actions</span>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? '600px' : 'auto' }}>
@@ -118,10 +120,10 @@ export default function ActivityDashboard({ activityData, activityLoading, isMob
                   </tr>
                 </thead>
                 <tbody>
-                  {activityData.recentLogs.length === 0 && (
+                  {(activityData.recentLogs || []).length === 0 && (
                     <tr><td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: '#71717A', fontSize: '14px' }}>Aucune activité sur cette période</td></tr>
                   )}
-                  {activityData.recentLogs.map((log, i) => {
+                  {(activityData.recentLogs || []).map((log, i) => {
                     const actionColors = {
                       CREATION: { bg: '#EAF3DE', color: '#3B6D11' },
                       MODIFICATION: { bg: '#FAEEDA', color: '#854F0B' },
