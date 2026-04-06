@@ -4,6 +4,9 @@ import { uuidSchema, clientIdSchema } from './achats.schema'
 // ── Roles ──────────────────────────────────────────────────────────────────
 const roleSchema = z.enum(['admin', 'cuisine', 'bar', 'directeur', 'consultant'])
 
+// Helper: transform empty strings to null (frontend sends "" for optional fields)
+const emptyToNull = z.string().transform(v => v.trim() === '' ? null : v.trim())
+
 // ── Create user ────────────────────────────────────────────────────────────
 export const createUserSchema = z.object({
   email:    z.string().email('Email invalide'),
@@ -33,10 +36,10 @@ export const updateUserSchema = z.object({
   email:            z.string().email().optional(),
   nom:              z.string().min(1).max(255).optional(),
   role:             roleSchema.optional(),
-  telephone:        z.string().max(20).optional().nullable(),
-  site_web:         z.string().max(255).optional().nullable(),
-  siret_personnel:  z.string().regex(/^\d{14}$/, 'SIRET invalide (14 chiffres)').optional().nullable(),
-  adresse_pro:      z.string().max(500).optional().nullable(),
+  telephone:        emptyToNull.optional().nullable(),
+  site_web:         emptyToNull.optional().nullable(),
+  siret_personnel:  emptyToNull.pipe(z.string().regex(/^\d{14}$/, 'SIRET invalide (14 chiffres)').nullable()).optional().nullable(),
+  adresse_pro:      emptyToNull.optional().nullable(),
 })
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>
@@ -53,10 +56,10 @@ export const createGlobalUserSchema = z.object({
   nom:              z.string().min(1, 'Nom requis').max(255),
   role:             roleSchema.default('admin'),
   client_ids:       z.array(uuidSchema).optional().default([]),
-  telephone:        z.string().max(20).optional().nullable(),
-  site_web:         z.string().max(255).optional().nullable(),
-  siret_personnel:  z.string().regex(/^\d{14}$/, 'SIRET invalide').optional().nullable(),
-  adresse_pro:      z.string().max(500).optional().nullable(),
+  telephone:        emptyToNull.optional().nullable(),
+  site_web:         emptyToNull.optional().nullable(),
+  siret_personnel:  emptyToNull.pipe(z.string().regex(/^\d{14}$/, 'SIRET invalide').nullable()).optional().nullable(),
+  adresse_pro:      emptyToNull.optional().nullable(),
 })
 
 export type CreateGlobalUserInput = z.infer<typeof createGlobalUserSchema>

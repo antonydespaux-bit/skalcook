@@ -38,7 +38,7 @@ export default function ActivityDashboard({ activityData, activityLoading, isMob
         // Normalize: service may return { logs } or { kpis, recentLogs, chartData, ... }
         const logs = activityData.recentLogs || activityData.logs || []
         const kpis = activityData.kpis || null
-        const chartData = chartData
+        const chartData = activityData.chartData || []
         const clients = activityData.clients || []
         const users = activityData.users || []
 
