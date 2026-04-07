@@ -7,7 +7,7 @@ const querySchema = z.object({
 
 export const GET = apiHandler({
   schema: querySchema,
-  guard: 'adminOrSuperadmin',
+  guard: 'memberOfClient',
   clientIdFrom: 'body.client_id',
   handler: async ({ data, db }) => {
     const clientId = data.client_id
