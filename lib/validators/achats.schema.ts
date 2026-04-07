@@ -41,6 +41,8 @@ export const updateFactureSchema = z.object({
   numeroFacture:  z.string().max(100).optional().nullable(),
   dateFacture:    z.string().optional(),
   statut:         z.enum(['bl', 'facture']).optional(),
+  tauxTva:        z.coerce.number().min(0).max(100).optional(),
+  lignes:         z.array(ligneFactureSchema).optional(),
 })
 
 export type UpdateFactureInput = z.infer<typeof updateFactureSchema>

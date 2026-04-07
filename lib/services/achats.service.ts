@@ -230,12 +230,85 @@ export async function updateFacture(
     numeroFacture: 'numero_facture',
     dateFacture: 'date_facture',
     statut: 'statut',
+    tauxTva: 'taux_tva',
   }
 
   const dbUpdates: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields[key] && value !== undefined) {
       dbUpdates[allowedFields[key]] = value
+    }
+  }
+
+  // ── Remplacement des lignes (optionnel) ─────────────────────────────────
+  const lignes = updates.lignes as Array<{
+    designation: string
+    ingredient_id?: string | null
+    quantite: number
+    unite?: string | null
+    prix_unitaire_ht: number
+    remise?: number
+  }> | undefined
+
+  if (lignes) {
+    // Recalcul du total HT depuis les nouvelles lignes
+    const totalHt = lignes.reduce((sum, l) => {
+      const { montantHt } = computeLigneEffective(l)
+      return sum + montantHt
+    }, 0)
+    dbUpdates.total_ht = totalHt
+
+    // Suppression des lignes existantes
+    const { error: dErr } = await db
+      .from('achats_lignes')
+      .delete()
+      .eq('facture_id', factureId)
+      .eq('client_id', clientId)
+    if (dErr) throw new Error(dErr.message)
+
+    // Insertion des nouvelles lignes
+    if (lignes.length > 0) {
+      const lignesInsert = lignes.map((l) => {
+        const { prixEffectif, montantHt, remise } = computeLigneEffective(l)
+        return {
+          facture_id: factureId,
+          client_id: clientId,
+          designation: l.designation,
+          ingredient_id: l.ingredient_id || null,
+          quantite: l.quantite,
+          unite: l.unite || null,
+          prix_unitaire_ht: prixEffectif,
+          remise,
+          montant_ht: montantHt,
+        }
+      })
+      const { error: iErr } = await db.from('achats_lignes').insert(lignesInsert)
+      if (iErr) throw new Error(iErr.message)
+    }
+
+    // Mise à jour mapping fournisseur (nouvelles liaisons)
+    const { data: facRow } = await db
+      .from('achats_factures')
+      .select('fournisseur')
+      .eq('id', factureId)
+      .eq('client_id', clientId)
+      .maybeSingle()
+    const nomFournisseur = (dbUpdates.fournisseur as string | undefined) || facRow?.fournisseur || ''
+    if (nomFournisseur) {
+      const newMappings = lignes
+        .filter((l) => l.ingredient_id)
+        .map((l) => ({
+          client_id: clientId,
+          designation_fournisseur: l.designation,
+          designation_norm: normDesignation(l.designation),
+          ingredient_id: l.ingredient_id!,
+          fournisseur: nomFournisseur,
+        }))
+      if (newMappings.length > 0) {
+        await db
+          .from('fournisseur_mapping')
+          .upsert(newMappings, { onConflict: 'client_id,designation_norm' })
+      }
     }
   }
 
