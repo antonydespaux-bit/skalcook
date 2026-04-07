@@ -23,11 +23,6 @@ export default function InventairePage() {
   const { role } = useRole()
   const isMobile = useIsMobile()
 
-  useEffect(() => {
-    if (!role) return
-    if (role !== 'admin' && role !== 'directeur') router.replace('/dashboard')
-  }, [role, router])
-
   useEffect(() => { loadInventaires() }, [])
 
   const loadInventaires = async () => {

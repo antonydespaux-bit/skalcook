@@ -32,7 +32,7 @@ export default function SaisieInventairePage() {
 
   useEffect(() => {
     if (!role) return
-    if (role !== 'admin') router.replace('/inventaire')
+    if (role !== 'admin' && role !== 'cuisine' && role !== 'bar') router.replace('/inventaire')
   }, [role, router])
 
   useEffect(() => { loadData() }, [])

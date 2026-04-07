@@ -4,7 +4,7 @@ import { saveLigne } from '../../../../lib/services/inventaire.service'
 
 export const PATCH = apiHandler({
   schema: saveLigneSchema,
-  guard: 'adminOrSuperadmin',
+  guard: 'memberOfClient',
   clientIdFrom: 'body.clientId',
   handler: async ({ data, db }) => {
     const result = await saveLigne(db, data.ligneId, data.clientId, data.quantite_reelle)

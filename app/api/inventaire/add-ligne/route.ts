@@ -4,7 +4,7 @@ import { addLigne } from '../../../../lib/services/inventaire.service'
 
 export const POST = apiHandler({
   schema: addLigneSchema,
-  guard: 'adminOrSuperadmin',
+  guard: 'memberOfClient',
   clientIdFrom: 'body.clientId',
   handler: async ({ data, db }) => {
     const result = await addLigne(

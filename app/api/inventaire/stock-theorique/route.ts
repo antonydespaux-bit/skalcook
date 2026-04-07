@@ -4,7 +4,7 @@ import { calculateStockTheorique } from '../../../../lib/services/inventaire.ser
 
 export const GET = apiHandler({
   schema: stockTheoriqueQuerySchema,
-  guard: 'adminOrSuperadmin',
+  guard: 'memberOfClient',
   clientIdFrom: 'body.client_id',
   handler: async ({ data, db }) => {
     const result = await calculateStockTheorique(db, data.client_id, data.section)
