@@ -103,7 +103,7 @@ export async function saveFacture(
   input: SaveFactureInput,
   userId: string
 ) {
-  const { clientId, fournisseur, numeroFacture, dateFacture, statut, lignes, fileBase64, fileMime, forceInsert } = input
+  const { clientId, fournisseur, numeroFacture, dateFacture, statut, lignes, fileBase64, fileMime, forceInsert, tauxTva } = input
   const nomFournisseur = fournisseur.trim()
 
   // 1. Check duplicate
@@ -138,6 +138,7 @@ export async function saveFacture(
       numero_facture: numeroFacture?.trim() || null,
       date_facture: dateFacture,
       total_ht: totalHt,
+      taux_tva: tauxTva ?? null,
       statut: statut === 'bl' ? 'bl' : 'facture',
       fichier_url: fichierUrl,
     })

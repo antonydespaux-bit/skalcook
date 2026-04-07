@@ -34,6 +34,7 @@ export default function AchatsImportPage() {
   const [dateFacture, setDateFacture] = useState(yesterdayIso())
   const [numeroFacture, setNumeroFacture] = useState('')
   const [statut, setStatut] = useState('facture')
+  const [tauxTva, setTauxTva] = useState(5.5) // % par défaut (alimentaire)
 
   // ── Lignes enrichies ──────────────────────────────────────────────────────
   // Chaque ligne : { _id, designation, quantite, unite, prix_unitaire_ht, remise,
@@ -52,6 +53,17 @@ export default function AchatsImportPage() {
     ),
     [ingredientsById]
   )
+
+  // ── Totaux facture (HT / TVA / TTC) ──────────────────────────────────────
+  const totalHtFacture = useMemo(
+    () => lignes.reduce((s, l) => {
+      const r = Number(l.remise) || 0
+      return s + (Number(l.quantite) || 0) * (Number(l.prix_unitaire_ht) || 0) * (1 - r / 100)
+    }, 0),
+    [lignes]
+  )
+  const montantTva = totalHtFacture * (Number(tauxTva) || 0) / 100
+  const totalTtcFacture = totalHtFacture + montantTva
 
   // ── UX ────────────────────────────────────────────────────────────────────
   const [error, setError] = useState('')
@@ -332,7 +344,7 @@ export default function AchatsImportPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ clientId, fournisseur, numeroFacture, dateFacture, statut, lignes, forceInsert, fileBase64, fileMime }),
+        body: JSON.stringify({ clientId, fournisseur, numeroFacture, dateFacture, statut, lignes, forceInsert, fileBase64, fileMime, tauxTva: Number(tauxTva) || 0 }),
       })
       const result = await res.json()
 
@@ -586,6 +598,36 @@ export default function AchatsImportPage() {
                     </select>
                   </label>
                 </div>
+
+                {/* Totaux HT / TVA / TTC */}
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${c.bordure}`, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 10 }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
+                    Total HT
+                    <input
+                      style={{ ...inputS, background: c.fond, fontVariantNumeric: 'tabular-nums' }}
+                      readOnly
+                      value={fmtPrix(totalHtFacture)}
+                    />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
+                    TVA (%)
+                    <input
+                      style={inputS}
+                      type="number"
+                      min="0" max="100" step="0.1"
+                      value={tauxTva}
+                      onChange={e => setTauxTva(e.target.value)}
+                    />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
+                    Total TTC
+                    <input
+                      style={{ ...inputS, background: c.fond, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}
+                      readOnly
+                      value={fmtPrix(totalTtcFacture)}
+                    />
+                  </label>
+                </div>
               </div>
 
             </div>
@@ -712,13 +754,7 @@ export default function AchatsImportPage() {
                                 {fmtPrix(totalLigne)}
                               </td>
                               <td style={{ ...td, textAlign: 'center' }}>
-                                {l.reconnu ? (
-                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                    <span style={badgeVert}>✓ Reconnu</span>
-                                    {l.ingredient_nom && <span style={{ fontSize: 10, color: c.texteMuted }}>{l.ingredient_nom}</span>}
-                                    <button onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }} style={{ fontSize: 10, padding: '1px 5px', background: 'transparent', border: `1px solid ${c.bordure}`, color: c.texteMuted, borderRadius: 4, cursor: 'pointer', marginTop: 2 }}>Changer</button>
-                                  </div>
-                                ) : creatingIngFor === l._id ? (
+                                {creatingIngFor === l._id ? (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
                                     <input
                                       autoFocus
@@ -759,6 +795,12 @@ export default function AchatsImportPage() {
                                       )}
                                     </div>
                                     <button onClick={() => { setLinkingIngFor(null); setLinkSearch('') }} style={{ padding: '2px 6px', fontSize: 11, background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 4, cursor: 'pointer' }}>✕ Annuler</button>
+                                  </div>
+                                ) : l.reconnu ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                    <span style={badgeVert}>✓ Reconnu</span>
+                                    {l.ingredient_nom && <span style={{ fontSize: 10, color: c.texteMuted }}>{l.ingredient_nom}</span>}
+                                    <button onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }} style={{ fontSize: 10, padding: '1px 5px', background: 'transparent', border: `1px solid ${c.bordure}`, color: c.texteMuted, borderRadius: 4, cursor: 'pointer', marginTop: 2 }}>Changer</button>
                                   </div>
                                 ) : (
                                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>

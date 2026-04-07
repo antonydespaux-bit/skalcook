@@ -28,6 +28,7 @@ export const saveFactureSchema = z.object({
   fileBase64:     z.string().optional(),
   fileMime:       z.enum(['application/pdf', 'image/png', 'image/webp', 'image/jpeg']).optional(),
   forceInsert:    z.boolean().optional(),
+  tauxTva:        z.coerce.number().min(0).max(100).optional(),
 })
 
 export type SaveFactureInput = z.infer<typeof saveFactureSchema>
