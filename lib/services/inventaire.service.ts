@@ -466,7 +466,7 @@ export async function validerInventaire(
     .update({
       statut: 'valide',
       date_validation: now,
-      validated_by: userId,
+      valide_par: userId,
     })
     .eq('id', inventaireId)
 
