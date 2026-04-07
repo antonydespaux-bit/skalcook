@@ -305,7 +305,9 @@ export default function ImportView({ section = 'cuisine' }) {
               }
             } else {
               await supabase.from(cfg.table).insert([{
-                ...ing,
+                nom: ing.nom,
+                prix_kg: ing.prix_kg,
+                unite: ing.unite,
                 client_id: clientId
               }])
               importes++
@@ -396,7 +398,7 @@ export default function ImportView({ section = 'cuisine' }) {
                 background: accentBg, color: accent, border: `0.5px solid ${accent}40`,
                 borderRadius: '8px', padding: '6px 12px', fontSize: '12px', fontWeight: '500', cursor: 'pointer'
               }}>
-                \ud83d\udce5 T\u00e9l\u00e9charger le mod\u00e8le
+                📥 Télécharger le modèle
               </button>
             )}
           </div>
@@ -406,22 +408,22 @@ export default function ImportView({ section = 'cuisine' }) {
             <div style={{ background: c.fond, borderRadius: '8px', padding: '14px 16px', fontSize: '13px', color: c.texteMuted, marginBottom: '20px', border: `0.5px solid ${c.bordure}` }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px' }}>
                 <strong style={{ color: c.texte }}>Colonne A</strong><span>Nom de l&apos;article <span style={{ color: '#DC2626' }}>*</span></span>
-                <strong style={{ color: c.texte }}>Colonne B</strong><span>Prix HT en \u20ac (avec . ou ,)</span>
-                <strong style={{ color: c.texte }}>Colonne C</strong><span>Unit\u00e9 ({cfg.unitExamples})</span>
-                <strong style={{ color: accent }}>Colonne D</strong><span style={{ color: accent }}>Cat\u00e9gorie (doit correspondre exactement)</span>
+                <strong style={{ color: c.texte }}>Colonne B</strong><span>Prix HT en € (avec . ou ,)</span>
+                <strong style={{ color: c.texte }}>Colonne C</strong><span>Unité ({cfg.unitExamples})</span>
+                <strong style={{ color: accent }}>Colonne D</strong><span style={{ color: accent }}>Catégorie (doit correspondre exactement)</span>
               </div>
               <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `0.5px solid ${c.bordure}`, fontSize: '12px' }}>
-                <div style={{ color: green, marginBottom: '2px' }}>\u2713 Les prix existants seront mis \u00e0 jour automatiquement</div>
-                <div style={{ color: accent }}>\u2713 La cat\u00e9gorie doit correspondre exactement \u00e0 une cat\u00e9gorie existante</div>
+                <div style={{ color: green, marginBottom: '2px' }}>✓ Les prix existants seront mis à jour automatiquement</div>
+                <div style={{ color: accent }}>✓ La catégorie doit correspondre exactement à une catégorie existante</div>
               </div>
             </div>
           ) : (
             <div style={{ background: c.fond, borderRadius: '8px', padding: '14px 16px', fontSize: '13px', color: c.texteMuted, marginBottom: '20px', border: `0.5px solid ${c.bordure}` }}>
-              <strong style={{ color: c.texte }}>Colonne A</strong> \u2014 Nom de l&apos;article<br />
-              <strong style={{ color: c.texte }}>Colonne B</strong> \u2014 Prix HT (avec . ou ,)<br />
-              <strong style={{ color: c.texte }}>Colonne C</strong> \u2014 Unit\u00e9 ({cfg.unitExamples})<br />
-              <strong style={{ color: c.texte }}>Colonne D</strong> \u2014 Cat\u00e9gorie (optionnelle, pour filtrage)<br />
-              <div style={{ marginTop: '8px', color: green, fontSize: '12px' }}>\u2713 Les prix existants seront mis \u00e0 jour automatiquement</div>
+              <strong style={{ color: c.texte }}>Colonne A</strong> — Nom de l&apos;article<br />
+              <strong style={{ color: c.texte }}>Colonne B</strong> — Prix HT (avec . ou ,)<br />
+              <strong style={{ color: c.texte }}>Colonne C</strong> — Unité ({cfg.unitExamples})<br />
+              <strong style={{ color: c.texte }}>Colonne D</strong> — Catégorie (optionnelle, pour filtrage)<br />
+              <div style={{ marginTop: '8px', color: green, fontSize: '12px' }}>✓ Les prix existants seront mis à jour automatiquement</div>
             </div>
           )}
 
@@ -433,7 +435,7 @@ export default function ImportView({ section = 'cuisine' }) {
           {cfg.hasCategories && categoriesInconnues.length > 0 && (
             <div style={{ background: '#FEF3C7', border: '0.5px solid #FDE68A', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px' }}>
               <div style={{ fontSize: '13px', fontWeight: '500', color: '#92400E', marginBottom: '8px' }}>
-                \u26a0\ufe0f {categoriesInconnues.length} cat\u00e9gorie{categoriesInconnues.length > 1 ? 's' : ''} non reconnue{categoriesInconnues.length > 1 ? 's' : ''} :
+                ⚠️ {categoriesInconnues.length} catégorie{categoriesInconnues.length > 1 ? 's' : ''} non reconnue{categoriesInconnues.length > 1 ? 's' : ''} :
               </div>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {categoriesInconnues.map(cat => (
@@ -443,7 +445,7 @@ export default function ImportView({ section = 'cuisine' }) {
                 ))}
               </div>
               <div style={{ fontSize: '12px', color: '#92400E', marginTop: '8px' }}>
-                Ces ingr\u00e9dients seront import\u00e9s sans cat\u00e9gorie. Cr\u00e9ez d&apos;abord les cat\u00e9gories manquantes dans la page Ingr\u00e9dients.
+                Ces ingrédients seront importés sans catégorie. Créez d&apos;abord les catégories manquantes dans la page Ingrédients.
               </div>
             </div>
           )}
@@ -451,10 +453,10 @@ export default function ImportView({ section = 'cuisine' }) {
           {categoriesFichier.length > 0 && (
             <div style={{ marginBottom: '18px', border: `0.5px solid ${c.bordure}`, borderRadius: '10px', padding: '12px' }}>
               <div style={{ fontSize: '13px', fontWeight: '600', color: c.texte, marginBottom: '8px' }}>
-                Filtrer les produits \u00e0 importer
+                Filtrer les produits à importer
               </div>
               <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '10px' }}>
-                {donneesSelectionnees.length} ingr\u00e9dients s\u00e9lectionn\u00e9s sur {donnees.length} trouv\u00e9s dans le fichier
+                {donneesSelectionnees.length} ingrédients sélectionnés sur {donnees.length} trouvés dans le fichier
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                 {categoriesFichier.map((cat) => {
@@ -519,7 +521,7 @@ export default function ImportView({ section = 'cuisine' }) {
                                 {ing.categorieNonTrouvee ? '\u26a0\ufe0f ' : '\u2713 '}{ing.categorieNom}
                               </span>
                             ) : (
-                              <span style={{ color: c.texteMuted, fontSize: '12px' }}>\u2014</span>
+                              <span style={{ color: c.texteMuted, fontSize: '12px' }}>—</span>
                             )}
                           </td>
                         )}
@@ -534,7 +536,7 @@ export default function ImportView({ section = 'cuisine' }) {
           {/* Progression */}
           {loading && (
             <div style={{ marginBottom: '16px' }}>
-              <ChefLoader message="Le chef analyse vos ingr\u00e9dients..." size={120} />
+              <ChefLoader message="Le chef analyse vos ingrédients..." size={120} />
               <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '6px' }}>{etape}</div>
               <div style={{ background: c.fond, borderRadius: '20px', height: '8px', overflow: 'hidden', border: `0.5px solid ${c.bordure}` }}>
                 <div style={{ background: accent, height: '100%', borderRadius: '20px', width: `${progression}%`, transition: 'width 0.3s ease' }} />
@@ -557,9 +559,9 @@ export default function ImportView({ section = 'cuisine' }) {
         {/* R\u00e9sultat */}
         {resultat && (
           <div style={{ background: greenBg, border: `0.5px solid ${greenBorder}`, borderRadius: '12px', padding: '20px' }}>
-            <div style={{ fontWeight: '600', marginBottom: '10px', color: green }}>Import termin\u00e9 !</div>
+            <div style={{ fontWeight: '600', marginBottom: '10px', color: green }}>Import terminé !</div>
             <div style={{ fontSize: '13px', color: c.texte, marginBottom: '10px' }}>
-              Succ\u00e8s : {resultat.importes + resultat.misAJour} ingr\u00e9dients trait\u00e9s, {resultat.ignores || 0} ignor\u00e9s (car d\u00e9coch\u00e9s).
+              Succès : {resultat.importes + resultat.misAJour} ingrédients traités, {resultat.ignores || 0} ignorés (car décochés).
             </div>
 
             {cfg.hasCategories ? (
@@ -584,7 +586,7 @@ export default function ImportView({ section = 'cuisine' }) {
                 </div>
                 <div style={{ background: c.blanc, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
                   <div style={{ fontSize: '24px', fontWeight: '500', color: '#854F0B' }}>{resultat.misAJour}</div>
-                  <div style={{ fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase' }}>Mis \u00e0 jour</div>
+                  <div style={{ fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase' }}>Mis à jour</div>
                 </div>
                 <div style={{ background: c.blanc, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
                   <div style={{ fontSize: '24px', fontWeight: '500', color: resultat.erreurs > 0 ? '#A32D2D' : c.texte }}>{resultat.erreurs}</div>
@@ -595,7 +597,7 @@ export default function ImportView({ section = 'cuisine' }) {
 
             {resultat.misAJour > 0 && !resultat.recalculDone && (
               <div style={{ background: '#FAEEDA', borderRadius: '8px', padding: '14px', marginBottom: '12px', border: '0.5px solid #FAC775' }}>
-                <div style={{ fontSize: '13px', color: '#633806', fontWeight: '500', marginBottom: '8px' }}>\u26a0\ufe0f {resultat.misAJour} prix ont \u00e9t\u00e9 mis \u00e0 jour</div>
+                <div style={{ fontSize: '13px', color: '#633806', fontWeight: '500', marginBottom: '8px' }}>⚠️ {resultat.misAJour} prix ont été mis à jour</div>
                 <button onClick={handleRecalcul} disabled={recalcul} style={{
                   width: '100%', padding: '12px', background: recalcul ? c.texteMuted : green,
                   color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: recalcul ? 'not-allowed' : 'pointer'
