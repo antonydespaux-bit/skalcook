@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
 import Navbar from '../../components/Navbar'
+import ChefLoader from '../../components/ChefLoader'
 
 export default function CartesPage() {
   const [cartes, setCartes] = useState([])
@@ -121,7 +122,7 @@ export default function CartesPage() {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px', color: c.texteMuted }}>Chargement...</div>
+          <ChefLoader />
         ) : cartes.length === 0 ? (
           <div style={{
             textAlign: 'center', padding: '60px', background: 'white',

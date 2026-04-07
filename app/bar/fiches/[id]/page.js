@@ -9,6 +9,7 @@ import { useRole } from '../../../../lib/useRole'
 import { log } from '../../../../lib/useLog'
 import { ALLERGENES } from '../../../../lib/allergenes'
 import { AllergenesBlock } from '../../../../components/FicheDetailShared'
+import ChefLoader from '../../../../components/ChefLoader'
 
 export default function BarFicheDetail() {
   const [fiche, setFiche] = useState(null)
@@ -179,7 +180,7 @@ const loadFiche = async () => {
 
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
-      <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
+      <ChefLoader />
     </div>
   )
 

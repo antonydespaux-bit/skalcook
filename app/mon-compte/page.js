@@ -6,6 +6,7 @@ import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { Logo } from '../../lib/theme.jsx'
+import ChefLoader from '../../components/ChefLoader'
 
 const TABS = [
   { id: 'profil',        label: 'Mon Profil' },
@@ -234,7 +235,7 @@ export default function MonCompte() {
 
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
-      <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
+      <ChefLoader />
     </div>
   )
 

@@ -7,6 +7,7 @@ import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
 import { calculerFoodCost, foodCostColor, getSeuilsFromParams } from '../../../lib/foodCost'
 import Navbar from '../../../components/Navbar'
+import ChefLoader from '../../../components/ChefLoader'
 
 export default function BarDashboardPage() {
   const [fiches, setFiches] = useState([])
@@ -74,7 +75,7 @@ export default function BarDashboardPage() {
 
   if (loading || roleLoading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
-      <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
+      <ChefLoader />
     </div>
   )
 

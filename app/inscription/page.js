@@ -7,6 +7,7 @@ import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
 import { log } from '../../lib/useLog'
 import Navbar from '../../components/Navbar'
+import ChefLoader from '../../components/ChefLoader'
 
 export default function IngredientsPage() {
   const [ingredients, setIngredients] = useState([])
@@ -175,7 +176,7 @@ export default function IngredientsPage() {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px', color: c.texteMuted }}>Chargement...</div>
+          <ChefLoader />
         ) : isMobile ? (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', padding: '8px 12px', background: c.blanc, borderRadius: '8px', border: `0.5px solid ${c.bordure}` }}>

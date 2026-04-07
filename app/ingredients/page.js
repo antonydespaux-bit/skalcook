@@ -8,6 +8,7 @@ import { useRole } from '../../lib/useRole'
 import { log } from '../../lib/useLog'
 import Navbar from '../../components/Navbar'
 import Pagination from '../../components/Pagination'
+import ChefLoader from '../../components/ChefLoader'
 
 const PAGE_SIZE = 30
 
@@ -398,7 +399,7 @@ export default function IngredientsPage() {
 
             {/* Table ingrédients */}
             {loading ? (
-              <div style={{ textAlign: 'center', padding: '60px', color: c.texteMuted }}>Chargement...</div>
+              <ChefLoader />
             ) : ingredientsFiltres.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '60px', background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, color: c.texteMuted, fontSize: '14px' }}>
                 Aucun ingrédient trouvé

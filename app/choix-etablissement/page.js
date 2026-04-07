@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { theme, Logo, LogoBand } from '../../lib/theme.jsx'
+import ChefLoader from '../../components/ChefLoader'
 
 // Hub multi-etablissements (selection explicite du client actif)
 export default function ChoixEtablissementPage() {
@@ -88,7 +89,7 @@ export default function ChoixEtablissementPage() {
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
-        <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
+        <ChefLoader />
       </div>
     )
   }

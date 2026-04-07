@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo, LogoBand } from '../../lib/theme.jsx'
 import { useRole } from '../../lib/useRole'
+import ChefLoader from '../../components/ChefLoader'
 
 export default function ChoixPage() {
   const router = useRouter()
@@ -47,7 +48,7 @@ export default function ChoixPage() {
 
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
-      <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
+      <ChefLoader />
     </div>
   )
 

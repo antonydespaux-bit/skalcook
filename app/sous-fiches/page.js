@@ -7,6 +7,7 @@ import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
 import Navbar from '../../components/Navbar'
 import { ALLERGENES } from '../../lib/allergenes'
+import ChefLoader from '../../components/ChefLoader'
 
 export default function SousFichesPage() {
   const [fiches, setFiches] = useState([])
@@ -72,7 +73,7 @@ export default function SousFichesPage() {
           style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: c.blanc, outline: 'none', color: c.texte, marginBottom: '16px' }}
         />
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px', color: c.texteMuted }}>Chargement...</div>
+          <ChefLoader />
         ) : fichesFiltrees.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px', background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}` }}>
             <div style={{ fontSize: '14px', color: c.texteMuted, marginBottom: '16px' }}>Aucune sous-fiche pour le moment</div>

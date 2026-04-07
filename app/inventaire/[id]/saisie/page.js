@@ -7,6 +7,7 @@ import { useRole } from '../../../../lib/useRole'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import Navbar from '../../../../components/Navbar'
 import IngredientSearch from '../../../../components/IngredientSearch'
+import ChefLoader from '../../../../components/ChefLoader'
 
 export default function SaisieInventairePage() {
   const params = useParams()
@@ -203,7 +204,7 @@ export default function SaisieInventairePage() {
   if (loading) return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
       <Navbar section="cuisine" />
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '60px', color: c.texteMuted }}>Chargement...</div>
+      <ChefLoader />
     </div>
   )
 

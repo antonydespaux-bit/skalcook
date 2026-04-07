@@ -7,6 +7,7 @@ import { useRole } from '../../lib/useRole'
 import { useIsMobile } from '../../lib/useIsMobile'
 import Navbar from '../../components/Navbar'
 import {
+import ChefLoader from '../../components/ChefLoader'
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
 } from 'recharts'
@@ -119,7 +120,7 @@ export default function InventairePage() {
   if (loading) return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
       <Navbar section="cuisine" />
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '60px', color: c.texteMuted }}>Chargement...</div>
+      <ChefLoader />
     </div>
   )
 

@@ -10,6 +10,7 @@ import { log } from '../../../lib/useLog'
 import { ALLERGENES } from '../../../lib/allergenes'
 import FichePhoto, { FicheHeaderInfo, FicheHeaderInfoStyles } from '../../../components/FichePhoto'
 import { AllergenesBlock, FicheDetailNavbar } from '../../../components/FicheDetailShared'
+import ChefLoader from '../../../components/ChefLoader'
 
 export default function FicheDetail() {
   const [fiche, setFiche] = useState(null)
@@ -161,7 +162,7 @@ export default function FicheDetail() {
 
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
-      <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
+      <ChefLoader />
     </div>
   )
 

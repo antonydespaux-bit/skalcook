@@ -6,6 +6,7 @@ import { theme, Logo } from '../../lib/theme.jsx'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
 import Navbar from '../../components/Navbar'
+import ChefLoader from '../../components/ChefLoader'
 
 export default function MenusPage() {
   const [menus, setMenus] = useState([])
@@ -65,7 +66,7 @@ export default function MenusPage() {
       <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '1000px', margin: '0 auto' }}>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px', color: c.texteMuted }}>Chargement...</div>
+          <ChefLoader />
         ) : menus.length === 0 ? (
           <div style={{
             textAlign: 'center', padding: '60px', background: c.blanc,

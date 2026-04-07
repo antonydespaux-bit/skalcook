@@ -11,6 +11,7 @@ import { calculerFoodCost, foodCostColor, getSeuilsFromParams } from '../../lib/
 import Navbar from '../../components/Navbar'
 import InventaireBanner from '../../components/InventaireBanner'
 import * as XLSX from 'xlsx'
+import ChefLoader from '../../components/ChefLoader'
 
 export default function DashboardPage() {
   const [fiches, setFiches] = useState([])
@@ -107,7 +108,7 @@ export default function DashboardPage() {
 
   if (loading || roleLoading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
-      <div style={{ fontSize: '14px', color: c.texteMuted }}>Chargement...</div>
+      <ChefLoader />
     </div>
   )
 

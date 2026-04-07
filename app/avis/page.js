@@ -7,6 +7,7 @@ import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
 import Navbar from '../../components/Navbar'
+import ChefLoader from '../../components/ChefLoader'
 
 export default function AvisPage() {
   const [avis, setAvis] = useState([])
@@ -205,7 +206,7 @@ export default function AvisPage() {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px', color: c.texteMuted }}>Chargement...</div>
+          <ChefLoader />
         ) : activeTab === 'dashboard' ? (
           <>
             {/* KPIs */}
