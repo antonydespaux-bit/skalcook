@@ -371,96 +371,125 @@ export async function createIngredient(
 }
 
 export async function getMercuriale(db: SupabaseClient, clientId: string) {
-  // Load all invoices + lines + ingredients in parallel
-  const [facturesRes, ingredientsRes] = await Promise.all([
-    db
-      .from('achats_factures')
-      .select('id, fournisseur, date_facture')
-      .eq('client_id', clientId)
-      .is('deleted_at', null)
-      .order('date_facture', { ascending: false }),
-    db
-      .from('ingredients')
-      .select('id, nom, unite, prix_kg')
-      .eq('client_id', clientId),
-  ])
+  // Tous les ingrédients du client (pour la recherche hors mercuriale)
+  const { data: allIngs } = await db
+    .from('ingredients')
+    .select('id, nom, unite')
+    .eq('client_id', clientId)
+    .order('nom')
+  const allIngredients = (allIngs ?? []).map((i: { id: string; nom: string; unite: string | null }) => ({
+    id: i.id,
+    nom: i.nom,
+    unite: i.unite ?? '',
+  }))
 
-  const factures = facturesRes.data ?? []
-  const ingredients = ingredientsRes.data ?? []
+  // Toutes les factures + BL du client
+  const { data: factures } = await db
+    .from('achats_factures')
+    .select('id, fournisseur, fournisseur_id, date_facture')
+    .eq('client_id', clientId)
+    .order('date_facture', { ascending: false })
 
-  if (factures.length === 0) {
-    return { fournisseurs: [], data: [] }
+  if (!factures?.length) {
+    return { rows: [], fournisseurs: [], allIngredients }
   }
 
   const factureIds = factures.map((f) => f.id)
+  const factureMap = new Map(factures.map((f) => [f.id, f]))
+
+  // Toutes les lignes ayant un ingrédient lié
   const { data: lignes } = await db
     .from('achats_lignes')
-    .select('facture_id, ingredient_id, prix_unitaire_ht, quantite, montant_ht')
+    .select('ingredient_id, designation, unite, prix_unitaire_ht, remise, facture_id')
     .in('facture_id', factureIds)
     .not('ingredient_id', 'is', null)
 
-  // Build mercuriale data
-  const fournisseursSet = new Set<string>()
-  const factureMap = new Map(factures.map((f) => [f.id, f]))
-  const ingMap = new Map(ingredients.map((i) => [i.id, i]))
-
-  type MercEntry = {
-    ingredient_id: string
-    nom: string
-    unite: string
-    prix_kg: number
-    fournisseurs: Record<string, { prix_moyen: number; dernier_prix: number; nb_achats: number }>
+  // Index ingrédients pour le nom canonique
+  const ingredientIds = [...new Set((lignes ?? []).map((l) => l.ingredient_id).filter(Boolean) as string[])]
+  let ingredientsById: Record<string, { id: string; nom: string; unite: string | null }> = {}
+  if (ingredientIds.length) {
+    const { data: ings } = await db
+      .from('ingredients')
+      .select('id, nom, unite')
+      .in('id', ingredientIds)
+    if (ings) {
+      ingredientsById = Object.fromEntries(
+        (ings as { id: string; nom: string; unite: string | null }[]).map((i) => [i.id, i])
+      )
+    }
   }
-  const mercData = new Map<string, MercEntry>()
 
+  // Agrège par (ingredient_id, fournisseur)
+  type Achat = { prix: number; date: string; unite: string | null }
+  type ByFourn = Record<string, { fournisseur_id: string | null; achats: Achat[] }>
+  const agg: Record<string, ByFourn> = {}
   for (const l of lignes ?? []) {
     if (!l.ingredient_id) continue
-    const fac = factureMap.get(l.facture_id)
-    if (!fac) continue
+    const f = factureMap.get(l.facture_id)
+    if (!f) continue
+    const prix = Number(l.prix_unitaire_ht) * (1 - (Number(l.remise) || 0) / 100)
+    const fourn = f.fournisseur
+    const fournId = (f as { fournisseur_id?: string | null }).fournisseur_id ?? null
 
-    fournisseursSet.add(fac.fournisseur)
-    const ing = ingMap.get(l.ingredient_id)
-    if (!ing) continue
-
-    if (!mercData.has(l.ingredient_id)) {
-      mercData.set(l.ingredient_id, {
-        ingredient_id: l.ingredient_id,
-        nom: ing.nom,
-        unite: ing.unite,
-        prix_kg: ing.prix_kg,
-        fournisseurs: {},
-      })
+    if (!agg[l.ingredient_id]) agg[l.ingredient_id] = {}
+    if (!agg[l.ingredient_id][fourn]) {
+      agg[l.ingredient_id][fourn] = { fournisseur_id: fournId, achats: [] }
     }
-
-    const entry = mercData.get(l.ingredient_id)!
-    if (!entry.fournisseurs[fac.fournisseur]) {
-      entry.fournisseurs[fac.fournisseur] = { prix_moyen: 0, dernier_prix: 0, nb_achats: 0 }
-    }
-
-    const fEntry = entry.fournisseurs[fac.fournisseur]
-    fEntry.nb_achats++
-    fEntry.dernier_prix = l.prix_unitaire_ht
-    fEntry.prix_moyen =
-      (fEntry.prix_moyen * (fEntry.nb_achats - 1) + l.prix_unitaire_ht) / fEntry.nb_achats
+    agg[l.ingredient_id][fourn].achats.push({ prix, date: f.date_facture, unite: l.unite })
   }
 
-  // Mark best prices
-  const result = Array.from(mercData.values()).map((entry) => {
-    let bestPrice = Infinity
-    let bestFournisseur = ''
-    for (const [f, data] of Object.entries(entry.fournisseurs)) {
-      if (data.dernier_prix < bestPrice) {
-        bestPrice = data.dernier_prix
-        bestFournisseur = f
+  // Liste des fournisseurs triés
+  const fournisseursSet = new Set<string>()
+  for (const ingData of Object.values(agg)) {
+    for (const fourn of Object.keys(ingData)) fournisseursSet.add(fourn)
+  }
+  const fournisseurs = [...fournisseursSet].sort()
+
+  // Lignes de la mercuriale
+  type Col = {
+    fournisseur_id: string | null
+    prix_last: number
+    prix_moy: number
+    date_last: string
+    nb_achats: number
+    unite: string | null
+    is_best?: boolean
+  }
+  const rows = Object.entries(agg)
+    .map(([ingredientId, byFourn]) => {
+      const ing = ingredientsById[ingredientId]
+      const cols: Record<string, Col> = {}
+      let bestPrix: number | null = null
+
+      for (const [fourn, data] of Object.entries(byFourn)) {
+        const sorted = data.achats.sort((a, b) => b.date.localeCompare(a.date))
+        const prixLast = sorted[0].prix
+        const prixMoy = sorted.reduce((s, a) => s + a.prix, 0) / sorted.length
+        cols[fourn] = {
+          fournisseur_id: data.fournisseur_id,
+          prix_last: Math.round(prixLast * 10000) / 10000,
+          prix_moy: Math.round(prixMoy * 10000) / 10000,
+          date_last: sorted[0].date,
+          nb_achats: sorted.length,
+          unite: sorted[0].unite,
+        }
+        if (bestPrix === null || prixLast < bestPrix) bestPrix = prixLast
       }
-    }
-    return { ...entry, meilleur_fournisseur: bestFournisseur, meilleur_prix: bestPrice }
-  })
 
-  return {
-    fournisseurs: Array.from(fournisseursSet).sort(),
-    data: result.sort((a, b) => a.nom.localeCompare(b.nom)),
-  }
+      for (const fourn of Object.keys(cols)) {
+        cols[fourn].is_best = bestPrix !== null && Math.abs(cols[fourn].prix_last - bestPrix) < 0.001
+      }
+
+      return {
+        ingredient_id: ingredientId,
+        ingredient_nom: ing?.nom ?? '—',
+        unite: Object.values(byFourn)[0]?.achats[0]?.unite ?? ing?.unite ?? '—',
+        cols,
+      }
+    })
+    .sort((a, b) => a.ingredient_nom.localeCompare(b.ingredient_nom))
+
+  return { rows, fournisseurs, allIngredients }
 }
 
 export async function getReconciliationData(db: SupabaseClient, clientId: string) {
