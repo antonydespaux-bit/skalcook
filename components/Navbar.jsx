@@ -128,7 +128,7 @@ export default function Navbar({ section = 'cuisine' }) {
           label: 'Contenus',
           paths: ['/bar/recap', '/bar/ingredients', '/bar/import'],
           items: [
-            ...(hasModule('recap')                     ? [{ label: 'Récap food cost', path: '/bar/recap' }]       : []),
+            ...(hasModule('recap')                     ? [{ label: 'Récap bev cost', path: '/bar/recap' }]       : []),
             ...(hasModule('ingredients') && peutModifier ? [{ label: 'Ingrédients',  path: '/bar/ingredients' }] : []),
           ]
         },

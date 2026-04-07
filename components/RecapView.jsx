@@ -26,6 +26,7 @@ const SECTION_CONFIG = {
     tvaFn: () => 1.10,
     fcThresholds: { vert: 30, orange: 40 },
     loadExtraFilter: null,
+    costLabel: 'Food cost',
     colors: {
       lieuBg: '#FAECE7', lieuColor: '#993C1D',
       catBg: '#E1F5EE', catColor: '#085041',
@@ -47,6 +48,7 @@ const SECTION_CONFIG = {
     tvaFn: (fiche) => CATEGORIES_ALCOOL.includes(fiche?.categorie) ? 1.20 : 1.10,
     fcThresholds: { vert: 22, orange: 28 },
     loadExtraFilter: (q) => q.neq('categorie', 'Sous-fiche'),
+    costLabel: 'Bev cost',
     colors: {
       lieuBg: '#EEEDFE', lieuColor: '#3C3489',
       catBg: '#EDE9FE', catColor: '#3C3489',
@@ -168,7 +170,7 @@ export default function RecapView({ section = 'cuisine' }) {
       const lignes = fichesFiltrees.filter(f => f.lieu_id === lieu.id)
       const stats = statsListe(lignes)
       if (!stats) return null
-      return { 'Lieu': `${lieu.emoji} ${lieu.nom}`, 'Nb fiches': stats.nb, 'Food cost moyen (%)': stats.ratioMoyen.toFixed(1), 'Bénéfice moyen (€)': stats.beneficeMoyen.toFixed(2) }
+      return { 'Lieu': `${lieu.emoji} ${lieu.nom}`, 'Nb fiches': stats.nb, [`${cfg.costLabel} moyen (%)`]: stats.ratioMoyen.toFixed(1), 'Bénéfice moyen (€)': stats.beneficeMoyen.toFixed(2) }
     }).filter(Boolean)
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rowsGlobal), 'Récap par lieu')
     const rowsDetail = fichesFiltrees.map(f => {
@@ -182,7 +184,7 @@ export default function RecapView({ section = 'cuisine' }) {
         'Prix HT (€)': prixHT ? prixHT.toFixed(2) : '—',
         'TVA (%)': tvaPercent,
         'Prix TTC (€)': f.prix_ttc ? Number(f.prix_ttc).toFixed(2) : '—',
-        'Food cost (%)': prixHT && f.cout_portion ? (f.cout_portion / prixHT * 100).toFixed(1) : '—',
+        [`${cfg.costLabel} (%)`]: prixHT && f.cout_portion ? (f.cout_portion / prixHT * 100).toFixed(1) : '—',
       }
     })
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rowsDetail), 'Détail fiches')
@@ -239,7 +241,7 @@ export default function RecapView({ section = 'cuisine' }) {
 
   const HeadersDetail = ({ avecLieu = false }) => (
     <tr>
-      {['Nom', ...(avecLieu ? ['Lieu'] : []), 'Saison', 'Coût / portion', 'Prix HT', 'Prix TTC', 'Bénéfice', 'Food cost', ...(peutModifier ? ['Archiver'] : [])].map(h => (
+      {['Nom', ...(avecLieu ? ['Lieu'] : []), 'Saison', 'Coût / portion', 'Prix HT', 'Prix TTC', 'Bénéfice', cfg.costLabel, ...(peutModifier ? ['Archiver'] : [])].map(h => (
         <th key={h} style={{ padding: '6px 10px', textAlign: h === 'Nom' || h === 'Lieu' ? 'left' : 'right', color: c.texteMuted, fontWeight: '500', fontSize: '11px', textTransform: 'uppercase', borderBottom: `0.5px solid ${c.bordure}` }}>{h}</th>
       ))}
     </tr>
@@ -339,7 +341,7 @@ export default function RecapView({ section = 'cuisine' }) {
                 </div>
                 <div style={{ display: 'flex', gap: isMobile ? '12px' : '24px', alignItems: 'center' }}>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '10px', color: c.texteMuted, textTransform: 'uppercase' }}>Food cost moy.</div>
+                    <div style={{ fontSize: '10px', color: c.texteMuted, textTransform: 'uppercase' }}>{cfg.costLabel} moy.</div>
                     <div style={{ fontSize: '15px', fontWeight: '500', color: fcColor(statsLieu.ratioMoyen) }}>{statsLieu.ratioMoyen > 0 ? `${statsLieu.ratioMoyen.toFixed(1)}%` : '—'}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
@@ -452,7 +454,7 @@ export default function RecapView({ section = 'cuisine' }) {
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: '10px', marginBottom: '16px' }}>
           {[
             { label: 'Fiches actives', value: fichesFiltrees.length },
-            { label: 'Food cost global', value: statsTotal?.ratioMoyen > 0 ? `${statsTotal.ratioMoyen.toFixed(1)}%` : '—', color: fcColor(statsTotal?.ratioMoyen), bg: fcBg(statsTotal?.ratioMoyen) },
+            { label: `${cfg.costLabel} global`, value: statsTotal?.ratioMoyen > 0 ? `${statsTotal.ratioMoyen.toFixed(1)}%` : '—', color: fcColor(statsTotal?.ratioMoyen), bg: fcBg(statsTotal?.ratioMoyen) },
             { label: 'Bénéfice moyen', value: statsTotal?.beneficeMoyen > 0 ? `${statsTotal.beneficeMoyen.toFixed(2)} €` : '—' },
             { label: 'Prix TTC moyen', value: statsTotal?.prixTTCMoyen > 0 ? `${statsTotal.prixTTCMoyen.toFixed(2)} €` : '—' },
           ].map((kpi, i) => (
@@ -466,7 +468,7 @@ export default function RecapView({ section = 'cuisine' }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ background: c.principal }}>
-                {['Lieu', 'Fiches', 'Coût moy.', 'Prix TTC moy.', 'Bénéfice moy.', 'Food cost'].map(col => (
+                {['Lieu', 'Fiches', 'Coût moy.', 'Prix TTC moy.', 'Bénéfice moy.', cfg.costLabel].map(col => (
                   <th key={col} style={{ padding: '12px 16px', textAlign: col === 'Lieu' ? 'left' : 'right', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase' }}>{col}</th>
                 ))}
               </tr>

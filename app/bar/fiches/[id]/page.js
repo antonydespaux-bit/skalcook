@@ -315,7 +315,7 @@ const loadFiche = async () => {
           )}
           {fc && (
             <div style={{ background: fc < seuilVert ? '#EAF3DE' : fc < seuilOrange ? '#FAEEDA' : '#FCEBEB', borderRadius: '8px', padding: '12px' }}>
-              <div style={{ fontSize: '10px', fontWeight: '500', textTransform: 'uppercase', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>Food cost</div>
+              <div style={{ fontSize: '10px', fontWeight: '500', textTransform: 'uppercase', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>Bev cost</div>
               <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>{fc} %</div>
             </div>
           )}
@@ -414,7 +414,7 @@ const loadFiche = async () => {
             { label: `TVA ${TVA_BAR()}%`, value: fiche.prix_ttc ? `${(fiche.prix_ttc / (1 + TVA_BAR() / 100)).toFixed(2)} €` : '—' },
             { label: 'Prix TTC', value: fiche.prix_ttc ? `${Number(fiche.prix_ttc).toFixed(2)} €` : '—' },
             {
-              label: 'Food cost', value: fc ? `${fc} %` : '—',
+              label: 'Bev cost', value: fc ? `${fc} %` : '—',
               highlight: fc ? (fc < seuilVert ? '#EAF3DE' : fc < seuilOrange ? '#FAEEDA' : '#FCEBEB') : null,
               color: fc ? (fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D') : '#3C3489'
             }
