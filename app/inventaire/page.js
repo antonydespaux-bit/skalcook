@@ -6,8 +6,8 @@ import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
 import { useIsMobile } from '../../lib/useIsMobile'
 import Navbar from '../../components/Navbar'
-import {
 import ChefLoader from '../../components/ChefLoader'
+import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
 } from 'recharts'
