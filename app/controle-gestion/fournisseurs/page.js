@@ -196,14 +196,14 @@ export default function FournisseursPage() {
           </div>
         </div>
 
-        {/* Formulaire création / édition */}
-        {mode && role === 'admin' && (
+        {/* Formulaire création (top-of-page uniquement pour le mode create) */}
+        {mode === 'create' && role === 'admin' && (
           <div style={{
             background: c.blanc, borderRadius: 12, border: `0.5px solid ${c.accent}`,
             padding: isMobile ? 16 : 24, marginBottom: 20,
           }}>
             <h2 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600, color: c.texte }}>
-              {mode === 'create' ? 'Nouveau fournisseur' : 'Modifier le fournisseur'}
+              Nouveau fournisseur
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px 20px', marginBottom: 16 }}>
               {CHAMPS.map(({ key, label, required, placeholder }) => (
@@ -298,10 +298,16 @@ export default function FournisseursPage() {
                     {role === 'admin' && (
                       <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                         <button
-                          onClick={() => openEdit(f)}
-                          style={{ padding: '6px 12px', borderRadius: 7, fontSize: 12, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}
+                          onClick={() => mode === 'edit' && editId === f.id ? closeForm() : openEdit(f)}
+                          style={{
+                            padding: '6px 12px', borderRadius: 7, fontSize: 12,
+                            border: `1px solid ${mode === 'edit' && editId === f.id ? c.accent : c.bordure}`,
+                            background: mode === 'edit' && editId === f.id ? c.accent : c.blanc,
+                            color: mode === 'edit' && editId === f.id ? '#fff' : c.texte,
+                            cursor: 'pointer',
+                          }}
                         >
-                          Modifier
+                          {mode === 'edit' && editId === f.id ? '▲ Fermer' : 'Modifier'}
                         </button>
                         {confirmDelete === f.id ? (
                           <>
@@ -329,6 +335,60 @@ export default function FournisseursPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* Accordéon édition inline */}
+                  {mode === 'edit' && editId === f.id && role === 'admin' && (
+                    <div style={{
+                      marginTop: 14, paddingTop: 14, borderTop: `1px solid ${c.bordure}`,
+                    }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px 20px', marginBottom: 14 }}>
+                        {CHAMPS.map(({ key, label, required, placeholder }) => (
+                          <div key={key} style={key === 'notes' ? { gridColumn: '1 / -1' } : {}}>
+                            <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: c.texteMuted, marginBottom: 5 }}>
+                              {label}{required && <span style={{ color: '#A32D2D' }}> *</span>}
+                            </label>
+                            {key === 'notes' ? (
+                              <textarea
+                                value={form[key]}
+                                onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
+                                placeholder={placeholder}
+                                rows={3}
+                                style={{ ...inputStyle, resize: 'vertical' }}
+                              />
+                            ) : (
+                              <input
+                                type={key === 'email' ? 'email' : 'text'}
+                                value={form[key]}
+                                onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
+                                placeholder={placeholder}
+                                style={inputStyle}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      {formError && <p style={{ color: '#A32D2D', fontSize: 13, marginBottom: 10 }}>{formError}</p>}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={handleSave}
+                          disabled={saving}
+                          style={{
+                            padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+                            border: 'none', background: c.accent, color: '#fff',
+                            cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1,
+                          }}
+                        >
+                          {saving ? 'Enregistrement…' : 'Enregistrer'}
+                        </button>
+                        <button
+                          onClick={closeForm}
+                          style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
