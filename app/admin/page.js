@@ -128,23 +128,41 @@ export default function AdminPage() {
   const changerRole = async (id, newRole) => {
     const clientId = await getClientId()
     if (!clientId) return
-    await supabase
-      .from('acces_clients')
-      .update({ role: newRole })
-      .eq('user_id', id)
-      .eq('client_id', clientId)
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch('/api/admin/update-user-access', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.access_token || ''}`
+      },
+      body: JSON.stringify({ client_id: clientId, user_id: id, role: newRole })
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setError(data?.error || 'Erreur lors du changement de rôle.')
+      return
+    }
     await loadProfils()
   }
 
   const supprimerUtilisateur = async (id, nom) => {
-    if (!confirm(`Retirer l'accès de ${nom} à cet établissement ?`)) return
+    if (!confirm(`Retirer l'accès de ${nom || 'cet utilisateur'} à cet établissement ?`)) return
     const clientId = await getClientId()
     if (!clientId) return
-    await supabase
-      .from('acces_clients')
-      .delete()
-      .eq('user_id', id)
-      .eq('client_id', clientId)
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch('/api/admin/remove-user-access', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.access_token || ''}`
+      },
+      body: JSON.stringify({ client_id: clientId, user_id: id })
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setError(data?.error || "Erreur lors du retrait de l'accès.")
+      return
+    }
     await loadProfils()
   }
 
