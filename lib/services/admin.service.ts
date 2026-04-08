@@ -26,27 +26,33 @@ export async function listClientUsers(db: SupabaseClient, clientId: string) {
 
   const profilMap = new Map((profils ?? []).map((p) => [p.id, p]))
 
-  // Fallback : certains utilisateurs peuvent exister dans auth.users + acces_clients
-  // sans ligne correspondante dans `profils` (créés manuellement, migration, etc.).
-  // On complète nom/email depuis auth.users pour ne pas afficher des em-dash.
-  const missing = userIds.filter((id) => !profilMap.has(id))
+  // Pour tous les utilisateurs, on complète depuis auth.users :
+  //  - si la ligne `profils` est absente (import manuel, création via
+  //    dashboard Supabase, etc.)
+  //  - si `profils.nom` est null/vide (ancien flow d'invite, migration)
+  //  - si `profils.email` manque
+  // On récupère en parallèle, un getUserById par user_id. Pour 10-50
+  // utilisateurs par client c'est largement assez rapide.
+  const authResults = await Promise.all(
+    userIds.map((id) => db.auth.admin.getUserById(id).catch(() => null))
+  )
   const authMap = new Map<string, { email: string | null; nom: string | null; created_at: string | null }>()
-
-  if (missing.length > 0) {
-    const results = await Promise.all(
-      missing.map((id) => db.auth.admin.getUserById(id).catch(() => null))
-    )
-    for (let i = 0; i < missing.length; i++) {
-      const res = results[i]
-      const u = res?.data?.user
-      if (u) {
-        authMap.set(missing[i], {
-          email: u.email ?? null,
-          nom: (u.user_metadata?.nom as string | undefined) ?? null,
-          created_at: u.created_at ?? null,
-        })
-      }
+  for (let i = 0; i < userIds.length; i++) {
+    const u = authResults[i]?.data?.user
+    if (u) {
+      authMap.set(userIds[i], {
+        email: u.email ?? null,
+        nom: (u.user_metadata?.nom as string | undefined) ?? null,
+        created_at: u.created_at ?? null,
+      })
     }
+  }
+
+  const pickNonEmpty = (...vals: Array<string | null | undefined>) => {
+    for (const v of vals) {
+      if (typeof v === 'string' && v.trim() !== '') return v.trim()
+    }
+    return ''
   }
 
   return accesRows.map((a) => {
@@ -56,8 +62,8 @@ export async function listClientUsers(db: SupabaseClient, clientId: string) {
       id: a.user_id,            // `id` pour l'UI /admin qui utilise profil.id
       user_id: a.user_id,       // compat anciens consumers
       role: a.role,
-      nom: p?.nom || fallback?.nom || '',
-      email: p?.email || fallback?.email || '',
+      nom: pickNonEmpty(p?.nom, fallback?.nom),
+      email: pickNonEmpty(p?.email, fallback?.email),
       created_at: p?.created_at || fallback?.created_at || null,
     }
   })
