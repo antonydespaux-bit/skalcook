@@ -50,8 +50,8 @@ export default function Charts({ chartData, menuEngineeringData }) {
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12, fontSize: 11 }}>
             <span style={{ color: '#3B6D11', fontWeight: 500 }}>⭐ Stars</span>
             <span style={{ color: '#6366F1', fontWeight: 500 }}>🐄 Vaches à lait</span>
-            <span style={{ color: '#D97706', fontWeight: 500 }}>❓ Puzzles</span>
-            <span style={{ color: '#A32D2D', fontWeight: 500 }}>🐕 Chiens</span>
+            <span style={{ color: '#D97706', fontWeight: 500 }}>❓ Dilemmes</span>
+            <span style={{ color: '#A32D2D', fontWeight: 500 }}>🐕 Poids morts</span>
           </div>
           <ResponsiveContainer width="100%" height={isMobile ? 220 : 280}>
             <ScatterChart margin={{ top: 10, right: 20, bottom: 30, left: 10 }}>

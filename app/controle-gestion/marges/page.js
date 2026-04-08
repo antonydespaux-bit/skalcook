@@ -314,11 +314,11 @@ export default function MargesDashboardPage() {
       const isProfitable = L.margePct >= avgMarge
       const quadrant = isPopular && isProfitable ? 'Star'
         : isPopular ? 'Vache à lait'
-        : isProfitable ? 'Puzzle'
-        : 'Chien'
+        : isProfitable ? 'Dilemme'
+        : 'Poids mort'
       const quadrantColor = quadrant === 'Star' ? '#3B6D11'
         : quadrant === 'Vache à lait' ? '#6366F1'
-        : quadrant === 'Puzzle' ? '#D97706'
+        : quadrant === 'Dilemme' ? '#D97706'
         : '#A32D2D'
       return { x: L.quantiteVendue, y: L.margePct, nom: L.designation, quadrant, quadrantColor, ca: L.caNet }
     })
@@ -369,8 +369,8 @@ export default function MargesDashboardPage() {
       const quadrant = L.margePct == null ? '—'
         : isPopular && isProfitable ? 'Star ⭐'
         : isPopular ? 'Vache à lait 🐄'
-        : isProfitable ? 'Puzzle ❓'
-        : 'Chien 🐕'
+        : isProfitable ? 'Dilemme ❓'
+        : 'Poids mort 🐕'
       return {
         'Désignation': L.designation,
         'Catégorie': L.categorie ?? '—',

@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../../../lib/supabase'
 import { isSuperadminEmail } from '../../../../lib/superadmin'
 import { theme, Logo } from '../../../../lib/theme.jsx'
+import { useIsMobile } from '../../../../lib/useIsMobile'
 import ChefLoader from '../../../../components/ChefLoader'
 
 const inputStyle = {
@@ -30,6 +31,7 @@ const labelStyle = {
 export default function SuperadminEtablissementDetailPage() {
   const router = useRouter()
   const params = useParams()
+  const isMobile = useIsMobile()
   const clientId = String(params?.id || '')
   const c = theme.couleurs
 
@@ -302,7 +304,7 @@ export default function SuperadminEtablissementDetailPage() {
           border: '0.5px solid #E2E8F0',
           padding: '16px'
         }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
             <div>
               <label style={labelStyle}>SIRET</label>
               <input
@@ -343,7 +345,7 @@ export default function SuperadminEtablissementDetailPage() {
 
           <div style={{ height: '1px', background: '#E2E8F0', margin: '16px 0' }} />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
             <div style={{ border: '0.5px solid #E2E8F0', borderRadius: '10px', padding: '12px' }}>
               <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '8px', color: c.texte }}>KBIS</div>
               <label

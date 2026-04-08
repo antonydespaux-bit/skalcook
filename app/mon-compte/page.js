@@ -275,7 +275,7 @@ export default function MonCompte() {
           }}>{toast.msg}</div>
         )}
 
-        <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', overflowX: 'auto', paddingBottom: '4px' }}>
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', flexWrap: 'wrap' }}>
           {TABS.filter(t => isAdmin || t.id === 'profil' || t.id === 'donnees').map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
               padding: '8px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: '500',

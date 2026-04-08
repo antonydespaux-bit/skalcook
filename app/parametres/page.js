@@ -313,7 +313,7 @@ export default function SettingsPage() {
     <div style={{ minHeight: '100vh', background: c.fond }}>
       <Navbar section="cuisine" />
 
-      <div style={{ padding: '24px', maxWidth: '900px', margin: '0 auto' }}>
+      <div style={{ padding: isMobile ? '14px' : '24px', maxWidth: '900px', margin: '0 auto' }}>
 
         {/* Message */}
         {message && (
@@ -489,7 +489,7 @@ export default function SettingsPage() {
             {/* Seuils cuisine */}
             <div style={{ background: c.blanc, borderRadius: '12px', padding: '20px', border: `0.5px solid ${c.bordure}` }}>
               <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>🍽 Seuils food cost cuisine</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
                 <div>
                   <label style={{ fontSize: '12px', color: '#16A34A', fontWeight: '500', display: 'block', marginBottom: '6px' }}>Seuil vert (excellent) %</label>
                   <input type="number" value={params.seuil_vert_cuisine || ''} onChange={e => setParams({ ...params, seuil_vert_cuisine: e.target.value })}
@@ -510,7 +510,7 @@ export default function SettingsPage() {
             {/* Seuils bar */}
             <div style={{ background: c.blanc, borderRadius: '12px', padding: '20px', border: `0.5px solid ${c.bordure}` }}>
               <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>🍷 Seuils food cost bar</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
                 <div>
                   <label style={{ fontSize: '12px', color: '#16A34A', fontWeight: '500', display: 'block', marginBottom: '6px' }}>Seuil vert (excellent) %</label>
                   <input type="number" value={params.seuil_vert_boissons || ''} onChange={e => setParams({ ...params, seuil_vert_boissons: e.target.value })}
@@ -566,7 +566,7 @@ export default function SettingsPage() {
               </div>
 
               {params.inventaire_tournant_actif && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '16px' }}>
                   <div>
                     <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Fréquence</label>
                     <select

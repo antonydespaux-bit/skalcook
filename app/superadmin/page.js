@@ -234,38 +234,40 @@ export default function SuperAdminPage() {
       {/* ── Navbar ── */}
       <div style={{
         background: '#18181B', borderBottom: '0.5px solid rgba(255,255,255,0.06)',
-        padding: '0 24px', height: '56px',
+        padding: isMobile ? '10px 14px' : '0 24px',
+        minHeight: '56px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexWrap: 'wrap', gap: '10px',
         position: 'sticky', top: 0, zIndex: 100
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: '#6366F1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>⚡</div>
-          <span style={{ fontSize: '14px', fontWeight: '600', color: 'white' }}>Super Admin</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: '#6366F1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', flexShrink: 0 }}>⚡</div>
+          <span style={{ fontSize: '14px', fontWeight: '600', color: 'white', whiteSpace: 'nowrap' }}>Super Admin</span>
           <div style={{ padding: '2px 10px', borderRadius: '20px', background: 'rgba(99,102,241,0.2)', border: '0.5px solid rgba(99,102,241,0.3)' }}>
             <span style={{ fontSize: '11px', color: '#A5B4FC', fontWeight: '500' }}>Skalcook</span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: isMobile ? 'flex-start' : 'flex-end' }}>
           <div style={{ display: 'flex', background: 'rgba(255,255,255,0.06)', borderRadius: '8px', padding: '3px', border: '0.5px solid rgba(255,255,255,0.1)' }}>
             {[{ id: 'gestion', label: '🏗 Gestion' }, { id: 'activite', label: '📊 Activité' }].map(tab => (
               <button key={tab.id} onClick={() => basculerOnglet(tab.id)} style={{
                 background: onglet === tab.id ? 'rgba(99,102,241,0.85)' : 'transparent',
                 color: onglet === tab.id ? 'white' : 'rgba(255,255,255,0.55)',
                 border: 'none', borderRadius: '6px', padding: '5px 12px', fontSize: '12px',
-                fontWeight: onglet === tab.id ? '600' : '400', cursor: 'pointer'
+                fontWeight: onglet === tab.id ? '600' : '400', cursor: 'pointer', whiteSpace: 'nowrap'
               }}>{tab.label}</button>
             ))}
           </div>
           {onglet === 'gestion' && vue !== 'liste' && (
             <button onClick={() => { setVue('liste'); resetForm() }} style={{
               background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.6)',
-              border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer'
+              border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap'
             }}>← Retour</button>
           )}
-          <button onClick={() => handleNavigation('/superadmin/prospects')} style={{ background: 'rgba(99,102,241,0.2)', color: '#A5B4FC', border: '0.5px solid rgba(99,102,241,0.3)', borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer' }}>👥 Prospects</button>
-          <button onClick={() => handleNavigation('/superadmin/utilisateurs')} style={{ background: 'rgba(14,165,233,0.2)', color: '#BAE6FD', border: '0.5px solid rgba(14,165,233,0.35)', borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer' }}>🧑‍💼 Utilisateurs</button>
-          <button onClick={handleLogout} style={{ background: 'transparent', color: '#E11D48', border: '0.5px solid #FDA4AF', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', cursor: 'pointer' }}>🚪 Déconnexion</button>
+          <button onClick={() => handleNavigation('/superadmin/prospects')} style={{ background: 'rgba(99,102,241,0.2)', color: '#A5B4FC', border: '0.5px solid rgba(99,102,241,0.3)', borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>👥 Prospects</button>
+          <button onClick={() => handleNavigation('/superadmin/utilisateurs')} style={{ background: 'rgba(14,165,233,0.2)', color: '#BAE6FD', border: '0.5px solid rgba(14,165,233,0.35)', borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>🧑‍💼 Utilisateurs</button>
+          <button onClick={handleLogout} style={{ background: 'transparent', color: '#E11D48', border: '0.5px solid #FDA4AF', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>🚪 Déconnexion</button>
         </div>
       </div>
 
@@ -353,7 +355,7 @@ export default function SuperAdminPage() {
                     </button>
                   ))}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '16px' }}>
                   {[
                     { label: 'Couleur principale', value: couleurPrincipale, setter: setCouleurPrincipale, desc: 'Navbar, texte' },
                     { label: 'Couleur accent', value: couleurAccent, setter: setCouleurAccent, desc: 'Boutons CTA' },
