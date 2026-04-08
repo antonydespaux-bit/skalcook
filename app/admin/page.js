@@ -21,6 +21,9 @@ export default function AdminPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [isSuperadmin, setIsSuperadmin] = useState(false)
+  const [editingNomId, setEditingNomId] = useState(null)
+  const [editNomValue, setEditNomValue] = useState('')
+  const [savingNom, setSavingNom] = useState(false)
   const router = useRouter()
   const { c } = useTheme()
   const isMobile = useIsMobile()
@@ -123,6 +126,50 @@ export default function AdminPage() {
     setSuccess(`Compte créé pour ${newNom} !`)
     await loadProfils()
     setCreating(false)
+  }
+
+  const commencerEditNom = (profil) => {
+    setEditingNomId(profil.id)
+    setEditNomValue(profil.nom || '')
+    setError('')
+    setSuccess('')
+  }
+
+  const annulerEditNom = () => {
+    setEditingNomId(null)
+    setEditNomValue('')
+  }
+
+  const enregistrerNom = async () => {
+    const nom = editNomValue.trim()
+    if (!nom || !editingNomId) return
+    setSavingNom(true)
+    setError('')
+    setSuccess('')
+    try {
+      const clientId = await getClientId()
+      if (!clientId) { setError('client_id introuvable'); return }
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/admin/update-user-name', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token || ''}`
+        },
+        body: JSON.stringify({ client_id: clientId, user_id: editingNomId, nom })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data?.error || 'Erreur lors de la mise à jour du nom.')
+        return
+      }
+      setSuccess('Nom mis à jour.')
+      setEditingNomId(null)
+      setEditNomValue('')
+      await loadProfils()
+    } finally {
+      setSavingNom(false)
+    }
   }
 
   const changerRole = async (id, newRole) => {
@@ -300,8 +347,64 @@ export default function AdminPage() {
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   flexWrap: 'wrap', gap: '10px'
                 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '14px', fontWeight: '500', color: c.texte }}>{profil.nom || '—'}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {editingNomId === profil.id ? (
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '4px' }}>
+                        <input
+                          type="text"
+                          autoFocus
+                          value={editNomValue}
+                          onChange={e => setEditNomValue(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') enregistrerNom()
+                            if (e.key === 'Escape') annulerEditNom()
+                          }}
+                          disabled={savingNom}
+                          placeholder="Nom complet"
+                          style={{
+                            flex: 1, minWidth: '160px', padding: '6px 10px',
+                            borderRadius: '6px', border: `0.5px solid ${c.accent}`,
+                            fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc,
+                          }}
+                        />
+                        <button
+                          onClick={enregistrerNom}
+                          disabled={savingNom || !editNomValue.trim()}
+                          title="Enregistrer"
+                          style={{
+                            background: savingNom || !editNomValue.trim() ? c.texteMuted : '#16A34A',
+                            color: 'white', border: 'none', borderRadius: '6px',
+                            padding: '6px 10px', fontSize: '12px', fontWeight: 500,
+                            cursor: savingNom || !editNomValue.trim() ? 'not-allowed' : 'pointer',
+                          }}
+                        >{savingNom ? '…' : '✓'}</button>
+                        <button
+                          onClick={annulerEditNom}
+                          disabled={savingNom}
+                          title="Annuler"
+                          style={{
+                            background: 'transparent', color: c.texteMuted,
+                            border: `0.5px solid ${c.bordure}`, borderRadius: '6px',
+                            padding: '6px 10px', fontSize: '12px', cursor: 'pointer',
+                          }}
+                        >✕</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '2px' }}>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: c.texte }}>
+                          {profil.nom || <span style={{ color: c.texteMuted, fontStyle: 'italic' }}>(sans nom)</span>}
+                        </div>
+                        <button
+                          onClick={() => commencerEditNom(profil)}
+                          title="Modifier le nom"
+                          style={{
+                            background: 'transparent', color: c.texteMuted,
+                            border: 'none', padding: '2px 6px', fontSize: '12px',
+                            cursor: 'pointer', borderRadius: '4px',
+                          }}
+                        >✏️</button>
+                      </div>
+                    )}
                     <div style={{ fontSize: '12px', color: c.texteMuted, marginTop: '2px' }}>{profil.email}</div>
                     <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px', fontStyle: 'italic' }}>
                       {droitsRole(profil.role)}
