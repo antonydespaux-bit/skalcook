@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../lib/theme.jsx'
+import { Alert } from '../../components/ui'
 
 export default function NouveauMotDePassePage() {
   const [password, setPassword] = useState('')
@@ -81,7 +82,7 @@ export default function NouveauMotDePassePage() {
               </h2>
 
               {error && (
-                <div style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '8px', padding: '12px 14px', fontSize: '13px', marginBottom: '16px' }}>
+                <Alert variant="error" style={{ marginBottom: '16px' }}>
                   {error}
                   {error.includes('expiré') && (
                     <div style={{ marginTop: '8px' }}>
@@ -90,7 +91,7 @@ export default function NouveauMotDePassePage() {
                       </span>
                     </div>
                   )}
-                </div>
+                </Alert>
               )}
 
               {sessionReady && (

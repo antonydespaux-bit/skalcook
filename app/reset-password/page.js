@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../lib/theme.jsx'
 import { useTheme } from '../../lib/useTheme'
+import { Alert } from '../../components/ui'
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState('')
@@ -73,9 +74,9 @@ export default function ResetPasswordPage() {
               </p>
 
               {error && (
-                <div style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '8px', padding: '12px 14px', fontSize: '13px', marginBottom: '16px' }}>
+                <Alert variant="error" style={{ marginBottom: '16px' }}>
                   {error}
-                </div>
+                </Alert>
               )}
 
               <form onSubmit={handleReset}>

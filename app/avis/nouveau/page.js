@@ -6,6 +6,7 @@ import { theme, Logo } from '../../../lib/theme.jsx'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import BackButton from '../../../components/BackButton'
+import { Alert, Card } from '../../../components/ui'
 
 export default function NouvelAvisPage() {
   const [form, setForm] = useState({
@@ -67,10 +68,10 @@ const handleSubmit = async () => {
 
       <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '700px', margin: '0 auto' }}>
 
-        {error && <div style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '8px', padding: '12px 16px', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
+        {error && <Alert variant="error" style={{ marginBottom: '16px' }}>{error}</Alert>}
 
         {/* Établissement */}
-        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
+        <Card c={c} style={{ marginBottom: '12px' }}>
           <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Établissement</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             {[
@@ -87,10 +88,10 @@ const handleSubmit = async () => {
               }}>{opt.label}</div>
             ))}
           </div>
-        </div>
+        </Card>
 
         {/* Informations */}
-        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
+        <Card c={c} style={{ marginBottom: '12px' }}>
           <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Informations</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
@@ -115,10 +116,10 @@ const handleSubmit = async () => {
               </div>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Texte de l'avis */}
-        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
+        <Card c={c} style={{ marginBottom: '12px' }}>
           <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Texte de l'avis *</div>
           <textarea value={form.review_text} onChange={e => set('review_text', e.target.value)}
             placeholder="Collez ici l'avis du client (dans n'importe quelle langue — la réponse sera générée dans la même langue)..."
@@ -128,10 +129,10 @@ const handleSubmit = async () => {
           <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '6px' }}>
             La réponse IA sera générée automatiquement dans la langue de l'avis
           </div>
-        </div>
+        </Card>
 
         {/* Sentiment manuel optionnel */}
-        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}` }}>
+        <Card c={c}>
           <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Sentiment <span style={{ fontWeight: '400', textTransform: 'none', fontSize: '11px' }}>(optionnel — calculé automatiquement si vide)</span></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
             {[
@@ -148,7 +149,7 @@ const handleSubmit = async () => {
               }}>{opt.label}</div>
             ))}
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   )

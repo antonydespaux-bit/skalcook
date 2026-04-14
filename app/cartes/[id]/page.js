@@ -8,6 +8,7 @@ import { useIsMobile } from '../../../lib/useIsMobile'
 import { log } from '../../../lib/useLog'
 import { ALLERGENES } from '../../../lib/allergenes'
 import ChefLoader from '../../../components/ChefLoader'
+import { Alert } from '../../../components/ui'
 
 const genId = () => crypto.randomUUID()
 
@@ -394,9 +395,9 @@ export default function CarteDetailPage() {
       <div className="no-print" style={{ padding: isMobile ? '12px' : '24px', maxWidth: '900px', margin: '0 auto' }}>
 
         {error && (
-          <div style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '8px', padding: '12px 16px', fontSize: '13px', marginBottom: '20px' }}>
+          <Alert variant="error" style={{ marginBottom: '20px' }}>
             {error}
-          </div>
+          </Alert>
         )}
 
         {/* ── Mode Vue ── */}

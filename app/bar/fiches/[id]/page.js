@@ -11,6 +11,7 @@ import { ALLERGENES } from '../../../../lib/allergenes'
 import { AllergenesBlock } from '../../../../components/FicheDetailShared'
 import ChefLoader from '../../../../components/ChefLoader'
 import BackButton from '../../../../components/BackButton'
+import { Card } from '../../../../components/ui'
 
 export default function BarFicheDetail() {
   const [fiche, setFiche] = useState(null)
@@ -233,7 +234,7 @@ const loadFiche = async () => {
       <div className="no-print" style={{ padding: isMobile ? '12px' : '24px', maxWidth: '800px', margin: '0 auto' }}>
 
         {/* Infos générales */}
-        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
+        <Card c={c} style={{ marginBottom: '12px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <div style={{ flex: 1 }}>
               <h1 style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: '500', marginBottom: '8px', color: c.texte }}>{fiche.nom}</h1>
@@ -251,7 +252,7 @@ const loadFiche = async () => {
             <p style={{ fontSize: '14px', color: c.texteMuted, lineHeight: '1.6', marginTop: '8px' }}>{fiche.description}</p>
           )}
           <AllergenesBlock allergenes={fiche.allergenes} allergenesCascade={allergenesCascade} c={c} />
-        </div>
+        </Card>
 
         {/* Ingrédients */}
         <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', overflow: 'hidden' }}>

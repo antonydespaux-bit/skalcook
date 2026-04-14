@@ -1,6 +1,7 @@
 'use client'
 
 import { ALLERGENES } from '../lib/allergenes'
+import { Alert } from './ui'
 
 /**
  * Shared allergen display block for fiche detail pages.
@@ -13,10 +14,7 @@ export function AllergenesBlock({ allergenes = [], allergenesCascade = [], c }) 
   const cascadeOnly = allergenesCascade.filter(id => !directAllergens.includes(id))
 
   return (
-    <div style={{ background: '#FCEBEB', borderRadius: '8px', padding: '12px', marginTop: '12px', border: '0.5px solid #F09595' }}>
-      <div style={{ fontSize: '11px', color: '#A32D2D', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>
-        Allergènes présents
-      </div>
+    <Alert variant="error" title="Allergènes présents" style={{ marginTop: '12px' }}>
       {directAllergens.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: cascadeOnly.length > 0 ? '10px' : 0 }}>
           {directAllergens.map(id => {
@@ -44,7 +42,7 @@ export function AllergenesBlock({ allergenes = [], allergenesCascade = [], c }) 
           </div>
         </>
       )}
-    </div>
+    </Alert>
   )
 }
 

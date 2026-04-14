@@ -8,6 +8,7 @@ import { useIsMobile } from '../../lib/useIsMobile'
 import { Logo } from '../../lib/theme.jsx'
 import ChefLoader from '../../components/ChefLoader'
 import BackButton from '../../components/BackButton'
+import { Card, Button, Alert } from '../../components/ui'
 
 const TABS = [
   { id: 'profil',        label: 'Mon Profil' },
@@ -286,7 +287,7 @@ export default function MonCompte() {
         </div>
 
         {tab === 'profil' && (
-          <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}` }}>
+          <Card c={c}>
             <h2 style={{ fontSize: '16px', fontWeight: '600', color: c.texte, marginBottom: '20px' }}>Mon Profil</h2>
             <div style={fieldStyle}>
               <label style={labelStyle}>Nom complet</label>
@@ -302,14 +303,14 @@ export default function MonCompte() {
               <input style={inputStyle} value={editProfil.telephone} onChange={e => setEditProfil({ ...editProfil, telephone: e.target.value })} placeholder="+33 6 00 00 00 00" />
             </div>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '8px' }}>
-              <button onClick={saveProfil} disabled={saving} style={{ background: c.accent, color: 'white', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Enregistrer</button>
+              <Button variant="primary" c={c} onClick={saveProfil} disabled={saving}>Enregistrer</Button>
               <button onClick={sendResetPassword} disabled={pwdSent} style={{ background: 'transparent', color: c.accent, border: `0.5px solid ${c.accent}`, borderRadius: '8px', padding: '9px 18px', fontSize: '13px', cursor: 'pointer' }}>{pwdSent ? 'Email envoyé ✓' : 'Changer mon mot de passe'}</button>
             </div>
-          </div>
+          </Card>
         )}
 
         {tab === 'etablissement' && isAdmin && (
-          <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}` }}>
+          <Card c={c}>
             <h2 style={{ fontSize: '16px', fontWeight: '600', color: c.texte, marginBottom: '4px' }}>Informations légales de l'établissement</h2>
             <p style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '20px' }}>Ces informations apparaissent sur vos factures et documents officiels.</p>
             {[
@@ -325,13 +326,13 @@ export default function MonCompte() {
                 <input style={inputStyle} value={editClient[key] || ''} onChange={e => setEditClient({ ...editClient, [key]: e.target.value })} placeholder={placeholder} />
               </div>
             ))}
-            <button onClick={saveEtablissement} disabled={saving} style={{ background: c.accent, color: 'white', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginTop: '8px' }}>Enregistrer</button>
-          </div>
+            <Button variant="primary" c={c} onClick={saveEtablissement} disabled={saving} style={{ marginTop: '8px' }}>Enregistrer</Button>
+          </Card>
         )}
 
         {tab === 'abonnement' && isAdmin && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}` }}>
+            <Card c={c}>
               <h2 style={{ fontSize: '16px', fontWeight: '600', color: c.texte, marginBottom: '16px' }}>Mon abonnement</h2>
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '10px' }}>
                 <div style={{ background: c.fond, borderRadius: '8px', padding: '12px' }}>
@@ -344,12 +345,12 @@ export default function MonCompte() {
                 </div>
               </div>
               {client.demande_resiliation && (
-                <div style={{ marginTop: '16px', padding: '12px', background: '#FCEBEB', borderRadius: '8px', border: '0.5px solid #F09595', fontSize: '13px', color: '#A32D2D' }}>
+                <Alert variant="error" style={{ marginTop: '16px' }}>
                   ⚠ Une demande de résiliation est en cours de traitement par notre équipe.
-                </div>
+                </Alert>
               )}
-            </div>
-            <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}` }}>
+            </Card>
+            <Card c={c}>
               <h2 style={{ fontSize: '16px', fontWeight: '600', color: c.texte, marginBottom: '16px' }}>Documents contractuels</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {[
@@ -367,35 +368,35 @@ export default function MonCompte() {
                   CGU acceptées le {new Date(client.date_cgu).toLocaleDateString('fr-FR')} (version {client.version_cgu || '1.0'})
                 </div>
               )}
-            </div>
+            </Card>
             {!client.demande_resiliation && (
-              <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}` }}>
+              <Card c={c}>
                 <h2 style={{ fontSize: '16px', fontWeight: '600', color: c.texte, marginBottom: '8px' }}>Résilier mon abonnement</h2>
                 <p style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '16px' }}>Conformément à la loi du 16 août 2022 (résiliation en ligne), vous pouvez résilier votre abonnement à tout moment. Notre équipe traitera votre demande sous 48h.</p>
                 {!showResil ? (
-                  <button onClick={() => setShowResil(true)} style={{ background: 'transparent', color: '#A32D2D', border: '0.5px solid #F09595', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', cursor: 'pointer' }}>Résilier mon abonnement</button>
+                  <Button variant="danger" onClick={() => setShowResil(true)}>Résilier mon abonnement</Button>
                 ) : (
-                  <div style={{ background: '#FCEBEB', borderRadius: '10px', padding: '16px', border: '0.5px solid #F09595' }}>
-                    <p style={{ fontSize: '13px', color: '#A32D2D', marginBottom: '12px', fontWeight: '500' }}>Tapez <strong>résilier</strong> pour confirmer votre demande.</p>
+                  <Alert variant="error">
+                    <p style={{ marginBottom: '12px', fontWeight: '500' }}>Tapez <strong>résilier</strong> pour confirmer votre demande.</p>
                     <input style={{ ...inputStyle, border: '0.5px solid #F09595', marginBottom: '12px' }} value={resilConf} onChange={e => setResilConf(e.target.value)} placeholder='Tapez "résilier"' />
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <button onClick={confirmerResiliation} disabled={saving} style={{ background: '#A32D2D', color: 'white', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Confirmer la résiliation</button>
-                      <button onClick={() => { setShowResil(false); setResilConf('') }} style={{ background: 'transparent', color: '#A32D2D', border: '0.5px solid #F09595', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', cursor: 'pointer' }}>Annuler</button>
+                      <Button variant="danger-solid" onClick={confirmerResiliation} disabled={saving}>Confirmer la résiliation</Button>
+                      <Button variant="danger" onClick={() => { setShowResil(false); setResilConf('') }}>Annuler</Button>
                     </div>
-                  </div>
+                  </Alert>
                 )}
-              </div>
+              </Card>
             )}
           </div>
         )}
 
         {tab === 'donnees' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}` }}>
+            <Card c={c}>
               <h2 style={{ fontSize: '16px', fontWeight: '600', color: c.texte, marginBottom: '8px' }}>Portabilité des données</h2>
               <p style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '16px', lineHeight: '1.6' }}>Conformément au RGPD (article 20), vous pouvez télécharger l'ensemble des données de votre établissement au format JSON{isAdmin ? ', et les restaurer depuis un export' : ''}.</p>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <button onClick={exportData} style={{ background: c.accent, color: 'white', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Télécharger mes données (JSON)</button>
+                <Button variant="primary" c={c} onClick={exportData}>Télécharger mes données (JSON)</Button>
                 {isAdmin && (
                   <label style={{ background: c.blanc, color: c.accent, border: `0.5px solid ${c.accent}`, borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: '600', cursor: importing ? 'not-allowed' : 'pointer', opacity: importing ? 0.6 : 1 }}>
                     {importing ? 'Import en cours…' : 'Importer un fichier JSON'}
@@ -403,8 +404,8 @@ export default function MonCompte() {
                   </label>
                 )}
               </div>
-            </div>
-            <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}` }}>
+            </Card>
+            <Card c={c}>
               <h2 style={{ fontSize: '16px', fontWeight: '600', color: c.texte, marginBottom: '8px' }}>Responsable du traitement</h2>
               <div style={{ fontSize: '13px', color: c.texteMuted, lineHeight: '1.8' }}>
                 <div><strong style={{ color: c.texte }}>Éditeur :</strong> Skalcook SAS</div>
@@ -412,12 +413,12 @@ export default function MonCompte() {
                 <div><strong style={{ color: c.texte }}>Délai de réponse :</strong> 30 jours maximum (RGPD)</div>
               </div>
               <a href="/politique-confidentialite" target="_blank" rel="noopener noreferrer" style={{ color: c.accent, fontSize: '13px', textDecoration: 'none', fontWeight: '500', display: 'inline-block', marginTop: '12px' }}>Politique de confidentialité →</a>
-            </div>
-            <div style={{ background: '#FCEBEB', borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: '0.5px solid #F09595' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: '600', color: '#A32D2D', marginBottom: '8px' }}>Supprimer mon compte</h2>
-              <p style={{ fontSize: '13px', color: '#A32D2D', marginBottom: '16px', lineHeight: '1.6', opacity: 0.85 }}>Conformément au RGPD (article 17), vous pouvez supprimer votre compte. Vos accès seront révoqués immédiatement. Les données de l'établissement restent accessibles aux autres administrateurs.</p>
-              <button onClick={supprimerCompte} style={{ background: 'transparent', color: '#A32D2D', border: '0.5px solid #F09595', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', cursor: 'pointer' }}>Supprimer mon compte</button>
-            </div>
+            </Card>
+            <Alert variant="error" style={{ borderRadius: '12px', padding: isMobile ? '16px' : '24px' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>Supprimer mon compte</h2>
+              <p style={{ marginBottom: '16px', lineHeight: '1.6', opacity: 0.85 }}>Conformément au RGPD (article 17), vous pouvez supprimer votre compte. Vos accès seront révoqués immédiatement. Les données de l'établissement restent accessibles aux autres administrateurs.</p>
+              <Button variant="danger" onClick={supprimerCompte}>Supprimer mon compte</Button>
+            </Alert>
           </div>
         )}
       </div>

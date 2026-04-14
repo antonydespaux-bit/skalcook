@@ -51,3 +51,149 @@ body {
     visibility: hidden !important;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────
+ * Design tokens Skalcook
+ *
+ * 2 familles :
+ *  - STRUCTUREL (radius, spacing, typo, border) : totalement statique
+ *  - SÉMANTIQUE FIXE (rouge/vert/orange/bleu) : indépendant du branding client
+ *
+ * Les couleurs dynamiques (c.accent, c.principal, c.fond, c.blanc, c.bordure,
+ * c.texte, c.texteMuted) restent servies par useTheme() et passées en props
+ * aux primitives, car elles dépendent du branding client et du dark mode.
+ * ────────────────────────────────────────────────────────────── */
+
+:root {
+  /* — Radius — */
+  --sk-radius-sm: 6px;
+  --sk-radius-md: 8px;
+  --sk-radius-lg: 12px;
+  --sk-radius-xl: 16px;
+  --sk-radius-pill: 20px;
+
+  /* — Spacing (padding interne) — */
+  --sk-pad-xs: 8px;
+  --sk-pad-sm: 12px;
+  --sk-pad-md: 16px;
+  --sk-pad-lg: 24px;
+
+  /* — Typo — */
+  --sk-fs-xs: 10px;
+  --sk-fs-sm: 12px;
+  --sk-fs-md: 13px;
+  --sk-fs-lg: 15px;
+  --sk-fs-xl: 18px;
+  --sk-fw-med: 500;
+  --sk-fw-bold: 600;
+
+  /* — Bordure fine récurrente — */
+  --sk-border-hair: 0.5px;
+
+  /* — Couleurs sémantiques fixes (non impactées par le branding) — */
+  --sk-rouge: #DC2626;
+  --sk-rouge-clair: #FCEBEB;
+  --sk-rouge-bord: #F09595;
+  --sk-rouge-texte: #A32D2D;
+
+  --sk-orange: #D97706;
+  --sk-orange-clair: #FAEEDA;
+  --sk-orange-bord: #F0C595;
+  --sk-orange-texte: #854F0B;
+
+  --sk-vert: #16A34A;
+  --sk-vert-clair: #EAF3DE;
+  --sk-vert-bord: #B5D095;
+  --sk-vert-texte: #3B6D11;
+
+  --sk-bleu: #6366F1;
+  --sk-bleu-clair: #EEF2FF;
+  --sk-bleu-bord: #C7CFFB;
+  --sk-bleu-texte: #3730A3;
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * Primitives UI (Card, Button, Alert)
+ * Consomment les tokens ci-dessus.
+ * ────────────────────────────────────────────────────────────── */
+
+/* ─── Card ─── */
+.sk-card {
+  border-radius: var(--sk-radius-lg);
+  /* background + border color sont injectés via style={} (branding dépendant) */
+}
+.sk-card--pad-sm { padding: var(--sk-pad-sm); }
+.sk-card--pad-md { padding: var(--sk-pad-md); }
+.sk-card--pad-lg { padding: var(--sk-pad-lg); }
+.sk-card--pad-responsive { padding: var(--sk-pad-md); }
+@media (min-width: 768px) {
+  .sk-card--pad-responsive { padding: var(--sk-pad-lg); }
+}
+
+/* ─── Button ─── */
+.sk-btn {
+  border: none;
+  border-radius: var(--sk-radius-md);
+  padding: 9px 18px;
+  font-size: var(--sk-fs-md);
+  font-weight: var(--sk-fw-bold);
+  cursor: pointer;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sk-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.sk-btn--ghost {
+  background: transparent;
+  border: var(--sk-border-hair) solid transparent;
+  font-weight: var(--sk-fw-med);
+}
+.sk-btn--danger {
+  background: transparent;
+  color: var(--sk-rouge-texte);
+  border: var(--sk-border-hair) solid var(--sk-rouge-bord);
+  font-weight: var(--sk-fw-med);
+}
+.sk-btn--danger-solid {
+  background: var(--sk-rouge-texte);
+  color: #fff;
+}
+.sk-btn--sm { padding: 6px 10px; font-size: var(--sk-fs-md); font-weight: var(--sk-fw-med); }
+
+/* ─── Alert ─── */
+.sk-alert {
+  border-radius: var(--sk-radius-md);
+  padding: var(--sk-pad-sm);
+  border-width: var(--sk-border-hair);
+  border-style: solid;
+  font-size: var(--sk-fs-md);
+}
+.sk-alert--error {
+  background: var(--sk-rouge-clair);
+  border-color: var(--sk-rouge-bord);
+  color: var(--sk-rouge-texte);
+}
+.sk-alert--warn {
+  background: var(--sk-orange-clair);
+  border-color: var(--sk-orange-bord);
+  color: var(--sk-orange-texte);
+}
+.sk-alert--success {
+  background: var(--sk-vert-clair);
+  border-color: var(--sk-vert-bord);
+  color: var(--sk-vert-texte);
+}
+.sk-alert--info {
+  background: var(--sk-bleu-clair);
+  border-color: var(--sk-bleu-bord);
+  color: var(--sk-bleu-texte);
+}
+.sk-alert__title {
+  font-size: var(--sk-fs-xs);
+  font-weight: var(--sk-fw-med);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--sk-pad-xs);
+}

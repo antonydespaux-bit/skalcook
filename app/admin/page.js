@@ -9,6 +9,7 @@ import { useRole } from '../../lib/useRole'
 import { isSuperadminEmail } from '../../lib/superadmin'
 import Navbar from '../../components/Navbar'
 import ChefLoader from '../../components/ChefLoader'
+import { Alert } from '../../components/ui'
 
 export default function AdminPage() {
   const [profils, setProfils] = useState([])
@@ -256,15 +257,15 @@ export default function AdminPage() {
           </div>
 
           {error && (
-            <div style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '8px', padding: '12px', fontSize: '13px', marginBottom: '12px', border: '0.5px solid #F09595' }}>
+            <Alert variant="error" style={{ marginBottom: '12px' }}>
               {error}
-            </div>
+            </Alert>
           )}
 
           {success && (
-            <div style={{ background: '#EAF3DE', color: '#3B6D11', borderRadius: '8px', padding: '12px', fontSize: '13px', marginBottom: '12px', border: '0.5px solid #4A7B6F40' }}>
+            <Alert variant="success" style={{ marginBottom: '12px' }}>
               ✓ {success}
-            </div>
+            </Alert>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

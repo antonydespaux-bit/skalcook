@@ -11,6 +11,7 @@ import { ALLERGENES } from '../../../../../lib/allergenes'
 import IngredientSearch from '../../../../../components/IngredientSearch'
 import ChefLoader from '../../../../../components/ChefLoader'
 import BackButton from '../../../../../components/BackButton'
+import { Alert, Card } from '../../../../../components/ui'
 
 const CATEGORIES_ALCOOL = ['Cocktails', 'Vins', 'Champagnes', 'Bières', 'Spiritueux']
 
@@ -308,14 +309,14 @@ export default function ModifierBarFiche() {
           </div>
         )}
 
-        {error && <div style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '8px', padding: '12px 16px', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
+        {error && <Alert variant="error" style={{ marginBottom: '16px' }}>{error}</Alert>}
 
         <div style={{ background: isAlcool ? '#FCEBEB' : '#EAF3DE', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', marginBottom: '16px', border: `0.5px solid ${isAlcool ? '#F09595' : '#4A7B6F40'}`, color: isAlcool ? '#A32D2D' : '#3B6D11' }}>
           {isAlcool ? '🍷 TVA Alcool : 20%' : '🥤 TVA Sans alcool : 10%'}
         </div>
 
         {/* Infos générales */}
-        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
+        <Card c={c} style={{ marginBottom: '12px' }}>
           <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Informations générales</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
@@ -390,10 +391,10 @@ export default function ModifierBarFiche() {
               />
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Ingrédients */}
-        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
+        <Card c={c} style={{ marginBottom: '12px' }}>
           <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Ingrédients</div>
           {isMobile ? (
             <>
@@ -450,10 +451,10 @@ export default function ModifierBarFiche() {
           <button onClick={ajouterIngredient} style={{ background: '#EEEDFE', color: '#3C3489', border: '0.5px solid #AFA9EC', borderRadius: '8px', padding: '10px 16px', fontSize: '13px', cursor: 'pointer', marginTop: '8px', width: isMobile ? '100%' : 'auto' }}>
             + Ajouter un ingrédient
           </button>
-        </div>
+        </Card>
 
         {/* Instructions */}
-        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
+        <Card c={c} style={{ marginBottom: '12px' }}>
           <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>📋 Instructions de préparation</div>
           <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '12px' }}>Les sauts de ligne seront respectés à l'écran et à l'impression.</div>
           <textarea value={instructions} onChange={e => setInstructions(e.target.value)} rows={8}
@@ -465,10 +466,10 @@ export default function ModifierBarFiche() {
               {instructions.split('\n').length} ligne{instructions.split('\n').length > 1 ? 's' : ''} — {instructions.length} caractères
             </div>
           )}
-        </div>
+        </Card>
 
         {/* Allergènes */}
-        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
+        <Card c={c} style={{ marginBottom: '12px' }}>
           <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Allergènes</div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }}>
             {ALLERGENES.map(a => (
@@ -484,7 +485,7 @@ export default function ModifierBarFiche() {
               {allergenes.length} allergène{allergenes.length > 1 ? 's' : ''} : {allergenes.map(id => ALLERGENES.find(a => a.id === id)?.label).join(', ')}
             </div>
           )}
-        </div>
+        </Card>
 
         {/* Récapitulatif */}
         <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '20px', border: `0.5px solid ${c.bordure}`, display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>

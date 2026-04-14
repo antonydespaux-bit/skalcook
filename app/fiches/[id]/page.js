@@ -12,6 +12,7 @@ import FichePhoto, { FicheHeaderInfo, FicheHeaderInfoStyles } from '../../../com
 import { AllergenesBlock, FicheDetailNavbar } from '../../../components/FicheDetailShared'
 import ChefLoader from '../../../components/ChefLoader'
 import BackButton from '../../../components/BackButton'
+import { Card } from '../../../components/ui'
 
 export default function FicheDetail() {
   const [fiche, setFiche] = useState(null)
@@ -220,7 +221,7 @@ export default function FicheDetail() {
       <div className="no-print" style={{ padding: isMobile ? '12px' : '24px', maxWidth: '800px', margin: '0 auto' }}>
 
         {/* Infos générales */}
-        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
+        <Card c={c} style={{ marginBottom: '12px' }}>
           <h1 style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: '500', marginBottom: '10px', color: c.texte, width: '100%' }}>{fiche.nom}</h1>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flex: '1 1 auto', minWidth: 0 }}>
@@ -264,7 +265,7 @@ export default function FicheDetail() {
               Supprimer cette fiche
             </button>
           )}
-        </div>
+        </Card>
 
         {/* Ingrédients */}
         <div className="fiche-ingredients-after-header" style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', overflow: 'hidden' }}>
