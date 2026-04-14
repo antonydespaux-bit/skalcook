@@ -11,6 +11,7 @@ import { ALLERGENES } from '../../../../lib/allergenes'
 import IngredientSearch from '../../../../components/IngredientSearch'
 import FichePhoto from '../../../../components/FichePhoto'
 import ChefLoader from '../../../../components/ChefLoader'
+import BackButton from '../../../../components/BackButton'
 
 import { isIngredientPossible } from '../../../../lib/foodCost'
 import { UNITES_PRODUCTION } from '../../../../lib/constants'
@@ -296,10 +297,7 @@ export default function ModifierFiche() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Logo height={28} couleur="white" nom={nomEtablissement} onClick={() => router.push("/dashboard")} />
-          <button onClick={() => router.push(`/fiches/${params_route.id}`)} style={{
-            background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: '6px 10px', fontSize: '13px', cursor: 'pointer', color: 'rgba(255,255,255,0.7)'
-          }}>← Retour</button>
+          <BackButton fallback={`/fiches/${params_route.id}`} />
           {!isMobile && <span style={{ fontSize: '14px', fontWeight: '500', color: 'white' }}>Modifier — {nom}</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

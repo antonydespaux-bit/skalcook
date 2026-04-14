@@ -6,6 +6,7 @@ import { theme, Logo } from '../../../lib/theme.jsx'
 import { useTheme } from '../../../lib/useTheme'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { log } from '../../../lib/useLog'
+import BackButton from '../../../components/BackButton'
 
 const genId = () => crypto.randomUUID()
 
@@ -249,11 +250,7 @@ export default function NouvelleCarte() {
             <Logo height={isMobile ? 26 : 30} couleur="white" nom={nomEtablissement} onClick={() => router.push('/fiches')} />
           </div>
           {!isMobile && <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px' }}>|</span>}
-          <button type="button" onClick={() => router.push('/cartes')} style={{
-            background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: isMobile ? '6px 10px' : '6px 12px', fontSize: isMobile ? '12px' : '13px',
-            cursor: 'pointer', color: 'rgba(255,255,255,0.7)', flexShrink: 0,
-          }}>&larr; Retour</button>
+          <BackButton fallback="/cartes" style={{ padding: isMobile ? '6px 10px' : '6px 12px', fontSize: isMobile ? '12px' : '13px', flexShrink: 0 }} />
           <span style={{
             fontSize: isMobile ? '14px' : '15px', fontWeight: '500', color: 'white',
             minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
 import { useTheme } from '../../../lib/useTheme'
 import { log } from '../../../lib/useLog'
+import BackButton from '../../../components/BackButton'
 
 export default function NouveauMenu() {
   const { nomEtablissement } = useTheme()
@@ -135,11 +136,7 @@ export default function NouveauMenu() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <Logo height={30} couleur="white" nom={nomEtablissement} onClick={() => router.push("/fiches")} />
           <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px' }}>|</span>
-          <button onClick={() => router.push('/menus')} style={{
-            background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: '6px 12px', fontSize: '13px',
-            cursor: 'pointer', color: 'rgba(255,255,255,0.7)'
-          }}>← Retour</button>
+          <BackButton fallback="/menus" style={{ padding: '6px 12px' }} />
           <span style={{ fontSize: '15px', fontWeight: '500', color: 'white' }}>Nouveau menu</span>
         </div>
         <button onClick={handleSubmit} disabled={loading} style={{

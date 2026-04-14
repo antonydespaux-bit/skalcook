@@ -10,6 +10,7 @@ import { log } from '../../../../lib/useLog'
 import { ALLERGENES } from '../../../../lib/allergenes'
 import { AllergenesBlock } from '../../../../components/FicheDetailShared'
 import ChefLoader from '../../../../components/ChefLoader'
+import BackButton from '../../../../components/BackButton'
 
 export default function BarFicheDetail() {
   const [fiche, setFiche] = useState(null)
@@ -203,10 +204,7 @@ const loadFiche = async () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Logo height={28} couleur="white" nom={nomEtablissement} onClick={() => router.push("/bar/dashboard")} />
-          <button onClick={() => router.push('/bar/fiches')} style={{
-            background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: '6px 10px', fontSize: '13px', cursor: 'pointer', color: 'rgba(255,255,255,0.7)'
-          }}>← {!isMobile && 'Retour'}</button>
+          <BackButton fallback="/bar/fiches" label={isMobile ? '←' : '← Retour'} />
           {!isMobile && <span style={{ fontSize: '15px', fontWeight: '500', color: 'white' }}>{fiche.nom}</span>}
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>

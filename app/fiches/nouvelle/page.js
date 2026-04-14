@@ -9,6 +9,7 @@ import { useAutosave } from '../../../lib/useAutosave'
 import { log } from '../../../lib/useLog'
 import { ALLERGENES } from '../../../lib/allergenes'
 import IngredientSearch from '../../../components/IngredientSearch'
+import BackButton from '../../../components/BackButton'
 
 import { isIngredientPossible } from '../../../lib/foodCost'
 import { UNITES_PRODUCTION } from '../../../lib/constants'
@@ -248,10 +249,7 @@ export default function NouvelleFiche() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Logo height={28} couleur="white" nom={nomEtablissement} onClick={() => router.push("/dashboard")} />
           {!isMobile && <span style={{ color: 'rgba(255,255,255,0.3)' }}>|</span>}
-          <button onClick={() => router.push('/dashboard')} style={{
-            background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: '6px 10px', fontSize: '13px', cursor: 'pointer', color: 'rgba(255,255,255,0.7)'
-          }}>← Retour</button>
+          <BackButton fallback="/fiches" />
           {!isMobile && <span style={{ fontSize: '14px', fontWeight: '500', color: 'white' }}>{isSousFiche ? 'Nouvelle sous-fiche' : 'Nouvelle fiche technique'}</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

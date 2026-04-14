@@ -7,6 +7,7 @@ import { useRole } from '../../lib/useRole'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { Logo } from '../../lib/theme.jsx'
 import ChefLoader from '../../components/ChefLoader'
+import BackButton from '../../components/BackButton'
 
 const TABS = [
   { id: 'profil',        label: 'Mon Profil' },
@@ -257,10 +258,7 @@ export default function MonCompte() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Logo height={28} couleur="white" nom={nomEtablissement} onClick={() => router.push('/dashboard')} />
-          <button onClick={() => router.back()} style={{
-            background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: '6px 10px', fontSize: '13px', cursor: 'pointer', color: 'rgba(255,255,255,0.7)',
-          }}>← Retour</button>
+          <BackButton fallback="/dashboard" />
           {!isMobile && <span style={{ fontSize: '15px', fontWeight: '500', color: 'white' }}>Mon Compte</span>}
         </div>
       </div>

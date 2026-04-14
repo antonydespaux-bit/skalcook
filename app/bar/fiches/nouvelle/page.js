@@ -9,6 +9,7 @@ import { useAutosave } from '../../../../lib/useAutosave'
 import { log } from '../../../../lib/useLog'
 import { ALLERGENES } from '../../../../lib/allergenes'
 import IngredientSearch from '../../../../components/IngredientSearch'
+import BackButton from '../../../../components/BackButton'
 
 const CATEGORIES_ALCOOL = ['Cocktails', 'Vins', 'Champagnes', 'Bières', 'Spiritueux']
 
@@ -254,10 +255,7 @@ export default function NouvelleBarFiche() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Logo height={28} couleur="white" nom={nomEtablissement} onClick={() => router.push("/bar/dashboard")} />
-          <button onClick={() => router.push('/bar/dashboard')} style={{
-            background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: '6px 10px', fontSize: '13px', cursor: 'pointer', color: 'rgba(255,255,255,0.7)'
-          }}>← Retour</button>
+          <BackButton fallback="/bar/fiches" />
           {!isMobile && <span style={{ fontSize: '14px', fontWeight: '500', color: 'white' }}>
             {isSousFiche ? 'Nouvelle sous-fiche bar' : 'Nouvelle fiche bar'}
           </span>}

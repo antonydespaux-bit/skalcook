@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
+import BackButton from '../../../components/BackButton'
 
 export default function NouvelAvisPage() {
   const [form, setForm] = useState({
@@ -53,10 +54,7 @@ const handleSubmit = async () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Logo height={28} couleur="white" nom={nomEtablissement} onClick={() => router.push("/dashboard")} />
-          <button onClick={() => router.back()} style={{
-            background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: '6px 10px', fontSize: '13px', cursor: 'pointer', color: 'rgba(255,255,255,0.7)'
-          }}>← Retour</button>
+          <BackButton fallback="/dashboard" />
           {!isMobile && <span style={{ fontSize: '14px', fontWeight: '500', color: 'white' }}>Nouvel avis client</span>}
         </div>
         <button onClick={handleSubmit} disabled={loading} style={{

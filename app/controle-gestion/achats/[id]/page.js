@@ -8,6 +8,7 @@ import { useTheme } from '../../../../lib/useTheme'
 import { useRole } from '../../../../lib/useRole'
 import { normDesig, makeLigneId } from '../../../../lib/achatsHelpers'
 import Navbar from '../../../../components/Navbar'
+import BackButton from '../../../../components/BackButton'
 
 function formatEuro(n) {
   if (n == null || Number.isNaN(Number(n))) return '—'
@@ -279,10 +280,11 @@ export default function AchatsDetailPage() {
 
         {/* ── Barre actions ── */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
-          <button onClick={() => router.push('/controle-gestion/achats')}
-            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: c.texteMuted, fontSize: 13, padding: 0 }}>
-            ← Retour aux achats
-          </button>
+          <BackButton
+            fallback="/controle-gestion/achats"
+            label="← Retour aux achats"
+            style={{ background: 'transparent', border: 'none', color: c.texteMuted, fontSize: 13, padding: 0 }}
+          />
           {role === 'admin' && !loading && facture && (
             <div style={{ display: 'flex', gap: 8 }}>
               {isBl && (

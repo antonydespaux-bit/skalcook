@@ -7,6 +7,7 @@ import { useTheme } from '../../../lib/useTheme'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { log } from '../../../lib/useLog'
 import ChefLoader from '../../../components/ChefLoader'
+import BackButton from '../../../components/BackButton'
 
 export default function MenuDetail() {
   const { nomEtablissement } = useTheme()
@@ -185,11 +186,7 @@ useEffect(() => {
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '12px', minWidth: 0, flex: '1 1 auto', overflow: 'hidden' }}>
           <Logo height={28} couleur="white" nom={nomEtablissement} onClick={() => router.push('/fiches')} />
           {!isMobile && <span style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }}>|</span>}
-          <button onClick={() => router.push('/menus')} style={{
-            background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: isMobile ? '5px 8px' : '6px 12px', fontSize: '13px',
-            cursor: 'pointer', color: 'rgba(255,255,255,0.7)', flexShrink: 0,
-          }}>← Retour</button>
+          <BackButton fallback="/menus" style={{ padding: isMobile ? '5px 8px' : '6px 12px', flexShrink: 0 }} />
           <span style={{
             fontSize: '14px', fontWeight: '500', color: 'white',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
