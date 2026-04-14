@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [filtreLieu, setFiltreLieu] = useState('tous')
   const [lieux, setLieux] = useState([])
   const [isPrixExpanded, setIsPrixExpanded] = useState(false)
+  const [isAllergenesExpanded, setIsAllergenesExpanded] = useState(true)
   const router = useRouter()
   const isMobile = useIsMobile()
   const { c } = useTheme()
@@ -281,41 +282,55 @@ export default function DashboardPage() {
 
         {/* Tableau allergènes */}
         <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: `0.5px solid ${c.bordure}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ padding: '16px 20px', borderBottom: isAllergenesExpanded ? `0.5px solid ${c.bordure}` : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', background: isAllergenesExpanded ? c.fond + '40' : c.blanc, transition: 'background 0.2s ease' }}>
+            <div
+              onClick={() => setIsAllergenesExpanded(!isAllergenesExpanded)}
+              style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+            >
               <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>⚠️ Tableau des allergènes</div>
               <span style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: '20px', padding: '2px 8px', fontSize: '11px', fontWeight: '500' }}>
                 {fichesAvecAllergenes.length} fiche{fichesAvecAllergenes.length > 1 ? 's' : ''}
               </span>
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <select value={filtreCategorie} onChange={e => setFiltreCategorie(e.target.value)} style={{
-                padding: '6px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
-                fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer'
-              }}>
-                <option value="toutes">Toutes les catégories</option>
-                {theme.categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
-              <select value={filtreSaison} onChange={e => setFiltreSaison(e.target.value)} style={{
-                padding: '6px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
-                fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer'
-              }}>
-                <option value="toutes">Toutes les saisons</option>
-                {theme.saisons.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              {lieux.length > 0 && (
-                <select value={filtreLieu} onChange={e => setFiltreLieu(e.target.value)} style={{
-                  padding: '6px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
-                  fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer'
-                }}>
-                  <option value="tous">Tous les lieux</option>
-                  {lieux.map(l => <option key={l.id} value={l.id}>{l.emoji ? `${l.emoji} ${l.nom}` : l.nom}</option>)}
-                </select>
+              {isAllergenesExpanded && (
+                <>
+                  <select value={filtreCategorie} onChange={e => setFiltreCategorie(e.target.value)} style={{
+                    padding: '6px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
+                    fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer'
+                  }}>
+                    <option value="toutes">Toutes les catégories</option>
+                    {theme.categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                  <select value={filtreSaison} onChange={e => setFiltreSaison(e.target.value)} style={{
+                    padding: '6px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
+                    fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer'
+                  }}>
+                    <option value="toutes">Toutes les saisons</option>
+                    {theme.saisons.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  {lieux.length > 0 && (
+                    <select value={filtreLieu} onChange={e => setFiltreLieu(e.target.value)} style={{
+                      padding: '6px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
+                      fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer'
+                    }}>
+                      <option value="tous">Tous les lieux</option>
+                      {lieux.map(l => <option key={l.id} value={l.id}>{l.emoji ? `${l.emoji} ${l.nom}` : l.nom}</option>)}
+                    </select>
+                  )}
+                  <button onClick={exportAllergenesExcel} style={{ padding: '6px 12px', background: c.vert, color: 'white', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>📊 Excel</button>
+                  <button onClick={() => window.print()} style={{ padding: '6px 12px', background: c.accent, color: c.principal, border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>🖨️ Imprimer</button>
+                </>
               )}
-              <button onClick={exportAllergenesExcel} style={{ padding: '6px 12px', background: c.vert, color: 'white', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>📊 Excel</button>
-              <button onClick={() => window.print()} style={{ padding: '6px 12px', background: c.accent, color: c.principal, border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>🖨️ Imprimer</button>
+              <div
+                onClick={() => setIsAllergenesExpanded(!isAllergenesExpanded)}
+                style={{ fontSize: '16px', color: c.texteMuted, fontWeight: '300', cursor: 'pointer' }}
+              >
+                {isAllergenesExpanded ? '− Masquer' : '+ Développer'}
+              </div>
             </div>
           </div>
+          {isAllergenesExpanded && (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '900px' }}>
               <thead>
@@ -359,6 +374,7 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
+          )}
         </div>
       </div>
 
