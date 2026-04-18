@@ -107,7 +107,7 @@ export default function Navbar({ section = 'cuisine' }) {
   const isActive = (paths) => {
     const arr = Array.isArray(paths) ? paths : [paths]
     return arr.some(p => {
-      if (p === DASHBOARD_PATH) return pathname === DASHBOARD_PATH
+      if (p === DASHBOARD_PATH || p === '/crm') return pathname === p
       return pathname.startsWith(p)
     })
   }
@@ -154,7 +154,7 @@ export default function Navbar({ section = 'cuisine' }) {
             ...(hasModule('avis')                      ? [{ label: 'Avis clients',    path: '/avis' }]         : []),
           ]
         },
-        ...((role === 'admin' || role === 'directeur') ? [{
+        ...(hasModule('crm') && (role === 'admin' || role === 'directeur') ? [{
           label: 'CRM',
           paths: ['/crm'],
           items: [
