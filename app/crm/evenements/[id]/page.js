@@ -183,6 +183,7 @@ export default function CrmEvenementDetailPage() {
                 </p>
               </div>
               <div className="crm-actions">
+                <Button c={c} variant="ghost" onClick={() => router.push(`/crm/devis/nouveau?evenement=${id}`)}>+ Créer un devis</Button>
                 <Button c={c} variant="ghost" onClick={() => setMode('edit')}>Modifier</Button>
               </div>
             </div>

@@ -370,3 +370,243 @@
 @media (max-width: 640px) {
   .crm-actions .sk-btn { flex: 1 1 auto; justify-content: center; }
 }
+
+/* ═══ Devis ══════════════════════════════════════════════════ */
+
+/* ─── Composer layout (header + lignes + coef + totaux) ─── */
+.crm-devis-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ─── Coef bar ─── */
+.crm-devis-coef {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding: 12px;
+  border-radius: var(--sk-radius-lg);
+  border-width: var(--sk-border-hair);
+  border-style: solid;
+}
+.crm-devis-coef__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+.crm-devis-coef__label {
+  font-size: 11px;
+  font-weight: var(--sk-fw-med);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.crm-devis-coef__hint {
+  font-size: var(--sk-fs-sm);
+  flex: 1 1 100%;
+  margin-top: 4px;
+}
+
+/* ─── Liste des lignes ─── */
+.crm-devis-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.crm-devis-line {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--sk-radius-lg);
+  border-width: var(--sk-border-hair);
+  border-style: solid;
+}
+.crm-devis-line__header {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.crm-devis-line__header-main { flex: 1 1 auto; min-width: 0; }
+.crm-devis-line__type-badge {
+  font-size: 10px;
+  font-weight: var(--sk-fw-med);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-bottom: 4px;
+}
+.crm-devis-line__designation {
+  font-size: var(--sk-fs-md);
+  font-weight: var(--sk-fw-med);
+  word-break: break-word;
+}
+.crm-devis-line__designation-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: var(--sk-fs-md);
+  font-weight: var(--sk-fw-med);
+  padding: 2px 0;
+}
+.crm-devis-line__description {
+  width: 100%;
+  border-width: var(--sk-border-hair);
+  border-style: solid;
+  border-radius: var(--sk-radius-md);
+  padding: 6px 8px;
+  font-size: var(--sk-fs-sm);
+  min-height: 34px;
+  resize: vertical;
+}
+.crm-devis-line__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+@media (min-width: 768px) {
+  .crm-devis-line__grid { grid-template-columns: repeat(5, 1fr) auto; }
+}
+.crm-devis-line__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.crm-devis-line__cell--total {
+  justify-content: flex-end;
+  align-items: flex-end;
+}
+.crm-devis-line__cell-label {
+  font-size: 10px;
+  font-weight: var(--sk-fw-med);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.crm-devis-line__input {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: var(--sk-radius-md);
+  border-width: var(--sk-border-hair);
+  border-style: solid;
+  font-size: var(--sk-fs-sm);
+}
+.crm-devis-line__total-value {
+  font-size: var(--sk-fs-md);
+  font-weight: var(--sk-fw-sb);
+  white-space: nowrap;
+}
+.crm-devis-line__allergenes {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: var(--sk-fs-sm);
+}
+.crm-devis-line__delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 4px;
+}
+
+/* ─── Boutons ajout ligne ─── */
+.crm-devis-add-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ─── Sélecteur de fiches (panel inline) ─── */
+.crm-devis-picker {
+  border-radius: var(--sk-radius-lg);
+  border-width: var(--sk-border-hair);
+  border-style: solid;
+  overflow: hidden;
+}
+.crm-devis-picker__search {
+  padding: 10px;
+  border-bottom-width: var(--sk-border-hair);
+  border-bottom-style: solid;
+}
+.crm-devis-picker__search input {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: var(--sk-radius-md);
+  border-width: var(--sk-border-hair);
+  border-style: solid;
+  font-size: var(--sk-fs-md);
+}
+.crm-devis-picker__list {
+  max-height: 280px;
+  overflow-y: auto;
+}
+.crm-devis-picker__item {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border-bottom-width: var(--sk-border-hair);
+  border-bottom-style: solid;
+}
+.crm-devis-picker__item:last-child { border-bottom: none; }
+.crm-devis-picker__item-main { min-width: 0; }
+.crm-devis-picker__item-nom {
+  font-size: var(--sk-fs-md);
+  font-weight: var(--sk-fw-med);
+  word-break: break-word;
+}
+.crm-devis-picker__item-meta {
+  font-size: var(--sk-fs-sm);
+  margin-top: 2px;
+}
+.crm-devis-picker__item-price {
+  font-size: var(--sk-fs-sm);
+  font-weight: var(--sk-fw-med);
+  white-space: nowrap;
+}
+.crm-devis-picker__empty {
+  padding: 20px;
+  text-align: center;
+  font-size: var(--sk-fs-sm);
+}
+
+/* ─── Totaux ─── */
+.crm-devis-totals {
+  margin-left: auto;
+  max-width: 360px;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--sk-radius-lg);
+  border-width: var(--sk-border-hair);
+  border-style: solid;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.crm-devis-totals__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--sk-fs-md);
+}
+.crm-devis-totals__row--ttc {
+  font-size: var(--sk-fs-lg);
+  font-weight: var(--sk-fw-sb);
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top-width: var(--sk-border-hair);
+  border-top-style: solid;
+}
