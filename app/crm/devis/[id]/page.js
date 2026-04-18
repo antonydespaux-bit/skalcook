@@ -40,6 +40,8 @@ export default function CrmDevisDetailPage() {
   const [sendModalOpen, setSendModalOpen] = useState(false)
   const [linkSaving, setLinkSaving] = useState(false)
   const [showEvenementPicker, setShowEvenementPicker] = useState(false)
+  const [revisions, setRevisions] = useState([])
+  const [revisionLoadingId, setRevisionLoadingId] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -83,6 +85,7 @@ export default function CrmDevisDetailPage() {
       { data: clientsData },
       { data: evenementsData },
       { data: fichesData },
+      { data: revisionsData },
     ] = await Promise.all([
       supabase.from('crm_devis_lignes')
         .select('*')
@@ -110,6 +113,10 @@ export default function CrmDevisDetailPage() {
         .eq('archive', false)
         .eq('is_sub_fiche', false)
         .order('nom', { ascending: true }),
+      supabase.from('crm_devis_revisions')
+        .select('id, version, sent_at, sent_to_email, sent_subject, snapshot_header')
+        .eq('devis_id', id)
+        .order('version', { ascending: false }),
     ])
     if (lErr) { setError(lErr.message); setLoading(false); return }
     setLignes(lignesData || [])
@@ -118,6 +125,7 @@ export default function CrmDevisDetailPage() {
     setClientsDispo(clientsData || [])
     setEvenementsDispo(evenementsData || [])
     setFichesDispo(fichesData || [])
+    setRevisions(revisionsData || [])
     setLoading(false)
   }, [id])
 
@@ -225,6 +233,36 @@ export default function CrmDevisDetailPage() {
     if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`)
     setSendModalOpen(false)
     await load()
+  }
+
+  async function handleDownloadRevisionPdf(revisionId, { download = false, version } = {}) {
+    if (!clientId) return
+    setRevisionLoadingId(revisionId)
+    setError('')
+    try {
+      const headers = await authHeaders()
+      const url = `/api/crm/devis/${id}/revision/${revisionId}/pdf?client_id=${clientId}${download ? '&download=1' : ''}`
+      const res = await fetch(url, { headers })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+        throw new Error(j.error || 'Erreur PDF')
+      }
+      const blob = await res.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      if (download) {
+        const a = document.createElement('a')
+        a.href = blobUrl
+        a.download = `${devis?.numero || 'devis'}-v${version || ''}.pdf`
+        document.body.appendChild(a); a.click(); a.remove()
+      } else {
+        window.open(blobUrl, '_blank', 'noopener')
+      }
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
+    } catch (err) {
+      setError(err.message || 'Erreur PDF')
+    } finally {
+      setRevisionLoadingId(null)
+    }
   }
 
   async function handleLinkEvenement(evenementId) {
@@ -356,17 +394,22 @@ export default function CrmDevisDetailPage() {
             {devis.sent_at && (
               <Card c={c} padding="md" style={{ marginBottom: 20, background: hexToRgba('#10B981', 0.06), borderColor: hexToRgba('#10B981', 0.3) }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13, color: c.texte }}>
-                  <span style={{ fontWeight: 500 }}>✓ Envoyé</span>
+                  <span style={{ fontWeight: 500 }}>
+                    ✓ Envoyé{revisions.length > 0 ? ` · V${revisions[0].version}` : ''}
+                  </span>
                   <span style={{ color: c.texteMuted }}>
                     le {formatDateFr(devis.sent_at)}{devis.sent_to_email ? ` à ${devis.sent_to_email}` : ''}
                   </span>
                   <button
                     type="button"
-                    onClick={() => handleDownloadPdf({ download: false })}
-                    disabled={pdfLoading}
+                    onClick={() => {
+                      if (revisions[0]) handleDownloadRevisionPdf(revisions[0].id, { version: revisions[0].version })
+                      else handleDownloadPdf({ download: false })
+                    }}
+                    disabled={pdfLoading || revisionLoadingId != null}
                     style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: c.accent, cursor: 'pointer', textDecoration: 'underline', fontSize: 13 }}
                   >
-                    Voir le PDF
+                    Voir le PDF envoyé
                   </button>
                 </div>
               </Card>
@@ -562,6 +605,70 @@ export default function CrmDevisDetailPage() {
                   {clientCrm.telephone && (
                     <a href={`tel:${clientCrm.telephone}`} style={{ color: c.accent }}>{clientCrm.telephone}</a>
                   )}
+                </div>
+              </Card>
+            )}
+
+            {/* Historique des envois */}
+            {revisions.length > 0 && (
+              <Card c={c} padding="md" style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div className="sk-panel-header" style={{ color: c.texte, margin: 0 }}>
+                    Historique des envois <span style={{ color: c.texteMuted, fontWeight: 400 }}>· {revisions.length}</span>
+                  </div>
+                </div>
+                <p style={{ color: c.texteMuted, fontSize: 12, margin: '0 0 12px 0' }}>
+                  Chaque envoi fige le devis dans son état d'alors. Utile pour tracer les évolutions demandées par le client.
+                </p>
+                <div className="crm-list">
+                  {revisions.map((r) => {
+                    const isLatest = r.version === revisions[0].version
+                    const totalTtc = r.snapshot_header?.total_ttc
+                    return (
+                      <div
+                        key={r.id}
+                        className="crm-row"
+                        style={{ background: c.blanc, borderColor: c.bordure, color: c.texte, cursor: 'default' }}
+                      >
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div className="crm-row__primary" style={{ color: c.texte, display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <span>Version {r.version}</span>
+                            {isLatest && (
+                              <Badge bg={hexToRgba(c.accent, 0.12)} color={c.accent} size="sm">Actuelle</Badge>
+                            )}
+                          </div>
+                          <div className="crm-row__secondary" style={{ color: c.texteMuted }}>
+                            {formatDateFr(r.sent_at)} · {r.sent_to_email}
+                            {totalTtc != null && ` · ${formatMontant(totalTtc)} TTC`}
+                          </div>
+                          {r.sent_subject && (
+                            <div style={{ color: c.texteMuted, fontSize: 12, marginTop: 2 }}>
+                              Sujet : {r.sent_subject}
+                            </div>
+                          )}
+                        </div>
+                        <div className="crm-row__meta" style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadRevisionPdf(r.id, { version: r.version, download: false })}
+                            disabled={revisionLoadingId != null}
+                            style={{ background: 'transparent', border: 'none', color: c.accent, cursor: 'pointer', textDecoration: 'underline', fontSize: 13, padding: 0 }}
+                          >
+                            {revisionLoadingId === r.id ? '…' : 'Voir'}
+                          </button>
+                          <span style={{ color: c.texteMuted, fontSize: 13 }}>·</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadRevisionPdf(r.id, { version: r.version, download: true })}
+                            disabled={revisionLoadingId != null}
+                            style={{ background: 'transparent', border: 'none', color: c.accent, cursor: 'pointer', textDecoration: 'underline', fontSize: 13, padding: 0 }}
+                          >
+                            Télécharger
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </Card>
             )}

@@ -64,8 +64,18 @@ export const POST = apiHandler({
     })
     const pdfBuffer = await renderToBuffer(element)
 
-    // ─── 3. Upload dans le bucket (upsert) ─────────────────────────────
-    const path = `${clientId}/${devis.id}.pdf`
+    // ─── 3. Calcul du prochain numéro de révision ─────────────────────
+    const { data: lastRev } = await db
+      .from('crm_devis_revisions')
+      .select('version')
+      .eq('devis_id', devisId)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const nextVersion = (lastRev?.version || 0) + 1
+
+    // ─── 4. Upload dans le bucket (path versionné) ────────────────────
+    const path = `${clientId}/${devis.id}/v${nextVersion}.pdf`
     const { error: upErr } = await db.storage
       .from('devis')
       .upload(path, pdfBuffer, {
@@ -76,7 +86,7 @@ export const POST = apiHandler({
       return Response.json({ error: `Upload PDF échoué : ${upErr.message}` }, { status: 500 })
     }
 
-    // ─── 4. Envoyer l'email Resend ─────────────────────────────────────
+    // ─── 5. Envoyer l'email Resend ─────────────────────────────────────
     const resend = new Resend(process.env.RESEND_API_KEY)
     const replyTo = tenant?.email_contact || undefined
     const filename = `${devis.numero}.pdf`
@@ -106,9 +116,34 @@ export const POST = apiHandler({
       return Response.json({ error: `Envoi email échoué : ${emailErr.message}` }, { status: 500 })
     }
 
-    // ─── 5. Update devis (statut + tracking) ───────────────────────────
-    const nextStatut = devis.statut === 'brouillon' ? 'envoye' : devis.statut
+    // ─── 6. Enregistrer la révision (snapshot figé) ────────────────────
     const now = new Date().toISOString()
+    const { error: revErr } = await db
+      .from('crm_devis_revisions')
+      .insert({
+        devis_id: devisId,
+        client_id: clientId,
+        version: nextVersion,
+        snapshot_header: devis,
+        snapshot_lignes: lignes || [],
+        snapshot_crm_client: crmClientRes.data || null,
+        snapshot_tenant: tenant || null,
+        sent_at: now,
+        sent_to_email: data.to,
+        sent_subject: data.subject,
+        sent_message: data.message || null,
+        pdf_url: path,
+        created_by: user?.id || null,
+      })
+    if (revErr) {
+      // La révision est l'historique — si l'insert échoue on n'empêche pas
+      // la mise à jour du devis (l'email est parti, le PDF est uploadé),
+      // mais on le log côté serveur.
+      console.error('[devis/envoyer] revision insert failed:', revErr.message)
+    }
+
+    // ─── 7. Update devis (statut + tracking = pointeur vers la dernière rev) ─
+    const nextStatut = devis.statut === 'brouillon' ? 'envoye' : devis.statut
     const { error: updErr } = await db
       .from('crm_devis')
       .update({
@@ -127,6 +162,7 @@ export const POST = apiHandler({
     return Response.json({
       ok: true,
       pdf_url: path,
+      version: nextVersion,
       sent_at: now,
       sent_to_email: data.to,
       statut: nextStatut,
