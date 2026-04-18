@@ -161,6 +161,7 @@ export default function Navbar({ section = 'cuisine' }) {
             { label: 'Dashboard',   path: '/crm' },
             { label: 'Clients',     path: '/crm/clients' },
             { label: 'Événements',  path: '/crm/evenements' },
+            { label: 'Devis',       path: '/crm/devis' },
           ]
         }] : []),
         ...(role === 'admin' ? [{
