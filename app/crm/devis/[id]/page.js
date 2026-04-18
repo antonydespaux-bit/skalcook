@@ -36,6 +36,8 @@ export default function CrmDevisDetailPage() {
   const [mode, setMode] = useState('view')
   const [statutSaving, setStatutSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [sendModalOpen, setSendModalOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -172,6 +174,57 @@ export default function CrmDevisDetailPage() {
     router.push('/crm/devis')
   }
 
+  async function authHeaders() {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Session expirée.')
+    return { Authorization: `Bearer ${session.access_token}` }
+  }
+
+  async function handleDownloadPdf({ download = true } = {}) {
+    if (!clientId) return
+    setPdfLoading(true)
+    setError('')
+    try {
+      const headers = await authHeaders()
+      const url = `/api/crm/devis/${id}/pdf?client_id=${clientId}${download ? '&download=1' : ''}`
+      const res = await fetch(url, { headers })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+        throw new Error(j.error || 'Erreur PDF')
+      }
+      const blob = await res.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      if (download) {
+        const a = document.createElement('a')
+        a.href = blobUrl
+        a.download = `${devis?.numero || 'devis'}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+      } else {
+        window.open(blobUrl, '_blank', 'noopener')
+      }
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
+    } catch (err) {
+      setError(err.message || 'Erreur PDF')
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
+  async function handleSend({ to, subject, message }) {
+    const headers = { ...(await authHeaders()), 'Content-Type': 'application/json' }
+    const res = await fetch(`/api/crm/devis/${id}/envoyer`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ client_id: clientId, to, subject, message }),
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`)
+    setSendModalOpen(false)
+    await load()
+  }
+
   const statut = useMemo(() => STATUTS_DEVIS_MAP[devis?.statut], [devis])
   const allergenesAgreges = useMemo(() => {
     const set = new Set()
@@ -251,9 +304,35 @@ export default function CrmDevisDetailPage() {
                 </p>
               </div>
               <div className="crm-actions">
+                <Button c={c} variant="ghost" onClick={() => handleDownloadPdf({ download: true })} disabled={pdfLoading}>
+                  {pdfLoading ? 'PDF…' : 'Télécharger PDF'}
+                </Button>
                 <Button c={c} variant="ghost" onClick={() => setMode('edit')}>Modifier</Button>
+                <Button c={c} onClick={() => setSendModalOpen(true)}>
+                  {devis.sent_at ? 'Renvoyer' : 'Envoyer par email'}
+                </Button>
               </div>
             </div>
+
+            {/* Envoi info (si déjà envoyé) */}
+            {devis.sent_at && (
+              <Card c={c} padding="md" style={{ marginBottom: 20, background: hexToRgba('#10B981', 0.06), borderColor: hexToRgba('#10B981', 0.3) }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13, color: c.texte }}>
+                  <span style={{ fontWeight: 500 }}>✓ Envoyé</span>
+                  <span style={{ color: c.texteMuted }}>
+                    le {formatDateFr(devis.sent_at)}{devis.sent_to_email ? ` à ${devis.sent_to_email}` : ''}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadPdf({ download: false })}
+                    disabled={pdfLoading}
+                    style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: c.accent, cursor: 'pointer', textDecoration: 'underline', fontSize: 13 }}
+                  >
+                    Voir le PDF
+                  </button>
+                </div>
+              </Card>
+            )}
 
             {/* Statut */}
             <Card c={c} padding="md" style={{ marginBottom: 20 }}>
@@ -374,6 +453,17 @@ export default function CrmDevisDetailPage() {
               </Card>
             )}
 
+            {/* Modal envoi */}
+            {sendModalOpen && (
+              <SendDevisModal
+                c={c}
+                devis={devis}
+                clientCrm={clientCrm}
+                onClose={() => setSendModalOpen(false)}
+                onSend={handleSend}
+              />
+            )}
+
             {/* Danger zone */}
             <div style={{ marginTop: 32, paddingTop: 16, borderTop: `0.5px solid ${c.bordure}` }}>
               {confirmDelete ? (
@@ -400,6 +490,83 @@ function Kv({ c, label, value }) {
     <div>
       <div className="crm-kv__key" style={{ color: c.texteMuted }}>{label}</div>
       <div className="crm-kv__value" style={{ color: c.texte }}>{value || '—'}</div>
+    </div>
+  )
+}
+
+function SendDevisModal({ c, devis, clientCrm, onClose, onSend }) {
+  const [to, setTo] = useState(clientCrm?.email || '')
+  const [subject, setSubject] = useState(`Devis ${devis.numero}`)
+  const [message, setMessage] = useState(
+    `Bonjour${clientCrm?.prenom ? ' ' + clientCrm.prenom : ''},\n\nVous trouverez ci-joint votre devis pour votre événement. N'hésitez pas à revenir vers moi pour toute question.\n\nBien cordialement,`
+  )
+  const [sending, setSending] = useState(false)
+  const [err, setErr] = useState('')
+
+  const inputStyle = { background: c.blanc, borderColor: c.bordure, color: c.texte }
+  const labelStyle = { color: c.texte }
+
+  async function submit(e) {
+    e.preventDefault()
+    setErr('')
+    if (!to.trim()) { setErr('Destinataire requis.'); return }
+    if (!subject.trim()) { setErr('Sujet requis.'); return }
+    setSending(true)
+    try {
+      await onSend({ to: to.trim(), subject: subject.trim(), message: message.trim() })
+    } catch (e2) {
+      setErr(e2.message || 'Envoi échoué.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="crm-devis-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <form className="crm-devis-modal" style={{ background: c.blanc, border: `0.5px solid ${c.bordure}` }} onSubmit={submit}>
+        <div>
+          <h3 className="crm-devis-modal__title" style={{ color: c.texte }}>Envoyer le devis par email</h3>
+          <p className="crm-devis-modal__subtitle" style={{ color: c.texteMuted }}>
+            Le PDF sera généré puis joint automatiquement au message.
+          </p>
+        </div>
+
+        <div className="crm-field">
+          <label className="crm-field__label crm-field__label--required" style={labelStyle}>Destinataire</label>
+          <input
+            type="email" required
+            className="crm-field__input" style={inputStyle}
+            value={to} onChange={(e) => setTo(e.target.value)}
+            placeholder="client@exemple.fr"
+          />
+        </div>
+
+        <div className="crm-field">
+          <label className="crm-field__label crm-field__label--required" style={labelStyle}>Sujet</label>
+          <input
+            type="text" required
+            className="crm-field__input" style={inputStyle}
+            value={subject} onChange={(e) => setSubject(e.target.value)}
+          />
+        </div>
+
+        <div className="crm-field">
+          <label className="crm-field__label" style={labelStyle}>Message</label>
+          <textarea
+            className="crm-field__textarea" style={{ ...inputStyle, minHeight: 140 }}
+            value={message} onChange={(e) => setMessage(e.target.value)}
+          />
+        </div>
+
+        {err && <div style={{ color: 'var(--sk-rouge-texte)', fontSize: 13 }}>{err}</div>}
+
+        <div className="crm-actions">
+          <Button c={c} variant="ghost" type="button" onClick={onClose} disabled={sending}>Annuler</Button>
+          <Button c={c} type="submit" disabled={sending}>
+            {sending ? 'Envoi…' : 'Envoyer'}
+          </Button>
+        </div>
+      </form>
     </div>
   )
 }

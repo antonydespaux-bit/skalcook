@@ -610,3 +610,35 @@
   border-top-width: var(--sk-border-hair);
   border-top-style: solid;
 }
+
+/* ─── Devis send modal ─── */
+.crm-devis-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+.crm-devis-modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: var(--sk-radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.crm-devis-modal__title {
+  font-size: 18px;
+  font-weight: var(--sk-fw-sb);
+  margin: 0;
+}
+.crm-devis-modal__subtitle {
+  font-size: var(--sk-fs-sm);
+  margin: 0;
+}
