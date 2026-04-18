@@ -15,7 +15,7 @@ import { apiHandler } from '../../../lib/apiHandler'
 import { Resend } from 'resend'
 import { z } from 'zod'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'contact@skalcook.com'
 
 // Empty string -> null pour les champs optionnels.
@@ -60,6 +60,7 @@ export const POST = apiHandler({
     const prenom = data.nom.split(' ')[0]
 
     // 1. Email notification to admin
+    if (!resend) { console.warn('RESEND_API_KEY not set — skipping emails'); return Response.json({ ok: true }, { status: 201 }) }
     try {
       await resend.emails.send({
         from: FROM,
