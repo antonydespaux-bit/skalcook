@@ -256,7 +256,7 @@ const loadFiche = async () => {
 
         {/* Ingrédients */}
         <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', overflow: 'hidden' }}>
-          <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div className="sk-panel-header sk-label-muted" style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, color: c.texteMuted }}>
             Ingrédients & Préparations
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -324,7 +324,7 @@ const loadFiche = async () => {
         {/* Instructions écran */}
         {fiche.instructions && (
           <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', overflow: 'hidden' }}>
-            <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <div className="sk-panel-header sk-label-muted" style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, color: c.texteMuted }}>
               📋 Instructions de préparation
             </div>
             <div style={{ padding: '16px 20px' }}>

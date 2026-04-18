@@ -161,7 +161,7 @@ export default function InventairePage() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                  <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '6px' }}>{kpi.label}</div>
+                  <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '6px' }}>{kpi.label}</div>
                   <div style={{ fontSize: isMobile ? '22px' : '28px', fontWeight: '600', color: c.texte, lineHeight: 1 }}>{kpi.value}</div>
                   <div style={{ fontSize: '10px', color: c.texteMuted, marginTop: '4px' }}>{kpi.sub}</div>
                 </div>

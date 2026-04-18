@@ -212,3 +212,61 @@ body {
 }
 .sk-badge--sm { padding: 2px 8px; font-size: 11px; }
 .sk-badge--lg { padding: 4px 14px; }
+
+/* ──────────────────────────────────────────────────────────────
+ * Classes utilitaires (typo, tableaux, formulaires)
+ * ────────────────────────────────────────────────────────────── */
+
+/* ─── Label muted ─── */
+/* Micro-label : UPPERCASE muted au dessus d'une valeur (KPI, recap, form section) */
+.sk-label-muted {
+  font-size: 11px;
+  font-weight: var(--sk-fw-med);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  /* color injecté via style={} (c.texteMuted, dynamique) */
+}
+
+/* ─── Stat value ─── */
+/* Grosse valeur numérique (KPI dashboard) */
+.sk-stat-value {
+  font-weight: var(--sk-fw-med);
+  line-height: 1.1;
+  /* fontSize et color injectés via style={} (responsive + dynamique) */
+}
+
+/* ─── Panel header ─── */
+/* Header de section dans un panel blanc (titre + bordure basse) */
+.sk-panel-header {
+  font-size: var(--sk-fs-md);
+  font-weight: var(--sk-fw-med);
+  /* padding, borderBottom, color injectés via style={} */
+}
+
+/* ─── Table header cell ─── */
+.sk-th {
+  font-size: 11px;
+  font-weight: var(--sk-fw-med);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  /* padding, textAlign, color, background injectés via style={} */
+}
+
+/* ─── Table body cell ─── */
+.sk-td {
+  /* Padding standard table cell */
+  padding: 10px 16px;
+}
+.sk-td--right { text-align: right; }
+.sk-td--center { text-align: center; }
+
+/* ─── Select ─── */
+/* Dropdown de filtre standard */
+.sk-select {
+  padding: 6px 10px;
+  border-radius: var(--sk-radius-md);
+  font-size: var(--sk-fs-sm);
+  outline: none;
+  cursor: pointer;
+  /* background, border, color injectés via style={} (c.blanc, c.bordure, c.texte) */
+}

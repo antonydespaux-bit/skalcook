@@ -279,7 +279,7 @@ export default function NouvelleCarte() {
 
         {/* Informations */}
         <div style={{ background: 'white', borderRadius: '12px', padding: '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '16px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '16px' }}>
             Informations de la carte
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>

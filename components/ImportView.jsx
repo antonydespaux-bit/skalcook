@@ -368,7 +368,7 @@ export default function ImportView({ section = 'cuisine' }) {
 
         {/* Recalcul rapide */}
         <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '20px', border: `0.5px solid ${c.bordure}`, marginBottom: '16px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '10px' }}>
             {cfg.recalculLabel}
           </div>
           <div style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>

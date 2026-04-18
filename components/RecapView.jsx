@@ -275,12 +275,12 @@ export default function RecapView({ section = 'cuisine' }) {
               <td style={{ padding: '14px 16px', width: '30%' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>{badge}<span style={{ fontSize: '11px', color: c.texteMuted }}>{stats.nb} fiche{stats.nb > 1 ? 's' : ''}</span><span style={{ fontSize: '11px', color: c.accent, marginLeft: 'auto' }}>{isOpen ? '▲' : '▼'}</span></div>
               </td>
-              <td style={{ padding: '14px 16px', textAlign: 'right' }}>{stats.nb}</td>
-              <td style={{ padding: '14px 16px', textAlign: 'right' }}>{stats.coutMoyen > 0 ? `${stats.coutMoyen.toFixed(2)} €` : '—'}</td>
-              <td style={{ padding: '14px 16px', textAlign: 'right' }}>{stats.prixHTMoyen > 0 ? `${stats.prixHTMoyen.toFixed(2)} €` : '—'}</td>
-              <td style={{ padding: '14px 16px', textAlign: 'right' }}>{stats.prixTTCMoyen > 0 ? `${stats.prixTTCMoyen.toFixed(2)} €` : '—'}</td>
-              <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: '500', color: stats.beneficeMoyen > 0 ? '#3B6D11' : c.texteMuted }}>{stats.beneficeMoyen !== 0 ? `${stats.beneficeMoyen.toFixed(2)} €` : '—'}</td>
-              <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+              <td className="sk-td sk-td--right">{stats.nb}</td>
+              <td className="sk-td sk-td--right">{stats.coutMoyen > 0 ? `${stats.coutMoyen.toFixed(2)} €` : '—'}</td>
+              <td className="sk-td sk-td--right">{stats.prixHTMoyen > 0 ? `${stats.prixHTMoyen.toFixed(2)} €` : '—'}</td>
+              <td className="sk-td sk-td--right">{stats.prixTTCMoyen > 0 ? `${stats.prixTTCMoyen.toFixed(2)} €` : '—'}</td>
+              <td className="sk-td sk-td--right" style={{ fontWeight: '500', color: stats.beneficeMoyen > 0 ? '#3B6D11' : c.texteMuted }}>{stats.beneficeMoyen !== 0 ? `${stats.beneficeMoyen.toFixed(2)} €` : '—'}</td>
+              <td className="sk-td sk-td--right">
                 {stats.ratioMoyen > 0 ? <Badge bg={fcBg(stats.ratioMoyen)} color={fcColor(stats.ratioMoyen)}>{stats.ratioMoyen.toFixed(1)} %</Badge> : '—'}
               </td>
             </tr></tbody></table>
@@ -406,19 +406,19 @@ export default function RecapView({ section = 'cuisine' }) {
                         style={{ borderBottom: `0.5px solid ${c.bordure}`, cursor: 'pointer', background: isOpen ? cfg.colors.catBg : c.blanc }}
                         onMouseEnter={e => { if (!isOpen) e.currentTarget.style.background = c.fond }}
                         onMouseLeave={e => { if (!isOpen) e.currentTarget.style.background = c.blanc }}>
-                        <td style={{ padding: '14px 16px' }}>
+                        <td className="sk-td">
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <Badge bg={cfg.colors.catBg} color={cfg.colors.catColor}>{cat.emoji} {cat.nom}</Badge>
                             <span style={{ fontSize: '11px', color: c.texteMuted }}>{stats.nb} fiche{stats.nb > 1 ? 's' : ''}</span>
                             <span style={{ fontSize: '11px', color: c.accent, marginLeft: 'auto' }}>{isOpen ? '▲' : '▼'}</span>
                           </div>
                         </td>
-                        <td style={{ padding: '14px 16px', textAlign: 'right' }}>{stats.nb}</td>
-                        <td style={{ padding: '14px 16px', textAlign: 'right' }}>{stats.coutMoyen > 0 ? `${stats.coutMoyen.toFixed(2)} €` : '—'}</td>
-                        <td style={{ padding: '14px 16px', textAlign: 'right' }}>{stats.prixHTMoyen > 0 ? `${stats.prixHTMoyen.toFixed(2)} €` : '—'}</td>
-                        <td style={{ padding: '14px 16px', textAlign: 'right' }}>{stats.prixTTCMoyen > 0 ? `${stats.prixTTCMoyen.toFixed(2)} €` : '—'}</td>
-                        <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: '500', color: stats.beneficeMoyen > 0 ? '#3B6D11' : c.texteMuted }}>{stats.beneficeMoyen !== 0 ? `${stats.beneficeMoyen.toFixed(2)} €` : '—'}</td>
-                        <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                        <td className="sk-td sk-td--right">{stats.nb}</td>
+                        <td className="sk-td sk-td--right">{stats.coutMoyen > 0 ? `${stats.coutMoyen.toFixed(2)} €` : '—'}</td>
+                        <td className="sk-td sk-td--right">{stats.prixHTMoyen > 0 ? `${stats.prixHTMoyen.toFixed(2)} €` : '—'}</td>
+                        <td className="sk-td sk-td--right">{stats.prixTTCMoyen > 0 ? `${stats.prixTTCMoyen.toFixed(2)} €` : '—'}</td>
+                        <td className="sk-td sk-td--right" style={{ fontWeight: '500', color: stats.beneficeMoyen > 0 ? '#3B6D11' : c.texteMuted }}>{stats.beneficeMoyen !== 0 ? `${stats.beneficeMoyen.toFixed(2)} €` : '—'}</td>
+                        <td className="sk-td sk-td--right">
                           {stats.ratioMoyen > 0 ? <Badge bg={fcBg(stats.ratioMoyen)} color={fcColor(stats.ratioMoyen)}>{stats.ratioMoyen.toFixed(1)} %</Badge> : '—'}
                         </td>
                       </tr>
@@ -479,7 +479,7 @@ export default function RecapView({ section = 'cuisine' }) {
                 if (!stats) return null
                 return (
                   <tr key={lieu.id} style={{ borderBottom: `0.5px solid ${c.bordure}` }}>
-                    <td style={{ padding: '12px 16px' }}><Badge bg={cfg.colors.lieuBg} color={cfg.colors.lieuColor}>{lieu.emoji} {lieu.nom}</Badge></td>
+                    <td className="sk-td" style={{ padding: '12px 16px' }}><Badge bg={cfg.colors.lieuBg} color={cfg.colors.lieuColor}>{lieu.emoji} {lieu.nom}</Badge></td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>{stats.nb}</td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>{stats.coutMoyen > 0 ? `${stats.coutMoyen.toFixed(2)} €` : '—'}</td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>{stats.prixTTCMoyen > 0 ? `${stats.prixTTCMoyen.toFixed(2)} €` : '—'}</td>

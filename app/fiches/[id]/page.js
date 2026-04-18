@@ -269,7 +269,7 @@ export default function FicheDetail() {
 
         {/* Ingrédients */}
         <div className="fiche-ingredients-after-header" style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', overflow: 'hidden' }}>
-          <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Ingrédients</div>
+          <div className="sk-panel-header sk-label-muted" style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, color: c.texteMuted }}>Ingrédients</div>
           {isMobile ? (
             <div style={{ padding: '12px' }}>
               {ingredients.map((ing, i) => {
@@ -352,7 +352,7 @@ export default function FicheDetail() {
         {/* Instructions écran — après récap */}
         {fiche.instructions && (
           <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', overflow: 'hidden' }}>
-            <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <div className="sk-panel-header sk-label-muted" style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, color: c.texteMuted }}>
               📋 Instructions de préparation
             </div>
             <div style={{ padding: '16px 20px' }}>

@@ -218,8 +218,8 @@ export default function AvisPage() {
                 { label: 'Sans réponse', value: `${stats.sansReponse}`, bg: stats.sansReponse > 0 ? '#FAEEDA' : c.blanc, sub: `${stats.avecReponse} répondus` },
               ].map((stat, i) => (
                 <div key={i} style={{ background: stat.bg, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
-                  <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>{stat.label}</div>
-                  <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: c.texte }}>{stat.value}</div>
+                  <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>{stat.label}</div>
+                  <div className="sk-stat-value" style={{ fontSize: isMobile ? '28px' : '36px', color: c.texte }}>{stat.value}</div>
                   <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>{stat.sub}</div>
                 </div>
               ))}

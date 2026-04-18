@@ -329,7 +329,7 @@ export default function ModifierFiche() {
 
         {/* Informations générales */}
         <Card c={c} style={{ marginBottom: '12px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Informations générales</div>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Informations générales</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom *</label>
@@ -422,7 +422,7 @@ export default function ModifierFiche() {
         {/* Photo */}
         {clientId && (
           <div style={{ background: c.blanc, borderRadius: '12px', padding: '16px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '12px' }}>Photo</div>
+            <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '12px' }}>Photo</div>
             <FichePhoto
               ficheId={params_route.id}
               clientId={clientId}
@@ -436,7 +436,7 @@ export default function ModifierFiche() {
 
         {/* Ingrédients */}
         <Card c={c} style={{ marginBottom: '12px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Ingrédients</div>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Ingrédients</div>
           {isMobile ? (
             <>
               {ingredients.map((ing, index) => (
@@ -496,7 +496,7 @@ export default function ModifierFiche() {
 
         {/* Instructions */}
         <Card c={c} style={{ marginBottom: '12px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>📋 Instructions de préparation</div>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '6px' }}>📋 Instructions de préparation</div>
           <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '12px' }}>Les sauts de ligne seront respectés à l'écran et à l'impression.</div>
           <textarea value={instructions} onChange={e => setInstructions(e.target.value)} rows={8}
             placeholder={`1. Préparer la marinade...\n2. Saisir la viande à feu vif...\n\nDressage :\n- Disposer les légumes...`}
@@ -511,7 +511,7 @@ export default function ModifierFiche() {
 
         {/* Allergènes */}
         <Card c={c} style={{ marginBottom: '12px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Allergènes</div>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Allergènes</div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }}>
             {ALLERGENES.map(a => (
               <div key={a.id} onClick={() => toggleAllergene(a.id)}

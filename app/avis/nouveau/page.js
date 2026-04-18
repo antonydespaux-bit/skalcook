@@ -72,7 +72,7 @@ const handleSubmit = async () => {
 
         {/* Établissement */}
         <Card c={c} style={{ marginBottom: '12px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Établissement</div>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Établissement</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             {[
               { key: 'cuisine', label: '🍽️ Cuisine', color: c.principal, accent: c.accent },
@@ -92,7 +92,7 @@ const handleSubmit = async () => {
 
         {/* Informations */}
         <Card c={c} style={{ marginBottom: '12px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Informations</div>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Informations</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom du client</label>
@@ -120,7 +120,7 @@ const handleSubmit = async () => {
 
         {/* Texte de l'avis */}
         <Card c={c} style={{ marginBottom: '12px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Texte de l'avis *</div>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Texte de l'avis *</div>
           <textarea value={form.review_text} onChange={e => set('review_text', e.target.value)}
             placeholder="Collez ici l'avis du client (dans n'importe quelle langue — la réponse sera générée dans la même langue)..."
             rows={6}
@@ -133,7 +133,7 @@ const handleSubmit = async () => {
 
         {/* Sentiment manuel optionnel */}
         <Card c={c}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Sentiment <span style={{ fontWeight: '400', textTransform: 'none', fontSize: '11px' }}>(optionnel — calculé automatiquement si vide)</span></div>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Sentiment <span style={{ fontWeight: '400', textTransform: 'none', fontSize: '11px' }}>(optionnel — calculé automatiquement si vide)</span></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
             {[
               { key: 'pos', label: '😊 Positif', bg: '#EAF3DE', color: '#3B6D11', border: '#4A7B6F' },

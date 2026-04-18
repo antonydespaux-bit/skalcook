@@ -262,7 +262,7 @@ export default function IngredientsPage() {
             { label: 'Sans catégorie', value: ingredients.filter(i => !i.categorie_id).length },
           ].map((s, i) => (
             <div key={i} style={{ background: c.blanc, borderRadius: '10px', padding: '14px 16px', border: `0.5px solid ${c.bordure}` }}>
-              <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
+              <div className="sk-label-muted" style={{ color: c.texteMuted, fontSize: '10px' }}>{s.label}</div>
               <div style={{ fontSize: '24px', fontWeight: '500', color: c.texte, marginTop: '4px' }}>{s.value}</div>
             </div>
           ))}
@@ -456,7 +456,7 @@ export default function IngredientsPage() {
                   <tbody>
                     {ingredientsPagines.map((ing, i) => (
                       <tr key={ing.id} style={{ borderBottom: i < ingredientsPagines.length - 1 ? `0.5px solid ${c.bordure}` : 'none', background: selection.includes(ing.id) ? c.accentClair : c.blanc }}>
-                        <td style={{ padding: '10px 16px' }}>
+                        <td className="sk-td">
                           <input type="checkbox" checked={selection.includes(ing.id)} onChange={() => toggleSelection(ing.id)} style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: c.accent }} />
                         </td>
                         <td style={{ padding: '10px 16px', fontWeight: '500', color: c.texte }}>
@@ -472,7 +472,7 @@ export default function IngredientsPage() {
                             )}
                           </div>
                         </td>
-                        <td style={{ padding: '10px 16px' }}>
+                        <td className="sk-td">
                           {editionId === ing.id ? (
                             <select value={editionCategorie} onChange={e => setEditionCategorie(e.target.value)}
                               style={{ padding: '4px 8px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer' }}>
@@ -487,7 +487,7 @@ export default function IngredientsPage() {
                             <span style={{ color: c.texteMuted, fontSize: '12px' }}>—</span>
                           )}
                         </td>
-                        <td style={{ padding: '10px 16px', textAlign: 'right' }}>
+                        <td className="sk-td sk-td--right">
                           {editionId === ing.id ? (
                             <input type="text" value={editionPrix} onChange={e => setEditionPrix(e.target.value)}
                               style={{ width: '80px', padding: '4px 8px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', outline: 'none', textAlign: 'right', background: c.blanc, color: c.texte }}
@@ -498,7 +498,7 @@ export default function IngredientsPage() {
                         </td>
                         <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texteMuted }}>{ing.unite || '—'}</td>
                         {peutModifier && (
-                          <td style={{ padding: '10px 16px', textAlign: 'right' }}>
+                          <td className="sk-td sk-td--right">
                             {editionId === ing.id ? (
                               <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                                 <button onClick={() => saveEdition(ing.id)} style={{ background: c.accent, color: 'white', border: 'none', borderRadius: '6px', padding: '4px 10px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}>✓</button>
@@ -632,17 +632,17 @@ export default function IngredientsPage() {
                         onMouseEnter={e => e.currentTarget.style.background = c.fond}
                         onMouseLeave={e => e.currentTarget.style.background = c.blanc}
                       >
-                        <td style={{ padding: '14px 16px' }}>
+                        <td className="sk-td">
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <span style={{ fontSize: '18px' }}>{stat.emoji}</span>
                             <span style={{ fontWeight: '500', color: c.texte }}>{stat.nom}</span>
                           </div>
                         </td>
                         <td style={{ padding: '14px 16px', textAlign: 'right', color: c.texteMuted }}>{stat.nb}</td>
-                        <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: '500', color: c.texte }}>{stat.prixMoyen.toFixed(2)} €</td>
+                        <td className="sk-td sk-td--right" style={{ fontWeight: '500', color: c.texte }}>{stat.prixMoyen.toFixed(2)} €</td>
                         <td style={{ padding: '14px 16px', textAlign: 'right', color: '#16A34A' }}>{stat.prixMin.toFixed(2)} €</td>
                         <td style={{ padding: '14px 16px', textAlign: 'right', color: '#DC2626' }}>{stat.prixMax.toFixed(2)} €</td>
-                        <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                        <td className="sk-td sk-td--right">
                           <Badge bg={ecartPct > 50 ? '#FEE2E2' : ecartPct > 20 ? '#FEF3C7' : '#DCFCE7'} color={ecartPct > 50 ? '#DC2626' : ecartPct > 20 ? '#D97706' : '#16A34A'} size="sm">{ecart.toFixed(2)} € ({ecartPct}%)</Badge>
                         </td>
                       </tr>

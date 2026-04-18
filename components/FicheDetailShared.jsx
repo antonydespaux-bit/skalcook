@@ -60,24 +60,24 @@ export function FicheFinancialRecap({ cout, fc, prixIndic, fiche, seuilVert, seu
 
   return (
     <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', overflow: 'hidden' }}>
-      <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+      <div className="sk-panel-header sk-label-muted" style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, color: c.texteMuted }}>
         Récap financier
       </div>
       <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
         <div>
-          <div style={{ fontSize: '10px', color: c.texteMuted, textTransform: 'uppercase', marginBottom: '4px' }}>Coût total</div>
+          <div className="sk-label-muted" style={{ fontSize: '10px', color: c.texteMuted, marginBottom: '4px' }}>Coût total</div>
           <div style={{ fontSize: '18px', fontWeight: '500', color: c.texte }}>{cout > 0 ? `${cout.toFixed(2)} €` : '—'}</div>
         </div>
         <div>
-          <div style={{ fontSize: '10px', color: c.texteMuted, textTransform: 'uppercase', marginBottom: '4px' }}>Coût / portion</div>
+          <div className="sk-label-muted" style={{ fontSize: '10px', color: c.texteMuted, marginBottom: '4px' }}>Coût / portion</div>
           <div style={{ fontSize: '18px', fontWeight: '500', color: c.texte }}>{coutPortion > 0 ? `${coutPortion.toFixed(2)} €` : '—'}</div>
         </div>
         <div>
-          <div style={{ fontSize: '10px', color: c.texteMuted, textTransform: 'uppercase', marginBottom: '4px' }}>Prix TTC</div>
+          <div className="sk-label-muted" style={{ fontSize: '10px', color: c.texteMuted, marginBottom: '4px' }}>Prix TTC</div>
           <div style={{ fontSize: '18px', fontWeight: '500', color: c.texte }}>{prixTTC ? `${prixTTC.toFixed(2)} €` : '—'}</div>
         </div>
         <div>
-          <div style={{ fontSize: '10px', color: c.texteMuted, textTransform: 'uppercase', marginBottom: '4px' }}>
+          <div className="sk-label-muted" style={{ fontSize: '10px', color: c.texteMuted, marginBottom: '4px' }}>
             Food Cost {tvaLabel ? `(TVA ${tvaLabel})` : ''}
           </div>
           {fc ? (
@@ -90,7 +90,7 @@ export function FicheFinancialRecap({ cout, fc, prixIndic, fiche, seuilVert, seu
         </div>
         {prixIndic && (
           <div>
-            <div style={{ fontSize: '10px', color: c.texteMuted, textTransform: 'uppercase', marginBottom: '4px' }}>Prix indicatif TTC</div>
+            <div className="sk-label-muted" style={{ fontSize: '10px', color: c.texteMuted, marginBottom: '4px' }}>Prix indicatif TTC</div>
             <div style={{ fontSize: '18px', fontWeight: '500', color: '#6366F1' }}>{prixIndic} €</div>
           </div>
         )}

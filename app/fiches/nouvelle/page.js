@@ -296,7 +296,7 @@ export default function NouvelleFiche() {
 
         {/* Informations générales */}
         <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${isSousFiche ? '#AFA9EC' : c.bordure}`, marginBottom: '12px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Informations générales</div>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Informations générales</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom *</label>
@@ -389,7 +389,7 @@ export default function NouvelleFiche() {
 
         {/* Ingrédients */}
         <Card c={c} style={{ marginBottom: '12px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Ingrédients</div>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Ingrédients</div>
           {isMobile ? (
             <>
               {ingredients.map((ing, index) => (
@@ -449,7 +449,7 @@ export default function NouvelleFiche() {
 
         {/* Allergènes */}
         <Card c={c} style={{ marginBottom: '12px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Allergènes</div>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Allergènes</div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }}>
             {ALLERGENES.map(a => (
               <div key={a.id} onClick={() => toggleAllergene(a.id)}

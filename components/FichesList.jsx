@@ -166,12 +166,12 @@ export default function FichesList({ section = 'cuisine' }) {
         {/* KPIs */}
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(lieux.length + 1, 4)}, 1fr)`, gap: '12px', marginBottom: '24px' }}>
           <div style={{ background: c.blanc, borderRadius: '10px', padding: '16px', border: `0.5px solid ${c.bordure}` }}>
-            <div style={{ fontSize: '10px', color: c.texteMuted, textTransform: 'uppercase', marginBottom: '4px' }}>Total fiches</div>
+            <div className="sk-label-muted" style={{ fontSize: '10px', color: c.texteMuted, marginBottom: '4px' }}>Total fiches</div>
             <div style={{ fontSize: '24px', fontWeight: '500', color: c.texte }}>{fiches.length}</div>
           </div>
           {lieux.slice(0, 3).map(lieu => (
             <div key={lieu.id} style={{ background: c.blanc, borderRadius: '10px', padding: '16px', border: `0.5px solid ${c.bordure}` }}>
-              <div style={{ fontSize: '10px', color: c.texteMuted, textTransform: 'uppercase', marginBottom: '4px' }}>{lieu.emoji} {lieu.nom}</div>
+              <div className="sk-label-muted" style={{ fontSize: '10px', color: c.texteMuted, marginBottom: '4px' }}>{lieu.emoji} {lieu.nom}</div>
               <div style={{ fontSize: '24px', fontWeight: '500', color: c.texte }}>{fiches.filter(f => f.lieu_id === lieu.id).length}</div>
             </div>
           ))}

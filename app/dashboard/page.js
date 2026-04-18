@@ -145,25 +145,25 @@ export default function DashboardPage() {
           gap: isMobile ? '10px' : '16px', marginBottom: '24px'
         }}>
           <div style={{ background: foodCostMoyen ? fichesFCColor(foodCostMoyen).bg : c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
-            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Food cost moyen</div>
-            <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: foodCostMoyen ? fichesFCColor(foodCostMoyen).color : c.texte }}>
+            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>Food cost moyen</div>
+            <div className="sk-stat-value" style={{ fontSize: isMobile ? '28px' : '36px', color: foodCostMoyen ? fichesFCColor(foodCostMoyen).color : c.texte }}>
               {foodCostMoyen ? `${foodCostMoyen.toFixed(1)}%` : '—'}
             </div>
             <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Sur {fichesAvecFC.length} fiches</div>
           </div>
           <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}`, cursor: 'pointer' }} onClick={() => router.push('/fiches')}>
-            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Fiches actives</div>
-            <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: c.texte }}>{fiches.length}</div>
+            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>Fiches actives</div>
+            <div className="sk-stat-value" style={{ fontSize: isMobile ? '28px' : '36px', color: c.texte }}>{fiches.length}</div>
             <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>{menus.length} menu{menus.length > 1 ? 's' : ''}</div>
           </div>
           <div style={{ background: fichesAlerte.length > 0 ? '#FCEBEB' : '#EAF3DE', borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
-            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Fiches en alerte</div>
-            <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: fichesAlerte.length > 0 ? '#A32D2D' : '#3B6D11' }}>{fichesAlerte.length}</div>
+            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>Fiches en alerte</div>
+            <div className="sk-stat-value" style={{ fontSize: isMobile ? '28px' : '36px', color: fichesAlerte.length > 0 ? '#A32D2D' : '#3B6D11' }}>{fichesAlerte.length}</div>
             <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Food cost {'>'} {seuilOrange}%</div>
           </div>
           <div style={{ background: ingredientsPrixHausse.length > 0 ? '#FAEEDA' : c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
-            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', marginBottom: '8px' }}>Prix modifiés</div>
-            <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: '500', color: ingredientsPrixHausse.length > 0 ? '#854F0B' : c.texte }}>{ingredientsPrixHausse.length}</div>
+            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>Prix modifiés</div>
+            <div className="sk-stat-value" style={{ fontSize: isMobile ? '28px' : '36px', color: ingredientsPrixHausse.length > 0 ? '#854F0B' : c.texte }}>{ingredientsPrixHausse.length}</div>
             <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Ingrédients récents</div>
           </div>
         </div>
@@ -257,7 +257,7 @@ export default function DashboardPage() {
                           <td style={{ padding: '10px 16px', fontWeight: '500', color: c.texte }}>{ing.nom}</td>
                           <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texteMuted }}>{ing.prix_precedent ? `${Number(ing.prix_precedent).toFixed(2)} €` : '—'}</td>
                           <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texte }}>{ing.prix_kg ? `${Number(ing.prix_kg).toFixed(2)} €` : '—'}</td>
-                          <td style={{ padding: '10px 16px', textAlign: 'right' }}>
+                          <td className="sk-td sk-td--right">
                             {variation !== null && (
                               <Badge bg={hausse ? '#FCEBEB' : '#EAF3DE'} color={hausse ? '#A32D2D' : '#3B6D11'} size="sm">
                                 {hausse ? '+' : ''}{variation.toFixed(1)}%

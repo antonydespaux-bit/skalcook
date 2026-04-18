@@ -142,7 +142,7 @@ export default function BarIngredientsPage() {
 
         {ajoutVisible && peutModifier && (
           <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '20px', border: '0.5px solid #7F77DD', marginBottom: '16px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Nouvel ingrédient bar</div>
+            <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Nouvel ingrédient bar</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
                 <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom *</label>
@@ -309,7 +309,7 @@ export default function BarIngredientsPage() {
                     borderBottom: i < ingredientsFiltres.length - 1 ? `0.5px solid ${c.bordure}` : 'none',
                     background: selection.includes(ing.id) ? '#EEEDFE' : c.blanc
                   }}>
-                    <td style={{ padding: '10px 16px' }}>
+                    <td className="sk-td">
                       <input type="checkbox" checked={selection.includes(ing.id)}
                         onChange={() => toggleSelection(ing.id)}
                         style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#7F77DD' }}

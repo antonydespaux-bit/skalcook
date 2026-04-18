@@ -223,14 +223,14 @@ export default function LogsPage() {
                       onMouseLeave={e => e.currentTarget.style.background = c.blanc}
                     >
                       <td style={{ padding: '10px 16px', color: c.texteMuted, fontSize: '12px', whiteSpace: 'nowrap' }}>{formatDate(log.created_at)}</td>
-                      <td style={{ padding: '10px 16px' }}>
+                      <td className="sk-td">
                         <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>{log.user_nom}</div>
                         <div style={{ fontSize: '11px', color: c.texteMuted }}>{log.user_role}</div>
                       </td>
-                      <td style={{ padding: '10px 16px' }}>
+                      <td className="sk-td">
                         <Badge bg={ac.bg} color={ac.color}>{log.action}</Badge>
                       </td>
-                      <td style={{ padding: '10px 16px' }}>
+                      <td className="sk-td">
                         <Badge bg={sc.bg} color={sc.color}>{log.section}</Badge>
                       </td>
                       <td style={{ padding: '10px 16px', fontWeight: '500', color: c.texte }}>{log.entite_nom || '—'}</td>
