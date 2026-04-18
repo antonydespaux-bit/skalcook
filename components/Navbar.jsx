@@ -154,6 +154,15 @@ export default function Navbar({ section = 'cuisine' }) {
             ...(hasModule('avis')                      ? [{ label: 'Avis clients',    path: '/avis' }]         : []),
           ]
         },
+        ...((role === 'admin' || role === 'directeur') ? [{
+          label: 'CRM',
+          paths: ['/crm'],
+          items: [
+            { label: 'Dashboard',   path: '/crm' },
+            { label: 'Clients',     path: '/crm/clients' },
+            { label: 'Événements',  path: '/crm/evenements' },
+          ]
+        }] : []),
         ...(role === 'admin' ? [{
           label: 'Admin',
           paths: ['/parametres', '/admin', '/admin/logs', '/admin/ardoise'],

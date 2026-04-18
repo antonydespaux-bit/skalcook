@@ -1,5 +1,6 @@
 import './globals.css'
 import './landing.css'
+import './crm.css'
 import Script from 'next/script'
 import Providers from '../components/Providers'
 import AnalyticsWrapper from '../components/AnalyticsWrapper'
