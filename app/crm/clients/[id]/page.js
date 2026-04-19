@@ -9,7 +9,8 @@ import Navbar from '../../../../components/Navbar'
 import { Card, Button, Badge, Alert } from '../../../../components/ui'
 import ClientForm from '../../../../components/crm/ClientForm'
 import {
-  STATUTS_MAP, formatDateFr, formatMontant, clientDisplayName, hexToRgba,
+  STATUTS_MAP, ACTIVITY_TYPES_MAP, ACTIVITY_TYPES_MANUELS,
+  formatDateFr, formatDateTimeFr, formatMontant, clientDisplayName, hexToRgba,
 } from '../../../../lib/crmConstants'
 
 export default function CrmClientDetailPage() {
@@ -23,10 +24,14 @@ export default function CrmClientDetailPage() {
   const [clientId, setClientId] = useState(null)
   const [client, setClient] = useState(null)
   const [evenements, setEvenements] = useState([])
+  const [activities, setActivities] = useState([])
+  const [currentUserId, setCurrentUserId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [mode, setMode] = useState('view') // view | edit
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showActivityForm, setShowActivityForm] = useState(false)
+  const [activitySaving, setActivitySaving] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -53,17 +58,29 @@ export default function CrmClientDetailPage() {
     if (!cid) { setLoading(false); return }
     setClientId(cid)
 
-    const [{ data: cli, error: cErr }, { data: evts, error: eErr }] = await Promise.all([
+    const { data: { user } } = await supabase.auth.getUser()
+    setCurrentUserId(user?.id || null)
+
+    const [
+      { data: cli, error: cErr },
+      { data: evts, error: eErr },
+      { data: acts, error: aErr },
+    ] = await Promise.all([
       supabase.from('crm_clients').select('*').eq('id', id).eq('client_id', cid).maybeSingle(),
       supabase.from('crm_evenements')
         .select('id, titre, date_evenement, statut, type_prestation, nb_convives, montant_devis, montant_final, budget_estime, created_at')
         .eq('crm_client_id', id).eq('client_id', cid)
         .order('date_evenement', { ascending: false, nullsFirst: false }),
+      supabase.from('crm_client_activities')
+        .select('id, type, titre, description, occurred_at, crm_devis_id, crm_evenement_id, created_by, created_at')
+        .eq('crm_client_id', id)
+        .order('occurred_at', { ascending: false }),
     ])
 
-    if (cErr || eErr) { setError((cErr || eErr).message); setLoading(false); return }
+    if (cErr || eErr || aErr) { setError((cErr || eErr || aErr).message); setLoading(false); return }
     setClient(cli)
     setEvenements(evts || [])
+    setActivities(acts || [])
     setLoading(false)
   }, [id])
 
@@ -91,6 +108,35 @@ export default function CrmClientDetailPage() {
       .eq('client_id', clientId)
     if (err) { setError(err.message); return }
     router.push('/crm/clients')
+  }
+
+  async function handleAddActivity(values) {
+    setActivitySaving(true)
+    setError('')
+    const { error: err } = await supabase
+      .from('crm_client_activities')
+      .insert({
+        client_id: clientId,
+        crm_client_id: id,
+        type: values.type,
+        titre: values.titre.trim() || null,
+        description: values.description.trim() || null,
+        occurred_at: values.occurred_at ? new Date(values.occurred_at).toISOString() : new Date().toISOString(),
+        created_by: currentUserId,
+      })
+    setActivitySaving(false)
+    if (err) { setError(err.message); return }
+    setShowActivityForm(false)
+    await load()
+  }
+
+  async function handleDeleteActivity(activityId) {
+    const { error: err } = await supabase
+      .from('crm_client_activities')
+      .delete()
+      .eq('id', activityId)
+    if (err) { setError(err.message); return }
+    await load()
   }
 
   if (!authReady || roleLoading) {
@@ -189,6 +235,55 @@ export default function CrmClientDetailPage() {
               )}
             </Card>
 
+            {/* Historique des activités */}
+            <div className="crm-section">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                <h2 className="crm-section__title" style={{ color: c.texte, margin: 0 }}>
+                  Historique {activities.length > 0 && <span style={{ color: c.texteMuted, fontWeight: 400 }}>· {activities.length}</span>}
+                </h2>
+                {!showActivityForm && (
+                  <Button c={c} variant="ghost" size="sm" onClick={() => setShowActivityForm(true)}>
+                    + Ajouter une activité
+                  </Button>
+                )}
+              </div>
+
+              {showActivityForm && (
+                <ActivityForm
+                  c={c}
+                  saving={activitySaving}
+                  onSubmit={handleAddActivity}
+                  onCancel={() => setShowActivityForm(false)}
+                />
+              )}
+
+              {activities.length === 0 && !showActivityForm ? (
+                <div className="crm-empty" style={{ borderColor: c.bordure, background: c.blanc }}>
+                  <div className="crm-empty__title" style={{ color: c.texte }}>Aucune activité</div>
+                  <div className="crm-empty__text" style={{ color: c.texteMuted }}>
+                    Loguez vos appels, relances, rendez-vous — les envois de devis apparaissent automatiquement.
+                  </div>
+                  <Button c={c} onClick={() => setShowActivityForm(true)}>+ Ajouter une activité</Button>
+                </div>
+              ) : activities.length > 0 && (
+                <div className="crm-list">
+                  {activities.map((a) => (
+                    <ActivityRow
+                      key={a.id}
+                      c={c}
+                      activity={a}
+                      canDelete={a.created_by && a.created_by === currentUserId}
+                      onOpen={(act) => {
+                        if (act.crm_devis_id) router.push(`/crm/devis/${act.crm_devis_id}`)
+                        else if (act.crm_evenement_id) router.push(`/crm/evenements/${act.crm_evenement_id}`)
+                      }}
+                      onDelete={() => handleDeleteActivity(a.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Événements du client */}
             <div className="crm-section">
               <h2 className="crm-section__title" style={{ color: c.texte }}>
@@ -258,5 +353,127 @@ function Kv({ c, label, value }) {
       <div className="crm-kv__key" style={{ color: c.texteMuted }}>{label}</div>
       <div className="crm-kv__value" style={{ color: c.texte }}>{value || '—'}</div>
     </div>
+  )
+}
+
+function ActivityRow({ c, activity, canDelete, onOpen, onDelete }) {
+  const meta = ACTIVITY_TYPES_MAP[activity.type] || { label: activity.type, couleur: c.texteMuted, icon: '•' }
+  const clickable = !!(activity.crm_devis_id || activity.crm_evenement_id)
+  const handleClick = clickable ? () => onOpen(activity) : undefined
+
+  return (
+    <div
+      className="crm-row"
+      style={{ background: c.blanc, borderColor: c.bordure, color: c.texte, cursor: clickable ? 'pointer' : 'default', alignItems: 'flex-start' }}
+      onClick={handleClick}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick() } } : undefined}
+    >
+      <div style={{ display: 'flex', gap: 10, flex: 1, minWidth: 0 }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: hexToRgba(meta.couleur, 0.12), fontSize: 16,
+        }}>
+          {meta.icon}
+        </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div className="crm-row__primary" style={{ color: c.texte, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span>{activity.titre || meta.label}</span>
+            <Badge bg={hexToRgba(meta.couleur, 0.12)} color={meta.couleur} size="sm">
+              {meta.label}
+            </Badge>
+          </div>
+          {activity.description && (
+            <div className="crm-row__secondary" style={{ color: c.texteMuted, whiteSpace: 'pre-wrap' }}>
+              {activity.description}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="crm-row__meta" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ color: c.texteMuted, fontSize: 12, whiteSpace: 'nowrap' }}>
+          {formatDateTimeFr(activity.occurred_at)}
+        </span>
+        {canDelete && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onDelete() }}
+            title="Supprimer cette activité"
+            style={{ background: 'transparent', border: 'none', color: c.texteMuted, cursor: 'pointer', padding: 4, fontSize: 16, lineHeight: 1 }}
+          >
+            ×
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ActivityForm({ c, saving, onSubmit, onCancel }) {
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  const localInput = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
+
+  const [type, setType] = useState(ACTIVITY_TYPES_MANUELS[0]?.key || 'note')
+  const [titre, setTitre] = useState('')
+  const [description, setDescription] = useState('')
+  const [occurredAt, setOccurredAt] = useState(localInput)
+
+  const inputStyle = { background: c.blanc, borderColor: c.bordure, color: c.texte }
+  const labelStyle = { color: c.texte }
+
+  function submit(e) {
+    e.preventDefault()
+    onSubmit({ type, titre, description, occurred_at: occurredAt })
+  }
+
+  return (
+    <Card c={c} padding="md" style={{ marginBottom: 12 }}>
+      <form onSubmit={submit} className="crm-form" style={{ gap: 12 }}>
+        <div className="crm-form__grid crm-form__grid--2">
+          <div className="crm-field">
+            <label className="crm-field__label" style={labelStyle}>Type</label>
+            <select className="crm-field__select" style={inputStyle} value={type} onChange={(e) => setType(e.target.value)}>
+              {ACTIVITY_TYPES_MANUELS.map((t) => (
+                <option key={t.key} value={t.key}>{t.icon} {t.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="crm-field">
+            <label className="crm-field__label" style={labelStyle}>Date & heure</label>
+            <input
+              type="datetime-local"
+              className="crm-field__input" style={inputStyle}
+              value={occurredAt}
+              onChange={(e) => setOccurredAt(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="crm-field">
+          <label className="crm-field__label" style={labelStyle}>Titre (optionnel)</label>
+          <input
+            type="text" className="crm-field__input" style={inputStyle}
+            value={titre} onChange={(e) => setTitre(e.target.value)}
+            placeholder="Rappelé pour confirmer menu"
+          />
+        </div>
+        <div className="crm-field">
+          <label className="crm-field__label" style={labelStyle}>Description</label>
+          <textarea
+            className="crm-field__textarea" style={inputStyle}
+            value={description} onChange={(e) => setDescription(e.target.value)}
+            placeholder="Points discutés, engagements pris…"
+          />
+        </div>
+        <div className="crm-actions">
+          <Button c={c} variant="ghost" type="button" onClick={onCancel} disabled={saving}>Annuler</Button>
+          <Button c={c} type="submit" disabled={saving}>
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </Button>
+        </div>
+      </form>
+    </Card>
   )
 }
