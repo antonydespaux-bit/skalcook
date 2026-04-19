@@ -138,7 +138,7 @@ export const POST = apiHandler({
 
     // ─── 6. Enregistrer la révision (snapshot figé) ────────────────────
     const now = new Date().toISOString()
-    const { error: revErr } = await db
+    const { data: revRow, error: revErr } = await db
       .from('crm_devis_revisions')
       .insert({
         devis_id: devisId,
@@ -155,11 +155,33 @@ export const POST = apiHandler({
         pdf_url: path,
         created_by: user?.id || null,
       })
+      .select('id')
+      .single()
     if (revErr) {
       // La révision est l'historique — si l'insert échoue on n'empêche pas
       // la mise à jour du devis (l'email est parti, le PDF est uploadé),
       // mais on le log côté serveur.
       console.error('[devis/envoyer] revision insert failed:', revErr.message)
+    }
+
+    // ─── 6bis. Log activité client (timeline page client) ─────────────
+    if (devis.crm_client_id) {
+      const { error: actErr } = await db
+        .from('crm_client_activities')
+        .insert({
+          client_id: clientId,
+          crm_client_id: devis.crm_client_id,
+          type: 'devis_envoye',
+          titre: `Devis ${devis.numero} envoyé${nextVersion > 1 ? ` (V${nextVersion})` : ''}`,
+          description: `Montant ${Number(devis.total_ttc || 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} TTC → ${data.to}`,
+          occurred_at: now,
+          crm_devis_id: devisId,
+          crm_devis_revision_id: revRow?.id || null,
+          created_by: user?.id || null,
+        })
+      if (actErr) {
+        console.error('[devis/envoyer] activity insert failed:', actErr.message)
+      }
     }
 
     // ─── 7. Update devis (statut + tracking = pointeur vers la dernière rev) ─
