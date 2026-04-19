@@ -20,7 +20,24 @@ const bodySchema = z.object({
   message: z.string().max(5000).optional(),
 })
 
-const FROM = `Skalcook <${process.env.CONTACT_EMAIL || 'contact@skalcook.com'}>`
+const FROM_ADDRESS = process.env.CONTACT_EMAIL || 'contact@skalcook.com'
+const FALLBACK_FROM_NAME = 'Skalcook'
+
+// Construit l'en-tête From : "{Nom établissement} via Skalcook <contact@skalcook.com>"
+// L'adresse reste skalcook.com (domaine verifié chez Resend) mais le nom
+// affiché est celui du traiteur, pour que le client reconnaisse l'expéditeur.
+// Le replyTo pointe vers l'email du tenant, donc les réponses reviennent au
+// bon endroit.
+function buildFromHeader(tenantName) {
+  const base = (tenantName || '').trim()
+  // Caractères qui imposent d'entourer le display-name de guillemets (RFC 5322)
+  const needsQuoting = /[",<>@;:\\\[\]()]/.test(base)
+  const safe = base.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+  const displayName = base
+    ? (needsQuoting ? `"${safe} via ${FALLBACK_FROM_NAME}"` : `${base} via ${FALLBACK_FROM_NAME}`)
+    : FALLBACK_FROM_NAME
+  return `${displayName} <${FROM_ADDRESS}>`
+}
 
 export const POST = apiHandler({
   schema: bodySchema,
@@ -101,8 +118,11 @@ export const POST = apiHandler({
       </div>
     `
 
+    // Pour le FROM on préfère null à "Votre traiteur" si aucun nom n'est
+    // renseigné — dans ce cas on retombe sur "Skalcook" tout court.
+    const fromHeader = buildFromHeader(tenant?.nom_etablissement || tenant?.nom || null)
     const { error: emailErr } = await resend.emails.send({
-      from: FROM,
+      from: fromHeader,
       to: data.to,
       replyTo,
       subject: data.subject,
