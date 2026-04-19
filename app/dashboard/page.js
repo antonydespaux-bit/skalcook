@@ -20,6 +20,9 @@ import SectionFichesAlerte from '../../components/dashboard/widgets/SectionFiche
 import SectionFichesParEspace from '../../components/dashboard/widgets/SectionFichesParEspace'
 import SectionPrixModifies from '../../components/dashboard/widgets/SectionPrixModifies'
 import SectionAllergenes from '../../components/dashboard/widgets/SectionAllergenes'
+import KpiCaMtd from '../../components/dashboard/widgets/KpiCaMtd'
+import KpiMargeMtd from '../../components/dashboard/widgets/KpiMargeMtd'
+import SectionCrmEvenements from '../../components/dashboard/widgets/SectionCrmEvenements'
 import DashboardCustomizeModal from '../../components/dashboard/DashboardCustomizeModal'
 
 export default function DashboardPage() {
@@ -119,8 +122,12 @@ export default function DashboardPage() {
         return <SectionPrixModifies c={c} ingredientsPrixHausse={ingredientsPrixHausse} />
       case 'section-allergenes':
         return <SectionAllergenes c={c} fiches={fiches} lieux={lieux} params={params} />
-      // Widgets déclarés dans le catalog mais pas encore implémentés (étape 4) :
-      // kpi-ca-mtd, kpi-marge-mtd, section-crm-evenements
+      case 'kpi-ca-mtd':
+        return <KpiCaMtd c={c} isMobile={isMobile} />
+      case 'kpi-marge-mtd':
+        return <KpiMargeMtd c={c} isMobile={isMobile} />
+      case 'section-crm-evenements':
+        return <SectionCrmEvenements c={c} />
       default:
         return null
     }
