@@ -6,26 +6,29 @@ import { theme } from '../../lib/theme.jsx'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
-import { ALLERGENES } from '../../lib/allergenes'
 import { calculerFoodCost, foodCostColor, getSeuilsFromParams } from '../../lib/foodCost'
+import { getDashboardLayout, WIDGET_BY_ID } from '../../lib/dashboardPreferences'
 import Navbar from '../../components/Navbar'
 import InventaireBanner from '../../components/InventaireBanner'
-import * as XLSX from 'xlsx'
 import ChefLoader from '../../components/ChefLoader'
 import { Badge } from '../../components/ui'
+import KpiFoodCostMoyen from '../../components/dashboard/widgets/KpiFoodCostMoyen'
+import KpiFichesActives from '../../components/dashboard/widgets/KpiFichesActives'
+import KpiFichesAlerte from '../../components/dashboard/widgets/KpiFichesAlerte'
+import KpiPrixModifies from '../../components/dashboard/widgets/KpiPrixModifies'
+import SectionFichesAlerte from '../../components/dashboard/widgets/SectionFichesAlerte'
+import SectionFichesParEspace from '../../components/dashboard/widgets/SectionFichesParEspace'
+import SectionPrixModifies from '../../components/dashboard/widgets/SectionPrixModifies'
+import SectionAllergenes from '../../components/dashboard/widgets/SectionAllergenes'
 
 export default function DashboardPage() {
   const [fiches, setFiches] = useState([])
   const [menus, setMenus] = useState([])
   const [ingredientsPrixHausse, setIngredientsPrixHausse] = useState([])
   const [params, setParams] = useState({})
-  const [loading, setLoading] = useState(true)
-  const [filtreCategorie, setFiltreCategorie] = useState('toutes')
-  const [filtreSaison, setFiltreSaison] = useState('toutes')
-  const [filtreLieu, setFiltreLieu] = useState('tous')
   const [lieux, setLieux] = useState([])
-  const [isPrixExpanded, setIsPrixExpanded] = useState(false)
-  const [isAllergenesExpanded, setIsAllergenesExpanded] = useState(true)
+  const [layout, setLayout] = useState(null)
+  const [loading, setLoading] = useState(true)
   const router = useRouter()
   const isMobile = useIsMobile()
   const { c } = useTheme()
@@ -52,378 +55,146 @@ export default function DashboardPage() {
     if (!clientId) { setLoading(false); return }
     const p = await getParametres()
     setParams(p)
-    const { data: fichesData } = await supabase
-      .from('fiches').select('*').eq('client_id', clientId).neq('categorie', 'Sous-fiche').eq('archive', false)
-    const { data: lieuxData } = await supabase
-      .from('lieux').select('id, nom, emoji').eq('client_id', clientId).eq('section', 'cuisine').order('ordre')
-    const { data: menusData } = await supabase
-      .from('menus').select('*').eq('client_id', clientId).eq('archive', false)
-    const { data: prixData } = await supabase
-      .from('ingredients').select('*').eq('client_id', clientId)
-      .not('prix_precedent', 'is', null)
-      .order('prix_updated_at', { ascending: false })
-      .limit(20)
+    const [{ data: fichesData }, { data: lieuxData }, { data: menusData }, { data: prixData }, layoutData] = await Promise.all([
+      supabase.from('fiches').select('*').eq('client_id', clientId).neq('categorie', 'Sous-fiche').eq('archive', false),
+      supabase.from('lieux').select('id, nom, emoji').eq('client_id', clientId).eq('section', 'cuisine').order('ordre'),
+      supabase.from('menus').select('*').eq('client_id', clientId).eq('archive', false),
+      supabase.from('ingredients').select('*').eq('client_id', clientId)
+        .not('prix_precedent', 'is', null)
+        .order('prix_updated_at', { ascending: false })
+        .limit(20),
+      getDashboardLayout(),
+    ])
     setFiches(fichesData || [])
     setLieux(lieuxData || [])
     setMenus(menusData || [])
     setIngredientsPrixHausse(prixData || [])
+    setLayout(layoutData)
     setLoading(false)
   }
 
   const { seuilVert, seuilOrange, tva } = getSeuilsFromParams(params, 'cuisine')
   const foodCostFiche = (fiche) => calculerFoodCost(fiche.cout_portion, fiche.prix_ttc, tva)
 
-  const fichesAvecFC = fiches.filter(f => f.cout_portion && f.prix_ttc)
+  const fichesAvecFC = fiches.filter((f) => f.cout_portion && f.prix_ttc)
   const foodCostMoyen = fichesAvecFC.length > 0
     ? fichesAvecFC.reduce((sum, f) => sum + foodCostFiche(f), 0) / fichesAvecFC.length
     : null
 
   const fichesAlerte = fiches
-    .filter(f => { const fc = foodCostFiche(f); return fc && fc > seuilOrange })
+    .filter((f) => { const fc = foodCostFiche(f); return fc && fc > seuilOrange })
     .sort((a, b) => foodCostFiche(b) - foodCostFiche(a))
 
   const fichesFCColor = (fc) => foodCostColor(fc, seuilVert, seuilOrange)
 
-  const fichesByCategorie = theme.categories.map(cat => ({
-    cat, nb: fiches.filter(f => f.categorie === cat).length
-  })).filter(c => c.nb > 0)
+  const fichesByCategorie = theme.categories.map((cat) => ({
+    cat, nb: fiches.filter((f) => f.categorie === cat).length,
+  })).filter((item) => item.nb > 0)
 
-  const maxFiches = Math.max(...fichesByCategorie.map(c => c.nb), 1)
+  const maxFiches = Math.max(...fichesByCategorie.map((item) => item.nb), 1)
 
-  const fichesAvecAllergenes = fiches.filter(f => f.allergenes && f.allergenes.length > 0)
-  const fichesFiltreesAllergenes = fichesAvecAllergenes
-    .filter(f => filtreCategorie === 'toutes' || f.categorie === filtreCategorie)
-    .filter(f => filtreSaison === 'toutes' || f.saison === filtreSaison)
-    .filter(f => filtreLieu === 'tous' || f.lieu_id === filtreLieu)
-
-  const exportAllergenesExcel = () => {
-    const wb = XLSX.utils.book_new()
-    const rows = fichesFiltreesAllergenes.map(f => {
-      const row = { 'Fiche': f.nom, 'Catégorie': f.categorie || '—', 'Saison': f.saison || '—' }
-      ALLERGENES.forEach(a => { row[`${a.emoji} ${a.label}`] = f.allergenes?.includes(a.id) ? '✓' : '' })
-      return row
-    })
-    const ws = XLSX.utils.json_to_sheet(rows)
-    XLSX.utils.book_append_sheet(wb, ws, 'Allergènes')
-    XLSX.writeFile(wb, `allergenes_la_fantaisie_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.xlsx`)
-  }
-
-  if (loading || roleLoading) return (
+  if (loading || roleLoading || !layout) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
       <ChefLoader />
     </div>
   )
 
-  const today = new Date().toLocaleDateString('fr-FR')
+  const renderWidget = (id) => {
+    switch (id) {
+      case 'kpi-food-cost-moyen':
+        return <KpiFoodCostMoyen c={c} isMobile={isMobile} foodCostMoyen={foodCostMoyen} nbFiches={fichesAvecFC.length} fichesFCColor={fichesFCColor} />
+      case 'kpi-fiches-actives':
+        return <KpiFichesActives c={c} isMobile={isMobile} nbFiches={fiches.length} nbMenus={menus.length} onClick={() => router.push('/fiches')} />
+      case 'kpi-fiches-alerte':
+        return <KpiFichesAlerte c={c} isMobile={isMobile} nbAlertes={fichesAlerte.length} seuilOrange={seuilOrange} />
+      case 'kpi-prix-modifies':
+        return <KpiPrixModifies c={c} isMobile={isMobile} nbPrix={ingredientsPrixHausse.length} />
+      case 'section-fiches-alerte':
+        return <SectionFichesAlerte c={c} fichesAlerte={fichesAlerte} foodCostFiche={foodCostFiche} seuilOrange={seuilOrange} onFicheClick={(id) => router.push(`/fiches/${id}`)} />
+      case 'section-fiches-par-espace':
+        return <SectionFichesParEspace c={c} fichesByCategorie={fichesByCategorie} maxFiches={maxFiches} />
+      case 'section-prix-modifies':
+        return <SectionPrixModifies c={c} ingredientsPrixHausse={ingredientsPrixHausse} />
+      case 'section-allergenes':
+        return <SectionAllergenes c={c} fiches={fiches} lieux={lieux} params={params} />
+      // Widgets déclarés dans le catalog mais pas encore implémentés (étape 4) :
+      // kpi-ca-mtd, kpi-marge-mtd, section-crm-evenements
+      default:
+        return null
+    }
+  }
+
+  const visibleLayout = layout.filter((l) => l.visible && WIDGET_BY_ID[l.id])
+  const kpiLayout = visibleLayout.filter((l) => WIDGET_BY_ID[l.id].size === 'kpi')
+  const sectionLayout = visibleLayout.filter((l) => WIDGET_BY_ID[l.id].size !== 'kpi')
+
+  const kpiCols = isMobile ? 2 : Math.min(Math.max(kpiLayout.length, 1), 4)
+
+  // Grouper les sections en lignes : deux 'half' consécutives s'associent,
+  // sinon chaque widget prend toute la largeur.
+  const sectionRows = []
+  let i = 0
+  while (i < sectionLayout.length) {
+    const current = sectionLayout[i]
+    const next = sectionLayout[i + 1]
+    const currentSize = WIDGET_BY_ID[current.id].size
+    const nextSize = next ? WIDGET_BY_ID[next.id].size : null
+    if (currentSize === 'half' && nextSize === 'half') {
+      sectionRows.push([current, next])
+      i += 2
+    } else {
+      sectionRows.push([current])
+      i += 1
+    }
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-
       <Navbar section="cuisine" />
       <InventaireBanner />
 
-      {/* Vue écran */}
       <div className="no-print" style={{ padding: isMobile ? '12px' : '24px', maxWidth: '1100px', margin: '0 auto' }}>
-
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div style={{ fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '500' }}>
             Tableau de bord Cuisine — {params['nom_etablissement'] || 'La Fantaisie'}
           </div>
           {nom && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '12px', color: c.texteMuted }}>Bonjour, <strong style={{ color: c.texte }}>{nom}</strong></span>
-              <Badge bg={role === 'admin' ? '#F0E8E0' : role === 'cuisine' ? '#EAF3DE' : '#FAEEDA'} color={role === 'admin' ? '#2C1810' : role === 'cuisine' ? '#3B6D11' : '#854F0B'}>
+              <span style={{ fontSize: '12px', color: c.texteMuted }}>
+                Bonjour, <strong style={{ color: c.texte }}>{nom}</strong>
+              </span>
+              <Badge
+                bg={role === 'admin' ? '#F0E8E0' : role === 'cuisine' ? '#EAF3DE' : '#FAEEDA'}
+                color={role === 'admin' ? '#2C1810' : role === 'cuisine' ? '#3B6D11' : '#854F0B'}
+              >
                 {role === 'admin' ? 'Administrateur' : role === 'cuisine' ? 'Cuisine' : 'Directeur'}
               </Badge>
             </div>
           )}
         </div>
 
-        {/* KPIs */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
-          gap: isMobile ? '10px' : '16px', marginBottom: '24px'
-        }}>
-          <div style={{ background: foodCostMoyen ? fichesFCColor(foodCostMoyen).bg : c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
-            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>Food cost moyen</div>
-            <div className="sk-stat-value" style={{ fontSize: isMobile ? '28px' : '36px', color: foodCostMoyen ? fichesFCColor(foodCostMoyen).color : c.texte }}>
-              {foodCostMoyen ? `${foodCostMoyen.toFixed(1)}%` : '—'}
-            </div>
-            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Sur {fichesAvecFC.length} fiches</div>
-          </div>
-          <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}`, cursor: 'pointer' }} onClick={() => router.push('/fiches')}>
-            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>Fiches actives</div>
-            <div className="sk-stat-value" style={{ fontSize: isMobile ? '28px' : '36px', color: c.texte }}>{fiches.length}</div>
-            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>{menus.length} menu{menus.length > 1 ? 's' : ''}</div>
-          </div>
-          <div style={{ background: fichesAlerte.length > 0 ? '#FCEBEB' : '#EAF3DE', borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
-            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>Fiches en alerte</div>
-            <div className="sk-stat-value" style={{ fontSize: isMobile ? '28px' : '36px', color: fichesAlerte.length > 0 ? '#A32D2D' : '#3B6D11' }}>{fichesAlerte.length}</div>
-            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Food cost {'>'} {seuilOrange}%</div>
-          </div>
-          <div style={{ background: ingredientsPrixHausse.length > 0 ? '#FAEEDA' : c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
-            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>Prix modifiés</div>
-            <div className="sk-stat-value" style={{ fontSize: isMobile ? '28px' : '36px', color: ingredientsPrixHausse.length > 0 ? '#854F0B' : c.texte }}>{ingredientsPrixHausse.length}</div>
-            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Ingrédients récents</div>
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? '12px' : '16px', marginBottom: '16px' }}>
-          <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
-            <div style={{ padding: '16px 20px', borderBottom: `0.5px solid ${c.bordure}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>🚨 Fiches en alerte</div>
-              <span style={{ fontSize: '11px', color: c.texteMuted }}>Food cost {'>'} {seuilOrange}%</span>
-            </div>
-            {fichesAlerte.length === 0 ? (
-              <div style={{ padding: '24px', textAlign: 'center', color: c.texteMuted, fontSize: '13px' }}>✓ Aucune fiche en alerte</div>
-            ) : (
-              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                {fichesAlerte.slice(0, 10).map((fiche, i) => {
-                  const fc = foodCostFiche(fiche)
-                  return (
-                    <div key={fiche.id} onClick={() => router.push(`/fiches/${fiche.id}`)}
-                      style={{ padding: '12px 20px', cursor: 'pointer', borderBottom: i < fichesAlerte.length - 1 ? `0.5px solid ${c.bordure}` : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: c.blanc }}
-                      onMouseEnter={e => e.currentTarget.style.background = c.fond}
-                      onMouseLeave={e => e.currentTarget.style.background = c.blanc}
-                    >
-                      <div>
-                        <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>{fiche.nom}</div>
-                        <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '2px' }}>{fiche.categorie}</div>
-                      </div>
-                      <Badge bg={'#FCEBEB'} color={'#A32D2D'}>{fc.toFixed(1)}%</Badge>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-          <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
-            <div style={{ padding: '16px 20px', borderBottom: `0.5px solid ${c.bordure}` }}>
-              <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>📊 Fiches par espace</div>
-            </div>
-            <div style={{ padding: '16px 20px' }}>
-              {fichesByCategorie.map(({ cat, nb }) => (
-                <div key={cat} style={{ marginBottom: '10px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '12px', color: c.texte, fontWeight: '500' }}>{cat}</span>
-                    <span style={{ fontSize: '12px', color: c.texteMuted }}>{nb}</span>
-                  </div>
-                  <div style={{ background: c.fond, borderRadius: '20px', height: '6px', overflow: 'hidden' }}>
-                    <div style={{ background: c.accent, height: '100%', borderRadius: '20px', width: `${(nb / maxFiches) * 100}%`, transition: 'width 0.5s ease' }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* SECTION PRIX MODIFIÉS RÉTRACTABLE */}
-        {ingredientsPrixHausse.length > 0 && (
-          <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden', marginBottom: '16px' }}>
-            <div onClick={() => setIsPrixExpanded(!isPrixExpanded)} style={{
-              padding: '16px 20px',
-              borderBottom: isPrixExpanded ? `0.5px solid ${c.bordure}` : 'none',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              cursor: 'pointer',
-              background: isPrixExpanded ? c.fond + '40' : c.blanc,
-              transition: 'background 0.2s ease'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>📈 Ingrédients avec prix modifiés récemment</div>
-                <Badge bg={'#FAEEDA'} color={'#854F0B'} size="sm">
-                  {ingredientsPrixHausse.length} alertes
-                </Badge>
-              </div>
-              <div style={{ fontSize: '16px', color: c.texteMuted, fontWeight: '300' }}>
-                {isPrixExpanded ? '− Masquer' : '+ Développer'}
-              </div>
-            </div>
-            {isPrixExpanded && (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ background: c.fond }}>
-                      {['Ingrédient', 'Ancien prix', 'Nouveau prix', 'Variation', 'Date'].map((h, i) => (
-                        <th key={h} style={{ padding: '10px 16px', textAlign: i === 0 ? 'left' : 'right', fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', borderBottom: `0.5px solid ${c.bordure}` }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ingredientsPrixHausse.map((ing, i) => {
-                      const variation = ing.prix_precedent && ing.prix_kg ? ((ing.prix_kg - ing.prix_precedent) / ing.prix_precedent * 100) : null
-                      const hausse = variation > 0
-                      return (
-                        <tr key={ing.id} style={{ borderBottom: i < ingredientsPrixHausse.length - 1 ? `0.5px solid ${c.bordure}` : 'none', background: c.blanc }}>
-                          <td style={{ padding: '10px 16px', fontWeight: '500', color: c.texte }}>{ing.nom}</td>
-                          <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texteMuted }}>{ing.prix_precedent ? `${Number(ing.prix_precedent).toFixed(2)} €` : '—'}</td>
-                          <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texte }}>{ing.prix_kg ? `${Number(ing.prix_kg).toFixed(2)} €` : '—'}</td>
-                          <td className="sk-td sk-td--right">
-                            {variation !== null && (
-                              <Badge bg={hausse ? '#FCEBEB' : '#EAF3DE'} color={hausse ? '#A32D2D' : '#3B6D11'} size="sm">
-                                {hausse ? '+' : ''}{variation.toFixed(1)}%
-                              </Badge>
-                            )}
-                          </td>
-                          <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texteMuted, fontSize: '12px' }}>
-                            {ing.prix_updated_at ? new Date(ing.prix_updated_at).toLocaleDateString('fr-FR') : '—'}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+        {kpiLayout.length > 0 && (
+          <div style={{
+            display: 'grid', gridTemplateColumns: `repeat(${kpiCols}, 1fr)`,
+            gap: isMobile ? '10px' : '16px', marginBottom: '24px',
+          }}>
+            {kpiLayout.map((l) => <div key={l.id}>{renderWidget(l.id)}</div>)}
           </div>
         )}
 
-        {/* Tableau allergènes */}
-        <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: isAllergenesExpanded ? `0.5px solid ${c.bordure}` : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', background: isAllergenesExpanded ? c.fond + '40' : c.blanc, transition: 'background 0.2s ease' }}>
-            <div
-              onClick={() => setIsAllergenesExpanded(!isAllergenesExpanded)}
-              style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
-            >
-              <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>⚠️ Tableau des allergènes</div>
-              <Badge bg={'#FCEBEB'} color={'#A32D2D'} size="sm">
-                {fichesAvecAllergenes.length} fiche{fichesAvecAllergenes.length > 1 ? 's' : ''}
-              </Badge>
-            </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-              {isAllergenesExpanded && (
-                <>
-                  <select value={filtreCategorie} onChange={e => setFiltreCategorie(e.target.value)} style={{
-                    padding: '6px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
-                    fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer'
-                  }}>
-                    <option value="toutes">Toutes les catégories</option>
-                    {theme.categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
-                  <select value={filtreSaison} onChange={e => setFiltreSaison(e.target.value)} style={{
-                    padding: '6px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
-                    fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer'
-                  }}>
-                    <option value="toutes">Toutes les saisons</option>
-                    {theme.saisons.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                  {lieux.length > 0 && (
-                    <select value={filtreLieu} onChange={e => setFiltreLieu(e.target.value)} style={{
-                      padding: '6px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
-                      fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer'
-                    }}>
-                      <option value="tous">Tous les lieux</option>
-                      {lieux.map(l => <option key={l.id} value={l.id}>{l.emoji ? `${l.emoji} ${l.nom}` : l.nom}</option>)}
-                    </select>
-                  )}
-                  <button onClick={exportAllergenesExcel} style={{ padding: '6px 12px', background: c.vert, color: 'white', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>📊 Excel</button>
-                  <button onClick={() => window.print()} style={{ padding: '6px 12px', background: c.accent, color: c.principal, border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>🖨️ Imprimer</button>
-                </>
-              )}
-              <div
-                onClick={() => setIsAllergenesExpanded(!isAllergenesExpanded)}
-                style={{ fontSize: '16px', color: c.texteMuted, fontWeight: '300', cursor: 'pointer' }}
-              >
-                {isAllergenesExpanded ? '− Masquer' : '+ Développer'}
-              </div>
-            </div>
+        {sectionRows.map((row, idx) => (
+          <div
+            key={row.map((r) => r.id).join('|')}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile || row.length === 1 ? '1fr' : '1fr 1fr',
+              gap: isMobile ? '12px' : '16px',
+              marginBottom: idx < sectionRows.length - 1 ? (isMobile ? '12px' : '16px') : 0,
+            }}
+          >
+            {row.map((l) => <div key={l.id}>{renderWidget(l.id)}</div>)}
           </div>
-          {isAllergenesExpanded && (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '900px' }}>
-              <thead>
-                <tr style={{ background: c.principal }}>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase', position: 'sticky', left: 0, background: c.principal, zIndex: 1, minWidth: '160px' }}>
-                    Fiche / Catégorie
-                  </th>
-                  {ALLERGENES.map(a => (
-                    <th key={a.id} style={{ padding: '8px 4px', textAlign: 'center', fontSize: '10px', color: c.accent, fontWeight: '500', minWidth: '52px' }}>
-                      <div style={{ fontSize: '14px' }}>{a.emoji}</div>
-                      <div style={{ fontSize: '8px', textTransform: 'uppercase', letterSpacing: '0.5px', lineHeight: '1.2', marginTop: '2px' }}>{a.label}</div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {fichesFiltreesAllergenes.map((fiche, i) => (
-                  <tr key={fiche.id} style={{ borderBottom: `0.5px solid ${c.bordure}`, background: i % 2 === 0 ? c.blanc : c.fond }}>
-                    <td style={{ padding: '10px 12px', position: 'sticky', left: 0, background: i % 2 === 0 ? c.blanc : c.fond, zIndex: 1 }}>
-                      <div style={{ fontWeight: '500', color: c.texte, fontSize: '13px' }}>{fiche.nom}</div>
-                      <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '2px' }}>{fiche.categorie}</div>
-                    </td>
-                    {ALLERGENES.map(a => (
-                      <td key={a.id} style={{ padding: '8px 4px', textAlign: 'center' }}>
-                        {fiche.allergenes?.includes(a.id) ? (
-                          <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: '#FCEBEB', border: '1.5px solid #A32D2D', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', fontSize: '10px', color: '#A32D2D', fontWeight: '700' }}>✓</div>
-                        ) : (
-                          <div style={{ width: '20px', height: '20px', margin: '0 auto', opacity: 0.15, fontSize: '12px', textAlign: 'center', color: c.bordure }}>—</div>
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-                {fichesFiltreesAllergenes.length === 0 && (
-                  <tr>
-                    <td colSpan={ALLERGENES.length + 1} style={{ padding: '30px', textAlign: 'center', color: c.texteMuted, fontSize: '13px' }}>
-                      Aucune fiche avec allergènes
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          )}
-        </div>
-      </div>
-
-      {/* Version impression */}
-      <div className="print-only dashboard-allergenes-print" style={{ fontFamily: 'sans-serif', color: '#1a1a1a', background: 'white', padding: '0' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #2C1810', paddingBottom: '12px', marginBottom: '16px' }}>
-          <div>
-            <div style={{ fontSize: '8px', letterSpacing: '3px', textTransform: 'uppercase', color: '#8B7355', marginBottom: '4px' }}>Tableau des allergènes — Fiches actives</div>
-            <div style={{ fontSize: '18px', fontWeight: '600', color: '#2C1810', fontFamily: 'Georgia, serif' }}>{params['nom_etablissement'] || 'La Fantaisie'}</div>
-            <div style={{ fontSize: '9px', color: '#8B7355', marginTop: '2px' }}>Imprimé le {today} — {fichesFiltreesAllergenes.length} fiche{fichesFiltreesAllergenes.length > 1 ? 's' : ''}</div>
-          </div>
-          <img
-            src={params['logo_url'] || '/skalcook_logo.svg'}
-            alt={params['nom_etablissement'] || 'Skalcook'}
-            style={{ height: '60px', objectFit: 'contain' }}
-          />
-        </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px', tableLayout: 'fixed' }}>
-          <thead>
-            <tr style={{ background: '#2C1810' }}>
-              <th style={{ padding: '6px 8px', textAlign: 'left', color: '#C4956A', fontWeight: '600', fontSize: '9px', textTransform: 'uppercase', width: '140px', wordWrap: 'break-word' }}>Fiche</th>
-              {ALLERGENES.map(a => (
-                <th key={a.id} style={{ padding: '4px 2px', textAlign: 'center', color: '#C4956A', fontWeight: '600', fontSize: '7px', textTransform: 'uppercase', lineHeight: '1.2' }}>
-                  <div style={{ fontSize: '10px' }}>{a.emoji}</div>
-                  <div style={{ fontSize: '6px', marginTop: '1px' }}>{a.label.replace('Céréales/Gluten', 'Gluten').replace('Graines de sésame', 'Sésame').replace('Anhydride sulfureux', 'Sulfites').replace('Fruits à coque', 'F. à coque')}</div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {fichesFiltreesAllergenes.map((fiche, i) => (
-              <tr key={fiche.id} style={{ background: i % 2 === 0 ? 'white' : '#FAF9F6', borderBottom: '0.5px solid #e8e4dc' }}>
-                <td style={{ padding: '5px 8px', fontWeight: '500', color: '#2C1810', fontSize: '9px', wordWrap: 'break-word' }}>
-                  {fiche.nom}
-                  <div style={{ fontSize: '7px', color: '#8B7355', marginTop: '1px' }}>{fiche.categorie}</div>
-                </td>
-                {ALLERGENES.map(a => (
-                  <td key={a.id} style={{ padding: '4px 2px', textAlign: 'center' }}>
-                    {fiche.allergenes?.includes(a.id) ? (
-                      <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: '#FCEBEB', border: '1px solid #A32D2D', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', fontSize: '8px', color: '#A32D2D', fontWeight: '700' }}>✓</div>
-                    ) : (
-                      <div style={{ color: '#ddd', fontSize: '8px', textAlign: 'center' }}>·</div>
-                    )}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div style={{ marginTop: '10px', borderTop: '1px solid #e8e4dc', paddingTop: '8px', fontSize: '7px', color: '#8B7355' }}>
-          <strong>Allergènes :</strong> {ALLERGENES.map(a => `${a.emoji} ${a.label}`).join(' — ')}
-        </div>
+        ))}
       </div>
     </div>
   )
