@@ -9,7 +9,7 @@ import Navbar from '../../../../components/Navbar'
 import { Card, Button, Badge, Alert } from '../../../../components/ui'
 import ClientForm from '../../../../components/crm/ClientForm'
 import {
-  STATUTS_MAP, ACTIVITY_TYPES_MAP, ACTIVITY_TYPES_MANUELS,
+  STATUTS_MAP, STATUTS_DEVIS_MAP, ACTIVITY_TYPES_MAP, ACTIVITY_TYPES_MANUELS,
   formatDateFr, formatDateTimeFr, formatMontant, clientDisplayName, hexToRgba,
 } from '../../../../lib/crmConstants'
 
@@ -24,6 +24,7 @@ export default function CrmClientDetailPage() {
   const [clientId, setClientId] = useState(null)
   const [client, setClient] = useState(null)
   const [evenements, setEvenements] = useState([])
+  const [devis, setDevis] = useState([])
   const [activities, setActivities] = useState([])
   const [currentUserId, setCurrentUserId] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -64,6 +65,7 @@ export default function CrmClientDetailPage() {
     const [
       { data: cli, error: cErr },
       { data: evts, error: eErr },
+      { data: devs, error: dErr },
       { data: acts, error: aErr },
     ] = await Promise.all([
       supabase.from('crm_clients').select('*').eq('id', id).eq('client_id', cid).maybeSingle(),
@@ -71,15 +73,20 @@ export default function CrmClientDetailPage() {
         .select('id, titre, date_evenement, statut, type_prestation, nb_convives, montant_devis, montant_final, budget_estime, created_at')
         .eq('crm_client_id', id).eq('client_id', cid)
         .order('date_evenement', { ascending: false, nullsFirst: false }),
+      supabase.from('crm_devis')
+        .select('id, numero, crm_evenement_id, statut, date_emission, date_validite, total_ttc, sent_at, sent_to_email')
+        .eq('crm_client_id', id).eq('client_id', cid)
+        .order('date_emission', { ascending: false }),
       supabase.from('crm_client_activities')
         .select('id, type, titre, description, occurred_at, crm_devis_id, crm_evenement_id, created_by, created_at')
         .eq('crm_client_id', id)
         .order('occurred_at', { ascending: false }),
     ])
 
-    if (cErr || eErr || aErr) { setError((cErr || eErr || aErr).message); setLoading(false); return }
+    if (cErr || eErr || dErr || aErr) { setError((cErr || eErr || dErr || aErr).message); setLoading(false); return }
     setClient(cli)
     setEvenements(evts || [])
+    setDevis(devs || [])
     setActivities(acts || [])
     setLoading(false)
   }, [id])
@@ -280,6 +287,57 @@ export default function CrmClientDetailPage() {
                       onDelete={() => handleDeleteActivity(a.id)}
                     />
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* Devis du client */}
+            <div className="crm-section">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                <h2 className="crm-section__title" style={{ color: c.texte, margin: 0 }}>
+                  Devis {devis.length > 0 && <span style={{ color: c.texteMuted, fontWeight: 400 }}>· {devis.length}</span>}
+                </h2>
+                <Button c={c} variant="ghost" size="sm" onClick={() => router.push(`/crm/devis/nouveau?client_id=${client.id}`)}>
+                  + Nouveau devis
+                </Button>
+              </div>
+              {devis.length === 0 ? (
+                <div className="crm-empty" style={{ borderColor: c.bordure, background: c.blanc }}>
+                  <div className="crm-empty__title" style={{ color: c.texte }}>Aucun devis</div>
+                  <div className="crm-empty__text" style={{ color: c.texteMuted }}>
+                    Composez un premier devis pour ce client depuis vos fiches techniques.
+                  </div>
+                  <Button c={c} onClick={() => router.push(`/crm/devis/nouveau?client_id=${client.id}`)}>+ Nouveau devis</Button>
+                </div>
+              ) : (
+                <div className="crm-list">
+                  {devis.map((d) => {
+                    const st = STATUTS_DEVIS_MAP[d.statut]
+                    return (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => router.push(`/crm/devis/${d.id}`)}
+                        className="crm-row"
+                        style={{ background: c.blanc, borderColor: c.bordure, color: c.texte }}
+                      >
+                        <div>
+                          <div className="crm-row__primary" style={{ color: c.texte }}>{d.numero}</div>
+                          <div className="crm-row__secondary" style={{ color: c.texteMuted }}>
+                            {formatDateFr(d.date_emission)}
+                            {d.sent_at && ` · Envoyé le ${formatDateFr(d.sent_at)}`}
+                            {d.sent_to_email && ` à ${d.sent_to_email}`}
+                          </div>
+                        </div>
+                        <div className="crm-row__secondary" style={{ color: c.texteMuted }}>
+                          {formatMontant(d.total_ttc)} TTC
+                        </div>
+                        <div className="crm-row__meta">
+                          {st && <Badge bg={hexToRgba(st.couleur, 0.12)} color={st.couleur} size="sm">{st.label}</Badge>}
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>
