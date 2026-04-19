@@ -20,6 +20,7 @@ import SectionFichesAlerte from '../../components/dashboard/widgets/SectionFiche
 import SectionFichesParEspace from '../../components/dashboard/widgets/SectionFichesParEspace'
 import SectionPrixModifies from '../../components/dashboard/widgets/SectionPrixModifies'
 import SectionAllergenes from '../../components/dashboard/widgets/SectionAllergenes'
+import DashboardCustomizeModal from '../../components/dashboard/DashboardCustomizeModal'
 
 export default function DashboardPage() {
   const [fiches, setFiches] = useState([])
@@ -28,6 +29,7 @@ export default function DashboardPage() {
   const [params, setParams] = useState({})
   const [lieux, setLieux] = useState([])
   const [layout, setLayout] = useState(null)
+  const [showCustomize, setShowCustomize] = useState(false)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const isMobile = useIsMobile()
@@ -158,19 +160,32 @@ export default function DashboardPage() {
           <div style={{ fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '500' }}>
             Tableau de bord Cuisine — {params['nom_etablissement'] || 'La Fantaisie'}
           </div>
-          {nom && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '12px', color: c.texteMuted }}>
-                Bonjour, <strong style={{ color: c.texte }}>{nom}</strong>
-              </span>
-              <Badge
-                bg={role === 'admin' ? '#F0E8E0' : role === 'cuisine' ? '#EAF3DE' : '#FAEEDA'}
-                color={role === 'admin' ? '#2C1810' : role === 'cuisine' ? '#3B6D11' : '#854F0B'}
-              >
-                {role === 'admin' ? 'Administrateur' : role === 'cuisine' ? 'Cuisine' : 'Directeur'}
-              </Badge>
-            </div>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {nom && (
+              <>
+                <span style={{ fontSize: '12px', color: c.texteMuted }}>
+                  Bonjour, <strong style={{ color: c.texte }}>{nom}</strong>
+                </span>
+                <Badge
+                  bg={role === 'admin' ? '#F0E8E0' : role === 'cuisine' ? '#EAF3DE' : '#FAEEDA'}
+                  color={role === 'admin' ? '#2C1810' : role === 'cuisine' ? '#3B6D11' : '#854F0B'}
+                >
+                  {role === 'admin' ? 'Administrateur' : role === 'cuisine' ? 'Cuisine' : 'Directeur'}
+                </Badge>
+              </>
+            )}
+            <button
+              onClick={() => setShowCustomize(true)}
+              title="Personnaliser mon tableau de bord"
+              style={{
+                background: 'transparent', border: `0.5px solid ${c.bordure}`, color: c.texteMuted,
+                borderRadius: '8px', padding: '4px 10px', fontSize: '12px',
+                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px',
+              }}
+            >
+              ⚙{isMobile ? '' : ' Personnaliser'}
+            </button>
+          </div>
         </div>
 
         {kpiLayout.length > 0 && (
@@ -180,6 +195,18 @@ export default function DashboardPage() {
           }}>
             {kpiLayout.map((l) => <div key={l.id}>{renderWidget(l.id)}</div>)}
           </div>
+        )}
+
+        {showCustomize && (
+          <DashboardCustomizeModal
+            c={c}
+            initialLayout={layout}
+            onClose={() => setShowCustomize(false)}
+            onSaved={(next) => {
+              setLayout(next)
+              setShowCustomize(false)
+            }}
+          />
         )}
 
         {sectionRows.map((row, idx) => (
