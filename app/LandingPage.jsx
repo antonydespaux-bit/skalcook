@@ -20,9 +20,18 @@ function usePasswordLinkRedirect() {
     const hasHashToken = /(^|[#&])access_token=/.test(hash)
     const hasHashType = /(^|[#&])type=(recovery|invite|signup|magiclink)/.test(hash)
     const hasCode = /(^|[?&])code=/.test(search)
+    // Supabase renvoie aussi les erreurs (otp_expired, access_denied…) dans
+    // le hash. On redirige pareil pour afficher un message propre au lieu
+    // de laisser l'utilisateur bloqué sur la landing.
+    const hasHashError = /(^|[#&])error(_code|_description)?=/.test(hash)
+    const hasQueryError = /(^|[?&])error(_code|_description)?=/.test(search)
     if (hasHashToken && hasHashType) {
       window.location.replace(`/nouveau-mot-de-passe${hash}`)
     } else if (hasCode) {
+      window.location.replace(`/nouveau-mot-de-passe${search}`)
+    } else if (hasHashError) {
+      window.location.replace(`/nouveau-mot-de-passe${hash}`)
+    } else if (hasQueryError) {
       window.location.replace(`/nouveau-mot-de-passe${search}`)
     }
   }, [])

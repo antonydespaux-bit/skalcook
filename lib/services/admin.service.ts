@@ -192,22 +192,31 @@ export async function inviteAdmin(db: SupabaseClient, email: string, nom: string
     redirectTo,
     data: { nom, client_id: clientId },
   })
-  if (authErr) throw new Error(authErr.message)
+  if (authErr) {
+    const msg = authErr.message || ''
+    if (/already|exist|registered/i.test(msg)) {
+      throw new ConflictError('Un compte existe déjà avec cet email. Demandez à l\'utilisateur de se connecter, ou utilisez une autre adresse.')
+    }
+    throw new Error(msg)
+  }
   const userId = authData.user.id
 
+  // On upsert les lignes profils + acces_clients pour être tolérant à un
+  // re-invite partiel (ex: auth user créé mais rows applicatives manquantes
+  // suite à un crash précédent).
   await Promise.all([
-    db.from('profils').insert({
+    db.from('profils').upsert({
       id: userId,
       email,
       nom,
       role: 'admin',
       client_id: clientId,
-    }),
-    db.from('acces_clients').insert({
+    }, { onConflict: 'id' }),
+    db.from('acces_clients').upsert({
       user_id: userId,
       client_id: clientId,
       role: 'admin',
-    }),
+    }, { onConflict: 'user_id,client_id' }),
   ])
 
   return {

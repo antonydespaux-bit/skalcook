@@ -24,9 +24,21 @@ export default function NouveauMotDePassePage() {
       const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
       const searchParams = new URLSearchParams(window.location.search)
 
-      const hashError = hashParams.get('error_description') || searchParams.get('error_description')
-      if (hashError) {
-        if (!cancelled) setError(decodeURIComponent(hashError).replace(/\+/g, ' '))
+      const rawErr = hashParams.get('error_description') || searchParams.get('error_description')
+        || hashParams.get('error') || searchParams.get('error')
+      if (rawErr) {
+        const decoded = decodeURIComponent(rawErr).replace(/\+/g, ' ').toLowerCase()
+        // Traduction des erreurs Supabase courantes pour déclencher le CTA
+        // "Demander un nouveau lien" (le composant le cherche via le mot "expiré")
+        let msg = 'Lien invalide ou expiré. Demandez un nouveau lien.'
+        if (decoded.includes('expired') || decoded.includes('expir')) {
+          msg = 'Lien invalide ou expiré. Demandez un nouveau lien.'
+        } else if (decoded.includes('access_denied') || decoded.includes('access denied')) {
+          msg = 'Accès refusé. Ce lien n\'est plus valide, demandez-en un nouveau.'
+        } else {
+          msg = decodeURIComponent(rawErr).replace(/\+/g, ' ')
+        }
+        if (!cancelled) setError(msg)
         return
       }
 
@@ -111,7 +123,7 @@ export default function NouveauMotDePassePage() {
               {error && (
                 <Alert variant="error" style={{ marginBottom: '16px' }}>
                   {error}
-                  {error.includes('expiré') && (
+                  {(/(expir|refus|invalid|nouveau)/i.test(error)) && (
                     <div style={{ marginTop: '8px' }}>
                       <span onClick={() => router.push('/reset-password')} style={{ color: '#A32D2D', cursor: 'pointer', fontWeight: '600', textDecoration: 'underline' }}>
                         Demander un nouveau lien →
