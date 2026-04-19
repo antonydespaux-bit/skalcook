@@ -15,22 +15,49 @@ export default function NouveauMotDePassePage() {
   const router = useRouter()
 
   useEffect(() => {
-    // Récupérer le token depuis l'URL et établir la session
-    const hashParams = new URLSearchParams(window.location.hash.substring(1))
-    const accessToken = hashParams.get('access_token')
-    const refreshToken = hashParams.get('refresh_token')
+    let cancelled = false
+    ;(async () => {
+      // Supabase envoie les tokens soit dans le hash (#access_token=…), soit
+      // dans la query (?code=…) selon le flow configuré côté projet.
+      // On gère les deux + une session déjà établie (au cas où un autre
+      // composant aurait déjà consommé les tokens).
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+      const searchParams = new URLSearchParams(window.location.search)
 
-    if (accessToken && refreshToken) {
-      supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken
-      }).then(({ error }) => {
-        if (!error) setSessionReady(true)
-        else setError('Lien invalide ou expiré. Demandez un nouveau lien.')
-      })
-    } else {
-      setError('Lien invalide ou expiré. Demandez un nouveau lien.')
-    }
+      const hashError = hashParams.get('error_description') || searchParams.get('error_description')
+      if (hashError) {
+        if (!cancelled) setError(decodeURIComponent(hashError).replace(/\+/g, ' '))
+        return
+      }
+
+      const accessToken = hashParams.get('access_token')
+      const refreshToken = hashParams.get('refresh_token')
+      const code = searchParams.get('code')
+
+      try {
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          })
+          if (error) throw error
+        } else if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code)
+          if (error) throw error
+        } else {
+          // Pas de token dans l'URL — peut-être session déjà en cours ?
+          const { data } = await supabase.auth.getSession()
+          if (!data.session) {
+            if (!cancelled) setError('Lien invalide ou expiré. Demandez un nouveau lien.')
+            return
+          }
+        }
+        if (!cancelled) setSessionReady(true)
+      } catch (e) {
+        if (!cancelled) setError(e?.message || 'Lien invalide ou expiré. Demandez un nouveau lien.')
+      }
+    })()
+    return () => { cancelled = true }
   }, [])
 
   const handleSubmit = async (e) => {

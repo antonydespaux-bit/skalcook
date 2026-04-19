@@ -177,13 +177,16 @@ export async function createGlobalUser(db: SupabaseClient, input: CreateGlobalUs
 
 // ── Invite admin ───────────────────────────────────────────────────────────
 
-export async function inviteAdmin(db: SupabaseClient, email: string, nom: string, clientId: string) {
+export async function inviteAdmin(db: SupabaseClient, email: string, nom: string, clientId: string, siteOrigin?: string) {
   // On utilise inviteUserByEmail : Supabase crée l'utilisateur sans mot de
   // passe et envoie un email d'invitation (template Auth → "Invite user")
   // avec un lien qui ouvre une session authentifiée sur /nouveau-mot-de-passe
   // où l'utilisateur définit son mot de passe.
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
-  const redirectTo = siteUrl ? `${siteUrl}/nouveau-mot-de-passe` : undefined
+  // siteOrigin est passé par la route handler (fallback sur l'origin de la
+  // requête si l'env var n'est pas configurée — voir app/api/invite-admin).
+  const envOrigin = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
+  const origin = siteOrigin || envOrigin
+  const redirectTo = origin ? `${origin.replace(/\/$/, '')}/nouveau-mot-de-passe` : undefined
 
   const { data: authData, error: authErr } = await db.auth.admin.inviteUserByEmail(email, {
     redirectTo,

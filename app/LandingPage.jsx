@@ -4,6 +4,30 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Logo } from '../lib/theme.jsx'
 import './landing.css'
 
+/* ── Safety net : si Supabase renvoie l'utilisateur sur la landing ──
+ *
+ * Le lien d'invitation / recovery devrait arriver sur /nouveau-mot-de-passe.
+ * Mais si la config Supabase (Site URL / Redirect URLs allow-list)
+ * n'autorise pas cette cible, Supabase rewrite silencieusement vers le
+ * Site URL — souvent la racine. On rattrape ici en détectant les params
+ * d'auth dans le hash ou la query, et on renvoie sur la bonne page en
+ * préservant les tokens. */
+function usePasswordLinkRedirect() {
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const hash = window.location.hash || ''
+    const search = window.location.search || ''
+    const hasHashToken = /(^|[#&])access_token=/.test(hash)
+    const hasHashType = /(^|[#&])type=(recovery|invite|signup|magiclink)/.test(hash)
+    const hasCode = /(^|[?&])code=/.test(search)
+    if (hasHashToken && hasHashType) {
+      window.location.replace(`/nouveau-mot-de-passe${hash}`)
+    } else if (hasCode) {
+      window.location.replace(`/nouveau-mot-de-passe${search}`)
+    }
+  }, [])
+}
+
 /* ── Scroll reveal hook ── */
 function useReveal() {
   const ref = useRef(null)
@@ -208,6 +232,7 @@ function DemoForm() {
  * Landing Page Component
  * ════════════════════════════════════════════════════════════════ */
 export default function LandingPage() {
+  usePasswordLinkRedirect()
   const [menuOpen, setMenuOpen] = useState(false)
 
   const scrollTo = useCallback((id) => {
