@@ -1,16 +1,18 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { WIDGET_BY_ID, DEFAULT_LAYOUT, saveDashboardLayout, resetDashboardLayout } from '../../lib/dashboardPreferences'
+import { WIDGET_BY_ID, DEFAULT_LAYOUT, saveDashboardLayout, resetDashboardLayout, isWidgetAvailable } from '../../lib/dashboardPreferences'
 
 // Le layout est un array plat, mais l'UI regroupe visuellement les
 // widgets par type (KPIs vs sections) pour que l'user comprenne que
 // les KPIs sont toujours rendus avant les sections.
-function splitByGroup(layout) {
+// On filtre aussi les widgets dont le module est désactivé sur ce tenant.
+function splitByGroup(layout, modulesActifs) {
   const kpis = []
   const sections = []
   for (const entry of layout) {
     const widget = WIDGET_BY_ID[entry.id]
     if (!widget) continue
+    if (!isWidgetAvailable(widget, modulesActifs)) continue
     if (widget.size === 'kpi') kpis.push(entry)
     else sections.push(entry)
   }
@@ -29,7 +31,7 @@ function moveItem(list, index, direction) {
   return copy
 }
 
-export default function DashboardCustomizeModal({ c, initialLayout, onClose, onSaved }) {
+export default function DashboardCustomizeModal({ c, initialLayout, modulesActifs = [], onClose, onSaved }) {
   const [draft, setDraft] = useState(initialLayout)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -40,23 +42,42 @@ export default function DashboardCustomizeModal({ c, initialLayout, onClose, onS
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const { kpis, sections } = splitByGroup(draft)
+  const { kpis, sections } = splitByGroup(draft, modulesActifs)
 
   const toggleVisible = (id) => {
     setDraft(draft.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l)))
   }
 
+  // Le réordonnancement doit préserver la position des widgets filtrés
+  // (modules désactivés) dans le layout stocké. On ne déplace les items
+  // que dans le sous-ensemble visible et on réinjecte les masqués à leur
+  // position d'origine.
   const move = (id, direction) => {
-    const { kpis, sections } = splitByGroup(draft)
-    const inKpis = kpis.findIndex((l) => l.id === id)
+    const visibleIds = new Set([...kpis, ...sections].map((e) => e.id))
+    const visibleOrder = draft.filter((e) => visibleIds.has(e.id))
+    const { kpis: visibleKpis, sections: visibleSections } = splitByGroup(visibleOrder, modulesActifs)
+
+    let nextVisible
+    const inKpis = visibleKpis.findIndex((l) => l.id === id)
     if (inKpis >= 0) {
-      setDraft(mergeGroups(moveItem(kpis, inKpis, direction), sections))
-      return
+      nextVisible = mergeGroups(moveItem(visibleKpis, inKpis, direction), visibleSections)
+    } else {
+      const inSections = visibleSections.findIndex((l) => l.id === id)
+      if (inSections < 0) return
+      nextVisible = mergeGroups(visibleKpis, moveItem(visibleSections, inSections, direction))
     }
-    const inSections = sections.findIndex((l) => l.id === id)
-    if (inSections >= 0) {
-      setDraft(mergeGroups(kpis, moveItem(sections, inSections, direction)))
+
+    const result = []
+    let vi = 0
+    for (const entry of draft) {
+      if (visibleIds.has(entry.id)) {
+        result.push(nextVisible[vi])
+        vi += 1
+      } else {
+        result.push(entry)
+      }
     }
+    setDraft(result)
   }
 
   const handleSave = async () => {

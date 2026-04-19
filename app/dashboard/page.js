@@ -6,8 +6,9 @@ import { theme } from '../../lib/theme.jsx'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
+import { useTenant } from '../../lib/useTenant'
 import { calculerFoodCost, foodCostColor, getSeuilsFromParams } from '../../lib/foodCost'
-import { getDashboardLayout, WIDGET_BY_ID } from '../../lib/dashboardPreferences'
+import { getDashboardLayout, WIDGET_BY_ID, isWidgetAvailable } from '../../lib/dashboardPreferences'
 import Navbar from '../../components/Navbar'
 import InventaireBanner from '../../components/InventaireBanner'
 import ChefLoader from '../../components/ChefLoader'
@@ -38,6 +39,8 @@ export default function DashboardPage() {
   const isMobile = useIsMobile()
   const { c } = useTheme()
   const { role, nom, loading: roleLoading } = useRole()
+  const { tenant } = useTenant()
+  const modulesActifs = tenant?.modules_actifs || []
 
   useEffect(() => {
     checkUser()
@@ -133,7 +136,9 @@ export default function DashboardPage() {
     }
   }
 
-  const visibleLayout = layout.filter((l) => l.visible && WIDGET_BY_ID[l.id])
+  const visibleLayout = layout.filter(
+    (l) => l.visible && WIDGET_BY_ID[l.id] && isWidgetAvailable(WIDGET_BY_ID[l.id], modulesActifs),
+  )
   const kpiLayout = visibleLayout.filter((l) => WIDGET_BY_ID[l.id].size === 'kpi')
   const sectionLayout = visibleLayout.filter((l) => WIDGET_BY_ID[l.id].size !== 'kpi')
 
@@ -208,6 +213,7 @@ export default function DashboardPage() {
           <DashboardCustomizeModal
             c={c}
             initialLayout={layout}
+            modulesActifs={modulesActifs}
             onClose={() => setShowCustomize(false)}
             onSaved={(next) => {
               setLayout(next)
