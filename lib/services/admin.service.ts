@@ -378,7 +378,7 @@ export async function getActivityLogs(
   }
 
   let query = db
-    .from('transactions_api')
+    .from('logs')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(50)
@@ -392,17 +392,26 @@ export async function getActivityLogs(
 
   const allLogs = logs ?? []
 
+  // Enrich logs with parsed device/browser from user_agent
+  const enrichedLogs = allLogs.map(l => {
+    const { device: d, browser: b } = parseUserAgent(l.user_agent)
+    return { ...l, device: d, browser: b }
+  })
+
+  // Device filter (applied after enrichment since it's derived from user_agent)
+  const filteredLogs = device ? enrichedLogs.filter(l => l.device === device) : enrichedLogs
+
   // Build KPIs
   const now24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
   const todayIso = todayStart.toISOString()
 
-  const activeUsers24h = new Set(allLogs.filter(l => l.created_at >= now24h).map(l => l.user_id)).size
-  const modificationsToday = allLogs.filter(l => l.created_at >= todayIso).length
+  const activeUsers24h = new Set(filteredLogs.filter(l => l.created_at >= now24h).map(l => l.user_id)).size
+  const modificationsToday = filteredLogs.filter(l => l.created_at >= todayIso).length
 
   // Top client
   const clientCounts: Record<string, number> = {}
-  for (const l of allLogs) {
+  for (const l of filteredLogs) {
     if (l.client_id) clientCounts[l.client_id] = (clientCounts[l.client_id] || 0) + 1
   }
   const topClientId = Object.entries(clientCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
@@ -422,7 +431,7 @@ export async function getActivityLogs(
     const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000)
     chartMap[d.toISOString().slice(0, 10)] = 0
   }
-  for (const l of allLogs) {
+  for (const l of filteredLogs) {
     const day = l.created_at?.slice(0, 10)
     if (day && chartMap[day] !== undefined) chartMap[day]++
   }
@@ -431,11 +440,11 @@ export async function getActivityLogs(
     actions,
   }))
 
-  // Enrich logs with user names
+  // Enrich logs with user names (fallback on profils if user_nom absent)
   const profilMap = new Map((profilsRes.data ?? []).map(p => [p.id, p]))
-  const recentLogs = allLogs.map(l => ({
+  const recentLogs = filteredLogs.map(l => ({
     ...l,
-    user_nom: profilMap.get(l.user_id)?.nom || profilMap.get(l.user_id)?.email || l.user_id?.slice(0, 8) || '—',
+    user_nom: l.user_nom || profilMap.get(l.user_id)?.nom || profilMap.get(l.user_id)?.email || l.user_id?.slice(0, 8) || '—',
   }))
 
   return {
@@ -449,6 +458,27 @@ export async function getActivityLogs(
     clients: clientsList,
     users: (profilsRes.data ?? []).map(p => ({ user_id: p.id, user_nom: p.nom || p.email })),
   }
+}
+
+// User-agent parsing : extract device OS + browser from raw UA string.
+function parseUserAgent(ua: string | null | undefined): { device: string; browser: string } {
+  if (!ua) return { device: 'Inconnu', browser: 'Inconnu' }
+
+  let device = 'Autre'
+  if (/iPhone|iPad|iPod/i.test(ua)) device = 'iOS'
+  else if (/Android/i.test(ua)) device = 'Android'
+  else if (/Windows/i.test(ua)) device = 'Windows'
+  else if (/Macintosh|Mac OS X/i.test(ua)) device = 'Mac'
+  else if (/Linux/i.test(ua)) device = 'Linux'
+
+  let browser = 'Autre'
+  if (/Edg\//i.test(ua)) browser = 'Edge'
+  else if (/OPR\/|Opera/i.test(ua)) browser = 'Opera'
+  else if (/Firefox/i.test(ua)) browser = 'Firefox'
+  else if (/Chrome\//i.test(ua)) browser = 'Chrome'
+  else if (/Safari/i.test(ua)) browser = 'Safari'
+
+  return { device, browser }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
