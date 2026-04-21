@@ -10,13 +10,19 @@ import { ValidationError, NotFoundError, ConflictError, ForbiddenError } from '.
 // ── List users for a client ────────────────────────────────────────────────
 
 export async function listClientUsers(db: SupabaseClient, clientId: string) {
-  const { data: accesRows, error } = await db
+  const { data: rawAccesRows, error } = await db
     .from('acces_clients')
     .select('user_id, role')
     .eq('client_id', clientId)
 
   if (error) throw new Error(error.message)
-  if (!accesRows || accesRows.length === 0) return []
+  if (!rawAccesRows || rawAccesRows.length === 0) return []
+
+  // Ignore les lignes corrompues (user_id null) qui cassent les endpoints
+  // de modification/suppression en aval (Zod rejette user_id=null). Ces
+  // lignes orphelines doivent être nettoyées directement en DB.
+  const accesRows = rawAccesRows.filter((r) => typeof r.user_id === 'string' && r.user_id.length > 0)
+  if (accesRows.length === 0) return []
 
   const userIds = accesRows.map((r) => r.user_id)
   const { data: profils } = await db
