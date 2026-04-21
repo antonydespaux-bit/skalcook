@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
 /**
- * Middleware unifié : détection du tenant + security headers + rate limiting.
+ * Proxy unifié : détection du tenant + security headers + rate limiting.
+ * (Next.js 16 : ancien middleware.ts renommé en proxy.ts.)
  *
  * Rate limiting strategy:
  * - If UPSTASH_REDIS_REST_URL is set → uses @upstash/ratelimit (production, serverless-safe)
@@ -27,7 +28,7 @@ async function initUpstashRatelimit() {
     })
     return upstashRatelimit
   } catch {
-    console.warn('[middleware] Failed to init Upstash ratelimit, falling back to in-memory')
+    console.warn('[proxy] Failed to init Upstash ratelimit, falling back to in-memory')
     return null
   }
 }
@@ -108,7 +109,7 @@ function detectTenantSlug(req: NextRequest): string | null {
   return sanitizeSlug(tenantSlug)
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
   let rateLimitRemaining: number | undefined
 
