@@ -4,7 +4,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { CreateUserInput, CreateGlobalUserInput, UpdateUserInput, UpdateClientInput } from '../validators/admin.schema'
+import type { CreateUserInput, CreateGlobalUserInput, UpdateUserInput, UpdateClientInput, CreateClientInput, UpdateClientSettingsInput } from '../validators/admin.schema'
 import { ValidationError, NotFoundError, ConflictError, ForbiddenError } from '../errors'
 
 // ── List users for a client ────────────────────────────────────────────────
@@ -310,6 +310,50 @@ export async function updateClient(db: SupabaseClient, input: UpdateClientInput)
 
   const { error } = await db.from('clients').update(dbUpdates).eq('id', id)
   if (error) throw new Error(error.message)
+
+  return { updated: true }
+}
+
+// ── Create client (establishment) ──────────────────────────────────────────
+// RLS bloque les INSERT sur `clients` côté client : on passe par service_role.
+
+export async function createClient(db: SupabaseClient, input: CreateClientInput) {
+  const { data, error } = await db
+    .from('clients')
+    .insert([input])
+    .select()
+    .single()
+
+  if (error) {
+    if (/duplicate|unique/i.test(error.message)) {
+      throw new ConflictError('Un établissement existe déjà avec ce slug.')
+    }
+    throw new Error(error.message)
+  }
+  return { client: data }
+}
+
+// ── Update client settings (full) ──────────────────────────────────────────
+
+export async function updateClientSettings(db: SupabaseClient, input: UpdateClientSettingsInput) {
+  const { id, ...updates } = input
+
+  const dbUpdates: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(updates)) {
+    if (value !== undefined) dbUpdates[key] = value
+  }
+
+  if (Object.keys(dbUpdates).length === 0) {
+    throw new ValidationError('Aucun champ à mettre à jour.')
+  }
+
+  const { error } = await db.from('clients').update(dbUpdates).eq('id', id)
+  if (error) {
+    if (/duplicate|unique/i.test(error.message)) {
+      throw new ConflictError('Un établissement existe déjà avec ce slug.')
+    }
+    throw new Error(error.message)
+  }
 
   return { updated: true }
 }

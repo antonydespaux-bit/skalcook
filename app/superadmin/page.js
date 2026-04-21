@@ -168,20 +168,34 @@ export default function SuperAdminPage() {
       seuil_vert_boissons: parseFloat(seuilVertBoissons), seuil_orange_boissons: parseFloat(seuilOrangeBoissons),
     }
 
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) { setError('Session expirée. Reconnectez-vous.'); setSaving(false); return }
+    const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }
+
     if (vue === 'nouveau') {
-      const { data: client, error: err } = await supabase.from('clients').insert([payload]).select().single()
-      if (err) { setError('Erreur : ' + err.message); setSaving(false); return }
-      if (logoFile) {
-        const logoUrl = await uploadLogo(client.id)
-        await supabase.from('clients').update({ logo_url: logoUrl }).eq('id', client.id)
+      const res = await fetch('/api/superadmin/create-client', {
+        method: 'POST', headers: authHeaders, body: JSON.stringify(payload),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setError('Erreur : ' + (json?.error || 'création impossible')); setSaving(false); return }
+      const newClient = json?.client
+      if (logoFile && newClient?.id) {
+        const logoUrl = await uploadLogo(newClient.id)
+        await fetch('/api/superadmin/update-client-settings', {
+          method: 'POST', headers: authHeaders,
+          body: JSON.stringify({ id: newClient.id, logo_url: logoUrl }),
+        })
       }
       setSuccess(`✓ Établissement "${nomEtablissement}" créé avec succès !`)
     } else {
       let logoUrl = logoExistant
       if (logoFile) logoUrl = await uploadLogo(clientSelectionne.id)
-      payload.logo_url = logoUrl
-      const { error: err } = await supabase.from('clients').update(payload).eq('id', clientSelectionne.id)
-      if (err) { setError('Erreur : ' + err.message); setSaving(false); return }
+      const res = await fetch('/api/superadmin/update-client-settings', {
+        method: 'POST', headers: authHeaders,
+        body: JSON.stringify({ id: clientSelectionne.id, ...payload, logo_url: logoUrl }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setError('Erreur : ' + (json?.error || 'mise à jour impossible')); setSaving(false); return }
       setSuccess(`✓ Établissement "${nomEtablissement}" mis à jour !`)
     }
 
@@ -191,7 +205,13 @@ export default function SuperAdminPage() {
   }
 
   const toggleActifClient = async (clientId, actifActuel) => {
-    await supabase.from('clients').update({ actif: !actifActuel }).eq('id', clientId)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) return
+    await fetch('/api/superadmin/update-client-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ id: clientId, actif: !actifActuel }),
+    })
     await loadClients()
   }
 

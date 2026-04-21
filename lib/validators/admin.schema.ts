@@ -64,6 +64,73 @@ export const createGlobalUserSchema = z.object({
 
 export type CreateGlobalUserInput = z.infer<typeof createGlobalUserSchema>
 
+// ── Client settings (create + full update) ────────────────────────────────
+// Used by /api/superadmin/create-client + /api/superadmin/update-client-settings
+// (writes to `clients` table are blocked by RLS côté client, donc on route tout
+// par le service_role).
+const hexColor = z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Couleur invalide')
+const slugFormat = z
+  .string()
+  .min(1)
+  .max(100)
+  .transform((s) => s.toLowerCase().trim().replace(/\s+/g, '-'))
+  .pipe(z.string().regex(/^[a-z0-9-]+$/, 'Slug invalide (a-z, 0-9, -)'))
+
+const clientSettingsFields = {
+  nom:                 z.string().min(1).max(255),
+  nom_etablissement:   z.string().min(1).max(255),
+  slug:                slugFormat,
+  adresse:             emptyToNull.optional().nullable(),
+  actif:               z.boolean(),
+  couleur_principale:  hexColor,
+  couleur_accent:      hexColor,
+  couleur_fond:        hexColor,
+  modules_actifs:      z.array(z.string()),
+  seuil_vert_cuisine:    z.number(),
+  seuil_orange_cuisine:  z.number(),
+  seuil_vert_boissons:   z.number(),
+  seuil_orange_boissons: z.number(),
+  logo_url:            emptyToNull.optional().nullable(),
+}
+
+export const createClientSchema = z.object({
+  nom:                 clientSettingsFields.nom,
+  nom_etablissement:   clientSettingsFields.nom_etablissement,
+  slug:                clientSettingsFields.slug,
+  adresse:             clientSettingsFields.adresse,
+  actif:               clientSettingsFields.actif.default(true),
+  couleur_principale:  clientSettingsFields.couleur_principale.default('#18181B'),
+  couleur_accent:      clientSettingsFields.couleur_accent.default('#6366F1'),
+  couleur_fond:        clientSettingsFields.couleur_fond.default('#F4F4F5'),
+  modules_actifs:      clientSettingsFields.modules_actifs.default([]),
+  seuil_vert_cuisine:    clientSettingsFields.seuil_vert_cuisine.default(28),
+  seuil_orange_cuisine:  clientSettingsFields.seuil_orange_cuisine.default(35),
+  seuil_vert_boissons:   clientSettingsFields.seuil_vert_boissons.default(22),
+  seuil_orange_boissons: clientSettingsFields.seuil_orange_boissons.default(28),
+})
+
+export type CreateClientInput = z.infer<typeof createClientSchema>
+
+export const updateClientSettingsSchema = z.object({
+  id:                  clientIdSchema,
+  nom:                 clientSettingsFields.nom.optional(),
+  nom_etablissement:   clientSettingsFields.nom_etablissement.optional(),
+  slug:                clientSettingsFields.slug.optional(),
+  adresse:             clientSettingsFields.adresse,
+  actif:               clientSettingsFields.actif.optional(),
+  couleur_principale:  clientSettingsFields.couleur_principale.optional(),
+  couleur_accent:      clientSettingsFields.couleur_accent.optional(),
+  couleur_fond:        clientSettingsFields.couleur_fond.optional(),
+  modules_actifs:      clientSettingsFields.modules_actifs.optional(),
+  seuil_vert_cuisine:    clientSettingsFields.seuil_vert_cuisine.optional(),
+  seuil_orange_cuisine:  clientSettingsFields.seuil_orange_cuisine.optional(),
+  seuil_vert_boissons:   clientSettingsFields.seuil_vert_boissons.optional(),
+  seuil_orange_boissons: clientSettingsFields.seuil_orange_boissons.optional(),
+  logo_url:            clientSettingsFields.logo_url,
+})
+
+export type UpdateClientSettingsInput = z.infer<typeof updateClientSettingsSchema>
+
 // ── Update client (legal info) ─────────────────────────────────────────────
 // Treat empty strings as "unset" so the page can send blank optional fields
 // without tripping the format validators (regex on siret/num_tva, email_contact).
