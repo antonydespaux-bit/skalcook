@@ -143,6 +143,21 @@ export default function AdminPage() {
     setEditNomValue('')
   }
 
+  // Formate une erreur API en message lisible, en incluant les détails Zod
+  // si l'API a renvoyé { error, details: { fieldErrors: { champ: [msg] } } }
+  const formatApiError = (data, fallback) => {
+    const base = typeof data?.error === 'string' ? data.error : fallback
+    const fieldErrors = data?.details?.fieldErrors
+    if (fieldErrors && typeof fieldErrors === 'object') {
+      const parts = []
+      for (const [champ, msgs] of Object.entries(fieldErrors)) {
+        if (Array.isArray(msgs) && msgs.length > 0) parts.push(`${champ}: ${msgs.join(', ')}`)
+      }
+      if (parts.length > 0) return `${base} — ${parts.join(' ; ')}`
+    }
+    return base
+  }
+
   const enregistrerNom = async () => {
     const nom = editNomValue.trim()
     if (!nom || !editingNomId) return
@@ -163,7 +178,7 @@ export default function AdminPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(data?.error || 'Erreur lors de la mise à jour du nom.')
+        setError(formatApiError(data, 'Erreur lors de la mise à jour du nom.'))
         window.scrollTo({ top: 0, behavior: 'smooth' })
         return
       }
@@ -192,7 +207,7 @@ export default function AdminPage() {
     })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      setError(data?.error || 'Erreur lors du changement de rôle.')
+      setError(formatApiError(data, 'Erreur lors du changement de rôle.'))
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
@@ -223,7 +238,7 @@ export default function AdminPage() {
     })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      setError(data?.error || "Erreur lors du retrait de l'accès.")
+      setError(formatApiError(data, "Erreur lors du retrait de l'accès."))
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
