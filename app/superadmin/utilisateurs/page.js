@@ -175,7 +175,7 @@ export default function SuperadminUsersPage() {
 
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(typeof data.error === 'string' ? data.error : 'Erreur lors de la suppression.')
+        setError(formatApiError(data, 'Erreur lors de la suppression.'))
         return
       }
 
@@ -210,6 +210,20 @@ export default function SuperadminUsersPage() {
     setEditAdressePro('')
   }
 
+  // Formate une erreur API (avec détails Zod éventuels) en message lisible.
+  const formatApiError = (data, fallback) => {
+    const base = typeof data?.error === 'string' ? data.error : fallback
+    const fieldErrors = data?.details?.fieldErrors
+    if (fieldErrors && typeof fieldErrors === 'object') {
+      const parts = []
+      for (const [champ, msgs] of Object.entries(fieldErrors)) {
+        if (Array.isArray(msgs) && msgs.length > 0) parts.push(`${champ}: ${msgs.join(', ')}`)
+      }
+      if (parts.length > 0) return `${base} — ${parts.join(' ; ')}`
+    }
+    return base
+  }
+
   const updateUser = async () => {
     if (!editingUser?.id) return
     setUpdatingId(editingUser.id)
@@ -223,27 +237,35 @@ export default function SuperadminUsersPage() {
         return
       }
 
+      // N'envoie que les champs non vides — sinon Zod rejette nom:"" (min 1),
+      // role:"" (enum). user_id est toujours envoyé.
+      const payload = { user_id: editingUser.id }
+      const nom = editNom.trim()
+      const email = editEmail.trim()
+      const telephone = editTelephone.trim()
+      const siteWeb = editSiteWeb.trim()
+      const siretPersonnel = editSiretPersonnel.trim()
+      const adressePro = editAdressePro.trim()
+      if (nom) payload.nom = nom
+      if (email) payload.email = email
+      if (editRole) payload.role = editRole
+      if (telephone) payload.telephone = telephone
+      if (siteWeb) payload.site_web = siteWeb
+      if (siretPersonnel) payload.siret_personnel = siretPersonnel
+      if (adressePro) payload.adresse_pro = adressePro
+
       const res = await fetch('/api/superadmin/update-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({
-          user_id: editingUser.id,
-          nom: editNom.trim(),
-          email: editEmail.trim(),
-          role: editRole,
-          telephone: editTelephone.trim(),
-          site_web: editSiteWeb.trim(),
-          siret_personnel: editSiretPersonnel.trim(),
-          adresse_pro: editAdressePro.trim()
-        })
+        body: JSON.stringify(payload)
       })
 
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(typeof data.error === 'string' ? data.error : 'Erreur lors de la mise à jour.')
+        setError(formatApiError(data, 'Erreur lors de la mise à jour.'))
         return
       }
 
