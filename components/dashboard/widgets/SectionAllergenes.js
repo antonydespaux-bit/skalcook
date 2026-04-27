@@ -4,11 +4,14 @@ import * as XLSX from 'xlsx'
 import { Badge } from '../../ui'
 import { ALLERGENES } from '../../../lib/allergenes'
 import { theme } from '../../../lib/theme.jsx'
+import { SAISONS, getYearsRange, formatSaison } from '../../../lib/saison'
 
 export default function SectionAllergenes({ c, fiches, lieux, params, categories = [] }) {
   const categoriesList = categories.length > 0 ? categories : theme.categories.map((nom) => ({ id: nom, nom, emoji: '' }))
+  const annees = getYearsRange()
   const [filtreCategorie, setFiltreCategorie] = useState('toutes')
   const [filtreSaison, setFiltreSaison] = useState('toutes')
+  const [filtreAnnee, setFiltreAnnee] = useState('toutes')
   const [filtreLieu, setFiltreLieu] = useState('tous')
   const [isExpanded, setIsExpanded] = useState(true)
   const [mounted, setMounted] = useState(false)
@@ -18,12 +21,13 @@ export default function SectionAllergenes({ c, fiches, lieux, params, categories
   const fichesFiltreesAllergenes = fichesAvecAllergenes
     .filter((f) => filtreCategorie === 'toutes' || f.categorie === filtreCategorie)
     .filter((f) => filtreSaison === 'toutes' || f.saison === filtreSaison)
+    .filter((f) => filtreAnnee === 'toutes' || f.annee === parseInt(filtreAnnee, 10))
     .filter((f) => filtreLieu === 'tous' || f.lieu_id === filtreLieu)
 
   const exportAllergenesExcel = () => {
     const wb = XLSX.utils.book_new()
     const rows = fichesFiltreesAllergenes.map((f) => {
-      const row = { Fiche: f.nom, Catégorie: f.categorie || '—', Saison: f.saison || '—' }
+      const row = { Fiche: f.nom, Catégorie: f.categorie || '—', Saison: formatSaison(f.saison, f.annee) || '—' }
       ALLERGENES.forEach((a) => { row[`${a.emoji} ${a.label}`] = f.allergenes?.includes(a.id) ? '✓' : '' })
       return row
     })
@@ -56,7 +60,11 @@ export default function SectionAllergenes({ c, fiches, lieux, params, categories
                 </select>
                 <select value={filtreSaison} onChange={(e) => setFiltreSaison(e.target.value)} style={{ padding: '6px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer' }}>
                   <option value="toutes">Toutes les saisons</option>
-                  {theme.saisons.map((s) => <option key={s} value={s}>{s}</option>)}
+                  {SAISONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <select value={filtreAnnee} onChange={(e) => setFiltreAnnee(e.target.value)} style={{ padding: '6px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer' }}>
+                  <option value="toutes">Toutes les années</option>
+                  {annees.map((y) => <option key={y} value={y}>{y}</option>)}
                 </select>
                 {lieux.length > 0 && (
                   <select value={filtreLieu} onChange={(e) => setFiltreLieu(e.target.value)} style={{ padding: '6px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer' }}>

@@ -6,6 +6,7 @@ import { theme, Logo } from '../../../lib/theme.jsx'
 import { useTheme } from '../../../lib/useTheme'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { log } from '../../../lib/useLog'
+import { SAISONS, getYearsRange, formatSaison, parseSaison } from '../../../lib/saison'
 import ChefLoader from '../../../components/ChefLoader'
 import BackButton from '../../../components/BackButton'
 import { Badge } from '../../../components/ui'
@@ -22,12 +23,14 @@ export default function MenuDetail() {
   const [editing, setEditing] = useState(false)
   const [nom, setNom] = useState('')
   const [saison, setSaison] = useState('')
+  const [annee, setAnnee] = useState(null)
   const [prixVente, setPrixVente] = useState('')
   const [description, setDescription] = useState('')
   const [selection, setSelection] = useState({ Entrée: '', Plat: '', Dessert: '' })
   const router = useRouter()
   const params_route = useParams()
   const c = theme.couleurs
+  const annees = getYearsRange()
   const services = ['Entrée', 'Plat', 'Dessert']
 
 useEffect(() => {
@@ -66,7 +69,14 @@ useEffect(() => {
     setMenu(menuData)
     setMenuFiches(menuData.menu_fiches || [])
     setNom(menuData.nom)
-    setSaison(menuData.saison || '')
+    if (menuData.annee || (menuData.saison && SAISONS.includes(menuData.saison))) {
+      setSaison(menuData.saison || '')
+      setAnnee(menuData.annee || null)
+    } else {
+      const parsed = parseSaison(menuData.saison)
+      setSaison(parsed.saison)
+      setAnnee(parsed.annee)
+    }
     setPrixVente(menuData.prix_vente || '')
     setDescription(menuData.description || '')
 
@@ -119,7 +129,7 @@ useEffect(() => {
     if (!clientId) { setSaving(false); return }
 
     await supabase.from('menus').update({
-      nom, saison,
+      nom, saison: saison || null, annee: annee || null,
       prix_vente: prixVente ? parseFloat(prixVente) : null,
       description
     }).eq('id', params_route.id).eq('client_id', clientId)
@@ -143,7 +153,7 @@ useEffect(() => {
     await log({
       action: 'MODIFICATION', entite: 'menu', entite_id: params_route.id,
       entite_nom: nom, section: 'cuisine',
-      details: `Saison: ${saison}`
+      details: `Saison: ${[saison, annee].filter(Boolean).join(' ')}`
     })
 
     await loadData()
@@ -265,7 +275,19 @@ useEffect(() => {
                   border: `0.5px solid ${c.bordure}`, fontSize: '14px',
                   background: 'white', outline: 'none', color: c.texte
                 }}>
-                  {theme.saisons.map(s => <option key={s}>{s}</option>)}
+                  <option value="">— Aucune —</option>
+                  {SAISONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Année</label>
+                <select value={annee || ''} onChange={e => setAnnee(e.target.value ? parseInt(e.target.value, 10) : null)} style={{
+                  width: '100%', padding: '10px 12px', borderRadius: '8px',
+                  border: `0.5px solid ${c.bordure}`, fontSize: '14px',
+                  background: 'white', outline: 'none', color: c.texte
+                }}>
+                  <option value="">— Aucune —</option>
+                  {annees.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
               <div>
@@ -290,9 +312,9 @@ useEffect(() => {
                 <div>
                   <h1 style={{ fontSize: '22px', fontWeight: '500', color: c.texte, marginBottom: '8px' }}>{menu.nom}</h1>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    {menu.saison && (
+                    {(menu.saison || menu.annee) && (
                       <Badge bg={c.accentClair} color={c.principal}>
-                        {menu.saison}
+                        {formatSaison(menu.saison, menu.annee)}
                       </Badge>
                     )}
                   </div>

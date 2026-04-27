@@ -4,6 +4,7 @@ import { supabase, getClientId } from '../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useIsMobile } from '../lib/useIsMobile'
 import { useTheme } from '../lib/useTheme'
+import { formatSaison } from '../lib/saison'
 import Navbar from './Navbar'
 
 /**
@@ -129,7 +130,7 @@ export default function ArchivesView({ section = 'cuisine' }) {
                   }}>ARCHIVÉ</span>
                   <div style={{ fontSize: '15px', fontWeight: '500', color: c.texte, marginTop: '4px' }}>{item.nom}</div>
                   {item.categorie && <div style={{ fontSize: '12px', color: c.texteMuted }}>{item.categorie}</div>}
-                  {item.saison && <div style={{ fontSize: '11px', color: c.texteMuted }}>{item.saison}</div>}
+                  {(item.saison || item.annee) && <div style={{ fontSize: '11px', color: c.texteMuted }}>{formatSaison(item.saison, item.annee)}</div>}
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button onClick={() => restaurer(item.id, itemType)} style={{
@@ -175,7 +176,7 @@ export default function ArchivesView({ section = 'cuisine' }) {
                       </div>
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', color: c.texteMuted }}>{item.categorie || '—'}</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', color: c.texteMuted }}>{item.saison || '—'}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', color: c.texteMuted }}>{formatSaison(item.saison, item.annee) || '—'}</td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', color: c.texte }}>
                       {item.cout_portion ? `${Number(item.cout_portion).toFixed(2)} €` : '—'}
                     </td>

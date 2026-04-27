@@ -8,6 +8,7 @@ import { useTheme } from '../../../lib/useTheme'
 import { useAutosave } from '../../../lib/useAutosave'
 import { log } from '../../../lib/useLog'
 import { ALLERGENES } from '../../../lib/allergenes'
+import { SAISONS, getYearsRange } from '../../../lib/saison'
 import IngredientSearch from '../../../components/IngredientSearch'
 import BackButton from '../../../components/BackButton'
 
@@ -24,7 +25,8 @@ export default function NouvelleFiche() {
   const [prixTTC, setPrixTTC] = useState('')
   const [perte, setPerte] = useState(0)
   const [description, setDescription] = useState('')
-  const [saison, setSaison] = useState('Printemps 2026')
+  const [saison, setSaison] = useState('')
+  const [annee, setAnnee] = useState(new Date().getFullYear())
   const [allergenes, setAllergenes] = useState([])
   const [ingredients, setIngredients] = useState([
     { ingredient_id: '', nom: '', quantite: '', unite: 'kg' }
@@ -38,14 +40,14 @@ export default function NouvelleFiche() {
   const [draftRestored, setDraftRestored] = useState(false)
   const router = useRouter()
   const { c, logoUrl, nomEtablissement } = useTheme()
-  const saisons = theme.saisons
+  const annees = getYearsRange()
   const isMobile = useIsMobile()
 
   // Pour la rétrocompatibilité : isSousFiche basé sur la catégorie sélectionnée
   const catSelectionnee = categoriesDyn.find(cat => cat.id === categoriePlat)
   const isSousFiche = catSelectionnee?.nom === 'Sous-fiches' || catSelectionnee?.nom === 'Sous-fiche'
 
-  const autosaveData = { nom, categoriePlat, lieuId, nbPortions, unitePortions, prixTTC, perte, description, saison, allergenes, ingredients }
+  const autosaveData = { nom, categoriePlat, lieuId, nbPortions, unitePortions, prixTTC, perte, description, saison, annee, allergenes, ingredients }
   const { hasDraft, lastSaved, getDraft, clearDraft } = useAutosave('nouvelle-fiche-draft', autosaveData, 60000)
 
   useEffect(() => {
@@ -95,7 +97,8 @@ export default function NouvelleFiche() {
     setPrixTTC(draft.prixTTC || '')
     setPerte(draft.perte || 0)
     setDescription(draft.description || '')
-    setSaison(draft.saison || 'Printemps 2026')
+    setSaison(draft.saison || '')
+    setAnnee(draft.annee || new Date().getFullYear())
     setAllergenes(draft.allergenes || [])
     setIngredients(draft.ingredients || [{ ingredient_id: '', nom: '', quantite: '', unite: 'kg' }])
     setDraftRestored(true)
@@ -178,7 +181,7 @@ export default function NouvelleFiche() {
       is_sub_fiche: !!isSousFiche,
       nb_portions: parseInt(nbPortions),
       prix_ttc: isSousFiche ? null : (prixTTC ? parseFloat(prixTTC) : null),
-      description, saison, allergenes,
+      description, saison: saison || null, annee: annee || null, allergenes,
       cout_portion: coutPortion ? parseFloat(coutPortion) : null,
       perte: perte ? parseFloat(perte) : 0,
       client_id: clientId
@@ -222,7 +225,7 @@ export default function NouvelleFiche() {
     await log({
       action: 'CREATION', entite: 'fiche', entite_id: fiche.id,
       entite_nom: nom, section: 'cuisine',
-      details: `Catégorie: ${catSelectionnee?.nom || ''}, Saison: ${saison}${perte > 0 ? `, Perte: ${perte}%` : ''}`
+      details: `Catégorie: ${catSelectionnee?.nom || ''}, Saison: ${[saison, annee].filter(Boolean).join(' ')}${perte > 0 ? `, Perte: ${perte}%` : ''}`
     })
 
     clearDraft()
@@ -324,11 +327,21 @@ export default function NouvelleFiche() {
               </div>
             </div>
 
-            <div>
-              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Saison</label>
-              <select value={saison} onChange={e => setSaison(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: c.blanc, outline: 'none', color: c.texte }}>
-                {saisons.map(s => <option key={s}>{s}</option>)}
-              </select>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Saison</label>
+                <select value={saison} onChange={e => setSaison(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: c.blanc, outline: 'none', color: c.texte }}>
+                  <option value="">— Aucune —</option>
+                  {SAISONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Année</label>
+                <select value={annee || ''} onChange={e => setAnnee(e.target.value ? parseInt(e.target.value, 10) : null)} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: c.blanc, outline: 'none', color: c.texte }}>
+                  <option value="">— Aucune —</option>
+                  {annees.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>

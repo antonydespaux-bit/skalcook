@@ -7,6 +7,7 @@ import { useTheme } from '../../../lib/useTheme'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { log } from '../../../lib/useLog'
 import { ALLERGENES } from '../../../lib/allergenes'
+import { SAISONS, getYearsRange, formatSaison, parseSaison } from '../../../lib/saison'
 import ChefLoader from '../../../components/ChefLoader'
 import { Alert , Badge } from '../../../components/ui'
 
@@ -18,7 +19,7 @@ export default function CarteDetailPage() {
   const { nomEtablissement, logoUrl } = useTheme()
   const isMobile = useIsMobile()
   const c = theme.couleurs
-  const saisons = theme.saisons
+  const annees = getYearsRange()
 
   const [carte, setCarte] = useState(null)
   const [editing, setEditing] = useState(false)
@@ -32,6 +33,7 @@ export default function CarteDetailPage() {
   // ── Edit state ──
   const [nom, setNom] = useState('')
   const [saison, setSaison] = useState('')
+  const [annee, setAnnee] = useState(null)
   const [prixBase, setPrixBase] = useState('')
   const [description, setDescription] = useState('')
   const [sections, setSections] = useState([])
@@ -120,7 +122,14 @@ export default function CarteDetailPage() {
     if (!data) { router.push('/cartes'); return }
     setCarte(data)
     setNom(data.nom)
-    setSaison(data.saison || '')
+    if (data.annee || (data.saison && SAISONS.includes(data.saison))) {
+      setSaison(data.saison || '')
+      setAnnee(data.annee || null)
+    } else {
+      const parsed = parseSaison(data.saison)
+      setSaison(parsed.saison)
+      setAnnee(parsed.annee)
+    }
     setPrixBase(data.prix_base ? String(data.prix_base) : '')
     setDescription(data.description || '')
     const sortedSections = (data.carte_sections || [])
@@ -235,7 +244,7 @@ export default function CarteDetailPage() {
     if (!clientId) { setSaving(false); return }
 
     await supabase.from('cartes').update({
-      nom, saison, description,
+      nom, saison: saison || null, annee: annee || null, description,
       prix_base: prixBase ? parseFloat(prixBase) : null,
       updated_at: new Date().toISOString()
     }).eq('id', params_route.id).eq('client_id', clientId)
@@ -408,7 +417,7 @@ export default function CarteDetailPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                 <div>
                   <div style={{ fontSize: '20px', fontWeight: '500', color: c.texte }}>{carte.nom}</div>
-                  {carte.saison && <Badge bg={c.accentClair} color={c.principal} size="sm">{carte.saison}</Badge>}
+                  {(carte.saison || carte.annee) && <Badge bg={c.accentClair} color={c.principal} size="sm">{formatSaison(carte.saison, carte.annee)}</Badge>}
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '10px', color: c.texteMuted, textTransform: 'uppercase' }}>{vueSupp ? 'Prix + suppl.' : 'Prix base'}</div>
@@ -511,7 +520,17 @@ export default function CarteDetailPage() {
                 </div>
                 <div>
                   <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Saison</label>
-                  <select value={saison} onChange={e => setSaison(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: 'white', outline: 'none', color: c.texte }}>{saisons.map(s => <option key={s}>{s}</option>)}</select>
+                  <select value={saison} onChange={e => setSaison(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: 'white', outline: 'none', color: c.texte }}>
+                    <option value="">— Aucune —</option>
+                    {SAISONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Année</label>
+                  <select value={annee || ''} onChange={e => setAnnee(e.target.value ? parseInt(e.target.value, 10) : null)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: 'white', outline: 'none', color: c.texte }}>
+                    <option value="">— Aucune —</option>
+                    {annees.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix base TTC</label>
@@ -602,7 +621,7 @@ export default function CarteDetailPage() {
           }
           <h1 style={{ fontSize: '28px', fontWeight: '400', color: '#2C1810', letterSpacing: '2px', marginBottom: '6px' }}>{carte.nom}</h1>
           {carte.description && <div style={{ fontSize: '12px', color: '#8B7355', fontStyle: 'italic' }}>{carte.description}</div>}
-          {carte.saison && <div style={{ fontSize: '10px', color: '#8B7355', letterSpacing: '2px', textTransform: 'uppercase', marginTop: '6px' }}>{carte.saison}</div>}
+          {(carte.saison || carte.annee) && <div style={{ fontSize: '10px', color: '#8B7355', letterSpacing: '2px', textTransform: 'uppercase', marginTop: '6px' }}>{formatSaison(carte.saison, carte.annee)}</div>}
         </div>
 
         {/* Sections */}

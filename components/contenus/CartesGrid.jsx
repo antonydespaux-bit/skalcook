@@ -1,5 +1,6 @@
 'use client'
 import { useRouter } from 'next/navigation'
+import { formatSaison } from '../../lib/saison'
 
 const calculerCouts = (carte, baseOnly = false) => {
   let coutMatiere = 0, totalSuppPrix = 0
@@ -94,12 +95,12 @@ export default function CartesGrid({ c, isMobile, cartes, onDelete, onCreateClic
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
               <div>
                 <div style={{ fontSize: isMobile ? '15px' : '16px', fontWeight: '500', color: c.texte }}>{carte.nom}</div>
-                {carte.saison && (
+                {(carte.saison || carte.annee) && (
                   <span style={{
                     background: c.accentClair, color: c.principal,
                     borderRadius: '20px', padding: '2px 10px',
                     fontSize: '11px', fontWeight: '500', marginTop: '4px', display: 'inline-block'
-                  }}>{carte.saison}</span>
+                  }}>{formatSaison(carte.saison, carte.annee)}</span>
                 )}
               </div>
               {carte.prix_base && (

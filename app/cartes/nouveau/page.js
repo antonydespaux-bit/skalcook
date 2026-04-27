@@ -6,6 +6,7 @@ import { theme, Logo } from '../../../lib/theme.jsx'
 import { useTheme } from '../../../lib/useTheme'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { log } from '../../../lib/useLog'
+import { SAISONS, getYearsRange } from '../../../lib/saison'
 import BackButton from '../../../components/BackButton'
 import { Alert } from '../../../components/ui'
 
@@ -15,7 +16,8 @@ export default function NouvelleCarte() {
   const { nomEtablissement, logoUrl } = useTheme()
   const isMobile = useIsMobile()
   const [nom, setNom] = useState('')
-  const [saison, setSaison] = useState('Printemps 2026')
+  const [saison, setSaison] = useState('')
+  const [annee, setAnnee] = useState(new Date().getFullYear())
   const [prixBase, setPrixBase] = useState('')
   const [description, setDescription] = useState('')
   const [sections, setSections] = useState([{ _id: genId(), titre: '', items: [{ _id: genId(), ficheId: '', description: '', supplement: '', relation: 'et' }] }])
@@ -25,7 +27,7 @@ export default function NouvelleCarte() {
   const [error, setError] = useState('')
   const router = useRouter()
   const c = theme.couleurs
-  const saisons = theme.saisons
+  const annees = getYearsRange()
 
   useEffect(() => {
     checkUser()
@@ -179,7 +181,7 @@ export default function NouvelleCarte() {
     const { data: carte, error: errCarte } = await supabase
       .from('cartes')
       .insert([{
-        nom, saison, description,
+        nom, saison: saison || null, annee: annee || null, description,
         prix_base: prixBase ? parseFloat(prixBase) : null,
         client_id: clientId
       }])
@@ -221,7 +223,7 @@ export default function NouvelleCarte() {
     await log({
       action: 'CREATION', entite: 'carte', entite_id: carte.id,
       entite_nom: nom, section: 'cuisine',
-      details: `Saison: ${saison}, ${sections.length} sections`
+      details: `Saison: ${[saison, annee].filter(Boolean).join(' ')}, ${sections.length} sections`
     })
 
     router.push('/cartes')
@@ -290,15 +292,29 @@ export default function NouvelleCarte() {
                 style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, boxSizing: 'border-box' }}
               />
             </div>
-            <div>
-              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Saison</label>
-              <select value={saison} onChange={e => setSaison(e.target.value)} style={{
-                width: '100%', padding: '10px 12px', borderRadius: '8px',
-                border: `0.5px solid ${c.bordure}`, fontSize: '14px',
-                background: 'white', outline: 'none', color: c.texte
-              }}>
-                {saisons.map(s => <option key={s}>{s}</option>)}
-              </select>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Saison</label>
+                <select value={saison} onChange={e => setSaison(e.target.value)} style={{
+                  width: '100%', padding: '10px 12px', borderRadius: '8px',
+                  border: `0.5px solid ${c.bordure}`, fontSize: '14px',
+                  background: 'white', outline: 'none', color: c.texte
+                }}>
+                  <option value="">— Aucune —</option>
+                  {SAISONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Année</label>
+                <select value={annee || ''} onChange={e => setAnnee(e.target.value ? parseInt(e.target.value, 10) : null)} style={{
+                  width: '100%', padding: '10px 12px', borderRadius: '8px',
+                  border: `0.5px solid ${c.bordure}`, fontSize: '14px',
+                  background: 'white', outline: 'none', color: c.texte
+                }}>
+                  <option value="">— Aucune —</option>
+                  {annees.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
             </div>
             <div>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix de base TTC (&euro;)</label>

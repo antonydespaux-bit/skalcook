@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase, getClientId } from '../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme } from '../lib/theme.jsx'
+import { SAISONS, getYearsRange, formatSaison } from '../lib/saison'
 import { useIsMobile } from '../lib/useIsMobile'
 import { useTheme } from '../lib/useTheme'
 import { useRole } from '../lib/useRole'
@@ -69,6 +70,8 @@ export default function RecapView({ section = 'cuisine' }) {
   const [loading, setLoading] = useState(true)
   const [vue, setVue] = useState('lieu')
   const [saisonFiltree, setSaisonFiltree] = useState('toutes')
+  const [anneeFiltree, setAnneeFiltree] = useState('toutes')
+  const annees = getYearsRange()
   const [filtreLieu, setFiltreLieu] = useState('')
   const [filtreCat, setFiltreCat] = useState('')
   const [ouvert, setOuvert] = useState(null)
@@ -125,11 +128,15 @@ export default function RecapView({ section = 'cuisine' }) {
 
   const fichesFiltrees = fiches.filter(f => {
     if (saisonFiltree !== 'toutes' && f.saison !== saisonFiltree) return false
+    if (anneeFiltree !== 'toutes' && f.annee !== parseInt(anneeFiltree, 10)) return false
     if (filtreLieu && f.lieu_id !== filtreLieu) return false
     if (filtreCat && f.categorie_plat_id !== filtreCat) return false
     return true
   })
-  const menusFiltres = cfg.hasMenus ? menus.filter(m => saisonFiltree === 'toutes' || m.saison === saisonFiltree) : []
+  const menusFiltres = cfg.hasMenus ? menus.filter(m =>
+    (saisonFiltree === 'toutes' || m.saison === saisonFiltree)
+    && (anneeFiltree === 'toutes' || m.annee === parseInt(anneeFiltree, 10))
+  ) : []
   const moyenne = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0
 
   const statsListe = (liste) => {
@@ -180,7 +187,7 @@ export default function RecapView({ section = 'cuisine' }) {
       const prixHT = f.prix_ttc ? (f.prix_ttc / tva) : null
       return {
         'Nom': f.nom, 'Lieu': f.lieux?.nom || '—', 'Catégorie': f.categories_plats?.nom || f.categorie || '—',
-        'Saison': f.saison || '—',
+        'Saison': formatSaison(f.saison, f.annee) || '—',
         'Coût / portion (€)': f.cout_portion ? Number(f.cout_portion).toFixed(2) : '—',
         'Prix HT (€)': prixHT ? prixHT.toFixed(2) : '—',
         'TVA (%)': tvaPercent,
@@ -215,7 +222,7 @@ export default function RecapView({ section = 'cuisine' }) {
         <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: c.texteMuted, flexWrap: 'wrap' }}>
           {cout ? <span>Coût : {Number(cout).toFixed(2)} €</span> : null}
           {prixTTC ? <span>Prix : {Number(prixTTC).toFixed(2)} €</span> : null}
-          {item.saison ? <span>{item.saison}</span> : null}
+          {(item.saison || item.annee) ? <span>{formatSaison(item.saison, item.annee)}</span> : null}
           {vue === 'categorie' && item.lieux && <Badge bg={cfg.colors.lieuBg} color={cfg.colors.lieuColor}>{item.lieux.emoji} {item.lieux.nom}</Badge>}
         </div>
       </div>
@@ -227,7 +234,7 @@ export default function RecapView({ section = 'cuisine' }) {
             {item.lieux && <Badge bg={cfg.colors.lieuBg} color={cfg.colors.lieuColor} size="sm">{item.lieux.emoji} {item.lieux.nom}</Badge>}
           </td>
         )}
-        <td style={{ padding: '8px 10px', textAlign: 'right', color: c.texteMuted }}>{item.saison || '—'}</td>
+        <td style={{ padding: '8px 10px', textAlign: 'right', color: c.texteMuted }}>{formatSaison(item.saison, item.annee) || '—'}</td>
         <td style={{ padding: '8px 10px', textAlign: 'right' }}>{cout ? `${Number(cout).toFixed(2)} €` : '—'}</td>
         <td style={{ padding: '8px 10px', textAlign: 'right' }}>{prixHT ? `${prixHT.toFixed(2)} €` : '—'}</td>
         <td style={{ padding: '8px 10px', textAlign: 'right' }}>{prixTTC ? `${Number(prixTTC).toFixed(2)} €` : '—'}</td>
@@ -527,7 +534,11 @@ export default function RecapView({ section = 'cuisine' }) {
           </div>
           <select value={saisonFiltree} onChange={e => setSaisonFiltree(e.target.value)} style={{ padding: '7px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte }}>
             <option value="toutes">Toutes saisons</option>
-            {theme.saisons.map(s => <option key={s} value={s}>{s}</option>)}
+            {SAISONS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={anneeFiltree} onChange={e => setAnneeFiltree(e.target.value)} style={{ padding: '7px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte }}>
+            <option value="toutes">Toutes années</option>
+            {annees.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
           {vue !== 'global' && (
             <>

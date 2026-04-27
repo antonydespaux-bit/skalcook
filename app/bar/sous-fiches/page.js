@@ -7,6 +7,7 @@ import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
 import Navbar from '../../../components/Navbar'
 import { ALLERGENES } from '../../../lib/allergenes'
+import { formatSaison } from '../../../lib/saison'
 import ChefLoader from '../../../components/ChefLoader'
 import { Badge } from '../../../components/ui'
 
@@ -101,7 +102,7 @@ export default function BarSousFichesPage() {
                   </div>
                   <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: fiche.allergenes?.length > 0 ? '8px' : '14px' }}>
                     {fiche.nb_portions} {uniteLabel}{fiche.nb_portions > 1 && uniteLabel === 'portion' ? 's' : ''}
-                    {fiche.saison && ` — ${fiche.saison}`}
+                    {(fiche.saison || fiche.annee) && ` — ${formatSaison(fiche.saison, fiche.annee)}`}
                   </div>
                   {fiche.allergenes && fiche.allergenes.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '14px' }}>

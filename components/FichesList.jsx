@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase, getClientId } from '../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme } from '../lib/theme.jsx'
+import { SAISONS, getYearsRange, formatSaison } from '../lib/saison'
 import { useIsMobile } from '../lib/useIsMobile'
 import { useTheme } from '../lib/useTheme'
 import { useRole } from '../lib/useRole'
@@ -68,7 +69,9 @@ export default function FichesList({ section = 'cuisine' }) {
   const [recherche, setRecherche] = useState('')
   const [filtreLieu, setFiltreLieu] = useState('tous')
   const [filtreCat, setFiltreCat] = useState('toutes')
-  const [saison, setSaison] = useState('toutes')
+  const [filtreSaison, setFiltreSaison] = useState('toutes')
+  const [filtreAnnee, setFiltreAnnee] = useState('toutes')
+  const annees = getYearsRange()
   const [modeArchive, setModeArchive] = useState(false)
   const [selection, setSelection] = useState([])
   const [saving, setSaving] = useState(false)
@@ -92,7 +95,7 @@ export default function FichesList({ section = 'cuisine' }) {
   useEffect(() => {
     if (!roleLoading && role && !cfg.allowedRoles.includes(role)) router.push(cfg.redirectOnDeny)
   }, [role, roleLoading])
-  useEffect(() => { setPage(1) }, [recherche, filtreLieu, filtreCat, saison, showArchives])
+  useEffect(() => { setPage(1) }, [recherche, filtreLieu, filtreCat, filtreSaison, filtreAnnee, showArchives])
 
   const checkUser = async () => {
     try {
@@ -138,7 +141,8 @@ export default function FichesList({ section = 'cuisine' }) {
     return f.nom.toLowerCase().includes(recherche.toLowerCase())
       && (filtreLieu === 'tous' || f.lieu_id === filtreLieu)
       && (filtreCat === 'toutes' || f.categorie_plat_id === filtreCat)
-      && (saison === 'toutes' || f.saison === saison)
+      && (filtreSaison === 'toutes' || f.saison === filtreSaison)
+      && (filtreAnnee === 'toutes' || f.annee === parseInt(filtreAnnee, 10))
   })
   const totalPages = Math.max(1, Math.ceil(fichesFiltrees.length / PAGE_SIZE))
   const fichesDisplay = cfg.hasPagination ? fichesFiltrees.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : fichesFiltrees
@@ -177,10 +181,15 @@ export default function FichesList({ section = 'cuisine' }) {
             <option value="toutes">Toutes catégories</option>
             {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.emoji} {cat.nom}</option>)}
           </select>
-          <select value={saison} onChange={e => setSaison(e.target.value)}
-            style={{ padding: '10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, background: c.blanc, outline: 'none', cursor: 'pointer', color: c.texte, fontSize: '13px' }}>
+          <select value={filtreSaison} onChange={e => setFiltreSaison(e.target.value)}
+            style={{ padding: '10px', borderRadius: '8px', border: `0.5px solid ${filtreSaison !== 'toutes' ? accent : c.bordure}`, background: filtreSaison !== 'toutes' ? accentClair : c.blanc, outline: 'none', cursor: 'pointer', color: c.texte, fontSize: '13px' }}>
             <option value="toutes">Toutes saisons</option>
-            {theme.saisons.map(s => <option key={s} value={s}>{s}</option>)}
+            {SAISONS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={filtreAnnee} onChange={e => setFiltreAnnee(e.target.value)}
+            style={{ padding: '10px', borderRadius: '8px', border: `0.5px solid ${filtreAnnee !== 'toutes' ? accent : c.bordure}`, background: filtreAnnee !== 'toutes' ? accentClair : c.blanc, outline: 'none', cursor: 'pointer', color: c.texte, fontSize: '13px' }}>
+            <option value="toutes">Toutes années</option>
+            {annees.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
           <button onClick={() => { setShowArchives(!showArchives); setModeArchive(false); setSelection([]) }} style={{
             padding: '10px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer',
@@ -287,7 +296,7 @@ export default function FichesList({ section = 'cuisine' }) {
                     </div>
                     <div style={{ display: 'flex', gap: '6px', fontSize: '12px', color: c.texteMuted, flexWrap: 'wrap', alignItems: 'center' }}>
                       {fiche.lieux && <Badge bg={cfg.colors.lieuBg} color={cfg.colors.lieuColor}>{fiche.lieux.emoji} {fiche.lieux.nom}</Badge>}
-                      {fiche.saison && <span style={{ fontSize: '11px' }}>{fiche.saison}</span>}
+                      {(fiche.saison || fiche.annee) && <span style={{ fontSize: '11px' }}>{formatSaison(fiche.saison, fiche.annee)}</span>}
                       {fiche.nb_portions && <span>{fiche.nb_portions} portions</span>}
                       {fiche.prix_ttc && <span style={{ fontWeight: '500', color: c.texte }}>{Number(fiche.prix_ttc).toFixed(2)} €</span>}
                       {fc && <Badge bg={fcBgColor} color={fcColor}>{fc}%</Badge>}

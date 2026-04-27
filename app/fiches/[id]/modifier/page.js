@@ -8,6 +8,7 @@ import { useTheme } from '../../../../lib/useTheme'
 import { useAutosave } from '../../../../lib/useAutosave'
 import { log } from '../../../../lib/useLog'
 import { ALLERGENES } from '../../../../lib/allergenes'
+import { SAISONS, getYearsRange, parseSaison } from '../../../../lib/saison'
 import IngredientSearch from '../../../../components/IngredientSearch'
 import FichePhoto from '../../../../components/FichePhoto'
 import ChefLoader from '../../../../components/ChefLoader'
@@ -27,7 +28,8 @@ export default function ModifierFiche() {
   const [perte, setPerte] = useState(0)
   const [description, setDescription] = useState('')
   const [instructions, setInstructions] = useState('')
-  const [saison, setSaison] = useState('Printemps 2026')
+  const [saison, setSaison] = useState('')
+  const [annee, setAnnee] = useState(new Date().getFullYear())
   const [allergenes, setAllergenes] = useState([])
   const [ingredients, setIngredients] = useState([])
   const [listeIngredients, setListeIngredients] = useState([])
@@ -48,7 +50,8 @@ export default function ModifierFiche() {
   const catSelectionnee = categoriesDyn.find(cat => cat.id === categoriePlat)
   const isSousFiche = catSelectionnee?.nom === 'Sous-fiches' || catSelectionnee?.nom === 'Sous-fiche'
 
-  const autosaveData = { nom, categoriePlat, lieuId, nbPortions, prixTTC, perte, description, instructions, saison, allergenes, ingredients }
+  const autosaveData = { nom, categoriePlat, lieuId, nbPortions, prixTTC, perte, description, instructions, saison, annee, allergenes, ingredients }
+  const annees = getYearsRange()
   const { hasDraft, lastSaved, getDraft, clearDraft } = useAutosave(`modifier-fiche-${params_route.id}`, autosaveData, 60000)
 
   useEffect(() => {
@@ -118,7 +121,14 @@ export default function ModifierFiche() {
     setPerte(ficheData.perte || 0)
     setDescription(ficheData.description || '')
     setInstructions(ficheData.instructions || '')
-    setSaison(ficheData.saison || 'Printemps 2026')
+    if (ficheData.annee || (ficheData.saison && SAISONS.includes(ficheData.saison))) {
+      setSaison(ficheData.saison || '')
+      setAnnee(ficheData.annee || null)
+    } else {
+      const parsed = parseSaison(ficheData.saison)
+      setSaison(parsed.saison)
+      setAnnee(parsed.annee)
+    }
     setAllergenes(ficheData.allergenes || [])
 
     const { data: ingsData } = await supabase
@@ -148,7 +158,8 @@ export default function ModifierFiche() {
     setPerte(draft.perte || 0)
     setDescription(draft.description || '')
     setInstructions(draft.instructions || '')
-    setSaison(draft.saison || 'Printemps 2026')
+    setSaison(draft.saison || '')
+    setAnnee(draft.annee || new Date().getFullYear())
     setAllergenes(draft.allergenes || [])
     setIngredients(draft.ingredients || [])
     setDraftRestored(true)
@@ -228,7 +239,7 @@ export default function ModifierFiche() {
       prix_ttc: isSousFiche ? null : (prixTTC ? parseFloat(prixTTC) : null),
       description,
       instructions: instructions || null,
-      saison, allergenes,
+      saison: saison || null, annee: annee || null, allergenes,
       cout_portion: coutPortion,
       perte: perte ? parseFloat(perte) : 0,
       updated_at: new Date().toISOString()
@@ -267,7 +278,7 @@ export default function ModifierFiche() {
     await log({
       action: 'MODIFICATION', entite: 'fiche', entite_id: params_route.id,
       entite_nom: nom, section: 'cuisine',
-      details: `Catégorie: ${catSelectionnee?.nom || ''}, Saison: ${saison}${perte > 0 ? `, Perte: ${perte}%` : ''}`
+      details: `Catégorie: ${catSelectionnee?.nom || ''}, Saison: ${[saison, annee].filter(Boolean).join(' ')}${perte > 0 ? `, Perte: ${perte}%` : ''}`
     })
 
     setSaving(false)
@@ -358,11 +369,21 @@ export default function ModifierFiche() {
               </div>
             </div>
 
-            <div>
-              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Saison</label>
-              <select value={saison} onChange={e => setSaison(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: c.blanc, outline: 'none', color: c.texte }}>
-                {theme.saisons.map(s => <option key={s}>{s}</option>)}
-              </select>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Saison</label>
+                <select value={saison} onChange={e => setSaison(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: c.blanc, outline: 'none', color: c.texte }}>
+                  <option value="">— Aucune —</option>
+                  {SAISONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Année</label>
+                <select value={annee || ''} onChange={e => setAnnee(e.target.value ? parseInt(e.target.value, 10) : null)} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: c.blanc, outline: 'none', color: c.texte }}>
+                  <option value="">— Aucune —</option>
+                  {annees.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>

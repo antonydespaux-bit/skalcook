@@ -8,6 +8,7 @@ import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
 import { log } from '../../../lib/useLog'
 import { ALLERGENES } from '../../../lib/allergenes'
+import { formatSaison } from '../../../lib/saison'
 import FichePhoto, { FicheHeaderInfo, FicheHeaderInfoStyles } from '../../../components/FichePhoto'
 import { AllergenesBlock, FicheDetailNavbar } from '../../../components/FicheDetailShared'
 import ChefLoader from '../../../components/ChefLoader'
@@ -146,7 +147,7 @@ export default function FicheDetail() {
       await log({
         action: 'SUPPRESSION', entite: 'fiche', entite_id: params_route.id,
         entite_nom: fiche.nom, section: 'cuisine',
-        details: `Catégorie: ${fiche.categorie}, Saison: ${fiche.saison}`
+        details: `Catégorie: ${fiche.categorie}, Saison: ${formatSaison(fiche.saison, fiche.annee)}`
       })
       if (photoPath) {
         await supabase.storage.from('fiches-photos').remove([photoPath])
@@ -225,7 +226,7 @@ export default function FicheDetail() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flex: '1 1 auto', minWidth: 0 }}>
               {fiche.categorie && <Badge bg={c.accentClair} color={c.accent}>{fiche.categorie}</Badge>}
-              {fiche.saison && <Badge bg={c.fond} color={c.texteMuted} border={`0.5px solid ${c.bordure}`}>{fiche.saison}</Badge>}
+              {(fiche.saison || fiche.annee) && <Badge bg={c.fond} color={c.texteMuted} border={`0.5px solid ${c.bordure}`}>{formatSaison(fiche.saison, fiche.annee)}</Badge>}
             </div>
             <div style={{ background: c.principal, color: c.accent, borderRadius: '10px', padding: '8px 14px', textAlign: 'center', flexShrink: 0, minWidth: '70px' }}>
               <div style={{ fontSize: '10px', opacity: 0.7, textTransform: 'capitalize' }}>{uniteLabel}</div>
@@ -376,7 +377,7 @@ export default function FicheDetail() {
             <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#8B7355', marginBottom: '6px', fontFamily: 'sans-serif' }}>Fiche technique — {fiche.categorie || ''}</div>
             <h1 style={{ fontSize: '28px', fontWeight: '400', color: '#2C1810', marginBottom: '10px', letterSpacing: '1px', width: '100%' }}>{fiche.nom}</h1>
             <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: '#8B7355', fontFamily: 'sans-serif' }}>
-              {fiche.saison && <span>Saison : {fiche.saison}</span>}
+              {(fiche.saison || fiche.annee) && <span>Saison : {formatSaison(fiche.saison, fiche.annee)}</span>}
               {fiche.nb_portions && <span>{uniteLabel} : {fiche.nb_portions}</span>}
             </div>
           </div>
@@ -499,7 +500,7 @@ export default function FicheDetail() {
         {/* Pied de page */}
         <div style={{ borderTop: '1px solid #e8e4dc', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', color: '#8B7355', fontFamily: 'sans-serif' }}>
           <span>{nomEtablissement || params['nom_etablissement'] || ''} — {params['adresse'] || ''}</span>
-          <span>{fiche.nom} — {fiche.saison || ''} — Imprimé le {today}</span>
+          <span>{fiche.nom} — {formatSaison(fiche.saison, fiche.annee)} — Imprimé le {today}</span>
         </div>
       </div>
     </div>

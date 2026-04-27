@@ -1,5 +1,6 @@
 'use client'
 import { useRouter } from 'next/navigation'
+import { formatSaison } from '../../lib/saison'
 
 const calculerCoutMenu = (menu) => {
   if (!menu.menu_fiches) return 0
@@ -49,12 +50,12 @@ export default function MenusGrid({ c, isMobile, menus, onDelete, onCreateClick 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
               <div>
                 <div style={{ fontSize: isMobile ? '15px' : '16px', fontWeight: '500', color: c.texte }}>{menu.nom}</div>
-                {menu.saison && (
+                {(menu.saison || menu.annee) && (
                   <span style={{
                     background: c.accentClair, color: c.principal,
                     borderRadius: '20px', padding: '2px 10px',
                     fontSize: '11px', fontWeight: '500', marginTop: '4px', display: 'inline-block'
-                  }}>{menu.saison}</span>
+                  }}>{formatSaison(menu.saison, menu.annee)}</span>
                 )}
               </div>
               {menu.prix_vente && (

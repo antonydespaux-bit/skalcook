@@ -8,6 +8,7 @@ import { useTheme } from '../../../../lib/useTheme'
 import { useRole } from '../../../../lib/useRole'
 import { log } from '../../../../lib/useLog'
 import { ALLERGENES } from '../../../../lib/allergenes'
+import { formatSaison } from '../../../../lib/saison'
 import { AllergenesBlock } from '../../../../components/FicheDetailShared'
 import ChefLoader from '../../../../components/ChefLoader'
 import BackButton from '../../../../components/BackButton'
@@ -240,7 +241,7 @@ const loadFiche = async () => {
               <h1 style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: '500', marginBottom: '8px', color: c.texte }}>{fiche.nom}</h1>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {fiche.categorie && <Badge bg={'#EEEDFE'} color={'#3C3489'}>{fiche.categorie}</Badge>}
-                {fiche.saison && <Badge bg={c.fond} color={c.texteMuted} border={`0.5px solid ${c.bordure}`}>{fiche.saison}</Badge>}
+                {(fiche.saison || fiche.annee) && <Badge bg={c.fond} color={c.texteMuted} border={`0.5px solid ${c.bordure}`}>{formatSaison(fiche.saison, fiche.annee)}</Badge>}
               </div>
             </div>
             <div style={{ background: '#3C3489', color: '#C4956A', borderRadius: '10px', padding: '8px 14px', textAlign: 'center', flexShrink: 0, marginLeft: '12px' }}>
@@ -349,7 +350,7 @@ const loadFiche = async () => {
             <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#7C3AED', marginBottom: '6px', fontFamily: 'sans-serif' }}>Fiche technique Bar — {fiche.categorie || ''}</div>
             <h1 style={{ fontSize: '26px', fontWeight: '400', color: '#3C3489', marginBottom: '8px', letterSpacing: '1px' }}>{fiche.nom}</h1>
             <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: '#7C3AED', fontFamily: 'sans-serif' }}>
-              {fiche.saison && <span>Saison : {fiche.saison}</span>}
+              {(fiche.saison || fiche.annee) && <span>Saison : {formatSaison(fiche.saison, fiche.annee)}</span>}
               {fiche.nb_portions && <span>Portions : {fiche.nb_portions}</span>}
             </div>
           </div>
@@ -453,7 +454,7 @@ const loadFiche = async () => {
         {/* Pied de page */}
         <div style={{ borderTop: '1px solid #DDD6FE', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', color: '#7C3AED', fontFamily: 'sans-serif' }}>
           <span>{nomEtablissement || params['nom_etablissement'] || ''} — Bar</span>
-          <span>{fiche.nom} — {fiche.saison || ''} — Imprimé le {today}</span>
+          <span>{fiche.nom} — {formatSaison(fiche.saison, fiche.annee)} — Imprimé le {today}</span>
         </div>
       </div>
     </div>

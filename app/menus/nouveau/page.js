@@ -5,12 +5,14 @@ import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
 import { useTheme } from '../../../lib/useTheme'
 import { log } from '../../../lib/useLog'
+import { SAISONS, getYearsRange } from '../../../lib/saison'
 import BackButton from '../../../components/BackButton'
 
 export default function NouveauMenu() {
   const { nomEtablissement, logoUrl } = useTheme()
   const [nom, setNom] = useState('')
-  const [saison, setSaison] = useState('Printemps 2026')
+  const [saison, setSaison] = useState('')
+  const [annee, setAnnee] = useState(new Date().getFullYear())
   const [prixVente, setPrixVente] = useState('')
   const [description, setDescription] = useState('')
   const [fiches, setFiches] = useState([])
@@ -20,7 +22,7 @@ export default function NouveauMenu() {
   const [error, setError] = useState('')
   const router = useRouter()
   const c = theme.couleurs
-  const saisons = theme.saisons
+  const annees = getYearsRange()
   const services = ['Entrée', 'Plat', 'Dessert']
 
   useEffect(() => {
@@ -85,7 +87,7 @@ export default function NouveauMenu() {
     const { data: menu, error: errMenu } = await supabase
       .from('menus')
       .insert([{
-        nom, saison,
+        nom, saison: saison || null, annee: annee || null,
         prix_vente: prixVente ? parseFloat(prixVente) : null,
         description,
         client_id: clientId
@@ -112,7 +114,7 @@ export default function NouveauMenu() {
     await log({
       action: 'CREATION', entite: 'menu', entite_id: menu.id,
       entite_nom: nom, section: 'cuisine',
-      details: `Saison: ${saison}`
+      details: `Saison: ${[saison, annee].filter(Boolean).join(' ')}`
     })
 
     router.push('/menus')
@@ -174,15 +176,29 @@ export default function NouveauMenu() {
                 style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte }}
               />
             </div>
-            <div>
-              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Saison</label>
-              <select value={saison} onChange={e => setSaison(e.target.value)} style={{
-                width: '100%', padding: '10px 12px', borderRadius: '8px',
-                border: `0.5px solid ${c.bordure}`, fontSize: '14px',
-                background: 'white', outline: 'none', color: c.texte
-              }}>
-                {saisons.map(s => <option key={s}>{s}</option>)}
-              </select>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Saison</label>
+                <select value={saison} onChange={e => setSaison(e.target.value)} style={{
+                  width: '100%', padding: '10px 12px', borderRadius: '8px',
+                  border: `0.5px solid ${c.bordure}`, fontSize: '14px',
+                  background: 'white', outline: 'none', color: c.texte
+                }}>
+                  <option value="">— Aucune —</option>
+                  {SAISONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Année</label>
+                <select value={annee || ''} onChange={e => setAnnee(e.target.value ? parseInt(e.target.value, 10) : null)} style={{
+                  width: '100%', padding: '10px 12px', borderRadius: '8px',
+                  border: `0.5px solid ${c.bordure}`, fontSize: '14px',
+                  background: 'white', outline: 'none', color: c.texte
+                }}>
+                  <option value="">— Aucune —</option>
+                  {annees.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
             </div>
             <div>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix de vente TTC (€)</label>
