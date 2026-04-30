@@ -12,6 +12,7 @@ import { SAISONS, getYearsRange, parseSaison } from '../../../../../lib/saison'
 import IngredientSearch from '../../../../../components/IngredientSearch'
 import ChefLoader from '../../../../../components/ChefLoader'
 import BackButton from '../../../../../components/BackButton'
+import { uploadFichePhoto } from '../../../../../lib/uploadPhoto'
 import { Alert, Card } from '../../../../../components/ui'
 
 const CATEGORIES_ALCOOL = ['Cocktails', 'Vins', 'Champagnes', 'Bières', 'Spiritueux']
@@ -28,6 +29,9 @@ export default function ModifierBarFiche() {
   const [saison, setSaison] = useState('')
   const [annee, setAnnee] = useState(new Date().getFullYear())
   const [allergenes, setAllergenes] = useState([])
+  const [photo, setPhoto] = useState(null)
+  const [photoPreview, setPhotoPreview] = useState(null)
+  const [existingPhotoUrl, setExistingPhotoUrl] = useState(null)
   const [ingredients, setIngredients] = useState([])
   const [listeIngredients, setListeIngredients] = useState([])
   const [lieux, setLieux] = useState([])
@@ -108,6 +112,13 @@ export default function ModifierBarFiche() {
       }
       setAllergenes(ficheData.allergenes || [])
 
+      if (ficheData.photo_url) {
+        const url = ficheData.photo_url.startsWith('http')
+          ? ficheData.photo_url
+          : supabase.storage.from('fiches-photos').getPublicUrl(ficheData.photo_url).data?.publicUrl
+        setExistingPhotoUrl(url || null)
+      }
+
       // Requête ingrédients en deux temps
       const { data: liens } = await supabase
         .from('fiche_bar_ingredients')
@@ -168,6 +179,13 @@ export default function ModifierBarFiche() {
 
   const toggleAllergene = (id) => {
     setAllergenes(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id])
+  }
+
+  const handlePhoto = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setPhoto(file)
+    setPhotoPreview(URL.createObjectURL(file))
   }
 
   const ajouterIngredient = () => {
@@ -244,6 +262,16 @@ export default function ModifierBarFiche() {
       perte: perte ? parseFloat(perte) : 0,
       updated_at: new Date().toISOString()
     }).eq('id', params_route.id).eq('client_id', clientId)
+
+    if (photo) {
+      try {
+        const photoUrl = await uploadFichePhoto(supabase, { clientId, ficheId: params_route.id, file: photo, isBar: true })
+        await supabase.from('fiches_bar').update({ photo_url: photoUrl }).eq('id', params_route.id).eq('client_id', clientId)
+      } catch (err) {
+        setError('Erreur upload photo : ' + err.message); setSaving(false); return
+      }
+    }
+
     await supabase.from('fiche_bar_ingredients').delete().eq('fiche_bar_id', params_route.id).eq('client_id', clientId)
 
     const ingredientsAInserer = ingredients
@@ -325,6 +353,34 @@ export default function ModifierBarFiche() {
         <div style={{ background: isAlcool ? '#FCEBEB' : '#EAF3DE', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', marginBottom: '16px', border: `0.5px solid ${isAlcool ? '#F09595' : '#4A7B6F40'}`, color: isAlcool ? '#A32D2D' : '#3B6D11' }}>
           {isAlcool ? '🍷 TVA Alcool : 20%' : '🥤 TVA Sans alcool : 10%'}
         </div>
+
+        {/* Photo */}
+        <Card c={c} style={{ marginBottom: '12px' }}>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Photo de la boisson</div>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+            {photoPreview || existingPhotoUrl ? (
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <img src={photoPreview || existingPhotoUrl} alt="Aperçu" style={{ width: isMobile ? '100px' : '160px', height: isMobile ? '80px' : '120px', objectFit: 'cover', borderRadius: '8px', border: `0.5px solid ${c.bordure}` }} />
+                {photoPreview && (
+                  <button onClick={() => { setPhoto(null); setPhotoPreview(null) }} style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#A32D2D', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', fontSize: '12px', cursor: 'pointer' }}>×</button>
+                )}
+              </div>
+            ) : (
+              <div style={{ width: isMobile ? '100px' : '160px', height: isMobile ? '80px' : '120px', borderRadius: '8px', border: `1px dashed ${c.bordure}`, display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond, flexDirection: 'column', gap: '4px', flexShrink: 0 }}>
+                <span style={{ fontSize: '20px' }}>📷</span>
+                <span style={{ fontSize: '10px', color: c.texteMuted }}>Aucune photo</span>
+              </div>
+            )}
+            <div style={{ flex: 1 }}>
+              <input type="file" accept="image/*" onChange={handlePhoto}
+                style={{ width: '100%', padding: '10px 12px', border: `0.5px solid ${c.accent}`, borderRadius: '8px', fontSize: '13px', background: c.accentClair, cursor: 'pointer', color: c.texte }}
+              />
+              <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '6px' }}>
+                {existingPhotoUrl && !photoPreview ? 'Sélectionne une nouvelle image pour remplacer' : 'JPG, PNG, WEBP — Max 5MB'}
+              </div>
+            </div>
+          </div>
+        </Card>
 
         {/* Infos générales */}
         <Card c={c} style={{ marginBottom: '12px' }}>

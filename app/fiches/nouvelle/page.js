@@ -11,6 +11,7 @@ import { ALLERGENES } from '../../../lib/allergenes'
 import { SAISONS, getYearsRange } from '../../../lib/saison'
 import IngredientSearch from '../../../components/IngredientSearch'
 import BackButton from '../../../components/BackButton'
+import { uploadFichePhoto } from '../../../lib/uploadPhoto'
 
 import { isIngredientPossible } from '../../../lib/foodCost'
 import { UNITES_PRODUCTION } from '../../../lib/constants'
@@ -28,6 +29,8 @@ export default function NouvelleFiche() {
   const [saison, setSaison] = useState('')
   const [annee, setAnnee] = useState(new Date().getFullYear())
   const [allergenes, setAllergenes] = useState([])
+  const [photo, setPhoto] = useState(null)
+  const [photoPreview, setPhotoPreview] = useState(null)
   const [ingredients, setIngredients] = useState([
     { ingredient_id: '', nom: '', quantite: '', unite: 'kg' }
   ])
@@ -106,6 +109,13 @@ export default function NouvelleFiche() {
 
   const toggleAllergene = (id) => {
     setAllergenes(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id])
+  }
+
+  const handlePhoto = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setPhoto(file)
+    setPhotoPreview(URL.createObjectURL(file))
   }
 
   const ajouterIngredient = () => {
@@ -193,6 +203,15 @@ export default function NouvelleFiche() {
       .select().single()
 
     if (errFiche) { setError('Erreur : ' + errFiche.message); setLoading(false); return }
+
+    if (photo) {
+      try {
+        const photoUrl = await uploadFichePhoto(supabase, { clientId, ficheId: fiche.id, file: photo, isBar: false })
+        await supabase.from('fiches').update({ photo_url: photoUrl }).eq('id', fiche.id).eq('client_id', clientId)
+      } catch (err) {
+        setError('Erreur upload photo : ' + err.message); setLoading(false); return
+      }
+    }
 
     const ingredientsAInserer = ingredients
       .filter(i => i.ingredient_id && i.quantite)
@@ -294,6 +313,30 @@ export default function NouvelleFiche() {
             Cette fiche sera disponible comme ingrédient dans les fiches principales
           </div>
         )}
+
+        {/* Photo */}
+        <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Photo du plat</div>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+            {photoPreview ? (
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <img src={photoPreview} alt="Aperçu" style={{ width: isMobile ? '100px' : '160px', height: isMobile ? '80px' : '120px', objectFit: 'cover', borderRadius: '8px', border: `0.5px solid ${c.bordure}` }} />
+                <button onClick={() => { setPhoto(null); setPhotoPreview(null) }} style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#A32D2D', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', fontSize: '12px', cursor: 'pointer' }}>×</button>
+              </div>
+            ) : (
+              <div style={{ width: isMobile ? '100px' : '160px', height: isMobile ? '80px' : '120px', borderRadius: '8px', border: `1px dashed ${c.bordure}`, display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond, flexDirection: 'column', gap: '4px', flexShrink: 0 }}>
+                <span style={{ fontSize: '20px' }}>📷</span>
+                <span style={{ fontSize: '10px', color: c.texteMuted }}>Aucune photo</span>
+              </div>
+            )}
+            <div style={{ flex: 1 }}>
+              <input type="file" accept="image/*" onChange={handlePhoto}
+                style={{ width: '100%', padding: '10px 12px', border: `0.5px solid ${c.accent}`, borderRadius: '8px', fontSize: '13px', background: c.accentClair, cursor: 'pointer', color: c.texte }}
+              />
+              <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '6px' }}>JPG, PNG, WEBP — Max 5MB</div>
+            </div>
+          </div>
+        </div>
 
         {/* Informations générales */}
         <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '24px', border: `0.5px solid ${isSousFiche ? '#AFA9EC' : c.bordure}`, marginBottom: '12px' }}>
