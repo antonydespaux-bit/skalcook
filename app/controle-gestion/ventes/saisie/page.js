@@ -320,7 +320,7 @@ export default function SaisieVentesPage() {
       {!loading && lieux.length > 0 && (
         <div
           style={{
-            position: 'sticky',
+            position: 'fixed',
             bottom: 0,
             left: 0,
             right: 0,
@@ -329,17 +329,17 @@ export default function SaisieVentesPage() {
             padding: isMobile ? '12px 16px' : '12px 24px',
             display: 'flex',
             justifyContent: 'center',
-            zIndex: 10,
-            boxShadow: '0 -4px 12px rgba(0,0,0,0.04)',
+            zIndex: 100,
+            boxShadow: '0 -6px 20px rgba(0,0,0,0.08)',
           }}
         >
           <button
             onClick={handleSave}
             disabled={saving || loading}
             style={{
-              padding: '12px 24px',
+              padding: '14px 32px',
               borderRadius: 8,
-              fontSize: 15,
+              fontSize: 16,
               border: 'none',
               background: c.accent,
               color: '#fff',
@@ -347,7 +347,7 @@ export default function SaisieVentesPage() {
               fontWeight: 600,
               opacity: saving || loading ? 0.5 : 1,
               width: isMobile ? '100%' : 'auto',
-              minWidth: isMobile ? 'auto' : 280,
+              minWidth: isMobile ? 'auto' : 320,
             }}
           >
             {saving ? 'Enregistrement…' : 'Enregistrer la journée'}
