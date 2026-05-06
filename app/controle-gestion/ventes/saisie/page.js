@@ -256,7 +256,7 @@ export default function SaisieVentesPage() {
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
       <Navbar section="cuisine" />
-      <div style={{ padding: isMobile ? 16 : 24, maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ padding: isMobile ? 16 : 24, paddingBottom: 96, maxWidth: 1200, margin: '0 auto' }}>
         <div style={{ marginBottom: 16 }}>
           <h1 style={{ margin: '0 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 600, color: c.texte }}>
             Saisie CA journalier
@@ -289,24 +289,6 @@ export default function SaisieVentesPage() {
               fontSize: 13,
             }}
           />
-          <div style={{ flex: 1 }} />
-          <button
-            onClick={handleSave}
-            disabled={saving || loading || lieux.length === 0}
-            style={{
-              padding: '8px 14px',
-              borderRadius: 8,
-              fontSize: 13,
-              border: 'none',
-              background: c.accent,
-              color: '#fff',
-              cursor: saving || loading || lieux.length === 0 ? 'not-allowed' : 'pointer',
-              fontWeight: 500,
-              opacity: saving || loading || lieux.length === 0 ? 0.5 : 1,
-            }}
-          >
-            {saving ? 'Enregistrement…' : 'Enregistrer la journée'}
-          </button>
         </div>
 
         {error && (
@@ -322,6 +304,7 @@ export default function SaisieVentesPage() {
 
         {!loading && lieux.length > 0 && (
           <>
+            <LieuxBar lieux={lieux} addLieu={addLieu} c={c} isMobile={isMobile} />
             <SaisieGrid
               lieux={lieux}
               saisies={saisies}
@@ -333,6 +316,194 @@ export default function SaisieVentesPage() {
           </>
         )}
       </div>
+
+      {!loading && lieux.length > 0 && (
+        <div
+          style={{
+            position: 'sticky',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            background: c.blanc,
+            borderTop: `1px solid ${c.bordure}`,
+            padding: isMobile ? '12px 16px' : '12px 24px',
+            display: 'flex',
+            justifyContent: 'center',
+            zIndex: 10,
+            boxShadow: '0 -4px 12px rgba(0,0,0,0.04)',
+          }}
+        >
+          <button
+            onClick={handleSave}
+            disabled={saving || loading}
+            style={{
+              padding: '12px 24px',
+              borderRadius: 8,
+              fontSize: 15,
+              border: 'none',
+              background: c.accent,
+              color: '#fff',
+              cursor: saving || loading ? 'not-allowed' : 'pointer',
+              fontWeight: 600,
+              opacity: saving || loading ? 0.5 : 1,
+              width: isMobile ? '100%' : 'auto',
+              minWidth: isMobile ? 'auto' : 280,
+            }}
+          >
+            {saving ? 'Enregistrement…' : 'Enregistrer la journée'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LieuxBar({ lieux, addLieu, c, isMobile }) {
+  const [adding, setAdding] = useState(false)
+  const [newName, setNewName] = useState('')
+  const handleSubmit = async () => {
+    if (!newName.trim()) return
+    await addLieu(newName)
+    setNewName('')
+    setAdding(false)
+  }
+  const remaining = SUGGESTED_LIEUX.filter((s) => !lieux.some((l) => l.nom === s))
+  return (
+    <div
+      style={{
+        background: c.blanc,
+        borderRadius: 12,
+        border: `0.5px solid ${c.bordure}`,
+        padding: 12,
+        marginBottom: 12,
+        display: 'flex',
+        gap: 8,
+        alignItems: 'center',
+        flexWrap: 'wrap',
+      }}
+    >
+      <span style={{ fontSize: 13, color: c.texteMuted }}>
+        {lieux.length} lieu{lieux.length > 1 ? 'x' : ''} configuré{lieux.length > 1 ? 's' : ''} :
+      </span>
+      {lieux.map((l) => (
+        <span
+          key={l.id}
+          style={{
+            padding: '4px 10px',
+            borderRadius: 6,
+            background: c.fond,
+            color: c.texte,
+            fontSize: 12,
+            fontWeight: 500,
+          }}
+        >
+          {l.nom}
+        </span>
+      ))}
+      {!adding ? (
+        <button
+          onClick={() => setAdding(true)}
+          style={{
+            padding: '4px 10px',
+            borderRadius: 6,
+            border: `1px dashed ${c.bordure}`,
+            background: 'transparent',
+            color: c.texteMuted,
+            fontSize: 12,
+            cursor: 'pointer',
+            marginLeft: 'auto',
+          }}
+        >
+          + Ajouter un lieu
+        </button>
+      ) : (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginLeft: isMobile ? 0 : 'auto' }}>
+          {remaining.length > 0 && (
+            <select
+              onChange={(e) => {
+                if (e.target.value) {
+                  addLieu(e.target.value)
+                  setAdding(false)
+                }
+              }}
+              defaultValue=""
+              style={{
+                padding: '6px 10px',
+                borderRadius: 6,
+                border: `1px solid ${c.bordure}`,
+                background: c.blanc,
+                color: c.texte,
+                fontSize: 12,
+              }}
+            >
+              <option value="" disabled>
+                Suggestions…
+              </option>
+              {remaining.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          )}
+          <input
+            type="text"
+            placeholder="Autre nom…"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSubmit()
+              if (e.key === 'Escape') {
+                setAdding(false)
+                setNewName('')
+              }
+            }}
+            autoFocus
+            style={{
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: `1px solid ${c.bordure}`,
+              background: c.blanc,
+              color: c.texte,
+              fontSize: 12,
+              width: 140,
+            }}
+          />
+          <button
+            onClick={handleSubmit}
+            disabled={!newName.trim()}
+            style={{
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: 'none',
+              background: c.accent,
+              color: '#fff',
+              fontSize: 12,
+              cursor: newName.trim() ? 'pointer' : 'not-allowed',
+              opacity: newName.trim() ? 1 : 0.5,
+            }}
+          >
+            OK
+          </button>
+          <button
+            onClick={() => {
+              setAdding(false)
+              setNewName('')
+            }}
+            style={{
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: `1px solid ${c.bordure}`,
+              background: c.blanc,
+              color: c.texteMuted,
+              fontSize: 12,
+              cursor: 'pointer',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   )
 }
