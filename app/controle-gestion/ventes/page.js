@@ -220,6 +220,21 @@ export default function VentesMensuelPage() {
           />
           <div style={{ flex: 1 }} />
           <Link
+            href="/controle-gestion/ventes/budgets"
+            style={{
+              padding: '8px 14px',
+              borderRadius: 8,
+              fontSize: 13,
+              border: `1px solid ${c.bordure}`,
+              background: c.blanc,
+              color: c.texte,
+              textDecoration: 'none',
+              fontWeight: 500,
+            }}
+          >
+            Budgets
+          </Link>
+          <Link
             href="/controle-gestion/ventes/saisie"
             style={{
               padding: '8px 14px',

@@ -130,9 +130,13 @@ export type CaJournalierInsert = {
   updated_at?: string
 }
 
+/** 1-12 pour un override mensuel, NULL pour le budget par défaut annuel. */
+export type MoisBudget = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12
+
 export type CaBudgetsRow = {
   id: string
   client_id: string
+  mois: MoisBudget | null
   jour_semaine: JourSemaine
   lieu_service_id: string
   service: Service
@@ -141,6 +145,7 @@ export type CaBudgetsRow = {
   ca_bev_20_cible: number
   ca_bev_10_cible: number
   ca_autre_cible: number
+  raison_modification: string | null
   created_at: string
   updated_at: string
 }
@@ -148,6 +153,7 @@ export type CaBudgetsRow = {
 export type CaBudgetsInsert = {
   id?: string
   client_id: string
+  mois?: MoisBudget | null
   jour_semaine: JourSemaine
   lieu_service_id: string
   service: Service
@@ -156,8 +162,23 @@ export type CaBudgetsInsert = {
   ca_bev_20_cible?: number
   ca_bev_10_cible?: number
   ca_autre_cible?: number
+  raison_modification?: string | null
   created_at?: string
   updated_at?: string
+}
+
+export type CaBudgetsAuditAction = 'INSERT' | 'UPDATE' | 'DELETE'
+
+export type CaBudgetsAuditRow = {
+  id: string
+  client_id: string
+  budget_id: string | null
+  action: CaBudgetsAuditAction
+  changed_by: string | null
+  raison: string | null
+  old_values: Json | null
+  new_values: Json | null
+  changed_at: string
 }
 
 export type CaOffertsRow = {
@@ -291,6 +312,19 @@ export type Database = {
             foreignKeyName: 'ca_offerts_lieu_service_id_fkey'
             columns: ['lieu_service_id']
             referencedRelation: 'lieux_service'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      ca_budgets_audit: {
+        Row: CaBudgetsAuditRow
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'ca_budgets_audit_client_id_fkey'
+            columns: ['client_id']
+            referencedRelation: 'clients'
             referencedColumns: ['id']
           },
         ]
