@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import * as XLSX from 'xlsx'
 import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import { useTheme } from '../../../../lib/useTheme'
@@ -81,6 +82,162 @@ function formatEur(n) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n)
 }
 
+/* ─── Import Excel ───────────────────────────────────────────────────────── */
+
+const FOOD_RATIO = 0.65
+const BEV_20_RATIO = 0.28
+const BEV_10_RATIO = 0.07
+
+const MOIS_FR = [
+  'janvier',
+  'février',
+  'mars',
+  'avril',
+  'mai',
+  'juin',
+  'juillet',
+  'août',
+  'septembre',
+  'octobre',
+  'novembre',
+  'décembre',
+]
+const JOURS_FR_LOOKUP = {
+  lundi: 1,
+  mardi: 2,
+  mercredi: 3,
+  jeudi: 4,
+  vendredi: 5,
+  samedi: 6,
+  dimanche: 7,
+}
+
+function normalizeStr(s) {
+  return (s == null ? '' : String(s)).trim().toLowerCase()
+}
+
+function findMonthIdx(s) {
+  const n = normalizeStr(s)
+  return MOIS_FR.findIndex((m) => n.startsWith(m))
+}
+
+function findJourSemaine(s) {
+  const n = normalizeStr(s)
+  for (const [k, v] of Object.entries(JOURS_FR_LOOKUP)) {
+    if (n.startsWith(k)) return v
+  }
+  return null
+}
+
+function buildBudgetRow(section, mois, jourSemaine, service, couverts, tm) {
+  const ca = (Number(couverts) || 0) * (Number(tm) || 0)
+  return {
+    section,
+    mois,
+    jour_semaine: jourSemaine,
+    service,
+    couverts_cible: Number(couverts) || 0,
+    ca_food_cible: Math.round(ca * FOOD_RATIO * 100) / 100,
+    ca_bev_20_cible: Math.round(ca * BEV_20_RATIO * 100) / 100,
+    ca_bev_10_cible: Math.round(ca * BEV_10_RATIO * 100) / 100,
+    ca_autre_cible: 0,
+  }
+}
+
+async function parseExcelBudget(file) {
+  const buf = await file.arrayBuffer()
+  const wb = XLSX.read(buf, { type: 'array' })
+  const sheetName =
+    wb.SheetNames.find((n) => normalizeStr(n).includes('synthèse')) || wb.SheetNames[0]
+  const sheet = wb.Sheets[sheetName]
+  if (!sheet) throw new Error('Feuille introuvable')
+
+  const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null })
+
+  const sections = []
+  for (let r = 0; r < aoa.length; r++) {
+    const row = aoa[r] || []
+    for (let c = 0; c < row.length; c++) {
+      const v = normalizeStr(row[c])
+      if (!v.includes('déjeuner')) continue
+      if (v.includes('salle') && v.includes('manger')) {
+        sections.push({ name: 'Salle à manger', headerRow: r, lunchCol: c })
+      } else if (v.includes('table') && v.includes('partage')) {
+        sections.push({ name: 'Table de partage', headerRow: r, lunchCol: c })
+      }
+    }
+  }
+
+  if (sections.length === 0) {
+    throw new Error('Aucune section reconnue (Salle à manger / Table de partage)')
+  }
+
+  const parsed = []
+  for (const sec of sections) {
+    let r = sec.headerRow + 3
+    let monthsParsed = 0
+    while (monthsParsed < 12 && r < aoa.length) {
+      const row = aoa[r] || []
+      const monthIdx = findMonthIdx(row[0])
+      if (monthIdx >= 0) {
+        const mois = monthIdx + 1
+        for (let dr = r + 1; dr <= r + 5; dr++) {
+          const drow = aoa[dr] || []
+          const jourSemaine = findJourSemaine(drow[0])
+          if (!jourSemaine) continue
+
+          const couvL = Number(drow[sec.lunchCol + 1]) || 0
+          const tmL = Number(drow[sec.lunchCol + 3]) || 0
+          parsed.push(buildBudgetRow(sec.name, mois, jourSemaine, 'lunch', couvL, tmL))
+
+          const couvD = Number(drow[sec.lunchCol + 7]) || 0
+          const tmD = Number(drow[sec.lunchCol + 9]) || 0
+          parsed.push(buildBudgetRow(sec.name, mois, jourSemaine, 'dinner', couvD, tmD))
+        }
+        r += 7
+        monthsParsed++
+      } else {
+        r++
+      }
+    }
+  }
+
+  return parsed
+}
+
+function consolidateRows(parsed) {
+  const grouped = new Map()
+  for (const r of parsed) {
+    const k = `${r.section}|${r.jour_semaine}|${r.service}`
+    if (!grouped.has(k)) grouped.set(k, [])
+    grouped.get(k).push(r)
+  }
+  const final = []
+  for (const rows of grouped.values()) {
+    const sigCount = new Map()
+    const sigOf = (x) =>
+      `${x.couverts_cible}|${x.ca_food_cible}|${x.ca_bev_20_cible}|${x.ca_bev_10_cible}|${x.ca_autre_cible}`
+    for (const r of rows) {
+      const s = sigOf(r)
+      sigCount.set(s, (sigCount.get(s) || 0) + 1)
+    }
+    let bestSig = null
+    let bestCount = 0
+    for (const [s, count] of sigCount) {
+      if (count > bestCount) {
+        bestSig = s
+        bestCount = count
+      }
+    }
+    const def = rows.find((r) => sigOf(r) === bestSig)
+    final.push({ ...def, mois: null })
+    for (const r of rows) {
+      if (sigOf(r) !== bestSig) final.push(r)
+    }
+  }
+  return final
+}
+
 export default function BudgetsPage() {
   const router = useRouter()
   const c = useTheme()
@@ -99,6 +256,8 @@ export default function BudgetsPage() {
   const [okMsg, setOkMsg] = useState('')
   const [saving, setSaving] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [importPreview, setImportPreview] = useState(null)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     let cancel = false
@@ -254,6 +413,84 @@ export default function BudgetsPage() {
     }
   }, [clientId, moisValue, lieux, budgets, raison, loadData])
 
+  const handleFileChange = useCallback(async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setError('')
+    setOkMsg('')
+    try {
+      const parsed = await parseExcelBudget(file)
+      if (parsed.length === 0) {
+        throw new Error('Aucune donnée extraite du fichier.')
+      }
+      const consolidated = consolidateRows(parsed)
+      const sectionNames = [...new Set(consolidated.map((r) => r.section))]
+      const existingNames = lieux.map((l) => l.nom)
+      const lieuxToCreate = sectionNames.filter((n) => !existingNames.includes(n))
+      const defaultsCount = consolidated.filter((r) => r.mois == null).length
+      const overridesCount = consolidated.length - defaultsCount
+      setImportPreview({
+        rows: consolidated,
+        sectionNames,
+        lieuxToCreate,
+        defaultsCount,
+        overridesCount,
+      })
+    } catch (err) {
+      setError(`Erreur d'import : ${err.message}`)
+    }
+  }, [lieux])
+
+  const confirmImport = useCallback(async () => {
+    if (!importPreview || !clientId) return
+    setSaving(true)
+    setError('')
+    setOkMsg('')
+    try {
+      const updatedLieux = [...lieux]
+      for (const nom of importPreview.lieuxToCreate) {
+        const { data, error: insErr } = await supabase
+          .from('lieux_service')
+          .insert({ client_id: clientId, nom, ordre: updatedLieux.length })
+          .select('id, nom, ordre, actif')
+          .single()
+        if (insErr) throw insErr
+        updatedLieux.push(data)
+      }
+      const idByName = new Map(updatedLieux.map((l) => [l.nom, l.id]))
+      const rowsToUpsert = []
+      for (const r of importPreview.rows) {
+        const lieuId = idByName.get(r.section)
+        if (!lieuId) continue
+        rowsToUpsert.push({
+          client_id: clientId,
+          mois: r.mois,
+          jour_semaine: r.jour_semaine,
+          lieu_service_id: lieuId,
+          service: r.service,
+          couverts_cible: r.couverts_cible,
+          ca_food_cible: r.ca_food_cible,
+          ca_bev_20_cible: r.ca_bev_20_cible,
+          ca_bev_10_cible: r.ca_bev_10_cible,
+          ca_autre_cible: r.ca_autre_cible,
+          raison_modification: 'Import Excel Budget 2026',
+        })
+      }
+      const { error: upErr } = await supabase
+        .from('ca_budgets')
+        .upsert(rowsToUpsert, { onConflict: 'client_id,mois,jour_semaine,lieu_service_id,service' })
+      if (upErr) throw upErr
+      setOkMsg(`Import terminé : ${rowsToUpsert.length} lignes importées.`)
+      setImportPreview(null)
+      await loadData()
+    } catch (e) {
+      setError(`Erreur d'import : ${e.message}`)
+    } finally {
+      setSaving(false)
+    }
+  }, [importPreview, clientId, lieux, loadData])
+
   const totals = useMemo(() => {
     const t = { couverts: 0, ca: 0 }
     for (const j of JOURS_SEMAINE) {
@@ -326,6 +563,27 @@ export default function BudgetsPage() {
             ))}
           </select>
           <div style={{ flex: 1 }} />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleFileChange}
+            style={{ display: 'none' }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              padding: '7px 14px',
+              borderRadius: 8,
+              fontSize: 13,
+              border: `1px solid ${c.bordure}`,
+              background: c.blanc,
+              color: c.texte,
+              cursor: 'pointer',
+            }}
+          >
+            Importer Excel
+          </button>
           <button
             onClick={() => setHistoryOpen(true)}
             style={{
@@ -504,6 +762,117 @@ export default function BudgetsPage() {
       {historyOpen && (
         <HistoryModal clientId={clientId} onClose={() => setHistoryOpen(false)} c={c} isMobile={isMobile} />
       )}
+
+      {importPreview && (
+        <ImportPreviewModal
+          preview={importPreview}
+          onCancel={() => setImportPreview(null)}
+          onConfirm={confirmImport}
+          saving={saving}
+          c={c}
+        />
+      )}
+    </div>
+  )
+}
+
+function ImportPreviewModal({ preview, onCancel, onConfirm, saving, c }) {
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.4)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 200,
+        padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: c.blanc,
+          borderRadius: 12,
+          width: '100%',
+          maxWidth: 520,
+          padding: 24,
+        }}
+      >
+        <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 600, color: c.texte }}>
+          Confirmer l&apos;import
+        </h3>
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: c.texteMuted }}>
+          Le fichier sera converti en budgets « par défaut » + overrides mensuels pour les mois qui
+          diffèrent. Répartition appliquée : 65 % Food / 28 % Alcool / 7 % Soft.
+        </p>
+
+        <div
+          style={{
+            background: c.fond,
+            borderRadius: 8,
+            padding: 12,
+            marginBottom: 16,
+            fontSize: 13,
+            color: c.texte,
+          }}
+        >
+          <div style={{ marginBottom: 4 }}>
+            <strong>{preview.rows.length} lignes</strong> à importer (
+            {preview.defaultsCount} par défaut + {preview.overridesCount} overrides)
+          </div>
+          <div style={{ marginBottom: 4 }}>
+            Lieux concernés : {preview.sectionNames.join(', ')}
+          </div>
+          {preview.lieuxToCreate.length > 0 && (
+            <div style={{ color: '#B45309' }}>
+              ⚠ Lieux à créer automatiquement : {preview.lieuxToCreate.join(', ')}
+            </div>
+          )}
+        </div>
+
+        <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 16 }}>
+          Note : seules les sections « Salle à manger » et « Table de partage » sont importées.
+          Les Privats utilisent un format event/revenu différent — saisis-les à la main si besoin.
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button
+            onClick={onCancel}
+            disabled={saving}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: `1px solid ${c.bordure}`,
+              background: c.blanc,
+              color: c.texte,
+              fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            Annuler
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={saving}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: 'none',
+              background: c.accent,
+              color: c.texte,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: saving ? 'not-allowed' : 'pointer',
+              opacity: saving ? 0.5 : 1,
+            }}
+          >
+            {saving ? 'Import en cours…' : 'Confirmer l’import'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
