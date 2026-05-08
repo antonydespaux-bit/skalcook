@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import { useTheme } from '../../../../lib/useTheme'
@@ -67,13 +68,24 @@ function hasAnyValue(cell) {
 }
 
 export default function SaisieVentesPage() {
+  return (
+    <Suspense fallback={null}>
+      <SaisieVentesContent />
+    </Suspense>
+  )
+}
+
+function SaisieVentesContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const c = useTheme()
   const isMobile = useIsMobile()
 
+  const dateParam = searchParams.get('date')
+
   const [clientId, setClientId] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
-  const [jour, setJour] = useState(toIsoDate(new Date()))
+  const [jour, setJour] = useState(dateParam || toIsoDate(new Date()))
   const [lieux, setLieux] = useState([])
   const [saisies, setSaisies] = useState({})
   const [loading, setLoading] = useState(true)
@@ -258,6 +270,18 @@ export default function SaisieVentesPage() {
       <Navbar section="cuisine" />
       <div style={{ padding: isMobile ? 16 : 24, paddingBottom: 96, maxWidth: 1200, margin: '0 auto' }}>
         <div style={{ marginBottom: 16 }}>
+          <Link
+            href="/controle-gestion/ventes"
+            style={{
+              fontSize: 13,
+              color: c.texteMuted,
+              textDecoration: 'none',
+              marginBottom: 8,
+              display: 'inline-block',
+            }}
+          >
+            ← Vue mensuelle
+          </Link>
           <h1 style={{ margin: '0 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 600, color: c.texte }}>
             Saisie CA journalier
           </h1>
