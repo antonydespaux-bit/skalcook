@@ -24,14 +24,21 @@ const schema = z.object({
 })
 
 const PROMPT_EXTRACTION = `Tu analyses une photo ou scan d'une facture fournisseur de restauration française.
-Extrais les informations suivantes et retourne UNIQUEMENT du JSON valide, sans markdown, sans texte avant ou après.
+La facture peut faire PLUSIEURS PAGES : les lignes sont sur les premières pages,
+les TOTAUX (HT, TVA, TTC) sont en bas de la DERNIÈRE PAGE. Lis tout le document.
+
+Extrais les informations suivantes et retourne UNIQUEMENT du JSON valide,
+sans markdown, sans texte avant ou après.
 
 Format attendu :
 {
   "fournisseur": "Nom du fournisseur (string ou null)",
   "date_facture": "YYYY-MM-DD (string ou null)",
   "numero_facture": "Numéro ou référence de la facture (string ou null)",
-  "montant_tva_total": 33.50,
+  "total_ht_facture": 726.74,
+  "total_ttc_facture": 784.15,
+  "montant_tva_total": 42.88,
+  "montant_taxes_hors_tva": 14.53,
   "lignes": [
     {
       "designation": "Nom du produit tel qu'il apparaît sur la facture",
@@ -44,26 +51,35 @@ Format attendu :
   ]
 }
 
-Règles importantes :
-- FORMAT NUMÉRIQUE FRANÇAIS : sur ces factures, la virgule est le séparateur DÉCIMAL.
-  Exemples : "1,610" = 1.61   "3,22" = 3.22   "2,000" = 2.0   "0,18" = 0.18.
-  Renvoie TOUJOURS des nombres JSON avec un point décimal (ex: 1.61, 3.22, 2.0).
-  Le séparateur de milliers est l'espace ou rien (ex: "1 234,56" = 1234.56).
-- unite : utilise l'unité standard la plus proche (kg, g, L, mL, pièce, carton, etc.).
-  Si la facture indique "U" / "Un" / "Unité", utilise "pièce".
-- prix_unitaire_ht : prix HT PAR UNITÉ (colonne "P.U.", "Prix unitaire HT", "PU HT", etc.).
-- montant_ht : total HT de la ligne (colonne "Montant HT", "Total HT", "Total ligne").
-  Permet de cross-vérifier : montant_ht ≈ quantite × prix_unitaire_ht.
-  Si tu lis bien le montant_ht mais pas le P.U., renseigne au moins montant_ht.
-- taux_tva : taux de TVA de la ligne en pourcentage (ex: 5.5 pour 5,5%, 10, 20).
-  Les factures alimentaires distinguent souvent plusieurs taux (5,5% denrées,
-  10% restauration sur place, 20% non-alimentaire). Cherche les colonnes
-  "Code TVA", "Taux", "TVA" ou les codes G1/G2/G3 qui renvoient à un récap
-  en pied de page. Si tu ne peux pas déduire, null.
-- montant_tva_total : total TVA en euros au pied de facture ("Montant TVA"
-  ou "Total TVA"). Pas en pourcentage. Si absent, null.
-- Si une valeur est absente ou illisible, utilise null.
-- Ne retourne QUE le JSON, rien d'autre.`
+Règles CRITIQUES :
+
+1. FORMAT NUMÉRIQUE FRANÇAIS : sur ces factures, la virgule est le séparateur DÉCIMAL.
+   Exemples : "1,610" → 1.61   "3,22" → 3.22   "2,000" → 2.0   "0,18" → 0.18.
+   Renvoie TOUJOURS des nombres JSON avec un point décimal (1.61, 3.22, 2.0).
+   Le séparateur de milliers est l'espace ou rien (ex: "1 234,56" → 1234.56).
+   Ne confonds JAMAIS "1,610" (= 1.61) avec 1610.
+
+2. TOTAUX FACTURE (en bas de la dernière page, sous le tableau des lignes) :
+   - total_ht_facture : "Total HT" ou "Montant HT" du pied de facture (avant TVA).
+   - total_ttc_facture : "Total TTC" ou "Net à payer" ou "A payer" du pied.
+   - montant_tva_total : "Total TVA" ou "Montant TVA" en euros (pas en %).
+   - montant_taxes_hors_tva : "Total taxes hors TVA" / éco-contributions /
+     consigne / contributions diverses si présent. Sinon null.
+   Si plusieurs taux de TVA sont récapitulés, montant_tva_total est leur SOMME.
+
+3. LIGNES DE FACTURE (cherche dans tout le tableau, sur toutes les pages) :
+   - designation : nom du produit comme écrit (ex: "MARJOLAINE EN BOTTE (FRANCE)").
+   - quantite : nombre dans la colonne "Qté" / "Quantité".
+   - unite : "kg", "g", "L", "mL", "pièce", "carton", etc. Si "U"/"Un"/"Unité" → "pièce".
+   - prix_unitaire_ht : colonne "P.U." / "Prix unitaire HT" / "PU HT".
+   - montant_ht : colonne "Montant HT" / "Total HT" / "Total ligne" (= qty × P.U.).
+     IMPORTANT : si tu lis bien le montant ligne mais pas le P.U., renseigne
+     quand même montant_ht. Le serveur dérivera le P.U. = montant_ht / quantite.
+   - taux_tva : 5.5 / 10 / 20. Cherche colonnes "Code TVA", "Taux", "TVA" ou
+     codes G1/G2/G3 renvoyant à un récap en pied. Sinon null.
+
+4. Si une valeur est absente ou illisible, utilise null.
+5. Ne retourne QUE le JSON, rien d'autre. Pas de markdown, pas d'explication.`
 
 export const POST = apiHandler({
   schema,
@@ -87,12 +103,16 @@ export const POST = apiHandler({
             { type: 'text', text: PROMPT_EXTRACTION },
           ],
         },
+        // Prefill : force la sortie en JSON pur dès le premier token
+        // (évite que le modèle ouvre par "Voici le JSON :" ou un bloc markdown).
+        { role: 'assistant', content: '{' },
       ],
     })
 
     // Trouve le premier bloc de type 'text' (évite de planter si un thinking block précède)
     const textBlock = message.content.find((b) => b.type === 'text')
-    const rawText = textBlock && 'text' in textBlock ? textBlock.text : ''
+    // Le prefill "{" n'est PAS dans message.content → on le rajoute pour parser.
+    const rawText = '{' + (textBlock && 'text' in textBlock ? textBlock.text : '')
 
     let parsed: Record<string, unknown>
     try {
@@ -163,15 +183,24 @@ export const POST = apiHandler({
       ? rawDate
       : null
 
-    const tvaTotalRaw = parsed.montant_tva_total
-    const tvaTotal = tvaTotalRaw == null ? null : Number(tvaTotalRaw)
-    const montantTvaTotal = tvaTotal != null && Number.isFinite(tvaTotal) && tvaTotal >= 0 ? tvaTotal : null
+    const sanitizeMontant = (v: unknown): number | null => {
+      if (v == null) return null
+      const n = Number(v)
+      return Number.isFinite(n) && n >= 0 ? n : null
+    }
+    const montantTvaTotal = sanitizeMontant(parsed.montant_tva_total)
+    const totalHtFacture = sanitizeMontant(parsed.total_ht_facture)
+    const totalTtcFacture = sanitizeMontant(parsed.total_ttc_facture)
+    const montantTaxesHorsTva = sanitizeMontant(parsed.montant_taxes_hors_tva)
 
     return Response.json({
       fournisseur: (parsed.fournisseur as string) ?? null,
       date_facture: dateFactureValide,
       numero_facture: (parsed.numero_facture as string) ?? null,
       montant_tva_total: montantTvaTotal,
+      total_ht_facture: totalHtFacture,
+      total_ttc_facture: totalTtcFacture,
+      montant_taxes_hors_tva: montantTaxesHorsTva,
       lignes,
     })
   },
