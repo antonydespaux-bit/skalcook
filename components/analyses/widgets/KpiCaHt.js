@@ -1,7 +1,7 @@
 import KpiCard from './KpiCard'
 import { buildComparison, formatEur, formatDeltaEur } from '../../../lib/caAnalyses'
 
-export default function KpiCaHt({ c, isMobile, totals, comparisonTotals, comparisonLabel }) {
+export default function KpiCaHt({ c, isMobile, totals, comparisonTotals, comparisonLabel, breakdownByLieu, breakdownByService }) {
   const value = totals ? formatEur(totals.caHt) : '—'
   const comparison = comparisonTotals && totals
     ? buildComparison({
@@ -19,6 +19,8 @@ export default function KpiCaHt({ c, isMobile, totals, comparisonTotals, compari
       value={value}
       hint={comparison ? null : 'Net de TVA (10 % Food/Soft, 20 % Alcool)'}
       comparison={comparison}
+      breakdownByLieu={breakdownByLieu}
+      breakdownByService={breakdownByService}
     />
   )
 }

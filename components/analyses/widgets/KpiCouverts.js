@@ -1,7 +1,7 @@
 import KpiCard from './KpiCard'
 import { buildComparison, formatNombre } from '../../../lib/caAnalyses'
 
-export default function KpiCouverts({ c, isMobile, totals, comparisonTotals, comparisonLabel }) {
+export default function KpiCouverts({ c, isMobile, totals, comparisonTotals, comparisonLabel, breakdownByLieu, breakdownByService }) {
   const value = totals ? formatNombre(totals.couverts) : '—'
   const comparison = comparisonTotals && totals
     ? buildComparison({
@@ -19,6 +19,8 @@ export default function KpiCouverts({ c, isMobile, totals, comparisonTotals, com
       value={value}
       hint={comparison ? null : 'Sur la période'}
       comparison={comparison}
+      breakdownByLieu={breakdownByLieu}
+      breakdownByService={breakdownByService}
     />
   )
 }

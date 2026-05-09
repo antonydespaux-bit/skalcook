@@ -19,6 +19,11 @@ import {
   perfByWeekday,
   mixSegments,
   topBottomDays,
+  aggregateBySerie,
+  buildBreakdown,
+  mixByService,
+  bucketDaysMultiSeries,
+  perfByWeekdayMultiSeries,
   fromIsoDate,
 } from '../../../lib/caAnalyses'
 import {
@@ -41,7 +46,7 @@ import { buildAnalysesWorkbook, buildFilename } from '../../../lib/analysesExpor
 import * as XLSX from 'xlsx'
 import Navbar from '../../../components/Navbar'
 import WidgetsCustomizeModal from '../../../components/dashboard/WidgetsCustomizeModal'
-import FilterBar, { COMPARAISON_LABELS } from '../../../components/analyses/FilterBar'
+import FilterBar, { COMPARAISON_LABELS, ALL_SERVICES } from '../../../components/analyses/FilterBar'
 import KpiCouverts from '../../../components/analyses/widgets/KpiCouverts'
 import KpiCaTtc from '../../../components/analyses/widgets/KpiCaTtc'
 import KpiCaHt from '../../../components/analyses/widgets/KpiCaHt'
@@ -78,8 +83,10 @@ export default function AnalysesPage() {
   const [dateDebut, setDateDebut] = useState(initialDates.debut)
   const [dateFin, setDateFin] = useState(initialDates.fin)
   const [comparaison, setComparaison] = useState('aucune')
-  const [lieuId, setLieuId] = useState('all')
-  const [service, setService] = useState('tout')
+  // Multi-select : tableau d'ids cochés. Vide = "Tous" (équivalent à tout
+  // cumulé). 1 entrée = filtre simple. 2+ entrées = mode multi-séries.
+  const [lieuxSelected, setLieuxSelected] = useState([])
+  const [servicesSelected, setServicesSelected] = useState([])
 
   // ── Layout widgets ───────────────────────────────────────────────────────
   const [layout, setLayout] = useState(null)
@@ -297,26 +304,38 @@ export default function AnalysesPage() {
     if (margesNeeded) loadMargesData()
   }, [margesNeeded, loadMargesData])
 
-  // ── Filtrage côté JS sur lieu / service ──────────────────────────────────
+  // ── Filtrage côté JS sur lieu / service (multi-select) ───────────────────
+  // Vide = "Tous" → on ne filtre pas. Sinon on garde les rows dont la
+  // dimension matche au moins une valeur sélectionnée.
   const filterRows = useCallback((rows) => {
+    const filterLieu = lieuxSelected.length > 0 && lieuxSelected.length < lieux.length
+    const filterService = servicesSelected.length > 0 && servicesSelected.length < ALL_SERVICES.length
+    if (!filterLieu && !filterService) return rows
+    const lieuxSet = new Set(lieuxSelected)
+    const servicesSet = new Set(servicesSelected)
     return rows.filter((r) => {
-      if (lieuId !== 'all' && r.lieu_service_id !== lieuId) return false
-      if (service !== 'tout' && r.service !== service) return false
+      if (filterLieu && !lieuxSet.has(r.lieu_service_id)) return false
+      if (filterService && !servicesSet.has(r.service)) return false
       return true
     })
-  }, [lieuId, service])
+  }, [lieuxSelected, servicesSelected, lieux.length])
 
   const filterBudgets = useCallback((budgetRowsByYear) => {
+    const filterLieu = lieuxSelected.length > 0 && lieuxSelected.length < lieux.length
+    const filterService = servicesSelected.length > 0 && servicesSelected.length < ALL_SERVICES.length
+    if (!filterLieu && !filterService) return budgetRowsByYear
+    const lieuxSet = new Set(lieuxSelected)
+    const servicesSet = new Set(servicesSelected)
     const out = {}
     for (const [annee, rows] of Object.entries(budgetRowsByYear)) {
       out[annee] = rows.filter((r) => {
-        if (lieuId !== 'all' && r.lieu_service_id !== lieuId) return false
-        if (service !== 'tout' && r.service !== service) return false
+        if (filterLieu && !lieuxSet.has(r.lieu_service_id)) return false
+        if (filterService && !servicesSet.has(r.service)) return false
         return true
       })
     }
     return out
-  }, [lieuId, service])
+  }, [lieuxSelected, servicesSelected, lieux.length])
 
   // ── Totals + days + budget ───────────────────────────────────────────────
   const filteredRows = useMemo(() => filterRows(rawCa), [rawCa, filterRows])
@@ -394,6 +413,99 @@ export default function AnalysesPage() {
   const topBottom = useMemo(() => topBottomDays(daysWithBudget, 5), [daysWithBudget])
   const hasBudget = periodBudget > 0
 
+  // ── Mode multi-séries (split lieu / service) ─────────────────────────────
+  // Le split est actif sur une dimension dès qu'au moins 2 entrées sont
+  // sélectionnées. "Tous" (tableau vide) compte aussi comme split potentiel
+  // si plusieurs valeurs existent — dans ce cas on split par défaut sur la
+  // dimension lieu (plus parlant que service à 2 valeurs).
+  const lieuxLabels = useMemo(() => new Map(lieux.map((l) => [l.id, l.nom])), [lieux])
+  const splitByLieu = useMemo(() => {
+    if (lieuxSelected.length >= 2) return true
+    if (lieuxSelected.length === 0 && lieux.length >= 2) return true // "Tous" + plusieurs lieux
+    return false
+  }, [lieuxSelected.length, lieux.length])
+  const splitByService = useMemo(() => {
+    if (servicesSelected.length === ALL_SERVICES.length) return true
+    if (servicesSelected.length === 0) return false // "Tous" mais pas split par défaut
+    return false // 1 service sélectionné = pas de split
+  }, [servicesSelected.length])
+
+  const splitDims = useMemo(() => {
+    const dims = []
+    if (splitByLieu) dims.push('lieu')
+    if (splitByService) dims.push('service')
+    return dims
+  }, [splitByLieu, splitByService])
+
+  const isSplit = splitDims.length > 0
+
+  // Séries agrégées sur la période entière : { 'Salle / Déjeuner': totals, … }
+  const seriesByGroup = useMemo(
+    () => aggregateBySerie(filteredRows, splitDims, lieuxLabels),
+    [filteredRows, splitDims, lieuxLabels]
+  )
+
+  // Breakdowns 1D pour les KPIs (toujours calculés indépendamment du mode
+  // multi-séries 2D — affichés en sous-titre de chaque KPI). On calcule par
+  // métrique pour que chaque KPI affiche les bons pourcentages (couverts,
+  // caTtc, caHt, tm).
+  const seriesByLieu = useMemo(
+    () => aggregateBySerie(filteredRows, ['lieu'], lieuxLabels),
+    [filteredRows, lieuxLabels]
+  )
+  const seriesByService = useMemo(
+    () => aggregateBySerie(filteredRows, ['service'], lieuxLabels),
+    [filteredRows, lieuxLabels]
+  )
+
+  const breakdowns = useMemo(() => {
+    const make = (metric) => ({
+      byLieu: lieux.length >= 2 ? buildBreakdown(seriesByLieu, metric) : null,
+      byService: buildBreakdown(seriesByService, metric),
+    })
+    return {
+      couverts: make('couverts'),
+      caTtc: make('caTtc'),
+      caHt: make('caHt'),
+    }
+  }, [seriesByLieu, seriesByService, lieux.length])
+
+  // Days par série (pour line charts multi-séries + perf jour-semaine)
+  const daysBySerie = useMemo(() => {
+    if (!isSplit) return null
+    const groups = new Map()
+    for (const r of filteredRows) {
+      const parts = []
+      if (splitByLieu) parts.push(lieuxLabels.get(r.lieu_service_id) || r.lieu_service_id || '—')
+      if (splitByService) parts.push(r.service === 'lunch' ? 'Déjeuner' : 'Dîner')
+      const key = parts.join(' / ')
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key).push(r)
+    }
+    const out = new Map()
+    for (const [key, rows] of groups.entries()) {
+      out.set(key, aggregateByDay(rows, dateDebut, dateFin))
+    }
+    return out
+  }, [filteredRows, isSplit, splitByLieu, splitByService, lieuxLabels, dateDebut, dateFin])
+
+  const bucketsMultiCa = useMemo(
+    () => isSplit ? bucketDaysMultiSeries(daysBySerie, granularity, 'caTot') : null,
+    [isSplit, daysBySerie, granularity]
+  )
+  const bucketsMultiCouverts = useMemo(
+    () => isSplit ? bucketDaysMultiSeries(daysBySerie, granularity, 'couverts') : null,
+    [isSplit, daysBySerie, granularity]
+  )
+  const perfMultiCa = useMemo(
+    () => isSplit ? perfByWeekdayMultiSeries(daysBySerie, 'ca') : null,
+    [isSplit, daysBySerie]
+  )
+  const mixServiceMatrix = useMemo(
+    () => mixByService(filteredRows),
+    [filteredRows]
+  )
+
   // ── Données dérivées pour les widgets marges ─────────────────────────────
   const margesLignes = useMemo(() => aggregateByFiche(rawVentes, ficheById), [rawVentes, ficheById])
   const margesTotals = useMemo(() => computeMargesTotals(margesLignes), [margesLignes])
@@ -427,23 +539,23 @@ export default function AnalysesPage() {
   const renderWidget = (id) => {
     const common = { c, isMobile, totals, comparisonTotals, comparisonLabel }
     switch (id) {
-      case 'kpi-couverts':         return <KpiCouverts {...common} />
-      case 'kpi-ca-ttc':           return <KpiCaTtc {...common} />
-      case 'kpi-ca-ht':            return <KpiCaHt {...common} />
+      case 'kpi-couverts':         return <KpiCouverts {...common} breakdownByLieu={breakdowns.couverts.byLieu} breakdownByService={breakdowns.couverts.byService} />
+      case 'kpi-ca-ttc':           return <KpiCaTtc {...common} breakdownByLieu={breakdowns.caTtc.byLieu} breakdownByService={breakdowns.caTtc.byService} />
+      case 'kpi-ca-ht':            return <KpiCaHt {...common} breakdownByLieu={breakdowns.caHt.byLieu} breakdownByService={breakdowns.caHt.byService} />
       case 'kpi-tm':               return <KpiTm {...common} />
       case 'kpi-ecart-budget-pct': return <KpiEcartBudgetPct c={c} isMobile={isMobile} totals={totals} budget={periodBudget} />
       case 'section-evolution-ca':
-        return <SectionEvolutionCa c={c} isMobile={isMobile} buckets={buckets} granularity={granularity} hasBudget={hasBudget} />
+        return <SectionEvolutionCa c={c} isMobile={isMobile} buckets={buckets} bucketsMulti={bucketsMultiCa} isSplit={isSplit} granularity={granularity} hasBudget={hasBudget} />
       case 'section-evolution-couverts':
-        return <SectionEvolutionCouverts c={c} isMobile={isMobile} buckets={buckets} granularity={granularity} />
+        return <SectionEvolutionCouverts c={c} isMobile={isMobile} buckets={buckets} bucketsMulti={bucketsMultiCouverts} isSplit={isSplit} granularity={granularity} />
       case 'section-perf-jour-semaine':
-        return <SectionPerfJourSemaine c={c} isMobile={isMobile} perf={perfWeekday} />
+        return <SectionPerfJourSemaine c={c} isMobile={isMobile} perf={perfWeekday} perfMulti={perfMultiCa} isSplit={isSplit} />
       case 'section-mix-food-bev':
-        return <SectionMixFoodBev c={c} isMobile={isMobile} segments={mix} totalCaTtc={totals.caTtc} />
+        return <SectionMixFoodBev c={c} isMobile={isMobile} segments={mix} totalCaTtc={totals.caTtc} matrix={mixServiceMatrix} />
       case 'section-top-bottom-jours':
         return <SectionTopBottomJours c={c} isMobile={isMobile} topBottom={topBottom} />
       case 'section-tableau-jour-jour':
-        return <SectionTableauJourJour c={c} isMobile={isMobile} days={daysWithBudget} totals={tableauTotals} />
+        return <SectionTableauJourJour c={c} isMobile={isMobile} days={daysWithBudget} totals={tableauTotals} isSplit={isSplit} splitByLieu={splitByLieu} splitByService={splitByService} filteredRows={filteredRows} lieuxLabels={lieuxLabels} />
       case 'kpi-food-cost-moyen':
         return (
           <KpiFoodCostMoyen
@@ -516,17 +628,28 @@ export default function AnalysesPage() {
 
   // ── Actions TopBar : export Excel + impression ───────────────────────────
   const handleExportExcel = () => {
-    const lieuLabel = lieuId === 'all' ? 'Tous lieux' : (lieux.find((l) => l.id === lieuId)?.nom || lieuId)
+    const lieuLabel = lieuxSelected.length === 0 || lieuxSelected.length === lieux.length
+      ? 'Tous lieux'
+      : lieuxSelected.map((id) => lieuxLabels.get(id) || id).join(', ')
+    const serviceLabel = servicesSelected.length === 0 || servicesSelected.length === ALL_SERVICES.length
+      ? 'tout'
+      : servicesSelected.join('+')
     const visibleIds = new Set(visibleLayout.map((l) => l.id))
     const wb = buildAnalysesWorkbook({
       visibleIds,
-      periode, dateDebut, dateFin, comparaison, lieuLabel, service,
+      periode, dateDebut, dateFin, comparaison, lieuLabel, service: serviceLabel,
       totals, comparisonTotals, comparisonLabel, periodBudget,
       buckets, granularity, perfWeekday, mix, topBottom, daysWithBudget,
       // PR 5 — données marges (peuvent être à 0 si l'user n'a activé aucun
       // widget marges, mais on les passe systématiquement → l'export ne
       // dump que les onglets dont l'id figure dans visibleIds).
       margesTotals, margesLignes, consoLignes, margesChartData,
+      // PR 6 — split lieu/service (pour ajouter la colonne Lieu/Service
+      // dans les onglets concernés).
+      isSplit, splitByLieu, splitByService,
+      bucketsMultiCa, bucketsMultiCouverts, perfMulti: perfMultiCa,
+      daysBySerieEntries: daysBySerie ? Array.from(daysBySerie.entries()) : null,
+      mixServiceMatrix,
     })
     XLSX.writeFile(wb, buildFilename(dateDebut, dateFin))
   }
@@ -547,7 +670,7 @@ export default function AnalysesPage() {
               Analyses CA
             </h1>
             <p style={{ margin: 0, fontSize: 14, color: c.texteMuted }}>
-              {humanRange(dateDebut, dateFin)}
+              {humanRange(dateDebut, dateFin)}{isSplit && ` — détail par ${splitDims.map((d) => d === 'lieu' ? 'lieu' : 'service').join(' × ')}`}
             </p>
           </div>
           <div className="no-print" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -581,8 +704,9 @@ export default function AnalysesPage() {
           dateDebut={dateDebut} dateFin={dateFin}
           onDateDebut={setDateDebut} onDateFin={setDateFin}
           comparaison={comparaison} onComparaison={setComparaison}
-          lieux={lieux} lieuId={lieuId} onLieu={setLieuId}
-          service={service} onService={setService}
+          lieux={lieux}
+          lieuxSelected={lieuxSelected} onLieuxSelected={setLieuxSelected}
+          servicesSelected={servicesSelected} onServicesSelected={setServicesSelected}
         />
 
         {error && <p style={{ color: '#B91C1C', fontSize: 14, marginBottom: 16 }}>{error}</p>}

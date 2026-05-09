@@ -4,8 +4,16 @@
 // `comparison` (optionnel) :
 //   { delta: number|null, deltaLabel: string, mode: 'success'|'danger'|'neutral'|'none' }
 //
-// La page passe `null` quand l'user a sélectionné "Aucune comparaison".
-export default function KpiCard({ c, isMobile, label, value, hint, comparison }) {
+// `breakdownByLieu` / `breakdownByService` (optionnels, PR 6) :
+//   array [{ serie, value, pct }] trié décroissant. Affiché en sous-titre
+//   sous la valeur quand au moins 2 séries ont du contenu — utile pour
+//   les présentations ("Salle 60 % · Privat 40 %").
+export default function KpiCard({
+  c, isMobile, label, value, hint, comparison,
+  breakdownByLieu, breakdownByService,
+}) {
+  const showLieuBreakdown = breakdownByLieu && breakdownByLieu.filter((e) => e.value > 0).length >= 2
+  const showServiceBreakdown = breakdownByService && breakdownByService.filter((e) => e.value > 0).length >= 2
   return (
     <div style={{
       background: c.blanc, borderRadius: '12px',
@@ -23,6 +31,8 @@ export default function KpiCard({ c, isMobile, label, value, hint, comparison })
       ) : hint ? (
         <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '6px' }}>{hint}</div>
       ) : null}
+      {showLieuBreakdown && <BreakdownLine c={c} breakdown={breakdownByLieu} />}
+      {showServiceBreakdown && <BreakdownLine c={c} breakdown={breakdownByService} />}
     </div>
   )
 }
@@ -35,6 +45,23 @@ function ComparisonLine({ c, comparison }) {
   return (
     <div style={{ fontSize: '11px', color, marginTop: '6px', fontWeight: 600 }}>
       {comparison.deltaLabel}
+    </div>
+  )
+}
+
+// "Salle 60 % · Privat 30 % · Table chef 10 %" — affichage compact.
+function BreakdownLine({ c, breakdown }) {
+  const visible = breakdown.filter((e) => e.value > 0)
+  return (
+    <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>
+      {visible.map((e, i) => (
+        <span key={e.serie}>
+          {i > 0 && <span style={{ margin: '0 6px', opacity: 0.5 }}>·</span>}
+          <span style={{ color: c.texte, fontWeight: 500 }}>{e.serie}</span>
+          {' '}
+          <span>{e.pct.toFixed(0)} %</span>
+        </span>
+      ))}
     </div>
   )
 }

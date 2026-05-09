@@ -17,22 +17,36 @@ const COMPARAISONS = [
   { code: 'budget',  label: 'vs Budget' },
 ]
 
-const SERVICES = [
-  { code: 'tout',   label: 'Tous services' },
-  { code: 'lunch',  label: 'Déjeuner' },
-  { code: 'dinner', label: 'Dîner' },
-]
+export const ALL_SERVICES = ['lunch', 'dinner']
 
+const SERVICE_LABELS = { lunch: 'Déjeuner', dinner: 'Dîner' }
+
+// `lieuxSelected` / `servicesSelected` :
+//   - tableau des codes/ids cochés
+//   - tableau vide = "Tous" (équivalent à tous cochés ; on conserve un tableau
+//     distinct pour préserver l'intent "all" même si un nouveau lieu apparaît)
+//
+// Quand 2+ entrées sont cochées, la page passe en mode multi-séries (split).
+// Le toggle "Tous" coche/décoche tout en un clic.
 export default function FilterBar({
   c, isMobile,
   periode, onPeriode,
   dateDebut, dateFin, onDateDebut, onDateFin,
   comparaison, onComparaison,
-  lieux, lieuId, onLieu,
-  service, onService,
+  lieux, lieuxSelected, onLieuxSelected,
+  servicesSelected, onServicesSelected,
 }) {
   const btn = (active) => ({
     padding: '7px 12px', borderRadius: 8, fontSize: 13,
+    border: `1px solid ${active ? c.accent : c.bordure}`,
+    background: active ? c.accent : c.blanc,
+    color: active ? c.texte : c.texteMuted,
+    cursor: 'pointer', fontWeight: active ? 600 : 500,
+    whiteSpace: 'nowrap',
+  })
+
+  const chip = (active) => ({
+    padding: '5px 10px', borderRadius: 16, fontSize: 12,
     border: `1px solid ${active ? c.accent : c.bordure}`,
     background: active ? c.accent : c.blanc,
     color: active ? c.texte : c.texteMuted,
@@ -50,12 +64,45 @@ export default function FilterBar({
     border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte,
   }
 
+  // ── Multi-select handlers ──────────────────────────────────────────────────
+
+  // "Tous lieux" actif si l'utilisateur a explicitement vidé la liste OU
+  // a coché tous les lieux disponibles → dans les deux cas on traite comme
+  // "all" et on stocke [] pour garder l'intent stable face à l'arrivée
+  // d'un nouveau lieu.
+  const lieuxAllActive = lieuxSelected.length === 0 || lieuxSelected.length === lieux.length
+  const servicesAllActive = servicesSelected.length === 0 || servicesSelected.length === ALL_SERVICES.length
+
+  const toggleLieu = (id) => {
+    if (lieuxAllActive) {
+      // Was "all" → switch to "only this one"
+      onLieuxSelected([id])
+      return
+    }
+    const set = new Set(lieuxSelected)
+    if (set.has(id)) set.delete(id)
+    else set.add(id)
+    onLieuxSelected(set.size === 0 ? [] : Array.from(set))
+  }
+
+  const toggleService = (code) => {
+    if (servicesAllActive) {
+      onServicesSelected([code])
+      return
+    }
+    const set = new Set(servicesSelected)
+    if (set.has(code)) set.delete(code)
+    else set.add(code)
+    onServicesSelected(set.size === 0 ? [] : Array.from(set))
+  }
+
   return (
     <div style={{
       background: c.blanc, border: `0.5px solid ${c.bordure}`, borderRadius: 12,
       padding: isMobile ? 12 : 16, marginBottom: 20,
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
+      {/* Période */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {PERIODES.map((p) => (
           <button key={p.code} onClick={() => onPeriode(p.code)} style={btn(p.code === periode)}>
@@ -73,6 +120,7 @@ export default function FilterBar({
         </div>
       )}
 
+      {/* Comparaison */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: c.texteMuted }}>
           Comparaison
@@ -80,21 +128,30 @@ export default function FilterBar({
             {COMPARAISONS.map((c2) => <option key={c2.code} value={c2.code}>{c2.label}</option>)}
           </select>
         </label>
+      </div>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: c.texteMuted }}>
-          Lieu
-          <select value={lieuId} onChange={(e) => onLieu(e.target.value)} style={select}>
-            <option value="all">Tous lieux</option>
-            {lieux.map((l) => <option key={l.id} value={l.id}>{l.nom}</option>)}
-          </select>
-        </label>
+      {/* Multi-select Lieux */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+        <span style={{ fontSize: 12, color: c.texteMuted, marginRight: 4 }}>Lieux :</span>
+        <button onClick={() => onLieuxSelected([])} style={chip(lieuxAllActive)}>Tous</button>
+        {lieux.map((l) => (
+          <button key={l.id} onClick={() => toggleLieu(l.id)}
+            style={chip(!lieuxAllActive && lieuxSelected.includes(l.id))}>
+            {l.nom}
+          </button>
+        ))}
+      </div>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: c.texteMuted }}>
-          Service
-          <select value={service} onChange={(e) => onService(e.target.value)} style={select}>
-            {SERVICES.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
-          </select>
-        </label>
+      {/* Multi-select Services */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+        <span style={{ fontSize: 12, color: c.texteMuted, marginRight: 4 }}>Services :</span>
+        <button onClick={() => onServicesSelected([])} style={chip(servicesAllActive)}>Tous</button>
+        {ALL_SERVICES.map((s) => (
+          <button key={s} onClick={() => toggleService(s)}
+            style={chip(!servicesAllActive && servicesSelected.includes(s))}>
+            {SERVICE_LABELS[s]}
+          </button>
+        ))}
       </div>
     </div>
   )
@@ -104,3 +161,5 @@ export const COMPARAISON_LABELS = {
   'n-1':    'vs même période N-1',
   'budget': 'vs Budget',
 }
+
+export const SERVICE_FR_LABELS = SERVICE_LABELS
