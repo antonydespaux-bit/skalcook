@@ -631,7 +631,8 @@ export default function BudgetsPage() {
     }
   }, [importPreview, clientId, annee, lieux, loadData])
 
-  // KPI annuels pour le lieu sélectionné
+  // KPI annuels pour le lieu sélectionné. Respecte les overrides de nb_jours
+  // pour rester cohérent avec le Total mois affiché dans MoisTable.
   const totauxAnnee = useMemo(() => {
     const t = { couverts: 0, ca: 0 }
     if (!lieuFilter) return t
@@ -641,7 +642,7 @@ export default function BudgetsPage() {
         for (const svc of SERVICES) {
           const cell = moisMap[`${j.code}_${lieuFilter}_${svc.code}`]
           if (!cell) continue
-          const nbre = joursDansMois(annee, m, j.code)
+          const nbre = getNbJours(annee, m, j.code, joursOverride)
           const couvJ = Number(cell.couverts_cible || 0)
           const tm = Number(cell.tm_cible || 0)
           t.couverts += nbre * couvJ
@@ -650,7 +651,7 @@ export default function BudgetsPage() {
       }
     }
     return t
-  }, [lieuFilter, budgets, annee])
+  }, [lieuFilter, budgets, annee, joursOverride])
 
   if (!authChecked) return null
 
@@ -737,6 +738,7 @@ export default function BudgetsPage() {
             budgets={budgets}
             lieux={lieux}
             annee={annee}
+            joursOverride={joursOverride}
             c={c}
             isMobile={isMobile}
           />
@@ -850,6 +852,7 @@ export default function BudgetsPage() {
                 budgets={budgets}
                 lieuId={lieuFilter}
                 annee={annee}
+                joursOverride={joursOverride}
                 c={c}
               />
             )}
@@ -1663,14 +1666,14 @@ function MoisCardsMobile({ mois, annee, lieu, moisMap, updateCell, joursOverride
 
 /* ─── SommaireSticky : nav latérale 12 mois ──────────────────────────────── */
 
-function SommaireSticky({ budgets, lieuId, annee, c }) {
+function SommaireSticky({ budgets, lieuId, annee, joursOverride, c }) {
   const items = useMemo(() => {
     return MOIS.map((m) => {
       const moisMap = budgets[m] || {}
       let cvts = 0
       let ca = 0
       for (const j of JOURS_SEMAINE) {
-        const nbre = joursDansMois(annee, m, j.code)
+        const nbre = getNbJours(annee, m, j.code, joursOverride)
         for (const svc of SERVICES) {
           const cell = moisMap[`${j.code}_${lieuId}_${svc.code}`]
           if (!cell) continue
@@ -1682,7 +1685,7 @@ function SommaireSticky({ budgets, lieuId, annee, c }) {
       }
       return { mois: m, cvts, ca }
     })
-  }, [budgets, lieuId, annee])
+  }, [budgets, lieuId, annee, joursOverride])
 
   return (
     <div
@@ -2218,10 +2221,12 @@ function ImportPreviewModal({ preview, onCancel, onConfirm, saving, c }) {
 
 /* ─── Récap annuel : agrégation tous lieux × services × mois ─────────────── */
 
-function RecapAnnuel({ budgets, lieux, annee, c, isMobile }) {
+function RecapAnnuel({ budgets, lieux, annee, joursOverride, c, isMobile }) {
   const [expanded, setExpanded] = useState(false)
 
-  // Données agrégées par mois (et total annuel)
+  // Données agrégées par mois (et total annuel). Respecte les overrides de
+  // nb_jours pour rester cohérent avec ce que les utilisateurs voient dans
+  // le Total mois de chaque MoisTable (ex : 4 jeudis au lieu de 5).
   const data = useMemo(() => {
     // Colonnes : 1 par (lieu × service)
     const cols = []
@@ -2242,7 +2247,7 @@ function RecapAnnuel({ budgets, lieux, annee, c, isMobile }) {
       let cattc = 0
       const usedJours = new Set()
       for (const j of JOURS_SEMAINE) {
-        const nbre = joursDansMois(annee, m, j.code)
+        const nbre = getNbJours(annee, m, j.code, joursOverride)
         for (const col of cols) {
           const cell = moisMap[`${j.code}_${col.lieuId}_${col.svcCode}`]
           if (!cell) continue
@@ -2261,7 +2266,7 @@ function RecapAnnuel({ budgets, lieux, annee, c, isMobile }) {
       const caHt = food + bev20 + bev10
       const bev = bev20 + bev10
       let nbJours = 0
-      for (const jc of usedJours) nbJours += joursDansMois(annee, m, jc)
+      for (const jc of usedJours) nbJours += getNbJours(annee, m, jc, joursOverride)
       return {
         mois: m,
         cols: colVals,
@@ -2284,7 +2289,7 @@ function RecapAnnuel({ budgets, lieux, annee, c, isMobile }) {
       for (const k of Object.keys(r.cols)) total.cols[k] = (total.cols[k] || 0) + r.cols[k]
     }
     return { cols, rows, total }
-  }, [budgets, lieux, annee])
+  }, [budgets, lieux, annee, joursOverride])
 
   const tdNum = {
     padding: '6px 10px',
