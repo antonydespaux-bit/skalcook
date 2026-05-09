@@ -255,7 +255,19 @@ export default function BudgetsPage() {
   const [wizardOpen, setWizardOpen] = useState(false)
   const [resetConfirm, setResetConfirm] = useState(null) // 'lieu' | null
   const [importPreview, setImportPreview] = useState(null)
+  const [expandedMois, setExpandedMois] = useState(() => new Set(MOIS))
   const fileInputRef = useRef(null)
+
+  const toggleMois = useCallback((m) => {
+    setExpandedMois((prev) => {
+      const next = new Set(prev)
+      if (next.has(m)) next.delete(m)
+      else next.add(m)
+      return next
+    })
+  }, [])
+  const expandAllMois = useCallback(() => setExpandedMois(new Set(MOIS)), [])
+  const collapseAllMois = useCallback(() => setExpandedMois(new Set()), [])
 
   useEffect(() => {
     let cancel = false
@@ -660,6 +672,36 @@ export default function BudgetsPage() {
         {!loading && selectedLieu && (
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) 220px', gap: 16, alignItems: 'flex-start' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                <button
+                  onClick={expandAllMois}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    border: `1px solid ${c.bordure}`,
+                    background: c.blanc,
+                    color: c.texte,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Tout déplier
+                </button>
+                <button
+                  onClick={collapseAllMois}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    border: `1px solid ${c.bordure}`,
+                    background: c.blanc,
+                    color: c.texte,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Tout replier
+                </button>
+              </div>
               {MOIS.map((m) => (
                 <MoisTable
                   key={m}
@@ -670,6 +712,8 @@ export default function BudgetsPage() {
                   updateCell={updateCell}
                   onDuplicateNext={() => duplicateMois(m, [m + 1])}
                   onDuplicateAllAfter={() => duplicateMois(m, MOIS.filter((x) => x > m))}
+                  expanded={expandedMois.has(m)}
+                  onToggleExpand={() => toggleMois(m)}
                   c={c}
                   isMobile={isMobile}
                 />
@@ -946,7 +990,7 @@ function TopBar({
 
 /* ─── MoisTable : tableau Excel-like d'un mois ───────────────────────────── */
 
-function MoisTable({ mois, annee, lieu, moisMap, updateCell, onDuplicateNext, onDuplicateAllAfter, c, isMobile }) {
+function MoisTable({ mois, annee, lieu, moisMap, updateCell, onDuplicateNext, onDuplicateAllAfter, expanded, onToggleExpand, c, isMobile }) {
   const sectionId = `mois-${mois}`
 
   // Totaux mensuels par service
@@ -970,6 +1014,9 @@ function MoisTable({ mois, annee, lieu, moisMap, updateCell, onDuplicateNext, on
     return t
   }, [mois, annee, lieu.id, moisMap])
 
+  const totalCvts = totals.lunch.cvts + totals.dinner.cvts
+  const totalCa = totals.lunch.ca + totals.dinner.ca
+
   if (isMobile) {
     return (
       <MoisCardsMobile
@@ -980,8 +1027,12 @@ function MoisTable({ mois, annee, lieu, moisMap, updateCell, onDuplicateNext, on
         updateCell={updateCell}
         onDuplicateNext={onDuplicateNext}
         onDuplicateAllAfter={onDuplicateAllAfter}
+        expanded={expanded}
+        onToggleExpand={onToggleExpand}
         sectionId={sectionId}
         totals={totals}
+        totalCvts={totalCvts}
+        totalCa={totalCa}
         c={c}
       />
     )
@@ -998,11 +1049,11 @@ function MoisTable({ mois, annee, lieu, moisMap, updateCell, onDuplicateNext, on
         scrollMarginTop: 80,
       }}
     >
-      {/* Header mois */}
+      {/* Header mois — cliquable pour replier/déplier */}
       <div
         style={{
           padding: '10px 16px',
-          borderBottom: `1px solid ${c.bordure}`,
+          borderBottom: expanded ? `1px solid ${c.bordure}` : 'none',
           background: c.fond,
           display: 'flex',
           justifyContent: 'space-between',
@@ -1010,10 +1061,34 @@ function MoisTable({ mois, annee, lieu, moisMap, updateCell, onDuplicateNext, on
           gap: 8,
         }}
       >
-        <div style={{ fontSize: 15, fontWeight: 600, color: c.texte }}>
-          {MOIS_LABEL[mois]} {annee}
-        </div>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <button
+          onClick={onToggleExpand}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+            textAlign: 'left',
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          <span style={{ fontSize: 13, color: c.texteMuted, width: 12 }}>
+            {expanded ? '▼' : '▶'}
+          </span>
+          <span style={{ fontSize: 15, fontWeight: 600, color: c.texte }}>
+            {MOIS_LABEL[mois]} {annee}
+          </span>
+          {!expanded && (
+            <span style={{ fontSize: 12, color: c.texteMuted, marginLeft: 8 }}>
+              {totalCvts > 0 ? `${formatNum(totalCvts)} cvts · ${formatEur(totalCa)}` : 'À renseigner'}
+            </span>
+          )}
+        </button>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
           {mois < 12 && (
             <button
               onClick={onDuplicateNext}
@@ -1050,6 +1125,8 @@ function MoisTable({ mois, annee, lieu, moisMap, updateCell, onDuplicateNext, on
           )}
         </div>
       </div>
+      {!expanded ? null : (
+      <>
 
       {/* Tableau */}
       <div style={{ overflowX: 'auto' }}>
@@ -1170,6 +1247,8 @@ function MoisTable({ mois, annee, lieu, moisMap, updateCell, onDuplicateNext, on
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   )
 }
@@ -1286,7 +1365,7 @@ function TotalCells({ nbre, cvts, tm, total, c, isLast }) {
   )
 }
 
-function MoisCardsMobile({ mois, annee, lieu, moisMap, updateCell, onDuplicateNext, onDuplicateAllAfter, sectionId, totals, c }) {
+function MoisCardsMobile({ mois, annee, lieu, moisMap, updateCell, onDuplicateNext, onDuplicateAllAfter, expanded, onToggleExpand, sectionId, totals, totalCvts, totalCa, c }) {
   return (
     <div
       id={sectionId}
@@ -1301,16 +1380,43 @@ function MoisCardsMobile({ mois, annee, lieu, moisMap, updateCell, onDuplicateNe
       <div
         style={{
           padding: '10px 14px',
-          borderBottom: `1px solid ${c.bordure}`,
+          borderBottom: expanded ? `1px solid ${c.bordure}` : 'none',
           background: c.fond,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          gap: 8,
         }}
       >
-        <div style={{ fontSize: 15, fontWeight: 600, color: c.texte }}>
-          {MOIS_LABEL[mois]} {annee}
-        </div>
+        <button
+          onClick={onToggleExpand}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+            textAlign: 'left',
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          <span style={{ fontSize: 13, color: c.texteMuted, width: 12 }}>
+            {expanded ? '▼' : '▶'}
+          </span>
+          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+            <span style={{ fontSize: 15, fontWeight: 600, color: c.texte }}>
+              {MOIS_LABEL[mois]} {annee}
+            </span>
+            {!expanded && (
+              <span style={{ fontSize: 11, color: c.texteMuted }}>
+                {totalCvts > 0 ? `${formatNum(totalCvts)} cvts · ${formatEur(totalCa)}` : 'À renseigner'}
+              </span>
+            )}
+          </div>
+        </button>
         {mois < 12 && (
           <button
             onClick={onDuplicateNext}
@@ -1322,12 +1428,15 @@ function MoisCardsMobile({ mois, annee, lieu, moisMap, updateCell, onDuplicateNe
               background: c.blanc,
               color: c.texte,
               cursor: 'pointer',
+              flexShrink: 0,
             }}
           >
             → {MOIS_LABEL[mois + 1].slice(0, 3)}.
           </button>
         )}
       </div>
+      {!expanded ? null : (
+      <>
       {JOURS_SEMAINE.map((j) => {
         const nbre = joursDansMois(annee, mois, j.code)
         return (
@@ -1424,6 +1533,8 @@ function MoisCardsMobile({ mois, annee, lieu, moisMap, updateCell, onDuplicateNe
             Dupliquer ce mois aux {12 - mois} suivants
           </button>
         </div>
+      )}
+      </>
       )}
     </div>
   )
