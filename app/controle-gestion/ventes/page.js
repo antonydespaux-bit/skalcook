@@ -46,6 +46,21 @@ function formatEur2(n) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n)
 }
 
+function formatDeltaEur(n) {
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: 0,
+    signDisplay: 'always',
+  }).format(n)
+}
+
+// jsWeekday : 0 = dimanche … 6 = samedi (Date.getDay)
+// jour_semaine ISO en BDD : 1 = lundi … 7 = dimanche
+function jsWeekdayToIso(jsWeekday) {
+  return jsWeekday === 0 ? 7 : jsWeekday
+}
+
 export default function VentesMensuelPage() {
   const router = useRouter()
   const { c } = useTheme()
@@ -55,6 +70,7 @@ export default function VentesMensuelPage() {
   const [authChecked, setAuthChecked] = useState(false)
   const [mois, setMois] = useState(currentMonthIso())
   const [rawRows, setRawRows] = useState([])
+  const [budgetRows, setBudgetRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -87,14 +103,27 @@ export default function VentesMensuelPage() {
     setError('')
     try {
       const { debut, fin } = monthRange(mois)
-      const { data, error: qErr } = await supabase
-        .from('ca_journalier')
-        .select('jour, service, couverts, ca_food, ca_bev_20, ca_bev_10, ca_autre')
-        .eq('client_id', clientId)
-        .gte('jour', debut)
-        .lte('jour', fin)
-      if (qErr) throw qErr
-      setRawRows(data || [])
+      const [y, m] = mois.split('-').map(Number)
+      const [caRes, budgetRes] = await Promise.all([
+        supabase
+          .from('ca_journalier')
+          .select('jour, service, couverts, ca_food, ca_bev_20, ca_bev_10, ca_autre')
+          .eq('client_id', clientId)
+          .gte('jour', debut)
+          .lte('jour', fin),
+        supabase
+          .from('ca_budgets')
+          .select(
+            'mois, jour_semaine, lieu_service_id, service, ca_food_cible, ca_bev_20_cible, ca_bev_10_cible, ca_autre_cible'
+          )
+          .eq('client_id', clientId)
+          .eq('annee', y)
+          .or(`mois.is.null,mois.eq.${m}`),
+      ])
+      if (caRes.error) throw caRes.error
+      if (budgetRes.error) throw budgetRes.error
+      setRawRows(caRes.data || [])
+      setBudgetRows(budgetRes.data || [])
     } catch (e) {
       setError(e.message || 'Erreur de chargement')
     } finally {
@@ -153,6 +182,40 @@ export default function VentesMensuelPage() {
     return result
   }, [rawRows, mois])
 
+  // Budget journalier total par jour ISO (1 = lundi … 7 = dimanche)
+  // pour le mois affiché. Override mensuel (mois = m) prioritaire sur le
+  // défaut (mois = NULL) au niveau de la cellule (jds, lieu, service).
+  const budgetByIsoJds = useMemo(() => {
+    const monthNum = Number(mois.split('-')[1])
+    const cellMap = new Map() // key = `${jds}_${lieu}_${svc}`
+    for (const b of budgetRows) {
+      const key = `${b.jour_semaine}_${b.lieu_service_id}_${b.service}`
+      if (b.mois === monthNum) {
+        cellMap.set(key, b)
+      } else if (!cellMap.has(key)) {
+        cellMap.set(key, b)
+      }
+    }
+    const out = new Map()
+    for (const cell of cellMap.values()) {
+      const total =
+        Number(cell.ca_food_cible || 0) +
+        Number(cell.ca_bev_20_cible || 0) +
+        Number(cell.ca_bev_10_cible || 0) +
+        Number(cell.ca_autre_cible || 0)
+      out.set(cell.jour_semaine, (out.get(cell.jour_semaine) || 0) + total)
+    }
+    return out
+  }, [budgetRows, mois])
+
+  const daysWithBudget = useMemo(() => {
+    return days.map((d) => {
+      const isoJds = jsWeekdayToIso(d.weekday)
+      const budget = budgetByIsoJds.get(isoJds) || 0
+      return { ...d, budget }
+    })
+  }, [days, budgetByIsoJds])
+
   const monthTotals = useMemo(() => {
     const t = {
       lunchCouverts: 0,
@@ -161,14 +224,16 @@ export default function VentesMensuelPage() {
       bev_20: 0,
       bev_10: 0,
       autre: 0,
+      budget: 0,
     }
-    for (const d of days) {
+    for (const d of daysWithBudget) {
       t.lunchCouverts += d.lunchCouverts
       t.dinnerCouverts += d.dinnerCouverts
       t.food += d.food
       t.bev_20 += d.bev_20
       t.bev_10 += d.bev_10
       t.autre += d.autre
+      t.budget += d.budget
     }
     const couvertsTot = t.lunchCouverts + t.dinnerCouverts
     const caTot = t.food + t.bev_20 + t.bev_10 + t.autre
@@ -178,7 +243,7 @@ export default function VentesMensuelPage() {
       caTot,
       tm: couvertsTot > 0 ? caTot / couvertsTot : null,
     }
-  }, [days])
+  }, [daysWithBudget])
 
   if (!authChecked) return null
 
@@ -257,7 +322,7 @@ export default function VentesMensuelPage() {
 
         {!loading && (
           <MonthTable
-            days={days}
+            days={daysWithBudget}
             totals={monthTotals}
             mois={mois}
             isMobile={isMobile}
@@ -315,6 +380,7 @@ function MonthTable({ days, totals, mois, isMobile, c }) {
               <th style={head}>CA Soft</th>
               <th style={head}>Autres</th>
               <th style={head}>CA Total</th>
+              <th style={head}>Δ Budget</th>
               <th style={head}>TM</th>
               <th style={head}></th>
             </tr>
@@ -341,6 +407,9 @@ function MonthTable({ days, totals, mois, isMobile, c }) {
                 <td style={cell}>{formatEur(d.bev_10)}</td>
                 <td style={cell}>{formatEur(d.autre)}</td>
                 <td style={{ ...cell, fontWeight: 600 }}>{formatEur(d.caTot)}</td>
+                <td style={budgetCellStyle(d, cell, c)} title={budgetCellTitle(d)}>
+                  {budgetCellLabel(d)}
+                </td>
                 <td style={cell}>{formatEur2(d.tm)}</td>
                 <td style={{ ...cell, padding: '4px 8px' }}>
                   <Link
@@ -373,6 +442,9 @@ function MonthTable({ days, totals, mois, isMobile, c }) {
               <td style={cell}>{formatEur(totals.bev_10)}</td>
               <td style={cell}>{formatEur(totals.autre)}</td>
               <td style={{ ...cell, fontWeight: 700 }}>{formatEur(totals.caTot)}</td>
+              <td style={totalBudgetCellStyle(totals, cell, c)} title={totalBudgetCellTitle(totals)}>
+                {totalBudgetCellLabel(totals)}
+              </td>
               <td style={cell}>{formatEur2(totals.tm)}</td>
               <td style={cell}></td>
             </tr>
@@ -381,4 +453,55 @@ function MonthTable({ days, totals, mois, isMobile, c }) {
       </div>
     </div>
   )
+}
+
+// Couleur cellule Δ Budget : vert si réel ≥ budget, rouge si < 95 %, orange entre,
+// gris si pas de budget cible ou pas de saisie ce jour-là.
+function budgetTone(real, budget, hasData) {
+  if (!budget) return 'none'
+  if (!hasData) return 'none'
+  if (real >= budget) return 'success'
+  if (real < budget * 0.95) return 'danger'
+  return 'warning'
+}
+
+function tonePalette(tone, c) {
+  if (tone === 'success') return { color: c.vert, bg: c.vertClair }
+  if (tone === 'danger') return { color: c.rouge, bg: c.rougeClair }
+  if (tone === 'warning') return { color: c.orange, bg: c.orangeClair }
+  return { color: c.texteMuted, bg: 'transparent' }
+}
+
+function budgetCellStyle(d, base, c) {
+  const tone = budgetTone(d.caTot, d.budget, d.hasData)
+  const { color, bg } = tonePalette(tone, c)
+  return { ...base, color, background: bg, fontWeight: tone === 'none' ? 400 : 600 }
+}
+
+function budgetCellLabel(d) {
+  if (!d.budget || !d.hasData) return '—'
+  return formatDeltaEur(d.caTot - d.budget)
+}
+
+function budgetCellTitle(d) {
+  if (!d.budget) return 'Pas de budget cible pour ce jour de la semaine'
+  const ratio = d.caTot > 0 ? (d.caTot / d.budget) * 100 : 0
+  return `Réel ${formatEur(d.caTot)} / Budget ${formatEur(d.budget)} (${ratio.toFixed(0)} %)`
+}
+
+function totalBudgetCellStyle(totals, base, c) {
+  const tone = budgetTone(totals.caTot, totals.budget, totals.caTot > 0)
+  const { color, bg } = tonePalette(tone, c)
+  return { ...base, color, background: bg, fontWeight: tone === 'none' ? 600 : 700 }
+}
+
+function totalBudgetCellLabel(totals) {
+  if (!totals.budget || totals.caTot === 0) return '—'
+  return formatDeltaEur(totals.caTot - totals.budget)
+}
+
+function totalBudgetCellTitle(totals) {
+  if (!totals.budget) return 'Aucun budget cible défini sur le mois'
+  const ratio = totals.caTot > 0 ? (totals.caTot / totals.budget) * 100 : 0
+  return `Réel ${formatEur(totals.caTot)} / Budget ${formatEur(totals.budget)} (${ratio.toFixed(0)} %)`
 }
