@@ -647,6 +647,16 @@ export default function BudgetsPage() {
           </div>
         )}
 
+        {!loading && lieux.length > 0 && (
+          <RecapAnnuel
+            budgets={budgets}
+            lieux={lieux}
+            annee={annee}
+            c={c}
+            isMobile={isMobile}
+          />
+        )}
+
         {!loading && selectedLieu && (
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) 220px', gap: 16, alignItems: 'flex-start' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
@@ -1970,6 +1980,253 @@ function ImportPreviewModal({ preview, onCancel, onConfirm, saving, c }) {
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ─── Récap annuel : agrégation tous lieux × services × mois ─────────────── */
+
+function RecapAnnuel({ budgets, lieux, annee, c, isMobile }) {
+  const [expanded, setExpanded] = useState(false)
+
+  // Données agrégées par mois (et total annuel)
+  const data = useMemo(() => {
+    // Colonnes : 1 par (lieu × service)
+    const cols = []
+    for (const lieu of lieux) {
+      for (const svc of SERVICES) {
+        cols.push({
+          key: `${lieu.id}_${svc.code}`,
+          label: `${lieu.nom} ${svc.code === 'lunch' ? 'Déj' : 'Dîn'}`,
+          lieuId: lieu.id,
+          svcCode: svc.code,
+        })
+      }
+    }
+
+    const rows = MOIS.map((m) => {
+      const moisMap = budgets[m] || {}
+      const colVals = {}
+      let cattc = 0
+      const usedJours = new Set()
+      for (const j of JOURS_SEMAINE) {
+        const nbre = joursDansMois(annee, m, j.code)
+        for (const col of cols) {
+          const cell = moisMap[`${j.code}_${col.lieuId}_${col.svcCode}`]
+          if (!cell) continue
+          const couvJ = Number(cell.couverts_cible || 0)
+          const tm = Number(cell.tm_cible || 0)
+          if (couvJ > 0) usedJours.add(j.code)
+          const ca = nbre * couvJ * tm
+          colVals[col.key] = (colVals[col.key] || 0) + ca
+          cattc += ca
+        }
+      }
+      // CA HT et splits via ratios fixes 65/28/7 sur le CATTC, TVA 10/20/10
+      const food = (cattc * FOOD_RATIO) / 1.1
+      const bev20 = (cattc * BEV_20_RATIO) / 1.2
+      const bev10 = (cattc * BEV_10_RATIO) / 1.1
+      const caHt = food + bev20 + bev10
+      const bev = bev20 + bev10
+      let nbJours = 0
+      for (const jc of usedJours) nbJours += joursDansMois(annee, m, jc)
+      return {
+        mois: m,
+        cols: colVals,
+        cattc,
+        cattcJour: nbJours > 0 ? cattc / nbJours : 0,
+        nbJours,
+        caHt,
+        food,
+        bev,
+      }
+    })
+
+    const total = { cols: {}, cattc: 0, caHt: 0, food: 0, bev: 0, nbJours: 0 }
+    for (const r of rows) {
+      total.cattc += r.cattc
+      total.caHt += r.caHt
+      total.food += r.food
+      total.bev += r.bev
+      total.nbJours += r.nbJours
+      for (const k of Object.keys(r.cols)) total.cols[k] = (total.cols[k] || 0) + r.cols[k]
+    }
+    return { cols, rows, total }
+  }, [budgets, lieux, annee])
+
+  const tdNum = {
+    padding: '6px 10px',
+    textAlign: 'right',
+    fontVariantNumeric: 'tabular-nums',
+    color: c.texte,
+    borderBottom: `0.5px solid ${c.bordure}`,
+  }
+  const thStyle = {
+    padding: '8px 10px',
+    textAlign: 'right',
+    color: c.texteMuted,
+    fontWeight: 600,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    borderBottom: `1px solid ${c.bordure}`,
+    background: c.fond,
+    whiteSpace: 'nowrap',
+  }
+
+  return (
+    <div
+      style={{
+        background: c.blanc,
+        borderRadius: 12,
+        border: `0.5px solid ${c.bordure}`,
+        marginBottom: 16,
+        overflow: 'hidden',
+      }}
+    >
+      <button
+        onClick={() => setExpanded((e) => !e)}
+        style={{
+          width: '100%',
+          padding: '12px 16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+          background: c.fond,
+          border: 'none',
+          borderBottom: expanded ? `1px solid ${c.bordure}` : 'none',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 13, color: c.texteMuted }}>{expanded ? '▼' : '▶'}</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: c.texte }}>Récapitulatif annuel</span>
+        </div>
+        <div style={{ display: 'flex', gap: 16, fontSize: 13, color: c.texte, flexWrap: 'wrap' }}>
+          <span>
+            CA TTC :{' '}
+            <strong>{data.total.cattc > 0 ? formatEur(data.total.cattc) : '—'}</strong>
+          </span>
+          <span style={{ color: c.texteMuted }}>·</span>
+          <span>
+            CA HT : <strong>{data.total.caHt > 0 ? formatEur(data.total.caHt) : '—'}</strong>
+          </span>
+        </div>
+      </button>
+
+      {expanded && (
+        <div style={{ overflowX: 'auto' }}>
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: 12,
+              minWidth: isMobile ? 720 : 'auto',
+            }}
+          >
+            <thead>
+              <tr>
+                <th
+                  style={{
+                    ...thStyle,
+                    textAlign: 'left',
+                    position: 'sticky',
+                    left: 0,
+                    background: c.fond,
+                    zIndex: 1,
+                  }}
+                >
+                  Mois
+                </th>
+                {data.cols.map((col) => (
+                  <th key={col.key} style={thStyle}>
+                    {col.label}
+                  </th>
+                ))}
+                <th style={{ ...thStyle, color: c.texte }}>CA TTC</th>
+                <th style={thStyle}>/ jour</th>
+                <th style={{ ...thStyle, color: c.texte }}>CA HT</th>
+                <th style={thStyle}>Food</th>
+                <th style={thStyle}>Bev</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.rows.map((r) => (
+                <tr key={r.mois}>
+                  <td
+                    style={{
+                      ...tdNum,
+                      textAlign: 'left',
+                      color: c.texte,
+                      fontWeight: 500,
+                      position: 'sticky',
+                      left: 0,
+                      background: c.blanc,
+                    }}
+                  >
+                    {MOIS_LABEL[r.mois]}
+                  </td>
+                  {data.cols.map((col) => (
+                    <td key={col.key} style={tdNum}>
+                      {r.cols[col.key] > 0 ? formatEur(r.cols[col.key]) : '—'}
+                    </td>
+                  ))}
+                  <td style={{ ...tdNum, fontWeight: 600 }}>
+                    {r.cattc > 0 ? formatEur(r.cattc) : '—'}
+                  </td>
+                  <td style={{ ...tdNum, color: c.texteMuted }}>
+                    {r.cattcJour > 0 ? formatEur(r.cattcJour) : '—'}
+                  </td>
+                  <td style={{ ...tdNum, fontWeight: 600 }}>
+                    {r.caHt > 0 ? formatEur(r.caHt) : '—'}
+                  </td>
+                  <td style={{ ...tdNum, color: c.texteMuted }}>
+                    {r.food > 0 ? formatEur(r.food) : '—'}
+                  </td>
+                  <td style={{ ...tdNum, color: c.texteMuted }}>
+                    {r.bev > 0 ? formatEur(r.bev) : '—'}
+                  </td>
+                </tr>
+              ))}
+              <tr style={{ background: c.fond, borderTop: `1.5px solid ${c.bordure}`, fontWeight: 700 }}>
+                <td
+                  style={{
+                    ...tdNum,
+                    textAlign: 'left',
+                    color: c.texte,
+                    position: 'sticky',
+                    left: 0,
+                    background: c.fond,
+                    borderBottom: 'none',
+                  }}
+                >
+                  Total
+                </td>
+                {data.cols.map((col) => (
+                  <td key={col.key} style={{ ...tdNum, color: c.texte, borderBottom: 'none' }}>
+                    {data.total.cols[col.key] > 0 ? formatEur(data.total.cols[col.key]) : '—'}
+                  </td>
+                ))}
+                <td style={{ ...tdNum, color: c.texte, borderBottom: 'none' }}>
+                  {data.total.cattc > 0 ? formatEur(data.total.cattc) : '—'}
+                </td>
+                <td style={{ ...tdNum, color: c.texteMuted, borderBottom: 'none' }}>—</td>
+                <td style={{ ...tdNum, color: c.texte, borderBottom: 'none' }}>
+                  {data.total.caHt > 0 ? formatEur(data.total.caHt) : '—'}
+                </td>
+                <td style={{ ...tdNum, color: c.texte, borderBottom: 'none' }}>
+                  {data.total.food > 0 ? formatEur(data.total.food) : '—'}
+                </td>
+                <td style={{ ...tdNum, color: c.texte, borderBottom: 'none' }}>
+                  {data.total.bev > 0 ? formatEur(data.total.bev) : '—'}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
