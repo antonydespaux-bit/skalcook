@@ -393,6 +393,9 @@ export default function AchatsImportPage() {
     setLignes(prev => prev.map(l =>
       l._id !== ligne._id ? l : {
         ...l,
+        // Préserve l'override de désignation envoyé par le caller (ex: autocomplete
+        // qui force le nom canonique de l'ingrédient sélectionné).
+        designation:      ligne.designation ?? l.designation,
         prix_unitaire_ht: prixLigneFinal,
         prix_auto:        !userHadOwnPrice,
         taux_tva:         tauxTvaFinal,

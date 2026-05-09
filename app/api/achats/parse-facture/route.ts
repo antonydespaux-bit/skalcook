@@ -23,7 +23,7 @@ const schema = z.object({
   clientId: z.string().uuid(),
 })
 
-const PROMPT_EXTRACTION = `Tu analyses une photo ou scan d'une facture fournisseur de restauration.
+const PROMPT_EXTRACTION = `Tu analyses une photo ou scan d'une facture fournisseur de restauration française.
 Extrais les informations suivantes et retourne UNIQUEMENT du JSON valide, sans markdown, sans texte avant ou après.
 
 Format attendu :
@@ -38,24 +38,32 @@ Format attendu :
       "quantite": 5.0,
       "unite": "kg",
       "prix_unitaire_ht": 2.50,
+      "montant_ht": 12.50,
       "taux_tva": 5.5
     }
   ]
 }
 
-Règles :
-- unite doit être l'unité standard la plus proche (kg, g, L, mL, pièce, carton, etc.)
-- prix_unitaire_ht est le prix HT PAR UNITÉ (pas le total de la ligne)
-- taux_tva est le taux de TVA applicable à la ligne en pourcentage (ex: 5.5 pour 5,5%, 10 pour 10%, 20 pour 20%).
-  Beaucoup de factures alimentaires distinguent plusieurs taux (5,5% pour les denrées,
-  10% pour la restauration sur place, 20% pour le non-alimentaire). Cherche les
-  colonnes "Code TVA", "Taux", "TVA" ou les codes G1/G2/G3 qui renvoient à un
-  tableau récap en pied de page. Si tu ne peux pas le déduire, utilise null.
-- montant_tva_total est le total de la TVA en euros tel qu'il apparaît au pied
-  de la facture (ligne "Montant TVA" ou "Total TVA"). Quand il y a plusieurs
-  taux, c'est la somme des TVA par taux. Pas en pourcentage. Si absent, null.
-- Si une valeur est absente ou illisible, utilise null
-- Ne retourne QUE le JSON, rien d'autre`
+Règles importantes :
+- FORMAT NUMÉRIQUE FRANÇAIS : sur ces factures, la virgule est le séparateur DÉCIMAL.
+  Exemples : "1,610" = 1.61   "3,22" = 3.22   "2,000" = 2.0   "0,18" = 0.18.
+  Renvoie TOUJOURS des nombres JSON avec un point décimal (ex: 1.61, 3.22, 2.0).
+  Le séparateur de milliers est l'espace ou rien (ex: "1 234,56" = 1234.56).
+- unite : utilise l'unité standard la plus proche (kg, g, L, mL, pièce, carton, etc.).
+  Si la facture indique "U" / "Un" / "Unité", utilise "pièce".
+- prix_unitaire_ht : prix HT PAR UNITÉ (colonne "P.U.", "Prix unitaire HT", "PU HT", etc.).
+- montant_ht : total HT de la ligne (colonne "Montant HT", "Total HT", "Total ligne").
+  Permet de cross-vérifier : montant_ht ≈ quantite × prix_unitaire_ht.
+  Si tu lis bien le montant_ht mais pas le P.U., renseigne au moins montant_ht.
+- taux_tva : taux de TVA de la ligne en pourcentage (ex: 5.5 pour 5,5%, 10, 20).
+  Les factures alimentaires distinguent souvent plusieurs taux (5,5% denrées,
+  10% restauration sur place, 20% non-alimentaire). Cherche les colonnes
+  "Code TVA", "Taux", "TVA" ou les codes G1/G2/G3 qui renvoient à un récap
+  en pied de page. Si tu ne peux pas déduire, null.
+- montant_tva_total : total TVA en euros au pied de facture ("Montant TVA"
+  ou "Total TVA"). Pas en pourcentage. Si absent, null.
+- Si une valeur est absente ou illisible, utilise null.
+- Ne retourne QUE le JSON, rien d'autre.`
 
 export const POST = apiHandler({
   schema,
@@ -104,11 +112,20 @@ export const POST = apiHandler({
       .map((l) => {
         const tauxRaw = l.taux_tva
         const taux = tauxRaw == null ? null : Number(tauxRaw)
+        const quantite = Number(l.quantite) || 1
+        const puRaw = Number(l.prix_unitaire_ht)
+        const montantHtRaw = Number(l.montant_ht)
+        const montantHt = Number.isFinite(montantHtRaw) && montantHtRaw > 0 ? montantHtRaw : null
+        // Si l'IA n'a pas réussi à lire le P.U. mais a bien lu le montant HT,
+        // dérive le P.U. : prix_unitaire_ht = montant_ht / quantite.
+        const prixUnitaire = Number.isFinite(puRaw) && puRaw > 0
+          ? puRaw
+          : (montantHt != null && quantite > 0 ? montantHt / quantite : 0)
         return {
           designation: String(l.designation ?? '').trim(),
-          quantite: Number(l.quantite) || 1,
+          quantite,
           unite: String(l.unite ?? '').trim() || null,
-          prix_unitaire_ht: Number(l.prix_unitaire_ht) || 0,
+          prix_unitaire_ht: prixUnitaire,
           taux_tva: taux != null && Number.isFinite(taux) && taux >= 0 && taux <= 100 ? taux : null,
         }
       })
