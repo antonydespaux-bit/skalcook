@@ -12,6 +12,9 @@ const ligneFactureSchema = z.object({
   unite:            z.string().nullable().optional(),
   prix_unitaire_ht: z.coerce.number().min(0),
   remise:           z.coerce.number().min(0).max(100).default(0),
+  // Taux de TVA spécifique à la ligne (pour factures multi-taux). Si null,
+  // on retombera sur le taux global de la facture (achats_factures.taux_tva).
+  taux_tva:         z.coerce.number().min(0).max(100).nullable().optional(),
   updatePrice:      z.boolean().optional(),
 })
 
@@ -23,12 +26,17 @@ export const saveFactureSchema = z.object({
   fournisseur:    z.string().min(1, 'Fournisseur requis').max(255),
   numeroFacture:  z.string().max(100).optional().nullable(),
   dateFacture:    z.string().min(1, 'Date requise'),
-  statut:         z.enum(['bl', 'facture']).default('facture'),
+  statut:         z.enum(['bl', 'facture', 'avoir']).default('facture'),
   lignes:         z.array(ligneFactureSchema).min(1, 'Au moins une ligne requise'),
-  fileBase64:     z.string().optional(),
-  fileMime:       z.enum(['application/pdf', 'image/png', 'image/webp', 'image/jpeg']).optional(),
+  // En mode manuel, le client envoie null (pas undefined) → on accepte les deux.
+  fileBase64:     z.string().nullable().optional(),
+  fileMime:       z.enum(['application/pdf', 'image/png', 'image/webp', 'image/jpeg']).nullable().optional(),
   forceInsert:    z.boolean().optional(),
   tauxTva:        z.coerce.number().min(0).max(100).optional(),
+  // Montant TVA total saisi en pied de facture (override). Si fourni, prime
+  // sur le calcul automatique depuis les taux par ligne / le taux global.
+  montantTva:     z.coerce.number().min(0).nullable().optional(),
+  autoCreateMissing: z.boolean().optional(),
 })
 
 export type SaveFactureInput = z.infer<typeof saveFactureSchema>
@@ -40,8 +48,9 @@ export const updateFactureSchema = z.object({
   fournisseur:    z.string().min(1).max(255).optional(),
   numeroFacture:  z.string().max(100).optional().nullable(),
   dateFacture:    z.string().optional(),
-  statut:         z.enum(['bl', 'facture']).optional(),
+  statut:         z.enum(['bl', 'facture', 'avoir']).optional(),
   tauxTva:        z.coerce.number().min(0).max(100).optional(),
+  montantTva:     z.coerce.number().min(0).nullable().optional(),
   lignes:         z.array(ligneFactureSchema).optional(),
 })
 

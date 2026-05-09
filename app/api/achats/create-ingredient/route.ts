@@ -7,7 +7,7 @@ export const POST = apiHandler({
   guard: 'adminOrSuperadmin',
   clientIdFrom: 'body.clientId',
   handler: async ({ data, db }) => {
-    const result = await createIngredient(db, data)
-    return Response.json(result)
+    const ingredient = await createIngredient(db, data)
+    return Response.json({ ingredient })
   },
 })

@@ -19,10 +19,15 @@ export function normDesignation(s: string | null | undefined): string {
     .trim()
 }
 
-function computeLigneEffective(ligne: { quantite: number; prix_unitaire_ht: number; remise?: number }) {
+export function computeLigneEffective(
+  ligne: { quantite: number; prix_unitaire_ht: number; remise?: number },
+  signe: 1 | -1 = 1,
+) {
   const remise = ligne.remise ?? 0
+  // prix unitaire reste positif (sert de référence pour la mercuriale et update prix ingrédient).
+  // Seul le montant porte le signe — un avoir aboutit à un montant_ht négatif.
   const prixEffectif = ligne.prix_unitaire_ht * (1 - remise / 100)
-  const montantHt = ligne.quantite * prixEffectif
+  const montantHt = ligne.quantite * prixEffectif * signe
   return { prixEffectif, montantHt, remise }
 }
 
@@ -103,8 +108,9 @@ export async function saveFacture(
   input: SaveFactureInput,
   userId: string
 ) {
-  const { clientId, fournisseur, numeroFacture, dateFacture, statut, lignes, fileBase64, fileMime, forceInsert, tauxTva } = input
+  const { clientId, fournisseur, numeroFacture, dateFacture, statut, lignes: lignesInput, fileBase64, fileMime, forceInsert, tauxTva, montantTva, autoCreateMissing } = input
   const nomFournisseur = fournisseur.trim()
+  const signe: 1 | -1 = statut === 'avoir' ? -1 : 1
 
   // 1. Check duplicate
   if (numeroFacture?.trim() && !forceInsert) {
@@ -122,9 +128,62 @@ export async function saveFacture(
       : Promise.resolve(null),
   ])
 
-  // 3. Calculate total HT
+  // 2bis. Création auto des ingrédients manquants (avant insert lignes).
+  // Pour chaque ligne sans ingredient_id mais avec une designation non vide :
+  //   - on tente d'abord de matcher un ingrédient existant par nom normalisé
+  //   - sinon on le crée avec nom = designation, unite = ligne.unite ?? 'kg',
+  //     prix_kg = prix unitaire de la ligne
+  // Idempotent : si plusieurs lignes partagent la même désignation, un seul
+  // ingrédient est créé et toutes les lignes pointent dessus.
+  let lignes = lignesInput
+  let autoCreatedCount = 0
+  if (autoCreateMissing) {
+    const missing = lignesInput.filter((l) => !l.ingredient_id && l.designation?.trim())
+    if (missing.length > 0) {
+      const norms = [...new Set(missing.map((l) => normDesignation(l.designation)))].filter(Boolean)
+      // Recherche des ingrédients déjà existants pour ces normes (par nom exact normalisé)
+      const { data: existingIngs } = await db
+        .from('ingredients')
+        .select('id, nom, unite, prix_kg')
+        .eq('client_id', clientId)
+      const ingByNorm: Record<string, { id: string }> = {}
+      for (const ing of existingIngs ?? []) {
+        ingByNorm[normDesignation((ing as { nom: string }).nom)] = ing as { id: string }
+      }
+      const idByNorm: Record<string, string> = {}
+      for (const norm of norms) {
+        if (ingByNorm[norm]) {
+          idByNorm[norm] = ingByNorm[norm].id
+          continue
+        }
+        // À créer : prend la 1re ligne qui matche cette norme comme source
+        const src = missing.find((l) => normDesignation(l.designation) === norm)
+        if (!src) continue
+        // Utilise findOrCreateIngredient : retourne l'existant si déjà présent
+        // pour le client, sinon crée. Conflit global → erreur exploitable.
+        const ing = await findOrCreateIngredient(
+          db,
+          clientId,
+          src.designation,
+          src.unite,
+          Number(src.prix_unitaire_ht) || 0,
+        )
+        idByNorm[norm] = ing.id
+        autoCreatedCount++
+      }
+      // Reassign ingredient_id sur les lignes
+      lignes = lignesInput.map((l) => {
+        if (l.ingredient_id || !l.designation?.trim()) return l
+        const norm = normDesignation(l.designation)
+        const id = idByNorm[norm]
+        return id ? { ...l, ingredient_id: id } : l
+      })
+    }
+  }
+
+  // 3. Calculate total HT (négatif pour un avoir)
   const totalHt = lignes.reduce((sum, l) => {
-    const { montantHt } = computeLigneEffective(l)
+    const { montantHt } = computeLigneEffective(l, signe)
     return sum + montantHt
   }, 0)
 
@@ -139,7 +198,9 @@ export async function saveFacture(
       date_facture: dateFacture,
       total_ht: totalHt,
       taux_tva: tauxTva ?? null,
-      statut: statut === 'bl' ? 'bl' : 'facture',
+      // Pour un avoir, le montant TVA suit naturellement le signe (négatif).
+      montant_tva: montantTva != null ? montantTva * signe : null,
+      statut,
       fichier_url: fichierUrl,
     })
     .select()
@@ -149,7 +210,7 @@ export async function saveFacture(
 
   // 5. Insert lines
   const lignesInsert = lignes.map((l) => {
-    const { prixEffectif, montantHt, remise } = computeLigneEffective(l)
+    const { prixEffectif, montantHt, remise } = computeLigneEffective(l, signe)
     return {
       facture_id: facture.id,
       client_id: clientId,
@@ -160,6 +221,7 @@ export async function saveFacture(
       prix_unitaire_ht: prixEffectif,
       remise,
       montant_ht: montantHt,
+      taux_tva: l.taux_tva ?? null,
     }
   })
 
@@ -193,6 +255,7 @@ export async function saveFacture(
         facture_id: facture.id,
         lignes_count: lignes.length,
         prix_maj: toUpdate.length,
+        auto_created_ingredients: autoCreatedCount,
       },
       user_id: userId,
     }),
@@ -216,7 +279,16 @@ export async function saveFacture(
     })(),
   ])
 
-  return { facture_id: facture.id, prix_maj: toUpdate.length }
+  // Le client veut savoir si un fichier était attendu et s'il a été stocké :
+  // permet d'afficher un avertissement quand l'upload Supabase Storage échoue
+  // (non bloquant côté serveur, mais on doit alerter l'utilisateur).
+  const fileExpected = !!(fileBase64 && fileMime)
+  return {
+    facture_id: facture.id,
+    prix_maj: toUpdate.length,
+    auto_created: autoCreatedCount,
+    file_uploaded: fileExpected ? !!fichierUrl : null,
+  }
 }
 
 export async function updateFacture(
@@ -231,6 +303,7 @@ export async function updateFacture(
     dateFacture: 'date_facture',
     statut: 'statut',
     tauxTva: 'taux_tva',
+    montantTva: 'montant_tva',
   }
 
   const dbUpdates: Record<string, unknown> = {}
@@ -248,12 +321,26 @@ export async function updateFacture(
     unite?: string | null
     prix_unitaire_ht: number
     remise?: number
+    taux_tva?: number | null
   }> | undefined
 
   if (lignes) {
+    // Détermine le signe applicable : statut envoyé en update, sinon statut courant
+    let statutEffectif = (dbUpdates.statut as string | undefined) || undefined
+    if (!statutEffectif) {
+      const { data: cur } = await db
+        .from('achats_factures')
+        .select('statut')
+        .eq('id', factureId)
+        .eq('client_id', clientId)
+        .maybeSingle()
+      statutEffectif = (cur?.statut as string) || 'facture'
+    }
+    const signe: 1 | -1 = statutEffectif === 'avoir' ? -1 : 1
+
     // Recalcul du total HT depuis les nouvelles lignes
     const totalHt = lignes.reduce((sum, l) => {
-      const { montantHt } = computeLigneEffective(l)
+      const { montantHt } = computeLigneEffective(l, signe)
       return sum + montantHt
     }, 0)
     dbUpdates.total_ht = totalHt
@@ -269,7 +356,7 @@ export async function updateFacture(
     // Insertion des nouvelles lignes
     if (lignes.length > 0) {
       const lignesInsert = lignes.map((l) => {
-        const { prixEffectif, montantHt, remise } = computeLigneEffective(l)
+        const { prixEffectif, montantHt, remise } = computeLigneEffective(l, signe)
         return {
           facture_id: factureId,
           client_id: clientId,
@@ -280,6 +367,7 @@ export async function updateFacture(
           prix_unitaire_ht: prixEffectif,
           remise,
           montant_ht: montantHt,
+          taux_tva: l.taux_tva ?? null,
         }
       })
       const { error: iErr } = await db.from('achats_lignes').insert(lignesInsert)
@@ -316,6 +404,38 @@ export async function updateFacture(
     throw new ValidationError('Aucun champ à mettre à jour.')
   }
 
+  // Si le statut change vers/depuis 'avoir' SANS que les lignes aient été
+  // re-postées, on bascule le signe des lignes existantes et du total pour
+  // garder la cohérence comptable.
+  const newStatut = dbUpdates.statut as string | undefined
+  if (newStatut && !lignes) {
+    const { data: cur } = await db
+      .from('achats_factures')
+      .select('statut, total_ht, montant_tva')
+      .eq('id', factureId)
+      .eq('client_id', clientId)
+      .maybeSingle()
+    const wasAvoir = cur?.statut === 'avoir'
+    const willBeAvoir = newStatut === 'avoir'
+    if (cur && wasAvoir !== willBeAvoir) {
+      const { data: existingLignes } = await db
+        .from('achats_lignes')
+        .select('id, montant_ht')
+        .eq('facture_id', factureId)
+        .eq('client_id', clientId)
+      for (const l of existingLignes ?? []) {
+        await db
+          .from('achats_lignes')
+          .update({ montant_ht: -Number(l.montant_ht) })
+          .eq('id', l.id)
+      }
+      dbUpdates.total_ht = -Number(cur.total_ht ?? 0)
+      if (cur.montant_tva != null) {
+        dbUpdates.montant_tva = -Number(cur.montant_tva)
+      }
+    }
+  }
+
   const { error } = await db
     .from('achats_factures')
     .update(dbUpdates)
@@ -348,26 +468,61 @@ export async function deleteFacture(
   return { deleted: true, soft: true }
 }
 
-export async function createIngredient(
+/**
+ * Cherche un ingrédient existant pour ce client (par nom case-insensitive),
+ * sinon le crée. Si la création échoue à cause de l'unique global sur `nom`
+ * (la contrainte est sur `nom` seul, pas par client_id), c'est qu'un autre
+ * établissement utilise déjà ce nom — on remonte une ConflictError exploitable.
+ */
+export async function findOrCreateIngredient(
   db: SupabaseClient,
-  input: CreateIngredientInput
+  clientId: string,
+  nom: string,
+  unite?: string | null,
+  prix_kg?: number | null,
 ) {
-  const { clientId, nom, unite, prix_kg } = input
+  // Convention skalcook : tous les noms d'ingrédients en MAJUSCULES.
+  const nomTrim = nom.trim().toUpperCase()
+  if (!nomTrim) throw new ValidationError('Nom d\'ingrédient requis.')
 
-  const { data, error } = await db
+  // 1. Existe pour ce client ?
+  const { data: existing } = await db
+    .from('ingredients')
+    .select('id, nom, unite, prix_kg')
+    .eq('client_id', clientId)
+    .ilike('nom', nomTrim)
+    .maybeSingle()
+  if (existing) return existing
+
+  // 2. Création
+  const { data: created, error } = await db
     .from('ingredients')
     .insert({
       client_id: clientId,
-      nom: nom.trim(),
-      unite,
+      nom: nomTrim,
+      unite: unite || 'kg',
       prix_kg: prix_kg ?? 0,
       est_sous_fiche: false,
     })
     .select('id, nom, unite, prix_kg')
     .single()
 
-  if (error) throw new Error(error.message)
-  return data
+  if (error) {
+    // Conflit unique global → un autre établissement a réservé ce nom
+    if (error.code === '23505' || /duplicate key/i.test(error.message)) {
+      throw new ConflictError(`L'ingrédient "${nomTrim}" est déjà utilisé par un autre établissement. Modifie légèrement le nom.`)
+    }
+    throw new Error(error.message)
+  }
+  return created
+}
+
+export async function createIngredient(
+  db: SupabaseClient,
+  input: CreateIngredientInput
+) {
+  const { clientId, nom, unite, prix_kg } = input
+  return findOrCreateIngredient(db, clientId, nom, unite, prix_kg)
 }
 
 export async function getMercuriale(db: SupabaseClient, clientId: string) {
@@ -493,7 +648,7 @@ export async function getMercuriale(db: SupabaseClient, clientId: string) {
 }
 
 export async function getReconciliationData(db: SupabaseClient, clientId: string) {
-  const [mappingRes, ingredientsRes] = await Promise.all([
+  const [mappingRes, ingredientsRes, lignesRes] = await Promise.all([
     db
       .from('fournisseur_mapping')
       .select('*')
@@ -504,10 +659,33 @@ export async function getReconciliationData(db: SupabaseClient, clientId: string
       .eq('client_id', clientId)
       .eq('est_sous_fiche', false)
       .order('nom'),
+    // Dernier taux_tva utilisé par ingrédient (pour pré-remplissage en saisie).
+    // On prend les 5000 dernières lignes du client, suffisant pour reconstituer
+    // l'historique récent sans faire un coûteux DISTINCT ON par ingrédient.
+    db
+      .from('achats_lignes')
+      .select('ingredient_id, taux_tva, created_at')
+      .eq('client_id', clientId)
+      .not('ingredient_id', 'is', null)
+      .not('taux_tva', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(5000),
   ])
+
+  // Pour chaque ingrédient, on garde le taux_tva de la ligne la plus récente.
+  const tvaByIngredient: Record<string, number> = {}
+  for (const l of lignesRes.data ?? []) {
+    const id = (l as { ingredient_id?: string | null }).ingredient_id
+    if (!id || id in tvaByIngredient) continue
+    const taux = Number((l as { taux_tva?: number | null }).taux_tva)
+    if (Number.isFinite(taux) && taux >= 0 && taux <= 100) {
+      tvaByIngredient[id] = taux
+    }
+  }
 
   return {
     mappings: mappingRes.data ?? [],
     ingredients: ingredientsRes.data ?? [],
+    tvaByIngredient,
   }
 }
