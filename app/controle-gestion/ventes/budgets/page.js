@@ -230,7 +230,7 @@ async function parseExcelBudget(file) {
 
 export default function BudgetsPage() {
   const router = useRouter()
-  const c = useTheme()
+  const { c } = useTheme()
   const isMobile = useIsMobile()
 
   const [clientId, setClientId] = useState(null)
