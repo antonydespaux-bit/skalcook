@@ -312,6 +312,7 @@ export default function BudgetsPage() {
             'id, mois, jour_semaine, lieu_service_id, service, couverts_cible, ca_food_cible, ca_bev_20_cible, ca_bev_10_cible, ca_autre_cible'
           )
           .eq('client_id', clientId)
+          .eq('annee', annee)
           .not('mois', 'is', null),
       ])
       if (lieuxRes.error) throw lieuxRes.error
@@ -340,7 +341,7 @@ export default function BudgetsPage() {
     } finally {
       setLoading(false)
     }
-  }, [clientId])
+  }, [clientId, annee])
 
   useEffect(() => {
     if (authChecked) loadData()
@@ -431,6 +432,7 @@ export default function BudgetsPage() {
               if (!cell || !hasAnyValue(cell)) continue
               rows.push({
                 client_id: clientId,
+                annee,
                 mois: m,
                 jour_semaine: j.code,
                 lieu_service_id: lieu.id,
@@ -452,9 +454,9 @@ export default function BudgetsPage() {
       }
       const { error: upErr } = await supabase
         .from('ca_budgets')
-        .upsert(rows, { onConflict: 'client_id,mois,jour_semaine,lieu_service_id,service' })
+        .upsert(rows, { onConflict: 'client_id,annee,mois,jour_semaine,lieu_service_id,service' })
       if (upErr) throw upErr
-      setOkMsg(`Enregistré (${rows.length} lignes).`)
+      setOkMsg(`Enregistré (${rows.length} lignes) pour ${annee}.`)
       setRaison('')
       await loadData()
     } catch (e) {
@@ -462,7 +464,7 @@ export default function BudgetsPage() {
     } finally {
       setSaving(false)
     }
-  }, [clientId, lieux, budgets, raison, loadData])
+  }, [clientId, annee, lieux, budgets, raison, loadData])
 
   // Vide tous les budgets du lieu sélectionné (12 mois × 7 jours × 2 svcs).
   // Le trigger d'audit log les DELETE.
@@ -476,10 +478,11 @@ export default function BudgetsPage() {
         .from('ca_budgets')
         .delete()
         .eq('client_id', clientId)
+        .eq('annee', annee)
         .eq('lieu_service_id', lieuFilter)
         .not('mois', 'is', null)
       if (delErr) throw delErr
-      setOkMsg('Budgets du lieu remis à zéro.')
+      setOkMsg(`Budgets du lieu remis à zéro pour ${annee}.`)
       setResetConfirm(null)
       await loadData()
     } catch (e) {
@@ -487,7 +490,7 @@ export default function BudgetsPage() {
     } finally {
       setSaving(false)
     }
-  }, [clientId, lieuFilter, loadData])
+  }, [clientId, annee, lieuFilter, loadData])
 
   const handleFileChange = useCallback(async (e) => {
     const file = e.target.files?.[0]
@@ -532,6 +535,7 @@ export default function BudgetsPage() {
         if (!lieuId) continue
         rowsToUpsert.push({
           client_id: clientId,
+          annee,
           mois: r.mois,
           jour_semaine: r.jour_semaine,
           lieu_service_id: lieuId,
@@ -541,12 +545,12 @@ export default function BudgetsPage() {
           ca_bev_20_cible: r.ca_bev_20_cible,
           ca_bev_10_cible: r.ca_bev_10_cible,
           ca_autre_cible: r.ca_autre_cible,
-          raison_modification: 'Import Excel Budget 2026',
+          raison_modification: `Import Excel Budget ${annee}`,
         })
       }
       const { error: upErr } = await supabase
         .from('ca_budgets')
-        .upsert(rowsToUpsert, { onConflict: 'client_id,mois,jour_semaine,lieu_service_id,service' })
+        .upsert(rowsToUpsert, { onConflict: 'client_id,annee,mois,jour_semaine,lieu_service_id,service' })
       if (upErr) throw upErr
       setOkMsg(`Import terminé : ${rowsToUpsert.length} lignes importées.`)
       setImportPreview(null)
@@ -556,7 +560,7 @@ export default function BudgetsPage() {
     } finally {
       setSaving(false)
     }
-  }, [importPreview, clientId, lieux, loadData])
+  }, [importPreview, clientId, annee, lieux, loadData])
 
   // KPI annuels pour le lieu sélectionné
   const totauxAnnee = useMemo(() => {
