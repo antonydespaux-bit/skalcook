@@ -1,7 +1,7 @@
 import KpiCard from './KpiCard'
 import { buildComparison, formatEur, formatDeltaEur } from '../../../lib/caAnalyses'
 
-export default function KpiCaTtc({ c, isMobile, totals, comparisonTotals, comparisonLabel }) {
+export default function KpiCaTtc({ c, isMobile, totals, comparisonTotals, comparisonLabel, breakdownByLieu, breakdownByService }) {
   const value = totals ? formatEur(totals.caTtc) : '—'
   const comparison = comparisonTotals && totals
     ? buildComparison({
@@ -19,6 +19,8 @@ export default function KpiCaTtc({ c, isMobile, totals, comparisonTotals, compar
       value={value}
       hint={comparison ? null : 'Total Food + Boissons + Autres sur la période'}
       comparison={comparison}
+      breakdownByLieu={breakdownByLieu}
+      breakdownByService={breakdownByService}
     />
   )
 }

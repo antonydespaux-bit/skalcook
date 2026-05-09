@@ -12,6 +12,11 @@ import {
   perfByWeekday,
   mixSegments,
   topBottomDays,
+  aggregateBySerie,
+  buildBreakdown,
+  mixByService,
+  bucketDaysMultiSeries,
+  perfByWeekdayMultiSeries,
   TVA_FOOD,
   TVA_BEV_20,
 } from '../caAnalyses'
@@ -162,6 +167,17 @@ describe('periodBudgetTotal', () => {
     const total = periodBudgetTotal({ 2025: rows2025, 2026: rows2026 }, '2025-12-31', '2026-01-01')
     expect(total).toBe(300)
   })
+
+  it('filtre par jour-de-semaine si isoJdsFilter fourni', () => {
+    // Lundi et mardi avec budget différent — filtrer sur lundi seul
+    const rows = [
+      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      { jour_semaine: 2, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 200, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+    ]
+    // Période 2026-05-04 → 2026-05-05 (lundi puis mardi). Filtre = lundi seulement.
+    const total = periodBudgetTotal({ 2026: rows }, '2026-05-04', '2026-05-05', new Set([1]))
+    expect(total).toBe(100)
+  })
 })
 
 describe('pickGranularity', () => {
@@ -286,5 +302,105 @@ describe('topBottomDays', () => {
     expect(top.length + bottom.length).toBeLessThanOrEqual(8) // 4 jours avec data
     expect(top.every((d) => d.hasData)).toBe(true)
     expect(bottom.every((d) => d.hasData)).toBe(true)
+  })
+})
+
+describe('aggregateBySerie', () => {
+  const lieuxLabels = new Map([['L1', 'Salle'], ['L2', 'Privat']])
+  const rows = [
+    { lieu_service_id: 'L1', service: 'lunch',  couverts: 10, ca_food: 100, ca_bev_20: 0, ca_bev_10: 0, ca_autre: 0 },
+    { lieu_service_id: 'L1', service: 'dinner', couverts: 20, ca_food: 200, ca_bev_20: 0, ca_bev_10: 0, ca_autre: 0 },
+    { lieu_service_id: 'L2', service: 'lunch',  couverts: 5,  ca_food: 50,  ca_bev_20: 0, ca_bev_10: 0, ca_autre: 0 },
+  ]
+
+  it('split par lieu : 1 entrée par lieu, totals agrégés', () => {
+    const m = aggregateBySerie(rows, ['lieu'], lieuxLabels)
+    expect(m.size).toBe(2)
+    expect(m.get('Salle').couverts).toBe(30)
+    expect(m.get('Salle').caTtc).toBe(300)
+    expect(m.get('Privat').couverts).toBe(5)
+  })
+
+  it('split par service : 1 entrée par service', () => {
+    const m = aggregateBySerie(rows, ['service'], lieuxLabels)
+    expect(m.get('Déjeuner').couverts).toBe(15)
+    expect(m.get('Dîner').couverts).toBe(20)
+  })
+
+  it('split lieu × service : produit cartésien des combinaisons rencontrées', () => {
+    const m = aggregateBySerie(rows, ['lieu', 'service'], lieuxLabels)
+    expect(m.size).toBe(3) // L1/lunch, L1/dinner, L2/lunch
+    expect(m.get('Salle / Déjeuner').couverts).toBe(10)
+    expect(m.get('Salle / Dîner').couverts).toBe(20)
+    expect(m.get('Privat / Déjeuner').couverts).toBe(5)
+  })
+
+  it('splitDims vide : 1 seule entrée __all__', () => {
+    const m = aggregateBySerie(rows, [], lieuxLabels)
+    expect(m.size).toBe(1)
+    expect(m.get('__all__').couverts).toBe(35)
+  })
+})
+
+describe('buildBreakdown', () => {
+  it('renvoie les % par série, triés décroissant', () => {
+    const series = new Map([
+      ['Salle', { caTtc: 600, couverts: 60 }],
+      ['Privat', { caTtc: 400, couverts: 40 }],
+    ])
+    const bd = buildBreakdown(series, 'caTtc')
+    expect(bd[0]).toEqual({ serie: 'Salle', value: 600, pct: 60 })
+    expect(bd[1]).toEqual({ serie: 'Privat', value: 400, pct: 40 })
+  })
+
+  it('renvoie pct=0 partout si total=0', () => {
+    const series = new Map([['A', { caTtc: 0 }], ['B', { caTtc: 0 }]])
+    const bd = buildBreakdown(series, 'caTtc')
+    expect(bd.every((e) => e.pct === 0)).toBe(true)
+  })
+})
+
+describe('mixByService', () => {
+  it('matrice 2 services × 4 catégories en pourcentages du grand total', () => {
+    const rows = [
+      { service: 'lunch',  ca_food: 65, ca_bev_20: 28, ca_bev_10: 7, ca_autre: 0 },
+      { service: 'dinner', ca_food: 65, ca_bev_20: 28, ca_bev_10: 7, ca_autre: 0 },
+    ]
+    const mix = mixByService(rows)
+    expect(mix).toHaveLength(2)
+    const lunch = mix.find((m) => m.service === 'lunch')
+    expect(lunch.ttc).toBe(100)
+    expect(lunch.pctFood).toBeCloseTo(32.5, 5) // 65 / 200
+    expect(lunch.pctTotal).toBeCloseTo(50, 5)
+  })
+})
+
+describe('bucketDaysMultiSeries', () => {
+  it('fusionne plusieurs séries au même bucket', () => {
+    const daysSalle = [
+      { iso: '2026-05-01', isoJds: 5, jsWeekday: 5, caTot: 100, couvertsTot: 10, hasData: true },
+    ]
+    const daysPrivat = [
+      { iso: '2026-05-01', isoJds: 5, jsWeekday: 5, caTot: 50, couvertsTot: 5, hasData: true },
+    ]
+    const daysBySerie = new Map([['Salle', daysSalle], ['Privat', daysPrivat]])
+    const { series, buckets } = bucketDaysMultiSeries(daysBySerie, 'day', 'caTot')
+    expect(series).toEqual(['Salle', 'Privat'])
+    expect(buckets).toHaveLength(1)
+    expect(buckets[0]['Salle']).toBe(100)
+    expect(buckets[0]['Privat']).toBe(50)
+  })
+})
+
+describe('perfByWeekdayMultiSeries', () => {
+  it('moyennes par jour-semaine ET par série', () => {
+    const days = [
+      { iso: '2026-05-04', isoJds: 1, caTot: 200, couvertsTot: 20, hasData: true }, // lundi
+      { iso: '2026-05-11', isoJds: 1, caTot: 100, couvertsTot: 10, hasData: true }, // lundi
+    ]
+    const daysBySerie = new Map([['Salle', days]])
+    const { data } = perfByWeekdayMultiSeries(daysBySerie, 'ca')
+    expect(data[0].label).toBe('Lundi')
+    expect(data[0]['Salle']).toBe(150) // (200 + 100) / 2
   })
 })
