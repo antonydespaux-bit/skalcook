@@ -203,7 +203,6 @@ export default function Navbar({ section = 'cuisine' }) {
             { label: 'Fournisseurs',  path: '/controle-gestion/fournisseurs' },
             { label: 'Mercuriale',    path: '/controle-gestion/mercuriale' },
             ...(role === 'admin' || role === 'directeur' ? [{ label: 'Analyses',      path: '/controle-gestion/analyses' }] : []),
-            ...(role === 'admin' || role === 'directeur' ? [{ label: 'Marges',        path: '/controle-gestion/marges' }] : []),
             { label: 'Suivi CA',      path: '/controle-gestion/ventes' },
             { label: 'Budgets CA',    path: '/controle-gestion/ventes/budgets' },
             ...(role === 'admin' ? [{ label: 'Import ventes', path: '/controle-gestion/import' }] : []),

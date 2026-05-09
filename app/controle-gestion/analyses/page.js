@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, getClientId } from '../../../lib/supabase'
+import { supabase, getClientId, getParametres } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useTenant } from '../../../lib/useTenant'
 import { useRole } from '../../../lib/useRole'
+import { getSeuilsFromParams } from '../../../lib/foodCost'
 import {
   getPeriodDates,
   shiftPeriodByYears,
@@ -23,11 +24,19 @@ import {
 import {
   WIDGET_BY_ID,
   DEFAULT_LAYOUT,
+  WIDGETS_REQUIRING_MARGES_DATA,
   isWidgetAvailable,
   getAnalysesLayout,
   saveAnalysesLayout,
   resetAnalysesLayout,
 } from '../../../lib/analysesPreferences'
+import {
+  aggregateByFiche,
+  computeMargesTotals,
+  buildMargesChartData,
+  computeConsoTheorique,
+  computeMenuEngineering,
+} from '../../../lib/margesData'
 import { buildAnalysesWorkbook, buildFilename } from '../../../lib/analysesExport'
 import * as XLSX from 'xlsx'
 import Navbar from '../../../components/Navbar'
@@ -44,6 +53,11 @@ import SectionPerfJourSemaine from '../../../components/analyses/widgets/Section
 import SectionMixFoodBev from '../../../components/analyses/widgets/SectionMixFoodBev'
 import SectionTopBottomJours from '../../../components/analyses/widgets/SectionTopBottomJours'
 import SectionTableauJourJour from '../../../components/analyses/widgets/SectionTableauJourJour'
+import KpiFoodCostMoyen from '../../../components/analyses/widgets/KpiFoodCostMoyen'
+import KpiMargeBrute from '../../../components/analyses/widgets/KpiMargeBrute'
+import SectionChartsMarges from '../../../components/analyses/widgets/SectionChartsMarges'
+import SectionCaParFiche from '../../../components/analyses/widgets/SectionCaParFiche'
+import SectionConsoIngredient from '../../../components/analyses/widgets/SectionConsoIngredient'
 
 const DEFAULT_PERIODE = 'mois-en-cours'
 
@@ -80,6 +94,14 @@ export default function AnalysesPage() {
   const [budgetByYearCompare, setBudgetByYearCompare] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  // Données marges (chargées paresseusement quand au moins un widget marges
+  // est visible) — voir margesNeeded plus bas.
+  const [params, setParams] = useState({})
+  const [rawVentes, setRawVentes] = useState([])
+  const [ficheById, setFicheById] = useState({})
+  const [ficheIngsMap, setFicheIngsMap] = useState({})
+  const [totalAchatsHT, setTotalAchatsHT] = useState(null)
 
   // ── Auth + redirect role ─────────────────────────────────────────────────
   useEffect(() => {
@@ -212,6 +234,69 @@ export default function AnalysesPage() {
     if (clientId && dateDebut && dateFin) loadData()
   }, [clientId, dateDebut, dateFin, comparaison, loadData])
 
+  // ── Lazy load des données marges (uniquement si un widget marges visible) ─
+  const margesNeeded = useMemo(() => {
+    if (!layout) return false
+    return layout.some((l) => l.visible && WIDGETS_REQUIRING_MARGES_DATA.has(l.id))
+  }, [layout])
+
+  const loadMargesData = useCallback(async () => {
+    if (!clientId || !dateDebut || !dateFin) return
+    try {
+      const p = await getParametres()
+      setParams(p)
+
+      const { data: ventesRaw, error: vErr } = await supabase
+        .from('ventes_journalieres')
+        .select('fiche_id, quantite_vendue, prix_vente_net, jour')
+        .eq('client_id', clientId)
+        .gte('jour', dateDebut)
+        .lte('jour', dateFin)
+      if (vErr) throw vErr
+      const ventes = ventesRaw || []
+      const ficheIds = [...new Set(ventes.map((v) => v.fiche_id).filter(Boolean))]
+
+      let ficheMap = {}
+      let ingsMap = {}
+      if (ficheIds.length > 0) {
+        const [fichesRes, fiRes] = await Promise.all([
+          supabase.from('fiches').select('id, nom, cout_portion, nb_portions, categorie').in('id', ficheIds),
+          supabase
+            .from('fiche_ingredients')
+            .select('fiche_id, ingredient_id, quantite, unite, ingredients(id, nom)')
+            .in('fiche_id', ficheIds)
+            .eq('client_id', clientId),
+        ])
+        ficheMap = Object.fromEntries((fichesRes.data || []).map((f) => [f.id, f]))
+        for (const fi of (fiRes.data || [])) {
+          if (!ingsMap[fi.fiche_id]) ingsMap[fi.fiche_id] = []
+          ingsMap[fi.fiche_id].push(fi)
+        }
+      }
+
+      const { data: achatsRows } = await supabase
+        .from('achats_lignes')
+        .select('montant_ht, achats_factures!inner(date_facture)')
+        .eq('client_id', clientId)
+        .gte('achats_factures.date_facture', dateDebut)
+        .lte('achats_factures.date_facture', dateFin)
+      const sumAchats = (achatsRows || []).reduce((s, r) => s + (Number(r.montant_ht) || 0), 0)
+
+      setRawVentes(ventes)
+      setFicheById(ficheMap)
+      setFicheIngsMap(ingsMap)
+      setTotalAchatsHT(sumAchats)
+    } catch (e) {
+      // Erreurs marges silencieuses : les widgets affichent leurs empty
+      // states et l'écran principal reste utilisable même si l'I/O foire.
+      console.warn('Chargement marges impossible :', e?.message || e)
+    }
+  }, [clientId, dateDebut, dateFin])
+
+  useEffect(() => {
+    if (margesNeeded) loadMargesData()
+  }, [margesNeeded, loadMargesData])
+
   // ── Filtrage côté JS sur lieu / service ──────────────────────────────────
   const filterRows = useCallback((rows) => {
     return rows.filter((r) => {
@@ -309,6 +394,35 @@ export default function AnalysesPage() {
   const topBottom = useMemo(() => topBottomDays(daysWithBudget, 5), [daysWithBudget])
   const hasBudget = periodBudget > 0
 
+  // ── Données dérivées pour les widgets marges ─────────────────────────────
+  const margesLignes = useMemo(() => aggregateByFiche(rawVentes, ficheById), [rawVentes, ficheById])
+  const margesTotals = useMemo(() => computeMargesTotals(margesLignes), [margesLignes])
+  const margesChartData = useMemo(() => buildMargesChartData(rawVentes, ficheById), [rawVentes, ficheById])
+  const ficheNbPortions = useMemo(() => {
+    const map = {}
+    Object.entries(ficheById).forEach(([id, f]) => {
+      if (f.nb_portions != null) map[id] = Number(f.nb_portions)
+    })
+    return map
+  }, [ficheById])
+  const consoLignes = useMemo(
+    () => computeConsoTheorique(margesLignes, ficheIngsMap, ficheNbPortions),
+    [margesLignes, ficheIngsMap, ficheNbPortions]
+  )
+  const menuEngineeringData = useMemo(() => computeMenuEngineering(margesLignes), [margesLignes])
+
+  // Seuils food-cost depuis les paramètres établissement (mêmes seuils que
+  // sur le dashboard cuisine, pour rester cohérent).
+  const { seuilVert, seuilOrange } = useMemo(() => getSeuilsFromParams(params, 'cuisine'), [params])
+  const margeColor = useCallback((pct) => {
+    if (pct == null) return { bg: null, color: c.texte }
+    const margeSeuilVert = 100 - seuilVert
+    const margeSeuilOrange = 100 - seuilOrange
+    if (pct >= margeSeuilVert) return { bg: '#EAF3DE', color: '#3B6D11' }
+    if (pct >= margeSeuilOrange) return { bg: '#FAEEDA', color: '#854F0B' }
+    return { bg: '#FCEBEB', color: '#A32D2D' }
+  }, [c.texte, seuilVert, seuilOrange])
+
   // ── Rendu d'un widget par id ─────────────────────────────────────────────
   const renderWidget = (id) => {
     const common = { c, isMobile, totals, comparisonTotals, comparisonLabel }
@@ -330,6 +444,31 @@ export default function AnalysesPage() {
         return <SectionTopBottomJours c={c} isMobile={isMobile} topBottom={topBottom} />
       case 'section-tableau-jour-jour':
         return <SectionTableauJourJour c={c} isMobile={isMobile} days={daysWithBudget} totals={tableauTotals} />
+      case 'kpi-food-cost-moyen':
+        return (
+          <KpiFoodCostMoyen
+            c={c} isMobile={isMobile}
+            foodCostPct={margesTotals.foodCostPct}
+            nbFiches={margesLignes.filter((L) => L.coutMatiere != null).length}
+            seuilVert={seuilVert} seuilOrange={seuilOrange}
+          />
+        )
+      case 'kpi-marge-brute':
+        return (
+          <KpiMargeBrute
+            c={c} isMobile={isMobile}
+            margeBrute={margesTotals.margeBrute}
+            margePct={margesTotals.margePct}
+            foodCostPct={margesTotals.foodCostPct}
+            seuilVert={seuilVert} seuilOrange={seuilOrange}
+          />
+        )
+      case 'section-charts-marges':
+        return <SectionChartsMarges chartData={margesChartData} menuEngineeringData={menuEngineeringData} />
+      case 'section-ca-par-fiche':
+        return <SectionCaParFiche c={c} lignes={margesLignes} margeColor={margeColor} />
+      case 'section-conso-ingredient':
+        return <SectionConsoIngredient c={c} consoLignes={consoLignes} hasVentes={margesLignes.length > 0} />
       default: return null
     }
   }
@@ -384,6 +523,10 @@ export default function AnalysesPage() {
       periode, dateDebut, dateFin, comparaison, lieuLabel, service,
       totals, comparisonTotals, comparisonLabel, periodBudget,
       buckets, granularity, perfWeekday, mix, topBottom, daysWithBudget,
+      // PR 5 — données marges (peuvent être à 0 si l'user n'a activé aucun
+      // widget marges, mais on les passe systématiquement → l'export ne
+      // dump que les onglets dont l'id figure dans visibleIds).
+      margesTotals, margesLignes, consoLignes, margesChartData,
     })
     XLSX.writeFile(wb, buildFilename(dateDebut, dateFin))
   }

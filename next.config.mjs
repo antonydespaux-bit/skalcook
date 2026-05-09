@@ -22,6 +22,19 @@ const nextConfig = {
       },
     ]
   },
+  async redirects() {
+    return [
+      // L'ancienne page /controle-gestion/marges a été remplacée par
+      // /controle-gestion/analyses (catalogue widgets unifié, KPIs marges
+      // et tables disponibles via le bouton Personnaliser). Permanent (301)
+      // pour que les bookmarks utilisateurs migrent côté navigateur.
+      {
+        source: '/controle-gestion/marges',
+        destination: '/controle-gestion/analyses',
+        permanent: true,
+      },
+    ]
+  },
 }
 
 export default nextConfig

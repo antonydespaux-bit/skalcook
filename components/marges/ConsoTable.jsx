@@ -22,14 +22,13 @@ export default function ConsoTable({ consoLignes, hasVentes }) {
   const tdMuted = { ...tdNum, color: c.texteMuted }
 
   return (
-    <div style={{ marginTop: 32 }}>
-      <h2 style={{ margin: '0 0 4px', fontSize: isMobile ? 18 : 20, fontWeight: 600, color: c.texte }}>
-        Consommations théoriques
-      </h2>
-      <p style={{ margin: '0 0 16px', fontSize: 13, color: c.texteMuted, maxWidth: 700 }}>
-        Quantités calculées d&apos;après les recettes et les ventes de la période.
-        Formule : <em>qté vendue × quantité recette / nb portions</em>.
-      </p>
+    <div>
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: c.texte }}>Consommations théoriques d&apos;ingrédients</div>
+        <div style={{ fontSize: 12, color: c.texteMuted, marginTop: 2 }}>
+          Quantités calculées d&apos;après les recettes et les ventes : qté vendue × qté recette / nb portions.
+        </div>
+      </div>
 
       {consoLignes.length === 0 ? (
         <p style={{ color: c.texteMuted, fontSize: 14 }}>
