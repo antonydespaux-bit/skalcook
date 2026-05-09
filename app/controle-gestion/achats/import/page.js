@@ -51,8 +51,11 @@ export default function AchatsImportPage() {
   const [numeroFacture, setNumeroFacture] = useState('')
   const [statut, setStatut] = useState('facture')
   const [tauxTva, setTauxTva] = useState(5.5) // % par défaut (alimentaire) — fallback pour les lignes sans taux
-  // Total TVA saisi en pied de facture (override). null = calcul automatique.
+  // Totaux saisis/extraits de la facture (override). null = calcul automatique
+  // depuis les lignes.
+  const [totalHtSaisi, setTotalHtSaisi] = useState(null)
   const [montantTvaSaisi, setMontantTvaSaisi] = useState(null)
+  const [totalTtcSaisi, setTotalTtcSaisi] = useState(null)
 
   // ── Lignes enrichies ──────────────────────────────────────────────────────
   // Chaque ligne : { _id, designation, quantite, unite, prix_unitaire_ht, remise,
@@ -74,13 +77,16 @@ export default function AchatsImportPage() {
   )
 
   // ── Totaux facture (HT / TVA / TTC) ──────────────────────────────────────
-  const totalHtFacture = useMemo(
+  // totalHtCalcule = somme des lignes (qty × P.U. × (1-remise))
+  // totalHtFacture = soit le total HT pied de facture saisi/OCR, soit le calcul.
+  const totalHtCalcule = useMemo(
     () => lignes.reduce((s, l) => {
       const r = Number(l.remise) || 0
       return s + (Number(l.quantite) || 0) * (Number(l.prix_unitaire_ht) || 0) * (1 - r / 100)
     }, 0),
     [lignes]
   )
+  const totalHtFacture = totalHtSaisi != null && totalHtSaisi !== '' ? Number(totalHtSaisi) : totalHtCalcule
   // Si une ligne a son propre taux_tva, il prime ; sinon fallback sur tauxTva global.
   const montantTvaCalcule = useMemo(
     () => lignes.reduce((s, l) => {
@@ -91,9 +97,9 @@ export default function AchatsImportPage() {
     }, 0),
     [lignes, tauxTva]
   )
-  // Si l'utilisateur a saisi un montant TVA en pied, il prime sur le calcul.
   const montantTva = montantTvaSaisi != null && montantTvaSaisi !== '' ? Number(montantTvaSaisi) : montantTvaCalcule
-  const totalTtcFacture = totalHtFacture + montantTva
+  const totalTtcCalcule = totalHtFacture + montantTva
+  const totalTtcFacture = totalTtcSaisi != null && totalTtcSaisi !== '' ? Number(totalTtcSaisi) : totalTtcCalcule
 
   // ── UX ────────────────────────────────────────────────────────────────────
   const [error, setError] = useState('')
@@ -206,10 +212,11 @@ export default function AchatsImportPage() {
       setFournisseur(result.fournisseur || '')
       setDateFacture(result.date_facture || yesterdayIso())
       setNumeroFacture(result.numero_facture || '')
-      // Si l'OCR a détecté le montant TVA en pied, on le préremplit
-      if (result.montant_tva_total != null) {
-        setMontantTvaSaisi(Number(result.montant_tva_total))
-      }
+      // Pré-remplit les totaux extraits du pied de facture (override des
+      // totaux calculés depuis les lignes ; l'utilisateur peut modifier).
+      if (result.total_ht_facture != null) setTotalHtSaisi(Number(result.total_ht_facture))
+      if (result.montant_tva_total != null) setMontantTvaSaisi(Number(result.montant_tva_total))
+      if (result.total_ttc_facture != null) setTotalTtcSaisi(Number(result.total_ttc_facture))
       const enriched = (result.lignes || []).map(l =>
         enrichLigneLocal({
           _id:              makeLigneId(),
@@ -781,14 +788,18 @@ export default function AchatsImportPage() {
                   </label>
                 </div>
 
-                {/* Totaux HT / TVA / TTC */}
+                {/* Totaux HT / TVA / TTC — éditables (override sur le calcul depuis les lignes) */}
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${c.bordure}`, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 10 }}>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
                     Total HT
                     <input
-                      style={{ ...inputS, background: c.fond, fontVariantNumeric: 'tabular-nums' }}
-                      readOnly
-                      value={fmtPrix(totalHtFacture)}
+                      style={inputS}
+                      type="number"
+                      min="0" step="0.01"
+                      value={totalHtSaisi ?? ''}
+                      placeholder={fmtPrix(totalHtCalcule)}
+                      title="Total HT en pied de facture. Pré-rempli par l'OCR. Vide → calcul automatique depuis les lignes."
+                      onChange={e => setTotalHtSaisi(e.target.value === '' ? null : e.target.value)}
                     />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
@@ -799,19 +810,29 @@ export default function AchatsImportPage() {
                       min="0" step="0.01"
                       value={montantTvaSaisi ?? ''}
                       placeholder={fmtPrix(montantTvaCalcule)}
-                      title="Saisissez le total TVA tel qu'il apparaît en pied de facture, ou laissez vide pour calculer automatiquement"
+                      title="Total TVA en pied de facture. Pré-rempli par l'OCR. Vide → calcul automatique depuis les lignes."
                       onChange={e => setMontantTvaSaisi(e.target.value === '' ? null : e.target.value)}
                     />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
                     Total TTC
                     <input
-                      style={{ ...inputS, background: c.fond, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}
-                      readOnly
-                      value={fmtPrix(totalTtcFacture)}
+                      style={{ ...inputS, fontWeight: 600 }}
+                      type="number"
+                      min="0" step="0.01"
+                      value={totalTtcSaisi ?? ''}
+                      placeholder={fmtPrix(totalTtcCalcule)}
+                      title="Total TTC en pied de facture. Pré-rempli par l'OCR. Vide → HT + TVA."
+                      onChange={e => setTotalTtcSaisi(e.target.value === '' ? null : e.target.value)}
                     />
                   </label>
                 </div>
+                {/* Hint d'incohérence : si la somme des lignes diffère de plus de 1 € ou 2 % du Total HT saisi */}
+                {totalHtSaisi != null && totalHtSaisi !== '' && Math.abs(Number(totalHtSaisi) - totalHtCalcule) > Math.max(1, Number(totalHtSaisi) * 0.02) && (
+                  <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 6, background: '#FEF3C7', border: '1px solid #F59E0B', fontSize: 12, color: '#92400E' }}>
+                    ⚠ La somme des lignes ({fmtPrix(totalHtCalcule)}) diffère du Total HT facture ({fmtPrix(Number(totalHtSaisi))}). Vérifie les prix unitaires des lignes ci-dessous.
+                  </div>
+                )}
               </div>
 
           {/* ── Lignes (incluses dans la colonne droite en mode side-by-side) ── */}
