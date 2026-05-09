@@ -106,8 +106,29 @@ export default function Navbar({ section = 'cuisine' }) {
     const arr = Array.isArray(paths) ? paths : [paths]
     return arr.some(p => {
       if (p === DASHBOARD_PATH || p === '/crm') return pathname === p
-      return pathname.startsWith(p)
+      return pathname === p || pathname.startsWith(p + '/')
     })
+  }
+
+  // Détermine quel item d'un groupe est "actif" : celui dont le path matche le
+  // plus précisément le pathname courant (le plus long préfixe qui colle).
+  // Évite que /controle-gestion/ventes/budgets highlight à la fois "Suivi CA"
+  // (path /controle-gestion/ventes) ET "Budgets CA" (path /…/ventes/budgets).
+  const matchingItemPath = (items) => {
+    let best = null
+    let bestLen = 0
+    for (const it of items) {
+      const p = it.path
+      if (typeof p !== 'string') continue
+      const matches = p === DASHBOARD_PATH || p === '/crm'
+        ? pathname === p
+        : pathname === p || pathname.startsWith(p + '/')
+      if (matches && p.length > bestLen) {
+        best = p
+        bestLen = p.length
+      }
+    }
+    return best
   }
 
   // ─── Navigation items ────────────────────────────────────────────────────────
@@ -288,22 +309,28 @@ export default function Navbar({ section = 'cuisine' }) {
                     <path d={ouvert ? "M2 7L5 4L8 7" : "M2 4L5 7L8 4"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                   </svg>
                 </button>
-                {ouvert && (
-                  <div style={dropdownStyle} onClick={e => e.stopPropagation()}>
-                    {groupe.items.map((item) => (
-                      <button key={item.path}
-                        onClick={() => { setGroupeOuvert(null); pushWithClient(item.path) }}
-                        style={{
-                          display: 'block', width: '100%', textAlign: 'left',
-                          padding: '9px 12px', border: 'none', borderRadius: '6px',
-                          background: isActive(item.path) ? ACCENT_LIGHT : 'transparent',
-                          color: isActive(item.path) ? ACCENT : '#18181B',
-                          fontSize: '13px', fontWeight: isActive(item.path) ? '500' : '400', cursor: 'pointer',
-                        }}
-                      >{item.label}</button>
-                    ))}
-                  </div>
-                )}
+                {ouvert && (() => {
+                  const activePath = matchingItemPath(groupe.items)
+                  return (
+                    <div style={dropdownStyle} onClick={e => e.stopPropagation()}>
+                      {groupe.items.map((item) => {
+                        const isItemActive = item.path === activePath
+                        return (
+                          <button key={item.path}
+                            onClick={() => { setGroupeOuvert(null); pushWithClient(item.path) }}
+                            style={{
+                              display: 'block', width: '100%', textAlign: 'left',
+                              padding: '9px 12px', border: 'none', borderRadius: '6px',
+                              background: isItemActive ? ACCENT_LIGHT : 'transparent',
+                              color: isItemActive ? ACCENT : '#18181B',
+                              fontSize: '13px', fontWeight: isItemActive ? '500' : '400', cursor: 'pointer',
+                            }}
+                          >{item.label}</button>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
               </div>
             )
           })}
@@ -409,12 +436,16 @@ export default function Navbar({ section = 'cuisine' }) {
               fontSize: '14px', cursor: 'pointer', marginBottom: '4px'
             }}
           >Dashboard</button>
-          {groupes.flatMap(g => g.items).map((item) => (
-            <button key={item.path}
-              onClick={() => { setMenuOuvert(false); pushWithClient(item.path) }}
-              style={mobileItemStyle(isActive(item.path))}
-            >{item.label}</button>
-          ))}
+          {(() => {
+            const allItems = groupes.flatMap(g => g.items)
+            const activePath = matchingItemPath(allItems)
+            return allItems.map((item) => (
+              <button key={item.path}
+                onClick={() => { setMenuOuvert(false); pushWithClient(item.path) }}
+                style={mobileItemStyle(item.path === activePath)}
+              >{item.label}</button>
+            ))
+          })()}
           {(role === 'admin' || role === 'directeur') && (isBar || hasBar) && (
             <button onClick={() => { setMenuOuvert(false); pushWithClient(CROSS_PATH) }}
               style={mobileItemStyle(false)}
