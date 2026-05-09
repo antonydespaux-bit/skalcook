@@ -28,6 +28,8 @@ import {
   saveAnalysesLayout,
   resetAnalysesLayout,
 } from '../../../lib/analysesPreferences'
+import { buildAnalysesWorkbook, buildFilename } from '../../../lib/analysesExport'
+import * as XLSX from 'xlsx'
 import Navbar from '../../../components/Navbar'
 import WidgetsCustomizeModal from '../../../components/dashboard/WidgetsCustomizeModal'
 import FilterBar, { COMPARAISON_LABELS } from '../../../components/analyses/FilterBar'
@@ -373,9 +375,28 @@ export default function AnalysesPage() {
     }
   }
 
+  // ── Actions TopBar : export Excel + impression ───────────────────────────
+  const handleExportExcel = () => {
+    const lieuLabel = lieuId === 'all' ? 'Tous lieux' : (lieux.find((l) => l.id === lieuId)?.nom || lieuId)
+    const visibleIds = new Set(visibleLayout.map((l) => l.id))
+    const wb = buildAnalysesWorkbook({
+      visibleIds,
+      periode, dateDebut, dateFin, comparaison, lieuLabel, service,
+      totals, comparisonTotals, comparisonLabel, periodBudget,
+      buckets, granularity, perfWeekday, mix, topBottom, daysWithBudget,
+    })
+    XLSX.writeFile(wb, buildFilename(dateDebut, dateFin))
+  }
+
+  const handlePrint = () => {
+    if (typeof window !== 'undefined') window.print()
+  }
+
   return (
-    <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar section="cuisine" />
+    <div className="sk-analyses-page" style={{ minHeight: '100vh', background: c.fond }}>
+      <div className="no-print">
+        <Navbar section="cuisine" />
+      </div>
       <div style={{ padding: isMobile ? 16 : 24, maxWidth: 1300, margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
           <div>
@@ -386,17 +407,29 @@ export default function AnalysesPage() {
               {humanRange(dateDebut, dateFin)}
             </p>
           </div>
-          <button
-            onClick={() => setShowCustomize(true)}
-            title="Personnaliser mes analyses"
-            style={{
-              background: 'transparent', border: `0.5px solid ${c.bordure}`, color: c.texteMuted,
-              borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-            }}
-          >
-            ⚙{isMobile ? '' : ' Personnaliser'}
-          </button>
+          <div className="no-print" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              onClick={handleExportExcel}
+              title="Exporter Excel (un onglet par widget visible)"
+              style={actionBtnStyle(c)}
+            >
+              📥{isMobile ? '' : ' Excel'}
+            </button>
+            <button
+              onClick={handlePrint}
+              title="Imprimer la page"
+              style={actionBtnStyle(c)}
+            >
+              🖨{isMobile ? '' : ' Imprimer'}
+            </button>
+            <button
+              onClick={() => setShowCustomize(true)}
+              title="Personnaliser mes analyses"
+              style={actionBtnStyle(c)}
+            >
+              ⚙{isMobile ? '' : ' Personnaliser'}
+            </button>
+          </div>
         </div>
 
         <FilterBar
@@ -417,7 +450,7 @@ export default function AnalysesPage() {
             display: 'grid', gridTemplateColumns: `repeat(${kpiCols}, 1fr)`,
             gap: isMobile ? 10 : 16, marginBottom: 24,
           }}>
-            {kpiLayout.map((l) => <div key={l.id}>{renderWidget(l.id)}</div>)}
+            {kpiLayout.map((l) => <div key={l.id} className="sk-print-section">{renderWidget(l.id)}</div>)}
           </div>
         )}
 
@@ -431,7 +464,7 @@ export default function AnalysesPage() {
               marginBottom: idx < sectionRows.length - 1 ? (isMobile ? 12 : 16) : 0,
             }}
           >
-            {row.map((l) => <div key={l.id}>{renderWidget(l.id)}</div>)}
+            {row.map((l) => <div key={l.id} className="sk-print-section">{renderWidget(l.id)}</div>)}
           </div>
         ))}
 
@@ -464,4 +497,12 @@ function humanRange(debut, fin) {
 function formatDate(iso) {
   const d = fromIsoDate(iso)
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function actionBtnStyle(c) {
+  return {
+    background: 'transparent', border: `0.5px solid ${c.bordure}`, color: c.texteMuted,
+    borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer',
+    display: 'inline-flex', alignItems: 'center', gap: 6,
+  }
 }

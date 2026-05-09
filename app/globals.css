@@ -63,6 +63,19 @@ body {
     display: none !important;
     visibility: hidden !important;
   }
+
+  /* Page Analyses CA : éviter de couper un widget en plein milieu. Les
+     graphes recharts utilisent SVG → on garde la couleur (color-adjust
+     déjà actif au-dessus). */
+  .sk-print-section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .sk-print-section table,
+  .sk-print-section .recharts-responsive-container {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
 }
 
 /* ──────────────────────────────────────────────────────────────
