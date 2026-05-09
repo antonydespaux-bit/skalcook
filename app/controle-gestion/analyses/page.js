@@ -13,6 +13,11 @@ import {
   aggregateTotals,
   aggregateByDay,
   periodBudgetTotal,
+  pickGranularity,
+  bucketDays,
+  perfByWeekday,
+  mixSegments,
+  topBottomDays,
   fromIsoDate,
 } from '../../../lib/caAnalyses'
 import {
@@ -31,6 +36,11 @@ import KpiCaTtc from '../../../components/analyses/widgets/KpiCaTtc'
 import KpiCaHt from '../../../components/analyses/widgets/KpiCaHt'
 import KpiTm from '../../../components/analyses/widgets/KpiTm'
 import KpiEcartBudgetPct from '../../../components/analyses/widgets/KpiEcartBudgetPct'
+import SectionEvolutionCa from '../../../components/analyses/widgets/SectionEvolutionCa'
+import SectionEvolutionCouverts from '../../../components/analyses/widgets/SectionEvolutionCouverts'
+import SectionPerfJourSemaine from '../../../components/analyses/widgets/SectionPerfJourSemaine'
+import SectionMixFoodBev from '../../../components/analyses/widgets/SectionMixFoodBev'
+import SectionTopBottomJours from '../../../components/analyses/widgets/SectionTopBottomJours'
 import SectionTableauJourJour from '../../../components/analyses/widgets/SectionTableauJourJour'
 
 const DEFAULT_PERIODE = 'mois-en-cours'
@@ -289,6 +299,14 @@ export default function AnalysesPage() {
     }
   }, [daysWithBudget, totals])
 
+  // ── Données dérivées pour les charts ─────────────────────────────────────
+  const granularity = useMemo(() => pickGranularity(dateDebut, dateFin), [dateDebut, dateFin])
+  const buckets = useMemo(() => bucketDays(daysWithBudget, granularity), [daysWithBudget, granularity])
+  const perfWeekday = useMemo(() => perfByWeekday(daysWithBudget), [daysWithBudget])
+  const mix = useMemo(() => mixSegments(totals, c), [totals, c])
+  const topBottom = useMemo(() => topBottomDays(daysWithBudget, 5), [daysWithBudget])
+  const hasBudget = periodBudget > 0
+
   // ── Rendu d'un widget par id ─────────────────────────────────────────────
   const renderWidget = (id) => {
     const common = { c, isMobile, totals, comparisonTotals, comparisonLabel }
@@ -298,6 +316,16 @@ export default function AnalysesPage() {
       case 'kpi-ca-ht':            return <KpiCaHt {...common} />
       case 'kpi-tm':               return <KpiTm {...common} />
       case 'kpi-ecart-budget-pct': return <KpiEcartBudgetPct c={c} isMobile={isMobile} totals={totals} budget={periodBudget} />
+      case 'section-evolution-ca':
+        return <SectionEvolutionCa c={c} isMobile={isMobile} buckets={buckets} granularity={granularity} hasBudget={hasBudget} />
+      case 'section-evolution-couverts':
+        return <SectionEvolutionCouverts c={c} isMobile={isMobile} buckets={buckets} granularity={granularity} />
+      case 'section-perf-jour-semaine':
+        return <SectionPerfJourSemaine c={c} isMobile={isMobile} perf={perfWeekday} />
+      case 'section-mix-food-bev':
+        return <SectionMixFoodBev c={c} isMobile={isMobile} segments={mix} totalCaTtc={totals.caTtc} />
+      case 'section-top-bottom-jours':
+        return <SectionTopBottomJours c={c} isMobile={isMobile} topBottom={topBottom} />
       case 'section-tableau-jour-jour':
         return <SectionTableauJourJour c={c} isMobile={isMobile} days={daysWithBudget} totals={tableauTotals} />
       default: return null
@@ -324,6 +352,26 @@ export default function AnalysesPage() {
   const kpiCols = isMobile
     ? Math.min(Math.max(kpiLayout.length, 1), 2)
     : Math.min(Math.max(kpiLayout.length, 1), 5)
+
+  // Groupement des sections en lignes : deux 'half' consécutives s'associent,
+  // sinon chaque widget prend la pleine largeur. Même logique que /dashboard.
+  const sectionRows = []
+  {
+    let i = 0
+    while (i < sectionLayout.length) {
+      const current = sectionLayout[i]
+      const next = sectionLayout[i + 1]
+      const currentSize = WIDGET_BY_ID[current.id].size
+      const nextSize = next ? WIDGET_BY_ID[next.id].size : null
+      if (currentSize === 'half' && nextSize === 'half') {
+        sectionRows.push([current, next])
+        i += 2
+      } else {
+        sectionRows.push([current])
+        i += 1
+      }
+    }
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
@@ -373,9 +421,17 @@ export default function AnalysesPage() {
           </div>
         )}
 
-        {!loading && !error && sectionLayout.map((l) => (
-          <div key={l.id} style={{ marginBottom: isMobile ? 12 : 16 }}>
-            {renderWidget(l.id)}
+        {!loading && !error && sectionRows.map((row, idx) => (
+          <div
+            key={row.map((r) => r.id).join('|')}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile || row.length === 1 ? '1fr' : '1fr 1fr',
+              gap: isMobile ? 12 : 16,
+              marginBottom: idx < sectionRows.length - 1 ? (isMobile ? 12 : 16) : 0,
+            }}
+          >
+            {row.map((l) => <div key={l.id}>{renderWidget(l.id)}</div>)}
           </div>
         ))}
 

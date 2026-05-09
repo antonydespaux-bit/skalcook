@@ -6,6 +6,12 @@ import {
   aggregateByDay,
   budgetByIsoJdsForMonth,
   periodBudgetTotal,
+  pickGranularity,
+  isoWeekStart,
+  bucketDays,
+  perfByWeekday,
+  mixSegments,
+  topBottomDays,
   TVA_FOOD,
   TVA_BEV_20,
 } from '../caAnalyses'
@@ -155,5 +161,130 @@ describe('periodBudgetTotal', () => {
     ]
     const total = periodBudgetTotal({ 2025: rows2025, 2026: rows2026 }, '2025-12-31', '2026-01-01')
     expect(total).toBe(300)
+  })
+})
+
+describe('pickGranularity', () => {
+  it('≤ 31 jours → day', () => {
+    expect(pickGranularity('2026-05-01', '2026-05-31')).toBe('day')
+  })
+  it('> 31 et ≤ 183 jours → week', () => {
+    expect(pickGranularity('2026-01-01', '2026-04-30')).toBe('week')
+  })
+  it('> 183 jours → month', () => {
+    expect(pickGranularity('2026-01-01', '2026-12-31')).toBe('month')
+  })
+})
+
+describe('isoWeekStart', () => {
+  it('renvoie le lundi de la semaine ISO', () => {
+    // 2026-05-09 = samedi → lundi de la semaine = 2026-05-04
+    expect(isoWeekStart('2026-05-09')).toBe('2026-05-04')
+    // 2026-05-04 = lundi → reste 2026-05-04
+    expect(isoWeekStart('2026-05-04')).toBe('2026-05-04')
+    // 2026-05-10 = dimanche → lundi de la semaine = 2026-05-04
+    expect(isoWeekStart('2026-05-10')).toBe('2026-05-04')
+  })
+})
+
+describe('bucketDays', () => {
+  const sampleDays = [
+    { iso: '2026-05-04', isoJds: 1, jsWeekday: 1, caTot: 100, couvertsTot: 10, budget: 80, hasData: true },
+    { iso: '2026-05-05', isoJds: 2, jsWeekday: 2, caTot: 200, couvertsTot: 20, budget: 80, hasData: true },
+    { iso: '2026-05-11', isoJds: 1, jsWeekday: 1, caTot: 150, couvertsTot: 15, budget: 80, hasData: true },
+  ]
+
+  it('day : 1 bucket par jour', () => {
+    const buckets = bucketDays(sampleDays, 'day')
+    expect(buckets).toHaveLength(3)
+    expect(buckets[0].caTot).toBe(100)
+    expect(buckets[0].label).toBe('04/05')
+  })
+
+  it('week : agrège lundi → dimanche, lundi suivant nouveau bucket', () => {
+    const buckets = bucketDays(sampleDays, 'week')
+    expect(buckets).toHaveLength(2)
+    expect(buckets[0].key).toBe('2026-05-04')
+    expect(buckets[0].caTot).toBe(300) // 04 + 05 mai
+    expect(buckets[0].budget).toBe(160)
+    expect(buckets[1].caTot).toBe(150) // 11 mai
+  })
+
+  it('month : agrège par YYYY-MM', () => {
+    const days = [
+      { iso: '2026-04-30', isoJds: 4, jsWeekday: 4, caTot: 50, couvertsTot: 5, budget: 40, hasData: true },
+      { iso: '2026-05-01', isoJds: 5, jsWeekday: 5, caTot: 100, couvertsTot: 10, budget: 80, hasData: true },
+      { iso: '2026-05-15', isoJds: 5, jsWeekday: 5, caTot: 200, couvertsTot: 20, budget: 80, hasData: true },
+    ]
+    const buckets = bucketDays(days, 'month')
+    expect(buckets).toHaveLength(2)
+    expect(buckets[0].label).toBe('Avr.')
+    expect(buckets[0].caTot).toBe(50)
+    expect(buckets[1].label).toBe('Mai')
+    expect(buckets[1].caTot).toBe(300)
+  })
+})
+
+describe('perfByWeekday', () => {
+  it('moyennes par jour ouvré, ignore les jours sans data', () => {
+    const days = [
+      { iso: '2026-05-04', isoJds: 1, caTot: 100, couvertsTot: 10, hasData: true },
+      { iso: '2026-05-11', isoJds: 1, caTot: 200, couvertsTot: 20, hasData: true },
+      { iso: '2026-05-05', isoJds: 2, caTot: 0,   couvertsTot: 0,  hasData: false },
+    ]
+    const perf = perfByWeekday(days)
+    expect(perf).toHaveLength(7)
+    // Lundi : moyenne = (100+200)/2 = 150 ; couverts = 30/2 = 15
+    expect(perf[0].label).toBe('Lundi')
+    expect(perf[0].ca).toBe(150)
+    expect(perf[0].cv).toBe(15)
+    // Mardi : pas de data → 0
+    expect(perf[1].count).toBe(0)
+    expect(perf[1].ca).toBe(0)
+  })
+})
+
+describe('mixSegments', () => {
+  const c = { principal: '#000', violet: '#7C3AED', accent: '#6366F1', orange: '#D97706' }
+
+  it('renvoie les pourcentages par catégorie', () => {
+    const segs = mixSegments({ food: 60, bev20: 28, bev10: 7, autre: 5 }, c)
+    expect(segs).toHaveLength(4)
+    expect(segs.find((s) => s.id === 'food').pct).toBeCloseTo(60, 5)
+    expect(segs.find((s) => s.id === 'bev20').pct).toBeCloseTo(28, 5)
+  })
+
+  it('exclut les catégories à 0', () => {
+    const segs = mixSegments({ food: 100, bev20: 0, bev10: 0, autre: 0 }, c)
+    expect(segs).toHaveLength(1)
+    expect(segs[0].id).toBe('food')
+    expect(segs[0].pct).toBe(100)
+  })
+
+  it('renvoie [] si total = 0', () => {
+    expect(mixSegments({ food: 0, bev20: 0, bev10: 0, autre: 0 }, c)).toEqual([])
+  })
+})
+
+describe('topBottomDays', () => {
+  const days = [
+    { iso: '2026-05-01', caTot: 100, hasData: true },
+    { iso: '2026-05-02', caTot: 500, hasData: true },
+    { iso: '2026-05-03', caTot: 0,   hasData: false },
+    { iso: '2026-05-04', caTot: 300, hasData: true },
+    { iso: '2026-05-05', caTot: 200, hasData: true },
+  ]
+
+  it('top 2 / bottom 2 par CA TTC', () => {
+    const { top, bottom } = topBottomDays(days, 2)
+    expect(top.map((d) => d.iso)).toEqual(['2026-05-02', '2026-05-04'])
+    expect(bottom.map((d) => d.iso)).toEqual(['2026-05-01', '2026-05-05'])
+  })
+
+  it('ignore les jours sans data', () => {
+    const { top, bottom } = topBottomDays(days, 5)
+    expect(top.length + bottom.length).toBeLessThanOrEqual(8) // 4 jours avec data
+    expect(top.every((d) => d.hasData)).toBe(true)
+    expect(bottom.every((d) => d.hasData)).toBe(true)
   })
 })
