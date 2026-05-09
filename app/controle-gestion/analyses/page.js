@@ -46,7 +46,7 @@ import { buildAnalysesWorkbook, buildFilename } from '../../../lib/analysesExpor
 import * as XLSX from 'xlsx'
 import Navbar from '../../../components/Navbar'
 import WidgetsCustomizeModal from '../../../components/dashboard/WidgetsCustomizeModal'
-import FilterBar, { COMPARAISON_LABELS, ALL_SERVICES } from '../../../components/analyses/FilterBar'
+import FilterBar, { COMPARAISON_LABELS, ALL_SERVICES, ALL_JOURS, JOUR_FR_LABELS } from '../../../components/analyses/FilterBar'
 import KpiCouverts from '../../../components/analyses/widgets/KpiCouverts'
 import KpiCaTtc from '../../../components/analyses/widgets/KpiCaTtc'
 import KpiCaHt from '../../../components/analyses/widgets/KpiCaHt'
@@ -87,6 +87,10 @@ export default function AnalysesPage() {
   // cumulé). 1 entrée = filtre simple. 2+ entrées = mode multi-séries.
   const [lieuxSelected, setLieuxSelected] = useState([])
   const [servicesSelected, setServicesSelected] = useState([])
+  // Jours de semaine ISO (1=lundi … 7=dimanche). Vide = tous les jours.
+  // N'active pas le mode split — sert uniquement à filtrer (ex : "tous les
+  // mardis du mois").
+  const [joursSelected, setJoursSelected] = useState([])
 
   // ── Layout widgets ───────────────────────────────────────────────────────
   const [layout, setLayout] = useState(null)
@@ -304,26 +308,36 @@ export default function AnalysesPage() {
     if (margesNeeded) loadMargesData()
   }, [margesNeeded, loadMargesData])
 
-  // ── Filtrage côté JS sur lieu / service (multi-select) ───────────────────
+  // ── Filtrage côté JS sur lieu / service / jour (multi-select) ────────────
   // Vide = "Tous" → on ne filtre pas. Sinon on garde les rows dont la
   // dimension matche au moins une valeur sélectionnée.
+  // Pour le filtre jours-de-semaine, on calcule le jsWeekday de la date r.jour
+  // et on le compare (1 = lundi … 7 = dimanche en ISO).
+  const filterJoursActive = joursSelected.length > 0 && joursSelected.length < ALL_JOURS.length
+  const joursSet = useMemo(() => new Set(joursSelected), [joursSelected])
+
   const filterRows = useCallback((rows) => {
     const filterLieu = lieuxSelected.length > 0 && lieuxSelected.length < lieux.length
     const filterService = servicesSelected.length > 0 && servicesSelected.length < ALL_SERVICES.length
-    if (!filterLieu && !filterService) return rows
+    if (!filterLieu && !filterService && !filterJoursActive) return rows
     const lieuxSet = new Set(lieuxSelected)
     const servicesSet = new Set(servicesSelected)
     return rows.filter((r) => {
       if (filterLieu && !lieuxSet.has(r.lieu_service_id)) return false
       if (filterService && !servicesSet.has(r.service)) return false
+      if (filterJoursActive) {
+        const date = new Date(`${r.jour}T00:00:00`)
+        const isoJds = date.getDay() === 0 ? 7 : date.getDay()
+        if (!joursSet.has(isoJds)) return false
+      }
       return true
     })
-  }, [lieuxSelected, servicesSelected, lieux.length])
+  }, [lieuxSelected, servicesSelected, lieux.length, filterJoursActive, joursSet])
 
   const filterBudgets = useCallback((budgetRowsByYear) => {
     const filterLieu = lieuxSelected.length > 0 && lieuxSelected.length < lieux.length
     const filterService = servicesSelected.length > 0 && servicesSelected.length < ALL_SERVICES.length
-    if (!filterLieu && !filterService) return budgetRowsByYear
+    if (!filterLieu && !filterService && !filterJoursActive) return budgetRowsByYear
     const lieuxSet = new Set(lieuxSelected)
     const servicesSet = new Set(servicesSelected)
     const out = {}
@@ -331,11 +345,12 @@ export default function AnalysesPage() {
       out[annee] = rows.filter((r) => {
         if (filterLieu && !lieuxSet.has(r.lieu_service_id)) return false
         if (filterService && !servicesSet.has(r.service)) return false
+        if (filterJoursActive && !joursSet.has(r.jour_semaine)) return false
         return true
       })
     }
     return out
-  }, [lieuxSelected, servicesSelected, lieux.length])
+  }, [lieuxSelected, servicesSelected, lieux.length, filterJoursActive, joursSet])
 
   // ── Totals + days + budget ───────────────────────────────────────────────
   const filteredRows = useMemo(() => filterRows(rawCa), [rawCa, filterRows])
@@ -345,11 +360,19 @@ export default function AnalysesPage() {
 
   const totals = useMemo(() => aggregateTotals(filteredRows), [filteredRows])
   const totalsCompare = useMemo(() => aggregateTotals(filteredCompareRows), [filteredCompareRows])
-  const days = useMemo(() => aggregateByDay(filteredRows, dateDebut, dateFin), [filteredRows, dateDebut, dateFin])
+
+  // `days` couvre toute la plage [debut, fin]. Quand un filtre jours est
+  // actif, on ne garde que les lignes dont le jour-de-semaine matche : utile
+  // pour visualiser uniquement les mardis sur 1 mois, par exemple.
+  const days = useMemo(() => {
+    const all = aggregateByDay(filteredRows, dateDebut, dateFin)
+    if (!filterJoursActive) return all
+    return all.filter((d) => joursSet.has(d.isoJds))
+  }, [filteredRows, dateDebut, dateFin, filterJoursActive, joursSet])
 
   const periodBudget = useMemo(
-    () => periodBudgetTotal(filteredBudgetByYear, dateDebut, dateFin),
-    [filteredBudgetByYear, dateDebut, dateFin]
+    () => periodBudgetTotal(filteredBudgetByYear, dateDebut, dateFin, filterJoursActive ? joursSet : null),
+    [filteredBudgetByYear, dateDebut, dateFin, filterJoursActive, joursSet]
   )
 
   const compareBudgetRange = useMemo(
@@ -359,8 +382,8 @@ export default function AnalysesPage() {
 
   const periodBudgetCompare = useMemo(() => {
     if (!compareBudgetRange) return 0
-    return periodBudgetTotal(filteredCompareBudgetByYear, compareBudgetRange.debut, compareBudgetRange.fin)
-  }, [filteredCompareBudgetByYear, compareBudgetRange])
+    return periodBudgetTotal(filteredCompareBudgetByYear, compareBudgetRange.debut, compareBudgetRange.fin, filterJoursActive ? joursSet : null)
+  }, [filteredCompareBudgetByYear, compareBudgetRange, filterJoursActive, joursSet])
 
   // ── Comparison props injectés dans les KPIs ──────────────────────────────
   // - 'aucune' → pas de comparaison
@@ -382,7 +405,8 @@ export default function AnalysesPage() {
   const comparisonLabel = comparaison === 'aucune' ? '' : (COMPARAISON_LABELS[comparaison] || '')
 
   // Pour le tableau jour-jour, on injecte le budget journalier dans chaque
-  // jour en réutilisant periodBudgetTotal sur une seule date.
+  // jour en réutilisant periodBudgetTotal sur une seule date. Pas besoin de
+  // passer joursSet ici : on est déjà filtré au niveau de `days`.
   const daysWithBudget = useMemo(() => {
     return days.map((d) => {
       const budget = periodBudgetTotal(filteredBudgetByYear, d.iso, d.iso)
@@ -634,10 +658,13 @@ export default function AnalysesPage() {
     const serviceLabel = servicesSelected.length === 0 || servicesSelected.length === ALL_SERVICES.length
       ? 'tout'
       : servicesSelected.join('+')
+    const joursLabel = !filterJoursActive
+      ? 'Tous'
+      : joursSelected.map((j) => JOUR_FR_LABELS[j]).join(', ')
     const visibleIds = new Set(visibleLayout.map((l) => l.id))
     const wb = buildAnalysesWorkbook({
       visibleIds,
-      periode, dateDebut, dateFin, comparaison, lieuLabel, service: serviceLabel,
+      periode, dateDebut, dateFin, comparaison, lieuLabel, service: serviceLabel, joursLabel,
       totals, comparisonTotals, comparisonLabel, periodBudget,
       buckets, granularity, perfWeekday, mix, topBottom, daysWithBudget,
       // PR 5 — données marges (peuvent être à 0 si l'user n'a activé aucun
@@ -670,7 +697,9 @@ export default function AnalysesPage() {
               Analyses CA
             </h1>
             <p style={{ margin: 0, fontSize: 14, color: c.texteMuted }}>
-              {humanRange(dateDebut, dateFin)}{isSplit && ` — détail par ${splitDims.map((d) => d === 'lieu' ? 'lieu' : 'service').join(' × ')}`}
+              {humanRange(dateDebut, dateFin)}
+              {filterJoursActive && ` — uniquement ${joursSelected.map((j) => JOUR_FR_LABELS[j]).join(', ')}`}
+              {isSplit && ` — détail par ${splitDims.map((d) => d === 'lieu' ? 'lieu' : 'service').join(' × ')}`}
             </p>
           </div>
           <div className="no-print" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -707,6 +736,7 @@ export default function AnalysesPage() {
           lieux={lieux}
           lieuxSelected={lieuxSelected} onLieuxSelected={setLieuxSelected}
           servicesSelected={servicesSelected} onServicesSelected={setServicesSelected}
+          joursSelected={joursSelected} onJoursSelected={setJoursSelected}
         />
 
         {error && <p style={{ color: '#B91C1C', fontSize: 14, marginBottom: 16 }}>{error}</p>}

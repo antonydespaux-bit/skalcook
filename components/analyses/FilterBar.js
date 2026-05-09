@@ -21,6 +21,11 @@ export const ALL_SERVICES = ['lunch', 'dinner']
 
 const SERVICE_LABELS = { lunch: 'Déjeuner', dinner: 'Dîner' }
 
+// ISO 8601 : 1 = lundi … 7 = dimanche (cohérent avec ca_budgets.jour_semaine).
+export const ALL_JOURS = [1, 2, 3, 4, 5, 6, 7]
+const JOUR_LABELS = { 1: 'Lundi', 2: 'Mardi', 3: 'Mercredi', 4: 'Jeudi', 5: 'Vendredi', 6: 'Samedi', 7: 'Dimanche' }
+const JOUR_LABELS_SHORT = { 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam', 7: 'Dim' }
+
 // `lieuxSelected` / `servicesSelected` :
 //   - tableau des codes/ids cochés
 //   - tableau vide = "Tous" (équivalent à tous cochés ; on conserve un tableau
@@ -35,6 +40,7 @@ export default function FilterBar({
   comparaison, onComparaison,
   lieux, lieuxSelected, onLieuxSelected,
   servicesSelected, onServicesSelected,
+  joursSelected, onJoursSelected,
 }) {
   const btn = (active) => ({
     padding: '7px 12px', borderRadius: 8, fontSize: 13,
@@ -72,6 +78,7 @@ export default function FilterBar({
   // d'un nouveau lieu.
   const lieuxAllActive = lieuxSelected.length === 0 || lieuxSelected.length === lieux.length
   const servicesAllActive = servicesSelected.length === 0 || servicesSelected.length === ALL_SERVICES.length
+  const joursAllActive = joursSelected.length === 0 || joursSelected.length === ALL_JOURS.length
 
   const toggleLieu = (id) => {
     if (lieuxAllActive) {
@@ -94,6 +101,17 @@ export default function FilterBar({
     if (set.has(code)) set.delete(code)
     else set.add(code)
     onServicesSelected(set.size === 0 ? [] : Array.from(set))
+  }
+
+  const toggleJour = (jds) => {
+    if (joursAllActive) {
+      onJoursSelected([jds])
+      return
+    }
+    const set = new Set(joursSelected)
+    if (set.has(jds)) set.delete(jds)
+    else set.add(jds)
+    onJoursSelected(set.size === 0 ? [] : Array.from(set).sort((a, b) => a - b))
   }
 
   return (
@@ -153,6 +171,19 @@ export default function FilterBar({
           </button>
         ))}
       </div>
+
+      {/* Multi-select Jours de la semaine */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+        <span style={{ fontSize: 12, color: c.texteMuted, marginRight: 4 }}>Jours :</span>
+        <button onClick={() => onJoursSelected([])} style={chip(joursAllActive)}>Tous</button>
+        {ALL_JOURS.map((jds) => (
+          <button key={jds} onClick={() => toggleJour(jds)}
+            style={chip(!joursAllActive && joursSelected.includes(jds))}
+            title={JOUR_LABELS[jds]}>
+            {isMobile ? JOUR_LABELS_SHORT[jds] : JOUR_LABELS[jds]}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -163,3 +194,4 @@ export const COMPARAISON_LABELS = {
 }
 
 export const SERVICE_FR_LABELS = SERVICE_LABELS
+export const JOUR_FR_LABELS = JOUR_LABELS

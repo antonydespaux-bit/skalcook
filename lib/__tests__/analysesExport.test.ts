@@ -17,16 +17,18 @@ describe('buildPeriodSheetRows', () => {
   it('produit une ligne par champ traçabilité', () => {
     const rows = buildPeriodSheetRows({
       periode: 'mois-en-cours', dateDebut: '2026-05-01', dateFin: '2026-05-09',
-      comparaison: 'n-1', lieuLabel: 'Salle', service: 'lunch', granularity: 'day',
+      comparaison: 'n-1', lieuLabel: 'Salle', service: 'lunch', joursLabel: 'Mardi',
+      granularity: 'day',
       generatedAt: new Date(2026, 4, 9, 14, 30),
     })
-    expect(rows).toHaveLength(8)
+    expect(rows).toHaveLength(9)
     const map = Object.fromEntries(rows.map((r) => [r.Champ, r.Valeur]))
     expect(map['Période']).toBe('Mois en cours')
     expect(map['Date début']).toBe('2026-05-01')
     expect(map['Comparaison']).toBe('vs même période N-1')
     expect(map['Lieu']).toBe('Salle')
     expect(map['Service']).toBe('Déjeuner')
+    expect(map['Jours de semaine']).toBe('Mardi')
     expect(map['Granularité auto']).toBe('Jour')
   })
 })

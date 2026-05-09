@@ -167,6 +167,17 @@ describe('periodBudgetTotal', () => {
     const total = periodBudgetTotal({ 2025: rows2025, 2026: rows2026 }, '2025-12-31', '2026-01-01')
     expect(total).toBe(300)
   })
+
+  it('filtre par jour-de-semaine si isoJdsFilter fourni', () => {
+    // Lundi et mardi avec budget différent — filtrer sur lundi seul
+    const rows = [
+      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      { jour_semaine: 2, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 200, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+    ]
+    // Période 2026-05-04 → 2026-05-05 (lundi puis mardi). Filtre = lundi seulement.
+    const total = periodBudgetTotal({ 2026: rows }, '2026-05-04', '2026-05-05', new Set([1]))
+    expect(total).toBe(100)
+  })
 })
 
 describe('pickGranularity', () => {
