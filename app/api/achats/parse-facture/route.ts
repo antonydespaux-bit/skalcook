@@ -103,16 +103,12 @@ export const POST = apiHandler({
             { type: 'text', text: PROMPT_EXTRACTION },
           ],
         },
-        // Prefill : force la sortie en JSON pur dès le premier token
-        // (évite que le modèle ouvre par "Voici le JSON :" ou un bloc markdown).
-        { role: 'assistant', content: '{' },
       ],
     })
 
     // Trouve le premier bloc de type 'text' (évite de planter si un thinking block précède)
     const textBlock = message.content.find((b) => b.type === 'text')
-    // Le prefill "{" n'est PAS dans message.content → on le rajoute pour parser.
-    const rawText = '{' + (textBlock && 'text' in textBlock ? textBlock.text : '')
+    const rawText = textBlock && 'text' in textBlock ? textBlock.text : ''
 
     let parsed: Record<string, unknown>
     try {
