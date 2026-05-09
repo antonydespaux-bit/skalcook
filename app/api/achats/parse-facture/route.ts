@@ -77,8 +77,8 @@ export const POST = apiHandler({
       : { type: 'image' as const, source: { type: 'base64' as const, media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif', data: fileBase64 } }
 
     const message = await getAnthropic().messages.create({
-      model: 'claude-opus-4-5',
-      max_tokens: 2048,
+      model: 'claude-opus-4-7',
+      max_tokens: 4096,
       messages: [
         {
           role: 'user',
@@ -107,6 +107,25 @@ export const POST = apiHandler({
       )
     }
 
+    // Décide du prix unitaire HT à partir de ce que Claude a renvoyé :
+    //   - prix_unitaire_ht (P.U.) ET/OU montant_ht (total ligne)
+    //
+    // Stratégie :
+    //   1. Si on a montant_ht et quantite > 0, calcule le PU "vérité" = montant_ht / quantite.
+    //   2. Si on a aussi un PU IA :
+    //      - les deux sont cohérents (écart < 5%) → on prend le PU IA (plus précis sur les centimes).
+    //      - sinon (ex: l'IA a lu "1,610" comme 1610 au lieu de 1.61) → on prend le PU "vérité".
+    //   3. Si on n'a que le PU IA → on l'utilise tel quel.
+    //   4. Si on n'a rien → 0.
+    const resolvePrixUnitaire = (puIA: number | null, montantHt: number | null, qte: number) => {
+      const puVerite = montantHt != null && qte > 0 ? montantHt / qte : null
+      if (puIA != null && puVerite != null) {
+        const ecart = Math.abs(puIA - puVerite) / Math.max(puVerite, 0.01)
+        return ecart < 0.05 ? puIA : puVerite
+      }
+      return puIA ?? puVerite ?? 0
+    }
+
     const lignes = ((parsed.lignes as Array<Record<string, unknown>>) || [])
       .filter((l) => l && l.designation)
       .map((l) => {
@@ -115,12 +134,9 @@ export const POST = apiHandler({
         const quantite = Number(l.quantite) || 1
         const puRaw = Number(l.prix_unitaire_ht)
         const montantHtRaw = Number(l.montant_ht)
+        const puIA = Number.isFinite(puRaw) && puRaw > 0 ? puRaw : null
         const montantHt = Number.isFinite(montantHtRaw) && montantHtRaw > 0 ? montantHtRaw : null
-        // Si l'IA n'a pas réussi à lire le P.U. mais a bien lu le montant HT,
-        // dérive le P.U. : prix_unitaire_ht = montant_ht / quantite.
-        const prixUnitaire = Number.isFinite(puRaw) && puRaw > 0
-          ? puRaw
-          : (montantHt != null && quantite > 0 ? montantHt / quantite : 0)
+        const prixUnitaire = resolvePrixUnitaire(puIA, montantHt, quantite)
         return {
           designation: String(l.designation ?? '').trim(),
           quantite,
@@ -129,6 +145,16 @@ export const POST = apiHandler({
           taux_tva: taux != null && Number.isFinite(taux) && taux >= 0 && taux <= 100 ? taux : null,
         }
       })
+
+    // Diagnostic : aide à comprendre les régressions OCR (lignes sans prix).
+    const sansPrix = lignes.filter((l) => !l.prix_unitaire_ht).length
+    if (sansPrix > 0) {
+      console.warn(
+        `[parse-facture] ${sansPrix}/${lignes.length} lignes sans prix.`,
+        'Échantillon brut:',
+        JSON.stringify(((parsed.lignes as unknown[]) || []).slice(0, 3))
+      )
+    }
 
     // Filtre date_facture : on n'accepte que YYYY-MM-DD valide, sinon null
     // (évite que Claude renvoie "hier" ou "2024-13-45" et fasse péter l'insert)
