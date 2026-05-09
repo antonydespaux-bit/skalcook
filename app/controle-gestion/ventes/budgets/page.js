@@ -11,6 +11,12 @@ import Navbar from '../../../../components/Navbar'
 
 const DEBUG_FALLBACK_CLIENT_ID = 'fa725e66-2cad-4ea4-892a-7eb3e90496a7'
 
+const ANNEE_BUDGET = 2026
+
+const FOOD_RATIO = 0.65
+const BEV_20_RATIO = 0.28
+const BEV_10_RATIO = 0.07
+
 const JOURS_SEMAINE = [
   { code: 1, label: 'Lundi', short: 'Lun' },
   { code: 2, label: 'Mardi', short: 'Mar' },
@@ -26,17 +32,10 @@ const SERVICES = [
   { code: 'dinner', label: 'Dîner' },
 ]
 
+const MOIS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 const MOIS_LABEL = [
   '', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
-]
-
-const FIELDS = [
-  { key: 'couverts_cible', label: 'Couv.', step: '1', suffix: null },
-  { key: 'ca_food_cible', label: 'Food', step: '0.01', suffix: '€' },
-  { key: 'ca_bev_20_cible', label: 'Alcool 20%', step: '0.01', suffix: '€' },
-  { key: 'ca_bev_10_cible', label: 'Soft 10%', step: '0.01', suffix: '€' },
-  { key: 'ca_autre_cible', label: 'Autres', step: '0.01', suffix: '€' },
 ]
 
 const JOUR_PRESETS = [
@@ -46,10 +45,17 @@ const JOUR_PRESETS = [
   { code: 'all', label: 'Toute la semaine', jours: [1, 2, 3, 4, 5, 6, 7] },
 ]
 
+/* ─── Helpers ─────────────────────────────────────────────────────────────── */
+
+function round2(n) {
+  return Math.round(Number(n || 0) * 100) / 100
+}
+
 function emptyCell() {
   return {
     id: null,
     couverts_cible: '',
+    tm_cible: '', // UI-only ; la BDD ne stocke pas le TM (recalculé au load)
     ca_food_cible: '',
     ca_bev_20_cible: '',
     ca_bev_10_cible: '',
@@ -57,7 +63,17 @@ function emptyCell() {
   }
 }
 
-function cellTotalCA(cell) {
+function deriveTm(cell) {
+  const couv = Number(cell.couverts_cible || 0)
+  if (!couv) return ''
+  const ca =
+    Number(cell.ca_food_cible || 0) +
+    Number(cell.ca_bev_20_cible || 0) +
+    Number(cell.ca_bev_10_cible || 0)
+  return ca / couv
+}
+
+function totalCa(cell) {
   return (
     Number(cell.ca_food_cible || 0) +
     Number(cell.ca_bev_20_cible || 0) +
@@ -67,22 +83,46 @@ function cellTotalCA(cell) {
 }
 
 function hasAnyValue(cell) {
-  return FIELDS.some((f) => {
-    const v = cell[f.key]
-    return v !== '' && v !== null && v !== undefined && Number(v) > 0
-  })
+  return Number(cell.couverts_cible || 0) > 0 || totalCa(cell) > 0
+}
+
+// Recalcule food/bev/soft à partir de couv × tm × ratios fixes 65/28/7.
+function recalcCa(cell) {
+  const couv = Number(cell.couverts_cible || 0)
+  const tm = Number(cell.tm_cible || 0)
+  const ca = couv * tm
+  return {
+    ...cell,
+    ca_food_cible: round2(ca * FOOD_RATIO),
+    ca_bev_20_cible: round2(ca * BEV_20_RATIO),
+    ca_bev_10_cible: round2(ca * BEV_10_RATIO),
+    ca_autre_cible: 0,
+  }
+}
+
+// Combien de fois `jds` (1=lundi … 7=dimanche, ISO) tombe dans `mois` de `annee`.
+function joursDansMois(annee, mois, jdsTarget) {
+  const lastDay = new Date(annee, mois, 0).getDate()
+  let count = 0
+  for (let d = 1; d <= lastDay; d++) {
+    const date = new Date(annee, mois - 1, d)
+    const dow = date.getDay() === 0 ? 7 : date.getDay()
+    if (dow === jdsTarget) count++
+  }
+  return count
 }
 
 function formatEur(n) {
   if (n == null || isNaN(n) || Number(n) === 0) return '—'
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n)
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n)
 }
 
-/* ─── Import Excel ───────────────────────────────────────────────────────── */
+function formatNum(n) {
+  if (n == null || isNaN(n) || Number(n) === 0) return '—'
+  return new Intl.NumberFormat('fr-FR').format(Math.round(n))
+}
 
-const FOOD_RATIO = 0.65
-const BEV_20_RATIO = 0.28
-const BEV_10_RATIO = 0.07
+/* ─── Import Excel (inchangé) ─────────────────────────────────────────────── */
 
 const MOIS_FR = [
   'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
@@ -118,9 +158,9 @@ function buildBudgetRow(section, mois, jourSemaine, service, couverts, tm) {
     jour_semaine: jourSemaine,
     service,
     couverts_cible: Number(couverts) || 0,
-    ca_food_cible: Math.round(ca * FOOD_RATIO * 100) / 100,
-    ca_bev_20_cible: Math.round(ca * BEV_20_RATIO * 100) / 100,
-    ca_bev_10_cible: Math.round(ca * BEV_10_RATIO * 100) / 100,
+    ca_food_cible: round2(ca * FOOD_RATIO),
+    ca_bev_20_cible: round2(ca * BEV_20_RATIO),
+    ca_bev_10_cible: round2(ca * BEV_10_RATIO),
     ca_autre_cible: 0,
   }
 }
@@ -186,39 +226,6 @@ async function parseExcelBudget(file) {
   return parsed
 }
 
-function consolidateRows(parsed) {
-  const grouped = new Map()
-  for (const r of parsed) {
-    const k = `${r.section}|${r.jour_semaine}|${r.service}`
-    if (!grouped.has(k)) grouped.set(k, [])
-    grouped.get(k).push(r)
-  }
-  const final = []
-  for (const rows of grouped.values()) {
-    const sigCount = new Map()
-    const sigOf = (x) =>
-      `${x.couverts_cible}|${x.ca_food_cible}|${x.ca_bev_20_cible}|${x.ca_bev_10_cible}|${x.ca_autre_cible}`
-    for (const r of rows) {
-      const s = sigOf(r)
-      sigCount.set(s, (sigCount.get(s) || 0) + 1)
-    }
-    let bestSig = null
-    let bestCount = 0
-    for (const [s, count] of sigCount) {
-      if (count > bestCount) {
-        bestSig = s
-        bestCount = count
-      }
-    }
-    const def = rows.find((r) => sigOf(r) === bestSig)
-    final.push({ ...def, mois: null })
-    for (const r of rows) {
-      if (sigOf(r) !== bestSig) final.push(r)
-    }
-  }
-  return final
-}
-
 /* ─── Page principale ────────────────────────────────────────────────────── */
 
 export default function BudgetsPage() {
@@ -228,12 +235,10 @@ export default function BudgetsPage() {
 
   const [clientId, setClientId] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
-  const [moisFilter, setMoisFilter] = useState('default') // 'default' | '1'..'12'
-  const [lieuFilter, setLieuFilter] = useState(null) // id du lieu sélectionné
+  const [lieuFilter, setLieuFilter] = useState(null)
   const [lieux, setLieux] = useState([])
-  // budgets indexés par `${jds}_${lieu_id}_${service}`
+  // budgets[mois][`${jds}_${lieuId}_${service}`] = cell ; mois ∈ [1..12]
   const [budgets, setBudgets] = useState({})
-  const [defaultBudgets, setDefaultBudgets] = useState({})
   const [raison, setRaison] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -267,15 +272,13 @@ export default function BudgetsPage() {
     }
   }, [router])
 
-  const moisValue = moisFilter === 'default' ? null : Number(moisFilter)
-
   const loadData = useCallback(async () => {
     if (!clientId) return
     setLoading(true)
     setError('')
     setOkMsg('')
     try {
-      const [lieuxRes, defaultRes, currentRes] = await Promise.all([
+      const [lieuxRes, budgetsRes] = await Promise.all([
         supabase
           .from('lieux_service')
           .select('id, nom, ordre, actif')
@@ -286,64 +289,43 @@ export default function BudgetsPage() {
         supabase
           .from('ca_budgets')
           .select(
-            'id, jour_semaine, lieu_service_id, service, couverts_cible, ca_food_cible, ca_bev_20_cible, ca_bev_10_cible, ca_autre_cible'
+            'id, mois, jour_semaine, lieu_service_id, service, couverts_cible, ca_food_cible, ca_bev_20_cible, ca_bev_10_cible, ca_autre_cible'
           )
           .eq('client_id', clientId)
-          .is('mois', null),
-        moisValue == null
-          ? Promise.resolve({ data: null, error: null })
-          : supabase
-              .from('ca_budgets')
-              .select(
-                'id, jour_semaine, lieu_service_id, service, couverts_cible, ca_food_cible, ca_bev_20_cible, ca_bev_10_cible, ca_autre_cible'
-              )
-              .eq('client_id', clientId)
-              .eq('mois', moisValue),
+          .not('mois', 'is', null),
       ])
       if (lieuxRes.error) throw lieuxRes.error
-      if (defaultRes.error) throw defaultRes.error
-      if (currentRes.error) throw currentRes.error
+      if (budgetsRes.error) throw budgetsRes.error
 
       setLieux(lieuxRes.data || [])
 
-      const idxDefault = {}
-      ;(defaultRes.data || []).forEach((b) => {
-        idxDefault[`${b.jour_semaine}_${b.lieu_service_id}_${b.service}`] = {
-          id: b.id,
-          couverts_cible: b.couverts_cible,
-          ca_food_cible: b.ca_food_cible,
-          ca_bev_20_cible: b.ca_bev_20_cible,
-          ca_bev_10_cible: b.ca_bev_10_cible,
-          ca_autre_cible: b.ca_autre_cible,
-        }
-      })
-      setDefaultBudgets(idxDefault)
-
-      const dataToShow = moisValue == null ? defaultRes.data : currentRes.data
-      const idxShow = {}
-      ;(dataToShow || []).forEach((b) => {
-        idxShow[`${b.jour_semaine}_${b.lieu_service_id}_${b.service}`] = {
+      const idx = {}
+      for (const m of MOIS) idx[m] = {}
+      ;(budgetsRes.data || []).forEach((b) => {
+        if (b.mois == null) return
+        const cell = {
           id: b.id,
           couverts_cible: b.couverts_cible ?? '',
-          ca_food_cible: b.ca_food_cible ?? '',
-          ca_bev_20_cible: b.ca_bev_20_cible ?? '',
-          ca_bev_10_cible: b.ca_bev_10_cible ?? '',
-          ca_autre_cible: b.ca_autre_cible ?? '',
+          ca_food_cible: b.ca_food_cible ?? 0,
+          ca_bev_20_cible: b.ca_bev_20_cible ?? 0,
+          ca_bev_10_cible: b.ca_bev_10_cible ?? 0,
+          ca_autre_cible: b.ca_autre_cible ?? 0,
         }
+        cell.tm_cible = deriveTm(cell)
+        idx[b.mois][`${b.jour_semaine}_${b.lieu_service_id}_${b.service}`] = cell
       })
-      setBudgets(idxShow)
+      setBudgets(idx)
     } catch (e) {
       setError(e.message || 'Erreur de chargement')
     } finally {
       setLoading(false)
     }
-  }, [clientId, moisValue])
+  }, [clientId])
 
   useEffect(() => {
     if (authChecked) loadData()
   }, [authChecked, loadData])
 
-  // Sélectionne le 1er lieu par défaut une fois la liste chargée
   useEffect(() => {
     if (lieux.length === 0) return
     if (lieuFilter == null || !lieux.find((l) => l.id === lieuFilter)) {
@@ -351,27 +333,62 @@ export default function BudgetsPage() {
     }
   }, [lieux, lieuFilter])
 
-  const updateCell = useCallback((jds, lieuId, service, field, value) => {
+  const updateCell = useCallback((mois, jds, lieuId, service, field, value) => {
     setBudgets((prev) => {
+      const next = { ...prev }
+      const moisMap = { ...(prev[mois] || {}) }
       const key = `${jds}_${lieuId}_${service}`
-      const current = prev[key] || emptyCell()
-      return { ...prev, [key]: { ...current, [field]: value } }
+      const current = moisMap[key] || emptyCell()
+      const updated = recalcCa({ ...current, [field]: value })
+      moisMap[key] = updated
+      next[mois] = moisMap
+      return next
     })
   }, [])
 
-  // Appelé par le wizard : pré-remplit les cellules pour 1 lieu × N jours.
-  // services = { lunch: { couverts_cible, ca_food_cible, … }, dinner: {…} }
-  const applyWizard = useCallback((lieuId, jours, services) => {
+  // Copie les valeurs Couv/TM d'un mois source vers un ou plusieurs mois cibles.
+  const duplicateMois = useCallback((moisSource, moisCibles) => {
     setBudgets((prev) => {
       const next = { ...prev }
-      for (const jds of jours) {
-        for (const svcCode of Object.keys(services)) {
-          const data = services[svcCode]
-          if (!data) continue
-          const key = `${jds}_${lieuId}_${svcCode}`
-          const existing = prev[key] || emptyCell()
-          next[key] = { ...existing, ...data }
+      const src = prev[moisSource] || {}
+      for (const mc of moisCibles) {
+        const dst = { ...(prev[mc] || {}) }
+        for (const key of Object.keys(src)) {
+          const srcCell = src[key]
+          if (!hasAnyValue(srcCell)) continue
+          const existing = dst[key] || emptyCell()
+          dst[key] = recalcCa({
+            ...existing,
+            couverts_cible: srcCell.couverts_cible,
+            tm_cible: srcCell.tm_cible,
+          })
         }
+        next[mc] = dst
+      }
+      return next
+    })
+  }, [])
+
+  // Wizard : applique Couv/TM à 1 lieu × N jours × les services renseignés × tous les mois choisis.
+  const applyWizard = useCallback((lieuId, joursList, servicesData, moisCibles) => {
+    setBudgets((prev) => {
+      const next = { ...prev }
+      for (const m of moisCibles) {
+        const moisMap = { ...(prev[m] || {}) }
+        for (const jds of joursList) {
+          for (const svcCode of Object.keys(servicesData)) {
+            const data = servicesData[svcCode]
+            if (!data) continue
+            const key = `${jds}_${lieuId}_${svcCode}`
+            const existing = moisMap[key] || emptyCell()
+            moisMap[key] = recalcCa({
+              ...existing,
+              couverts_cible: data.couverts_cible,
+              tm_cible: data.tm_cible,
+            })
+          }
+        }
+        next[m] = moisMap
       }
       return next
     })
@@ -385,24 +402,27 @@ export default function BudgetsPage() {
     setOkMsg('')
     try {
       const rows = []
-      for (const j of JOURS_SEMAINE) {
-        for (const lieu of lieux) {
-          for (const svc of SERVICES) {
-            const cell = budgets[`${j.code}_${lieu.id}_${svc.code}`]
-            if (!cell || !hasAnyValue(cell)) continue
-            rows.push({
-              client_id: clientId,
-              mois: moisValue,
-              jour_semaine: j.code,
-              lieu_service_id: lieu.id,
-              service: svc.code,
-              couverts_cible: Number(cell.couverts_cible || 0),
-              ca_food_cible: Number(cell.ca_food_cible || 0),
-              ca_bev_20_cible: Number(cell.ca_bev_20_cible || 0),
-              ca_bev_10_cible: Number(cell.ca_bev_10_cible || 0),
-              ca_autre_cible: Number(cell.ca_autre_cible || 0),
-              raison_modification: raison.trim() || null,
-            })
+      for (const m of MOIS) {
+        const moisMap = budgets[m] || {}
+        for (const j of JOURS_SEMAINE) {
+          for (const lieu of lieux) {
+            for (const svc of SERVICES) {
+              const cell = moisMap[`${j.code}_${lieu.id}_${svc.code}`]
+              if (!cell || !hasAnyValue(cell)) continue
+              rows.push({
+                client_id: clientId,
+                mois: m,
+                jour_semaine: j.code,
+                lieu_service_id: lieu.id,
+                service: svc.code,
+                couverts_cible: Number(cell.couverts_cible || 0),
+                ca_food_cible: Number(cell.ca_food_cible || 0),
+                ca_bev_20_cible: Number(cell.ca_bev_20_cible || 0),
+                ca_bev_10_cible: Number(cell.ca_bev_10_cible || 0),
+                ca_autre_cible: Number(cell.ca_autre_cible || 0),
+                raison_modification: raison.trim() || null,
+              })
+            }
           }
         }
       }
@@ -422,7 +442,7 @@ export default function BudgetsPage() {
     } finally {
       setSaving(false)
     }
-  }, [clientId, moisValue, lieux, budgets, raison, loadData])
+  }, [clientId, lieux, budgets, raison, loadData])
 
   const handleFileChange = useCallback(async (e) => {
     const file = e.target.files?.[0]
@@ -435,19 +455,10 @@ export default function BudgetsPage() {
       if (parsed.length === 0) {
         throw new Error('Aucune donnée extraite du fichier.')
       }
-      const consolidated = consolidateRows(parsed)
-      const sectionNames = [...new Set(consolidated.map((r) => r.section))]
+      const sectionNames = [...new Set(parsed.map((r) => r.section))]
       const existingNames = lieux.map((l) => l.nom)
       const lieuxToCreate = sectionNames.filter((n) => !existingNames.includes(n))
-      const defaultsCount = consolidated.filter((r) => r.mois == null).length
-      const overridesCount = consolidated.length - defaultsCount
-      setImportPreview({
-        rows: consolidated,
-        sectionNames,
-        lieuxToCreate,
-        defaultsCount,
-        overridesCount,
-      })
+      setImportPreview({ rows: parsed, sectionNames, lieuxToCreate })
     } catch (err) {
       setError(`Erreur d'import : ${err.message}`)
     }
@@ -502,16 +513,22 @@ export default function BudgetsPage() {
     }
   }, [importPreview, clientId, lieux, loadData])
 
-  // Totaux pour le lieu sélectionné uniquement
-  const lieuTotals = useMemo(() => {
+  // KPI annuels pour le lieu sélectionné
+  const annee = useMemo(() => {
     const t = { couverts: 0, ca: 0 }
     if (!lieuFilter) return t
-    for (const j of JOURS_SEMAINE) {
-      for (const svc of SERVICES) {
-        const cell = budgets[`${j.code}_${lieuFilter}_${svc.code}`]
-        if (!cell) continue
-        t.couverts += Number(cell.couverts_cible || 0)
-        t.ca += cellTotalCA(cell)
+    for (const m of MOIS) {
+      const moisMap = budgets[m] || {}
+      for (const j of JOURS_SEMAINE) {
+        for (const svc of SERVICES) {
+          const cell = moisMap[`${j.code}_${lieuFilter}_${svc.code}`]
+          if (!cell) continue
+          const nbre = joursDansMois(ANNEE_BUDGET, m, j.code)
+          const couvJ = Number(cell.couverts_cible || 0)
+          const tm = Number(cell.tm_cible || 0)
+          t.couverts += nbre * couvJ
+          t.ca += nbre * couvJ * tm
+        }
       }
     }
     return t
@@ -524,7 +541,7 @@ export default function BudgetsPage() {
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
       <Navbar section="cuisine" />
-      <div style={{ padding: isMobile ? 16 : 24, paddingBottom: 96, maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ padding: isMobile ? 16 : 24, paddingBottom: 96, maxWidth: 1400, margin: '0 auto' }}>
         <div style={{ marginBottom: 16 }}>
           <Link
             href="/controle-gestion/ventes"
@@ -539,10 +556,10 @@ export default function BudgetsPage() {
             ← Vue mensuelle
           </Link>
           <h1 style={{ margin: '0 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 600, color: c.texte }}>
-            Budgets de CA
+            Budgets de CA — {ANNEE_BUDGET}
           </h1>
           <p style={{ margin: 0, fontSize: 14, color: c.texteMuted }}>
-            Objectifs par jour de la semaine et service. Chaque modification est tracée.
+            Saisie type Excel : tu remplis Couv/J et TM ; le reste se calcule (Cvts total, Total, ratios Food/Bev). Chaque modification est tracée.
           </p>
         </div>
 
@@ -559,31 +576,12 @@ export default function BudgetsPage() {
             lieux={lieux}
             lieuFilter={lieuFilter}
             setLieuFilter={setLieuFilter}
-            moisFilter={moisFilter}
-            setMoisFilter={setMoisFilter}
             onOpenWizard={() => setWizardOpen(true)}
             onClickImport={() => fileInputRef.current?.click()}
             onOpenHistory={() => setHistoryOpen(true)}
             c={c}
             isMobile={isMobile}
           />
-        )}
-
-        {moisValue != null && (
-          <div
-            style={{
-              padding: '10px 14px',
-              borderRadius: 8,
-              border: `1px dashed ${c.bordure}`,
-              background: c.fond,
-              fontSize: 13,
-              color: c.texteMuted,
-              marginBottom: 16,
-            }}
-          >
-            <strong style={{ color: c.texte }}>Override pour {MOIS_LABEL[moisValue]} 2026.</strong>{' '}
-            Les cellules vides utiliseront le budget par défaut. Modifie uniquement ce qui change pour ce mois.
-          </div>
         )}
 
         {error && <p style={{ color: '#B91C1C', fontSize: 14, marginBottom: 16 }}>{error}</p>}
@@ -612,74 +610,83 @@ export default function BudgetsPage() {
         )}
 
         {!loading && selectedLieu && (
-          <>
-            <LieuTable
-              lieu={selectedLieu}
-              budgets={budgets}
-              defaultBudgets={defaultBudgets}
-              isOverride={moisValue != null}
-              updateCell={updateCell}
-              isMobile={isMobile}
-              c={c}
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) 220px', gap: 16, alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+              {MOIS.map((m) => (
+                <MoisTable
+                  key={m}
+                  mois={m}
+                  annee={ANNEE_BUDGET}
+                  lieu={selectedLieu}
+                  moisMap={budgets[m] || {}}
+                  updateCell={updateCell}
+                  onDuplicateNext={() => duplicateMois(m, [m + 1])}
+                  onDuplicateAllAfter={() => duplicateMois(m, MOIS.filter((x) => x > m))}
+                  c={c}
+                  isMobile={isMobile}
+                />
+              ))}
 
-            <div
-              style={{
-                marginTop: 16,
-                padding: 16,
-                background: c.blanc,
-                borderRadius: 12,
-                border: `0.5px solid ${c.bordure}`,
-                display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
-                gap: 12,
-              }}
-            >
-              <KPI label={`Couverts/sem (${selectedLieu.nom})`} value={lieuTotals.couverts || '—'} c={c} />
-              <KPI label={`CA/sem (${selectedLieu.nom})`} value={formatEur(lieuTotals.ca)} c={c} />
-              <KPI
-                label="Couverts/an (~52 sem.)"
-                value={lieuTotals.couverts ? Math.round(lieuTotals.couverts * 52).toLocaleString('fr-FR') : '—'}
-                c={c}
-              />
-              <KPI
-                label="CA/an (~52 sem.)"
-                value={lieuTotals.ca ? formatEur(lieuTotals.ca * 52) : '—'}
-                c={c}
-              />
-            </div>
-
-            <div
-              style={{
-                marginTop: 16,
-                padding: 16,
-                background: c.blanc,
-                borderRadius: 12,
-                border: `0.5px solid ${c.bordure}`,
-              }}
-            >
-              <label style={{ fontSize: 13, color: c.texte, display: 'block', marginBottom: 8 }}>
-                Raison de la modification (facultatif)
-              </label>
-              <input
-                type="text"
-                value={raison}
-                onChange={(e) => setRaison(e.target.value)}
-                placeholder="Ex : ajustement TM samedi suite à la nouvelle carte"
+              <div
                 style={{
-                  padding: '9px 14px',
-                  borderRadius: 8,
-                  fontSize: 13,
-                  border: `1px solid ${c.bordure}`,
+                  padding: 16,
                   background: c.blanc,
-                  color: c.texte,
-                  outline: 'none',
-                  width: '100%',
-                  boxSizing: 'border-box',
+                  borderRadius: 12,
+                  border: `0.5px solid ${c.bordure}`,
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)',
+                  gap: 12,
                 }}
-              />
+              >
+                <KPI label={`Couverts/an (${selectedLieu.nom})`} value={formatNum(annee.couverts)} c={c} />
+                <KPI label={`CA/an (${selectedLieu.nom})`} value={formatEur(annee.ca)} c={c} />
+                <KPI
+                  label="TM moyen"
+                  value={annee.couverts ? formatEur(annee.ca / annee.couverts) : '—'}
+                  c={c}
+                />
+              </div>
+
+              <div
+                style={{
+                  padding: 16,
+                  background: c.blanc,
+                  borderRadius: 12,
+                  border: `0.5px solid ${c.bordure}`,
+                }}
+              >
+                <label style={{ fontSize: 13, color: c.texte, display: 'block', marginBottom: 8 }}>
+                  Raison de la modification (facultatif)
+                </label>
+                <input
+                  type="text"
+                  value={raison}
+                  onChange={(e) => setRaison(e.target.value)}
+                  placeholder="Ex : ajustement TM samedi suite à la nouvelle carte"
+                  style={{
+                    padding: '9px 14px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    border: `1px solid ${c.bordure}`,
+                    background: c.blanc,
+                    color: c.texte,
+                    outline: 'none',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
             </div>
-          </>
+
+            {!isMobile && (
+              <SommaireSticky
+                budgets={budgets}
+                lieuId={lieuFilter}
+                annee={ANNEE_BUDGET}
+                c={c}
+              />
+            )}
+          </div>
         )}
       </div>
 
@@ -749,14 +756,12 @@ export default function BudgetsPage() {
   )
 }
 
-/* ─── TopBar : filtres lieu/mois + boutons d'action ──────────────────────── */
+/* ─── TopBar ─────────────────────────────────────────────────────────────── */
 
 function TopBar({
   lieux,
   lieuFilter,
   setLieuFilter,
-  moisFilter,
-  setMoisFilter,
   onOpenWizard,
   onClickImport,
   onOpenHistory,
@@ -778,53 +783,29 @@ function TopBar({
         flexWrap: 'wrap',
       }}
     >
-      <div style={{ display: 'flex', gap: 10, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: c.texteMuted }}>
-          Lieu
-          <select
-            value={lieuFilter || ''}
-            onChange={(e) => setLieuFilter(e.target.value || null)}
-            style={{
-              padding: '7px 10px',
-              borderRadius: 8,
-              border: `1px solid ${c.bordure}`,
-              background: c.blanc,
-              color: c.texte,
-              fontSize: 13,
-              minWidth: 180,
-            }}
-          >
-            {lieux.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.nom}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: c.texteMuted }}>
-          Vue
-          <select
-            value={moisFilter}
-            onChange={(e) => setMoisFilter(e.target.value)}
-            style={{
-              padding: '7px 10px',
-              borderRadius: 8,
-              border: `1px solid ${c.bordure}`,
-              background: c.blanc,
-              color: c.texte,
-              fontSize: 13,
-              minWidth: 200,
-            }}
-          >
-            <option value="default">Toute l&apos;année (défaut)</option>
-            {MOIS_LABEL.slice(1).map((nom, i) => (
-              <option key={i + 1} value={String(i + 1)}>
-                {nom} (override)
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: c.texteMuted }}>
+        Lieu de service
+        <select
+          value={lieuFilter || ''}
+          onChange={(e) => setLieuFilter(e.target.value || null)}
+          style={{
+            padding: '7px 10px',
+            borderRadius: 8,
+            border: `1px solid ${c.bordure}`,
+            background: c.blanc,
+            color: c.texte,
+            fontSize: 13,
+            minWidth: 220,
+          }}
+        >
+          {lieux.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.nom}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div style={{ flex: 1 }} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button
           onClick={onOpenWizard}
@@ -874,190 +855,358 @@ function TopBar({
   )
 }
 
-/* ─── LieuTable : grille 7 jours × 2 services pour 1 lieu ────────────────── */
+/* ─── MoisTable : tableau Excel-like d'un mois ───────────────────────────── */
 
-function LieuTable({ lieu, budgets, defaultBudgets, isOverride, updateCell, isMobile, c }) {
-  // Sur desktop : tableau dense ; sur mobile : cards par jour empilées.
+function MoisTable({ mois, annee, lieu, moisMap, updateCell, onDuplicateNext, onDuplicateAllAfter, c, isMobile }) {
+  const sectionId = `mois-${mois}`
+
+  // Totaux mensuels par service
+  const totals = useMemo(() => {
+    const t = {
+      lunch: { nbre: 0, cvts: 0, ca: 0 },
+      dinner: { nbre: 0, cvts: 0, ca: 0 },
+    }
+    for (const j of JOURS_SEMAINE) {
+      const nbre = joursDansMois(annee, mois, j.code)
+      for (const svc of SERVICES) {
+        const cell = moisMap[`${j.code}_${lieu.id}_${svc.code}`]
+        if (!cell) continue
+        const couvJ = Number(cell.couverts_cible || 0)
+        const tm = Number(cell.tm_cible || 0)
+        if (couvJ > 0) t[svc.code].nbre += nbre
+        t[svc.code].cvts += nbre * couvJ
+        t[svc.code].ca += nbre * couvJ * tm
+      }
+    }
+    return t
+  }, [mois, annee, lieu.id, moisMap])
+
   if (isMobile) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {JOURS_SEMAINE.map((j) => (
-          <JourCardMobile
-            key={j.code}
-            jour={j}
-            lieu={lieu}
-            budgets={budgets}
-            defaultBudgets={defaultBudgets}
-            isOverride={isOverride}
-            updateCell={updateCell}
-            c={c}
-          />
-        ))}
-      </div>
+      <MoisCardsMobile
+        mois={mois}
+        annee={annee}
+        lieu={lieu}
+        moisMap={moisMap}
+        updateCell={updateCell}
+        onDuplicateNext={onDuplicateNext}
+        onDuplicateAllAfter={onDuplicateAllAfter}
+        sectionId={sectionId}
+        totals={totals}
+        c={c}
+      />
     )
   }
 
   return (
     <div
+      id={sectionId}
       style={{
         background: c.blanc,
         borderRadius: 12,
         border: `0.5px solid ${c.bordure}`,
         overflow: 'hidden',
+        scrollMarginTop: 80,
       }}
     >
+      {/* Header mois */}
       <div
         style={{
           padding: '10px 16px',
           borderBottom: `1px solid ${c.bordure}`,
           background: c.fond,
-          fontSize: 14,
-          fontWeight: 600,
-          color: c.texte,
-        }}
-      >
-        {lieu.nom}
-      </div>
-      {JOURS_SEMAINE.map((j) => (
-        <JourRowDesktop
-          key={j.code}
-          jour={j}
-          lieu={lieu}
-          budgets={budgets}
-          defaultBudgets={defaultBudgets}
-          isOverride={isOverride}
-          updateCell={updateCell}
-          c={c}
-        />
-      ))}
-    </div>
-  )
-}
-
-function JourRowDesktop({ jour, lieu, budgets, defaultBudgets, isOverride, updateCell, c }) {
-  return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '90px 1fr 1fr',
-        borderTop: `0.5px solid ${c.bordure}`,
-      }}
-    >
-      <div
-        style={{
-          padding: '10px 16px',
-          fontSize: 13,
-          fontWeight: 500,
-          color: c.texte,
-          borderRight: `0.5px solid ${c.bordure}`,
           display: 'flex',
+          justifyContent: 'space-between',
           alignItems: 'center',
+          gap: 8,
         }}
       >
-        {jour.label}
-      </div>
-      {SERVICES.map((svc) => {
-        const key = `${jour.code}_${lieu.id}_${svc.code}`
-        const cell = budgets[key] || emptyCell()
-        const def = defaultBudgets[key]
-        const total = cellTotalCA(cell)
-        return (
-          <div
-            key={svc.code}
-            style={{
-              padding: '8px 12px',
-              borderRight: svc.code === 'lunch' ? `0.5px solid ${c.bordure}` : 'none',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 6,
-            }}
-          >
-            <div
+        <div style={{ fontSize: 15, fontWeight: 600, color: c.texte }}>
+          {MOIS_LABEL[mois]} {annee}
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {mois < 12 && (
+            <button
+              onClick={onDuplicateNext}
               style={{
-                fontSize: 10,
-                fontWeight: 600,
-                color: c.texteMuted,
-                textTransform: 'uppercase',
-                letterSpacing: 0.4,
+                padding: '5px 10px',
+                borderRadius: 6,
+                fontSize: 11,
+                border: `1px solid ${c.bordure}`,
+                background: c.blanc,
+                color: c.texte,
+                cursor: 'pointer',
               }}
+              title={`Copie les valeurs vers ${MOIS_LABEL[mois + 1]}`}
             >
-              {svc.label}
-            </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {FIELDS.map((f) => {
-                const placeholder =
-                  isOverride && def != null ? `défaut : ${def[f.key] ?? 0}` : '0'
+              → {MOIS_LABEL[mois + 1].slice(0, 3)}.
+            </button>
+          )}
+          {mois < 12 && (
+            <button
+              onClick={onDuplicateAllAfter}
+              style={{
+                padding: '5px 10px',
+                borderRadius: 6,
+                fontSize: 11,
+                border: `1px solid ${c.bordure}`,
+                background: c.blanc,
+                color: c.texte,
+                cursor: 'pointer',
+              }}
+              title={`Copie les valeurs vers tous les mois suivants`}
+            >
+              → tous les suivants
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Tableau */}
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ background: c.fond }}>
+              <th
+                rowSpan={2}
+                style={{
+                  textAlign: 'left',
+                  padding: '8px 10px',
+                  borderBottom: `1px solid ${c.bordure}`,
+                  borderRight: `1px solid ${c.bordure}`,
+                  color: c.texteMuted,
+                  fontWeight: 600,
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.4,
+                  width: 100,
+                  verticalAlign: 'middle',
+                }}
+              >
+                Jour
+              </th>
+              <th
+                colSpan={5}
+                style={{
+                  textAlign: 'center',
+                  padding: '6px 10px',
+                  borderBottom: `1px solid ${c.bordure}`,
+                  borderRight: `1px solid ${c.bordure}`,
+                  color: c.texte,
+                  fontWeight: 600,
+                  fontSize: 12,
+                }}
+              >
+                Déjeuner
+              </th>
+              <th
+                colSpan={5}
+                style={{
+                  textAlign: 'center',
+                  padding: '6px 10px',
+                  borderBottom: `1px solid ${c.bordure}`,
+                  color: c.texte,
+                  fontWeight: 600,
+                  fontSize: 12,
+                }}
+              >
+                Dîner
+              </th>
+            </tr>
+            <tr style={{ background: c.fond }}>
+              {SERVICES.map((svc, idx) => (
+                <ColumnHeaders key={svc.code} c={c} isLast={idx === SERVICES.length - 1} />
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {JOURS_SEMAINE.map((j) => {
+              const nbre = joursDansMois(annee, mois, j.code)
+              return (
+                <tr key={j.code} style={{ borderTop: `0.5px solid ${c.bordure}` }}>
+                  <td
+                    style={{
+                      padding: '6px 10px',
+                      borderRight: `1px solid ${c.bordure}`,
+                      color: c.texte,
+                      fontWeight: 500,
+                    }}
+                  >
+                    {j.label}
+                  </td>
+                  {SERVICES.map((svc, idx) => {
+                    const cell = moisMap[`${j.code}_${lieu.id}_${svc.code}`] || emptyCell()
+                    const couvJ = Number(cell.couverts_cible || 0)
+                    const tm = Number(cell.tm_cible || 0)
+                    const cvts = nbre * couvJ
+                    const total = cvts * tm
+                    return (
+                      <ServiceCells
+                        key={svc.code}
+                        nbre={nbre}
+                        cell={cell}
+                        cvts={cvts}
+                        total={total}
+                        onCouvChange={(v) => updateCell(mois, j.code, lieu.id, svc.code, 'couverts_cible', v)}
+                        onTmChange={(v) => updateCell(mois, j.code, lieu.id, svc.code, 'tm_cible', v)}
+                        c={c}
+                        isLast={idx === SERVICES.length - 1}
+                      />
+                    )
+                  })}
+                </tr>
+              )
+            })}
+            {/* Total mensuel */}
+            <tr style={{ background: c.fond, borderTop: `1.5px solid ${c.bordure}`, fontWeight: 600 }}>
+              <td style={{ padding: '8px 10px', borderRight: `1px solid ${c.bordure}`, color: c.texte }}>
+                Total mois
+              </td>
+              {SERVICES.map((svc, idx) => {
+                const t = totals[svc.code]
+                const tmAvg = t.cvts > 0 ? t.ca / t.cvts : 0
                 return (
-                  <FieldInline
-                    key={f.key}
-                    field={f}
-                    value={cell[f.key]}
-                    placeholder={placeholder}
-                    onChange={(v) => updateCell(jour.code, lieu.id, svc.code, f.key, v)}
+                  <TotalCells
+                    key={svc.code}
+                    nbre={t.nbre}
+                    cvts={t.cvts}
+                    tm={tmAvg}
+                    total={t.ca}
                     c={c}
+                    isLast={idx === SERVICES.length - 1}
                   />
                 )
               })}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  marginLeft: 'auto',
-                  fontSize: 12,
-                  color: c.texte,
-                  fontWeight: 600,
-                }}
-              >
-                = {formatEur(total)}
-              </div>
-            </div>
-          </div>
-        )
-      })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
 
-function FieldInline({ field, value, placeholder, onChange, c }) {
+function ColumnHeaders({ c, isLast }) {
+  const cells = ['Nbre', 'Couv/J', 'Cvts', 'TM', 'Total']
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <span style={{ fontSize: 10, color: c.texteMuted }}>
-        {field.label}
-        {field.suffix ? ` (${field.suffix})` : ''}
-      </span>
-      <input
-        type="number"
-        inputMode="decimal"
-        min="0"
-        step={field.step}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        style={{
-          padding: '5px 8px',
-          borderRadius: 6,
-          border: `1px solid ${c.bordure}`,
-          background: c.blanc,
-          color: c.texte,
-          fontSize: 12,
-          width: 72,
-          textAlign: 'right',
-          outline: 'none',
-        }}
-      />
-    </div>
+    <>
+      {cells.map((label, idx) => (
+        <th
+          key={label}
+          style={{
+            padding: '6px 6px',
+            textAlign: 'center',
+            borderBottom: `1px solid ${c.bordure}`,
+            borderRight: idx === cells.length - 1 && !isLast ? `1px solid ${c.bordure}` : 'none',
+            color: c.texteMuted,
+            fontSize: 10,
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: 0.3,
+            width: idx === 1 || idx === 3 ? 80 : 70,
+          }}
+        >
+          {label}
+        </th>
+      ))}
+    </>
   )
 }
 
-function JourCardMobile({ jour, lieu, budgets, defaultBudgets, isOverride, updateCell, c }) {
+function ServiceCells({ nbre, cell, cvts, total, onCouvChange, onTmChange, c, isLast }) {
+  const tdReadonly = {
+    padding: '4px 6px',
+    textAlign: 'right',
+    color: c.texteMuted,
+    background: c.fond,
+    fontVariantNumeric: 'tabular-nums',
+  }
+  const tdInput = {
+    padding: 2,
+    background: c.blanc,
+  }
+  const inputStyle = {
+    width: '100%',
+    padding: '5px 6px',
+    borderRadius: 4,
+    border: `1px solid ${c.bordure}`,
+    background: c.blanc,
+    color: c.texte,
+    fontSize: 12,
+    textAlign: 'right',
+    outline: 'none',
+    fontVariantNumeric: 'tabular-nums',
+  }
+  return (
+    <>
+      <td style={tdReadonly}>{nbre || '—'}</td>
+      <td style={tdInput}>
+        <input
+          type="number"
+          inputMode="decimal"
+          min="0"
+          step="1"
+          value={cell.couverts_cible}
+          onChange={(e) => onCouvChange(e.target.value)}
+          placeholder="0"
+          style={inputStyle}
+        />
+      </td>
+      <td style={tdReadonly}>{cvts > 0 ? formatNum(cvts) : '—'}</td>
+      <td style={tdInput}>
+        <input
+          type="number"
+          inputMode="decimal"
+          min="0"
+          step="0.01"
+          value={cell.tm_cible}
+          onChange={(e) => onTmChange(e.target.value)}
+          placeholder="0"
+          style={inputStyle}
+        />
+      </td>
+      <td style={{ ...tdReadonly, borderRight: !isLast ? `1px solid ${c.bordure}` : 'none', fontWeight: 500, color: c.texte }}>
+        {total > 0 ? formatEur(total) : '—'}
+      </td>
+    </>
+  )
+}
+
+function TotalCells({ nbre, cvts, tm, total, c, isLast }) {
+  const td = {
+    padding: '8px 6px',
+    textAlign: 'right',
+    color: c.texte,
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 600,
+  }
+  return (
+    <>
+      <td style={td}>{nbre || '—'}</td>
+      <td style={td}>—</td>
+      <td style={td}>{cvts > 0 ? formatNum(cvts) : '—'}</td>
+      <td style={td}>{tm > 0 ? formatEur(tm) : '—'}</td>
+      <td
+        style={{
+          ...td,
+          borderRight: !isLast ? `1px solid ${c.bordure}` : 'none',
+        }}
+      >
+        {total > 0 ? formatEur(total) : '—'}
+      </td>
+    </>
+  )
+}
+
+function MoisCardsMobile({ mois, annee, lieu, moisMap, updateCell, onDuplicateNext, onDuplicateAllAfter, sectionId, totals, c }) {
   return (
     <div
+      id={sectionId}
       style={{
         background: c.blanc,
         borderRadius: 12,
         border: `0.5px solid ${c.bordure}`,
         overflow: 'hidden',
+        scrollMarginTop: 80,
       }}
     >
       <div
@@ -1065,150 +1214,245 @@ function JourCardMobile({ jour, lieu, budgets, defaultBudgets, isOverride, updat
           padding: '10px 14px',
           borderBottom: `1px solid ${c.bordure}`,
           background: c.fond,
-          fontSize: 14,
-          fontWeight: 600,
-          color: c.texte,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
         }}
       >
-        {jour.label}
+        <div style={{ fontSize: 15, fontWeight: 600, color: c.texte }}>
+          {MOIS_LABEL[mois]} {annee}
+        </div>
+        {mois < 12 && (
+          <button
+            onClick={onDuplicateNext}
+            style={{
+              padding: '4px 8px',
+              borderRadius: 6,
+              fontSize: 11,
+              border: `1px solid ${c.bordure}`,
+              background: c.blanc,
+              color: c.texte,
+              cursor: 'pointer',
+            }}
+          >
+            → {MOIS_LABEL[mois + 1].slice(0, 3)}.
+          </button>
+        )}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {SERVICES.map((svc) => {
-          const key = `${jour.code}_${lieu.id}_${svc.code}`
-          const cell = budgets[key] || emptyCell()
-          const def = defaultBudgets[key]
-          const total = cellTotalCA(cell)
-          return (
-            <div
-              key={svc.code}
-              style={{
-                padding: '12px 14px',
-                borderTop: svc.code === 'dinner' ? `0.5px solid ${c.bordure}` : 'none',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: c.texteMuted,
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.4,
-                  marginBottom: 8,
-                }}
-              >
-                {svc.label}
-              </div>
-              {FIELDS.map((f) => {
-                const placeholder =
-                  isOverride && def != null ? `défaut : ${def[f.key] ?? 0}` : '0'
-                return (
-                  <div
-                    key={f.key}
-                    style={{
-                      marginBottom: 6,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 8,
-                    }}
-                  >
-                    <label style={{ fontSize: 12, color: c.texte, flex: 1 }}>{f.label}</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      {JOURS_SEMAINE.map((j) => {
+        const nbre = joursDansMois(annee, mois, j.code)
+        return (
+          <div key={j.code} style={{ padding: '10px 14px', borderTop: `0.5px solid ${c.bordure}` }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: c.texte, marginBottom: 6 }}>
+              {j.label} <span style={{ color: c.texteMuted, fontWeight: 400 }}>· {nbre} jours dans le mois</span>
+            </div>
+            {SERVICES.map((svc) => {
+              const cell = moisMap[`${j.code}_${lieu.id}_${svc.code}`] || emptyCell()
+              const couvJ = Number(cell.couverts_cible || 0)
+              const tm = Number(cell.tm_cible || 0)
+              const cvts = nbre * couvJ
+              const total = cvts * tm
+              return (
+                <div
+                  key={svc.code}
+                  style={{
+                    padding: '8px 10px',
+                    background: c.fond,
+                    borderRadius: 8,
+                    marginBottom: 6,
+                  }}
+                >
+                  <div style={{ fontSize: 11, color: c.texteMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>
+                    {svc.label}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11, color: c.texteMuted }}>
+                      Couv/J
                       <input
                         type="number"
                         inputMode="decimal"
                         min="0"
-                        step={f.step}
-                        value={cell[f.key]}
-                        onChange={(e) =>
-                          updateCell(jour.code, lieu.id, svc.code, f.key, e.target.value)
-                        }
-                        placeholder={placeholder}
-                        style={{
-                          padding: '6px 8px',
-                          borderRadius: 6,
-                          border: `1px solid ${c.bordure}`,
-                          background: c.blanc,
-                          color: c.texte,
-                          fontSize: 12,
-                          width: 100,
-                          textAlign: 'right',
-                          outline: 'none',
-                        }}
+                        step="1"
+                        value={cell.couverts_cible}
+                        onChange={(e) => updateCell(mois, j.code, lieu.id, svc.code, 'couverts_cible', e.target.value)}
+                        placeholder="0"
+                        style={{ padding: '6px 8px', borderRadius: 4, border: `1px solid ${c.bordure}`, fontSize: 13, textAlign: 'right', background: c.blanc, color: c.texte }}
                       />
-                      <span style={{ fontSize: 12, color: c.texteMuted, width: 12 }}>
-                        {f.suffix || ''}
-                      </span>
-                    </div>
+                    </label>
+                    <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11, color: c.texteMuted }}>
+                      TM
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        value={cell.tm_cible}
+                        onChange={(e) => updateCell(mois, j.code, lieu.id, svc.code, 'tm_cible', e.target.value)}
+                        placeholder="0"
+                        style={{ padding: '6px 8px', borderRadius: 4, border: `1px solid ${c.bordure}`, fontSize: 13, textAlign: 'right', background: c.blanc, color: c.texte }}
+                      />
+                    </label>
                   </div>
-                )
-              })}
-              <div
-                style={{
-                  marginTop: 6,
-                  paddingTop: 6,
-                  borderTop: `1px dashed ${c.bordure}`,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: 12,
-                }}
-              >
-                <span style={{ color: c.texteMuted }}>Total CA cible</span>
-                <span style={{ fontWeight: 600, color: c.texte }}>{formatEur(total)}</span>
-              </div>
+                  <div style={{ marginTop: 4, fontSize: 11, color: c.texteMuted, display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Cvts: {cvts > 0 ? formatNum(cvts) : '—'}</span>
+                    <span style={{ fontWeight: 600, color: c.texte }}>Total: {total > 0 ? formatEur(total) : '—'}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
+      <div style={{ padding: '10px 14px', borderTop: `1.5px solid ${c.bordure}`, background: c.fond, fontSize: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+          <span style={{ color: c.texteMuted }}>Total déjeuner</span>
+          <span style={{ fontWeight: 600, color: c.texte }}>
+            {totals.lunch.cvts > 0 ? `${formatNum(totals.lunch.cvts)} cvts · ${formatEur(totals.lunch.ca)}` : '—'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ color: c.texteMuted }}>Total dîner</span>
+          <span style={{ fontWeight: 600, color: c.texte }}>
+            {totals.dinner.cvts > 0 ? `${formatNum(totals.dinner.cvts)} cvts · ${formatEur(totals.dinner.ca)}` : '—'}
+          </span>
+        </div>
+      </div>
+      {mois < 12 && (
+        <div style={{ padding: '10px 14px', borderTop: `0.5px solid ${c.bordure}` }}>
+          <button
+            onClick={onDuplicateAllAfter}
+            style={{
+              width: '100%',
+              padding: '8px 14px',
+              borderRadius: 8,
+              fontSize: 12,
+              border: `1px solid ${c.bordure}`,
+              background: c.blanc,
+              color: c.texte,
+              cursor: 'pointer',
+            }}
+          >
+            Dupliquer ce mois aux {12 - mois} suivants
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ─── SommaireSticky : nav latérale 12 mois ──────────────────────────────── */
+
+function SommaireSticky({ budgets, lieuId, annee, c }) {
+  const items = useMemo(() => {
+    return MOIS.map((m) => {
+      const moisMap = budgets[m] || {}
+      let cvts = 0
+      let ca = 0
+      for (const j of JOURS_SEMAINE) {
+        const nbre = joursDansMois(annee, m, j.code)
+        for (const svc of SERVICES) {
+          const cell = moisMap[`${j.code}_${lieuId}_${svc.code}`]
+          if (!cell) continue
+          const couvJ = Number(cell.couverts_cible || 0)
+          const tm = Number(cell.tm_cible || 0)
+          cvts += nbre * couvJ
+          ca += nbre * couvJ * tm
+        }
+      }
+      return { mois: m, cvts, ca }
+    })
+  }, [budgets, lieuId, annee])
+
+  return (
+    <div
+      style={{
+        position: 'sticky',
+        top: 16,
+        background: c.blanc,
+        borderRadius: 12,
+        border: `0.5px solid ${c.bordure}`,
+        overflow: 'hidden',
+        maxHeight: 'calc(100vh - 32px)',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <div
+        style={{
+          padding: '10px 14px',
+          borderBottom: `1px solid ${c.bordure}`,
+          background: c.fond,
+          fontSize: 11,
+          fontWeight: 600,
+          color: c.texteMuted,
+          textTransform: 'uppercase',
+          letterSpacing: 0.4,
+        }}
+      >
+        Sommaire
+      </div>
+      <div style={{ overflowY: 'auto' }}>
+        {items.map(({ mois, cvts, ca }) => (
+          <a
+            key={mois}
+            href={`#mois-${mois}`}
+            onClick={(e) => {
+              e.preventDefault()
+              document.getElementById(`mois-${mois}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }}
+            style={{
+              display: 'block',
+              padding: '8px 14px',
+              borderBottom: `0.5px solid ${c.bordure}`,
+              textDecoration: 'none',
+              color: c.texte,
+              fontSize: 12,
+            }}
+          >
+            <div style={{ fontWeight: 600 }}>{MOIS_LABEL[mois]}</div>
+            <div style={{ fontSize: 11, color: c.texteMuted, marginTop: 2 }}>
+              {cvts > 0 ? `${formatNum(cvts)} cvts · ${formatEur(ca)}` : 'À renseigner'}
             </div>
-          )
-        })}
+          </a>
+        ))}
       </div>
     </div>
   )
 }
 
-/* ─── WizardModal : saisie guidée en 3 étapes ────────────────────────────── */
+/* ─── Wizard adapté Couv/J + TM ─────────────────────────────────────────── */
 
 function WizardModal({ lieux, initialLieuId, onApply, onClose, c, isMobile }) {
   const [step, setStep] = useState(1)
   const [lieuId, setLieuId] = useState(initialLieuId || (lieux[0] && lieux[0].id))
-  const [joursSelected, setJoursSelected] = useState([])
+  const [joursSelected, setJoursSelected] = useState([2, 3, 4, 5, 6]) // mar-sam par défaut
+  const [moisSelected, setMoisSelected] = useState([...MOIS]) // tous les mois par défaut
   const [services, setServices] = useState({
-    lunch: { ...emptyCell() },
-    dinner: { ...emptyCell() },
+    lunch: { couverts_cible: '', tm_cible: '' },
+    dinner: { couverts_cible: '', tm_cible: '' },
   })
 
-  const toggleJour = (code) => {
-    setJoursSelected((prev) =>
-      prev.includes(code) ? prev.filter((j) => j !== code) : [...prev, code]
-    )
-  }
-  const applyPreset = (jours) => setJoursSelected(jours)
+  const toggleJour = (code) =>
+    setJoursSelected((prev) => (prev.includes(code) ? prev.filter((j) => j !== code) : [...prev, code]))
+  const applyPresetJours = (jours) => setJoursSelected(jours)
 
-  const updateService = (svcCode, field, value) => {
-    setServices((prev) => ({
-      ...prev,
-      [svcCode]: { ...prev[svcCode], [field]: value },
-    }))
-  }
+  const toggleMois = (m) =>
+    setMoisSelected((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]))
+  const allMois = () => setMoisSelected([...MOIS])
+  const noMois = () => setMoisSelected([])
+
+  const updateService = (svcCode, field, value) =>
+    setServices((prev) => ({ ...prev, [svcCode]: { ...prev[svcCode], [field]: value } }))
 
   const lieuObj = lieux.find((l) => l.id === lieuId)
-  const joursLabels = joursSelected
-    .map((c) => JOURS_SEMAINE.find((j) => j.code === c))
-    .filter(Boolean)
-    .sort((a, b) => a.code - b.code)
-  const joursDisplay =
-    joursLabels.length === 0
-      ? '—'
-      : joursLabels.length === 1
-        ? joursLabels[0].label
-        : joursLabels.length === 7
-          ? 'toute la semaine'
-          : joursLabels.map((j) => j.short).join(', ')
-
   const canGoStep2 = lieuId != null
-  const canGoStep3 = joursSelected.length > 0
-  const canApply = hasAnyValue(services.lunch) || hasAnyValue(services.dinner)
+  const canGoStep3 = joursSelected.length > 0 && moisSelected.length > 0
+  const canApply =
+    (Number(services.lunch.couverts_cible) > 0 && Number(services.lunch.tm_cible) > 0) ||
+    (Number(services.dinner.couverts_cible) > 0 && Number(services.dinner.tm_cible) > 0)
 
   const handleApply = () => {
-    onApply(lieuId, joursSelected, services)
+    onApply(lieuId, joursSelected, services, moisSelected)
     onClose()
   }
 
@@ -1270,9 +1514,7 @@ function WizardModal({ lieux, initialLieuId, onApply, onClose, c, isMobile }) {
         <div style={{ padding: 20, overflow: 'auto', flex: 1 }}>
           {step === 1 && (
             <div>
-              <p style={{ margin: '0 0 12px', fontSize: 14, color: c.texte }}>
-                Pour quel lieu de service ?
-              </p>
+              <p style={{ margin: '0 0 12px', fontSize: 14, color: c.texte }}>Pour quel lieu de service ?</p>
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
                 {lieux.map((l) => {
                   const active = l.id === lieuId
@@ -1302,10 +1544,10 @@ function WizardModal({ lieux, initialLieuId, onApply, onClose, c, isMobile }) {
 
           {step === 2 && (
             <div>
-              <p style={{ margin: '0 0 12px', fontSize: 14, color: c.texte }}>
-                Pour quel(s) jour(s) ?
+              <p style={{ margin: '0 0 8px', fontSize: 14, color: c.texte, fontWeight: 600 }}>
+                Quel(s) jour(s) de la semaine ?
               </p>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                 {JOURS_SEMAINE.map((j) => {
                   const active = joursSelected.includes(j.code)
                   return (
@@ -1329,21 +1571,18 @@ function WizardModal({ lieux, initialLieuId, onApply, onClose, c, isMobile }) {
                   )
                 })}
               </div>
-              <p style={{ margin: '0 0 8px', fontSize: 12, color: c.texteMuted }}>
-                Ou choisis un raccourci :
-              </p>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 }}>
                 {JOUR_PRESETS.map((p) => (
                   <button
                     key={p.code}
-                    onClick={() => applyPreset(p.jours)}
+                    onClick={() => applyPresetJours(p.jours)}
                     style={{
-                      padding: '7px 12px',
-                      borderRadius: 8,
+                      padding: '5px 10px',
+                      borderRadius: 6,
                       border: `1px solid ${c.bordure}`,
                       background: c.blanc,
                       color: c.texte,
-                      fontSize: 12,
+                      fontSize: 11,
                       cursor: 'pointer',
                     }}
                   >
@@ -1351,13 +1590,70 @@ function WizardModal({ lieux, initialLieuId, onApply, onClose, c, isMobile }) {
                   </button>
                 ))}
               </div>
+
+              <p style={{ margin: '0 0 8px', fontSize: 14, color: c.texte, fontWeight: 600 }}>
+                Quel(s) mois ?
+              </p>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                {MOIS.map((m) => {
+                  const active = moisSelected.includes(m)
+                  return (
+                    <button
+                      key={m}
+                      onClick={() => toggleMois(m)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 6,
+                        border: active ? `2px solid ${c.accent}` : `1px solid ${c.bordure}`,
+                        background: active ? c.accent : c.blanc,
+                        color: c.texte,
+                        fontSize: 12,
+                        fontWeight: active ? 600 : 400,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {MOIS_LABEL[m].slice(0, 3)}.
+                    </button>
+                  )
+                })}
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  onClick={allMois}
+                  style={{
+                    padding: '5px 10px',
+                    borderRadius: 6,
+                    border: `1px solid ${c.bordure}`,
+                    background: c.blanc,
+                    color: c.texte,
+                    fontSize: 11,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Toute l&apos;année
+                </button>
+                <button
+                  onClick={noMois}
+                  style={{
+                    padding: '5px 10px',
+                    borderRadius: 6,
+                    border: `1px solid ${c.bordure}`,
+                    background: c.blanc,
+                    color: c.texte,
+                    fontSize: 11,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Aucun
+                </button>
+              </div>
             </div>
           )}
 
           {step === 3 && (
             <div>
               <p style={{ margin: '0 0 12px', fontSize: 14, color: c.texte }}>
-                Budget pour <strong>{lieuObj?.nom}</strong> × <strong>{joursDisplay}</strong>
+                Budget pour <strong>{lieuObj?.nom}</strong> · {joursSelected.length} jour(s) · {moisSelected.length} mois
               </p>
               {SERVICES.map((svc) => (
                 <div
@@ -1381,62 +1677,47 @@ function WizardModal({ lieux, initialLieuId, onApply, onClose, c, isMobile }) {
                   >
                     {svc.label}
                   </div>
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: isMobile ? '1fr' : 'repeat(5, 1fr)',
-                      gap: 10,
-                    }}
-                  >
-                    {FIELDS.map((f) => (
-                      <label
-                        key={f.key}
-                        style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: c.texteMuted }}
-                      >
-                        {f.label}
-                        {f.suffix ? ` (${f.suffix})` : ''}
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          min="0"
-                          step={f.step}
-                          value={services[svc.code][f.key]}
-                          onChange={(e) => updateService(svc.code, f.key, e.target.value)}
-                          placeholder="0"
-                          style={{
-                            padding: '8px 10px',
-                            borderRadius: 6,
-                            border: `1px solid ${c.bordure}`,
-                            background: c.blanc,
-                            color: c.texte,
-                            fontSize: 14,
-                            outline: 'none',
-                            textAlign: 'right',
-                          }}
-                        />
-                      </label>
-                    ))}
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: c.texteMuted }}>
+                      Couverts / jour
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="1"
+                        value={services[svc.code].couverts_cible}
+                        onChange={(e) => updateService(svc.code, 'couverts_cible', e.target.value)}
+                        placeholder="0"
+                        style={{ padding: '8px 10px', borderRadius: 6, border: `1px solid ${c.bordure}`, fontSize: 14, textAlign: 'right', background: c.blanc, color: c.texte }}
+                      />
+                    </label>
+                    <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: c.texteMuted }}>
+                      Ticket moyen (€)
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        value={services[svc.code].tm_cible}
+                        onChange={(e) => updateService(svc.code, 'tm_cible', e.target.value)}
+                        placeholder="0"
+                        style={{ padding: '8px 10px', borderRadius: 6, border: `1px solid ${c.bordure}`, fontSize: 14, textAlign: 'right', background: c.blanc, color: c.texte }}
+                      />
+                    </label>
                   </div>
-                  <div
-                    style={{
-                      marginTop: 8,
-                      paddingTop: 8,
-                      borderTop: `1px dashed ${c.bordure}`,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontSize: 12,
-                    }}
-                  >
-                    <span style={{ color: c.texteMuted }}>Total CA</span>
-                    <span style={{ fontWeight: 600, color: c.texte }}>
-                      {formatEur(cellTotalCA(services[svc.code]))}
-                    </span>
+                  <div style={{ marginTop: 8, fontSize: 11, color: c.texteMuted, textAlign: 'right' }}>
+                    Total ligne :{' '}
+                    {Number(services[svc.code].couverts_cible) > 0 && Number(services[svc.code].tm_cible) > 0
+                      ? formatEur(Number(services[svc.code].couverts_cible) * Number(services[svc.code].tm_cible))
+                      : '—'}{' '}
+                    par jour
                   </div>
                 </div>
               ))}
-              <p style={{ margin: '0 0 0', fontSize: 12, color: c.texteMuted }}>
-                Sera appliqué à <strong>{joursLabels.length} jour(s)</strong>. Tu pourras encore corriger
-                manuellement dans le tableau avant d&apos;enregistrer.
+              <p style={{ margin: 0, fontSize: 12, color: c.texteMuted }}>
+                Sera appliqué sur {joursSelected.length} jour(s) × {moisSelected.length} mois ={' '}
+                {joursSelected.length * moisSelected.length * SERVICES.length} cellules. Tu pourras
+                encore corriger manuellement avant d&apos;enregistrer.
               </p>
             </div>
           )}
@@ -1505,7 +1786,7 @@ function WizardModal({ lieux, initialLieuId, onApply, onClose, c, isMobile }) {
                 opacity: canApply ? 1 : 0.4,
               }}
             >
-              ✓ Appliquer aux {joursSelected.length} jour(s)
+              ✓ Appliquer
             </button>
           )}
         </div>
@@ -1514,7 +1795,7 @@ function WizardModal({ lieux, initialLieuId, onApply, onClose, c, isMobile }) {
   )
 }
 
-/* ─── Modals existantes (inchangées) ─────────────────────────────────────── */
+/* ─── ImportPreviewModal (inchangée logiquement) ─────────────────────────── */
 
 function ImportPreviewModal({ preview, onCancel, onConfirm, saving, c }) {
   return (
@@ -1545,8 +1826,8 @@ function ImportPreviewModal({ preview, onCancel, onConfirm, saving, c }) {
           Confirmer l&apos;import
         </h3>
         <p style={{ margin: '0 0 16px', fontSize: 13, color: c.texteMuted }}>
-          Le fichier sera converti en budgets « par défaut » + overrides mensuels pour les mois qui
-          diffèrent. Répartition appliquée : 65 % Food / 28 % Alcool / 7 % Soft.
+          Le fichier sera converti en budgets mensuels (12 mois × 5 jours × 2 services). Répartition
+          du CA appliquée : 65 % Food / 28 % Alcool / 7 % Soft.
         </p>
 
         <div
@@ -1560,12 +1841,9 @@ function ImportPreviewModal({ preview, onCancel, onConfirm, saving, c }) {
           }}
         >
           <div style={{ marginBottom: 4 }}>
-            <strong>{preview.rows.length} lignes</strong> à importer (
-            {preview.defaultsCount} par défaut + {preview.overridesCount} overrides)
+            <strong>{preview.rows.length} lignes</strong> à importer
           </div>
-          <div style={{ marginBottom: 4 }}>
-            Lieux concernés : {preview.sectionNames.join(', ')}
-          </div>
+          <div style={{ marginBottom: 4 }}>Lieux concernés : {preview.sectionNames.join(', ')}</div>
           {preview.lieuxToCreate.length > 0 && (
             <div style={{ color: '#B45309' }}>
               ⚠ Lieux à créer automatiquement : {preview.lieuxToCreate.join(', ')}
@@ -1574,8 +1852,8 @@ function ImportPreviewModal({ preview, onCancel, onConfirm, saving, c }) {
         </div>
 
         <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 16 }}>
-          Note : seules les sections « Salle à manger » et « Table de partage » sont importées.
-          Les Privats utilisent un format event/revenu différent — saisis-les à la main si besoin.
+          Note : seules les sections « Salle à manger » et « Table de partage » sont importées. Les
+          Privats utilisent un format event/revenu différent — saisis-les à la main si besoin.
         </div>
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -1635,6 +1913,8 @@ function KPI({ label, value, c }) {
     </div>
   )
 }
+
+/* ─── HistoryModal (inchangée) ────────────────────────────────────────────── */
 
 function HistoryModal({ clientId, onClose, c, isMobile }) {
   const [rows, setRows] = useState([])
