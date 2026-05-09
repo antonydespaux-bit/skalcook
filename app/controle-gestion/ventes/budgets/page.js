@@ -11,7 +11,13 @@ import Navbar from '../../../../components/Navbar'
 
 const DEBUG_FALLBACK_CLIENT_ID = 'fa725e66-2cad-4ea4-892a-7eb3e90496a7'
 
-const ANNEE_BUDGET = 2026
+const ANNEE_DEFAUT = 2026
+const ANNEES_DISPO = (() => {
+  const now = new Date().getFullYear()
+  const years = new Set([ANNEE_DEFAUT])
+  for (let y = now - 1; y <= now + 3; y++) years.add(y)
+  return Array.from(years).sort((a, b) => a - b)
+})()
 
 const FOOD_RATIO = 0.65
 const BEV_20_RATIO = 0.28
@@ -235,6 +241,7 @@ export default function BudgetsPage() {
 
   const [clientId, setClientId] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
+  const [annee, setAnnee] = useState(ANNEE_DEFAUT)
   const [lieuFilter, setLieuFilter] = useState(null)
   const [lieux, setLieux] = useState([])
   // budgets[mois][`${jds}_${lieuId}_${service}`] = cell ; mois ∈ [1..12]
@@ -246,6 +253,7 @@ export default function BudgetsPage() {
   const [saving, setSaving] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [resetConfirm, setResetConfirm] = useState(null) // 'lieu' | null
   const [importPreview, setImportPreview] = useState(null)
   const fileInputRef = useRef(null)
 
@@ -444,6 +452,31 @@ export default function BudgetsPage() {
     }
   }, [clientId, lieux, budgets, raison, loadData])
 
+  // Vide tous les budgets du lieu sélectionné (12 mois × 7 jours × 2 svcs).
+  // Le trigger d'audit log les DELETE.
+  const handleResetLieu = useCallback(async () => {
+    if (!clientId || !lieuFilter) return
+    setSaving(true)
+    setError('')
+    setOkMsg('')
+    try {
+      const { error: delErr } = await supabase
+        .from('ca_budgets')
+        .delete()
+        .eq('client_id', clientId)
+        .eq('lieu_service_id', lieuFilter)
+        .not('mois', 'is', null)
+      if (delErr) throw delErr
+      setOkMsg('Budgets du lieu remis à zéro.')
+      setResetConfirm(null)
+      await loadData()
+    } catch (e) {
+      setError(e.message || 'Erreur de suppression')
+    } finally {
+      setSaving(false)
+    }
+  }, [clientId, lieuFilter, loadData])
+
   const handleFileChange = useCallback(async (e) => {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -514,7 +547,7 @@ export default function BudgetsPage() {
   }, [importPreview, clientId, lieux, loadData])
 
   // KPI annuels pour le lieu sélectionné
-  const annee = useMemo(() => {
+  const totauxAnnee = useMemo(() => {
     const t = { couverts: 0, ca: 0 }
     if (!lieuFilter) return t
     for (const m of MOIS) {
@@ -523,7 +556,7 @@ export default function BudgetsPage() {
         for (const svc of SERVICES) {
           const cell = moisMap[`${j.code}_${lieuFilter}_${svc.code}`]
           if (!cell) continue
-          const nbre = joursDansMois(ANNEE_BUDGET, m, j.code)
+          const nbre = joursDansMois(annee, m, j.code)
           const couvJ = Number(cell.couverts_cible || 0)
           const tm = Number(cell.tm_cible || 0)
           t.couverts += nbre * couvJ
@@ -532,7 +565,7 @@ export default function BudgetsPage() {
       }
     }
     return t
-  }, [lieuFilter, budgets])
+  }, [lieuFilter, budgets, annee])
 
   if (!authChecked) return null
 
@@ -556,7 +589,7 @@ export default function BudgetsPage() {
             ← Vue mensuelle
           </Link>
           <h1 style={{ margin: '0 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 600, color: c.texte }}>
-            Budgets de CA — {ANNEE_BUDGET}
+            Budgets de CA — {annee}
           </h1>
           <p style={{ margin: 0, fontSize: 14, color: c.texteMuted }}>
             Saisie type Excel : tu remplis Couv/J et TM ; le reste se calcule (Cvts total, Total, ratios Food/Bev). Chaque modification est tracée.
@@ -576,9 +609,12 @@ export default function BudgetsPage() {
             lieux={lieux}
             lieuFilter={lieuFilter}
             setLieuFilter={setLieuFilter}
+            annee={annee}
+            setAnnee={setAnnee}
             onOpenWizard={() => setWizardOpen(true)}
             onClickImport={() => fileInputRef.current?.click()}
             onOpenHistory={() => setHistoryOpen(true)}
+            onReset={() => setResetConfirm('lieu')}
             onSave={handleSave}
             saving={saving}
             c={c}
@@ -618,7 +654,7 @@ export default function BudgetsPage() {
                 <MoisTable
                   key={m}
                   mois={m}
-                  annee={ANNEE_BUDGET}
+                  annee={annee}
                   lieu={selectedLieu}
                   moisMap={budgets[m] || {}}
                   updateCell={updateCell}
@@ -640,11 +676,11 @@ export default function BudgetsPage() {
                   gap: 12,
                 }}
               >
-                <KPI label={`Couverts/an (${selectedLieu.nom})`} value={formatNum(annee.couverts)} c={c} />
-                <KPI label={`CA/an (${selectedLieu.nom})`} value={formatEur(annee.ca)} c={c} />
+                <KPI label={`Couverts/an (${selectedLieu.nom})`} value={formatNum(totauxAnnee.couverts)} c={c} />
+                <KPI label={`CA/an (${selectedLieu.nom})`} value={formatEur(totauxAnnee.ca)} c={c} />
                 <KPI
                   label="TM moyen"
-                  value={annee.couverts ? formatEur(annee.ca / annee.couverts) : '—'}
+                  value={totauxAnnee.couverts ? formatEur(totauxAnnee.ca / totauxAnnee.couverts) : '—'}
                   c={c}
                 />
               </div>
@@ -684,7 +720,7 @@ export default function BudgetsPage() {
               <SommaireSticky
                 budgets={budgets}
                 lieuId={lieuFilter}
-                annee={ANNEE_BUDGET}
+                annee={annee}
                 c={c}
               />
             )}
@@ -716,6 +752,26 @@ export default function BudgetsPage() {
           isMobile={isMobile}
         />
       )}
+
+      {resetConfirm === 'lieu' && selectedLieu && (
+        <ConfirmModal
+          title="Remettre à zéro ?"
+          body={
+            <>
+              Cette action <strong>supprime tous les budgets</strong> du lieu{' '}
+              <strong>{selectedLieu.nom}</strong> (12 mois × 7 jours × 2 services).
+              Les autres lieux ne sont pas touchés. La suppression est tracée dans l&apos;historique
+              et peut être consultée à tout moment.
+            </>
+          }
+          confirmLabel="Oui, supprimer"
+          danger
+          saving={saving}
+          onCancel={() => setResetConfirm(null)}
+          onConfirm={handleResetLieu}
+          c={c}
+        />
+      )}
     </div>
   )
 }
@@ -726,9 +782,12 @@ function TopBar({
   lieux,
   lieuFilter,
   setLieuFilter,
+  annee,
+  setAnnee,
   onOpenWizard,
   onClickImport,
   onOpenHistory,
+  onReset,
   onSave,
   saving,
   c,
@@ -761,12 +820,34 @@ function TopBar({
             background: c.blanc,
             color: c.texte,
             fontSize: 13,
-            minWidth: 220,
+            minWidth: 200,
           }}
         >
           {lieux.map((l) => (
             <option key={l.id} value={l.id}>
               {l.nom}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: c.texteMuted }}>
+        Année
+        <select
+          value={annee}
+          onChange={(e) => setAnnee(Number(e.target.value))}
+          style={{
+            padding: '7px 10px',
+            borderRadius: 8,
+            border: `1px solid ${c.bordure}`,
+            background: c.blanc,
+            color: c.texte,
+            fontSize: 13,
+            minWidth: 90,
+          }}
+        >
+          {ANNEES_DISPO.map((y) => (
+            <option key={y} value={y}>
+              {y}
             </option>
           ))}
         </select>
@@ -814,6 +895,21 @@ function TopBar({
           }}
         >
           Historique
+        </button>
+        <button
+          onClick={onReset}
+          style={{
+            padding: '8px 14px',
+            borderRadius: 8,
+            fontSize: 13,
+            border: '1px solid #FCA5A5',
+            background: '#FEF2F2',
+            color: '#B91C1C',
+            cursor: 'pointer',
+          }}
+          title="Supprime tous les budgets du lieu sélectionné (12 mois × 7 jours × 2 services)"
+        >
+          🗑 Remettre à zéro
         </button>
         <button
           onClick={onSave}
@@ -1871,6 +1967,72 @@ function ImportPreviewModal({ preview, onCancel, onConfirm, saving, c }) {
             }}
           >
             {saving ? 'Import en cours…' : 'Confirmer l’import'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ConfirmModal({ title, body, confirmLabel = 'Confirmer', danger = false, saving = false, onCancel, onConfirm, c }) {
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.4)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 200,
+        padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: c.blanc,
+          borderRadius: 12,
+          width: '100%',
+          maxWidth: 480,
+          padding: 24,
+        }}
+      >
+        <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 600, color: c.texte }}>{title}</h3>
+        <div style={{ margin: '0 0 20px', fontSize: 13, color: c.texte, lineHeight: 1.5 }}>{body}</div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button
+            onClick={onCancel}
+            disabled={saving}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: `1px solid ${c.bordure}`,
+              background: c.blanc,
+              color: c.texte,
+              fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            Annuler
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={saving}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: 'none',
+              background: danger ? '#DC2626' : c.accent,
+              color: danger ? '#fff' : c.texte,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: saving ? 'not-allowed' : 'pointer',
+              opacity: saving ? 0.5 : 1,
+            }}
+          >
+            {saving ? '…' : confirmLabel}
           </button>
         </div>
       </div>
