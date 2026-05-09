@@ -541,7 +541,7 @@ export default function BudgetsPage() {
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
       <Navbar section="cuisine" />
-      <div style={{ padding: isMobile ? 16 : 24, paddingBottom: 96, maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ padding: isMobile ? 16 : 24, maxWidth: 1400, margin: '0 auto' }}>
         <div style={{ marginBottom: 16 }}>
           <Link
             href="/controle-gestion/ventes"
@@ -579,6 +579,8 @@ export default function BudgetsPage() {
             onOpenWizard={() => setWizardOpen(true)}
             onClickImport={() => fileInputRef.current?.click()}
             onOpenHistory={() => setHistoryOpen(true)}
+            onSave={handleSave}
+            saving={saving}
             c={c}
             isMobile={isMobile}
           />
@@ -690,44 +692,6 @@ export default function BudgetsPage() {
         )}
       </div>
 
-      {!loading && lieux.length > 0 && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            background: c.blanc,
-            borderTop: `1px solid ${c.bordure}`,
-            padding: isMobile ? '12px 16px' : '12px 24px',
-            display: 'flex',
-            justifyContent: 'center',
-            zIndex: 100,
-            boxShadow: '0 -6px 20px rgba(0,0,0,0.08)',
-          }}
-        >
-          <button
-            onClick={handleSave}
-            disabled={saving || loading}
-            style={{
-              padding: '14px 32px',
-              borderRadius: 8,
-              fontSize: 16,
-              border: 'none',
-              background: c.accent,
-              color: c.texte,
-              cursor: saving || loading ? 'not-allowed' : 'pointer',
-              fontWeight: 600,
-              opacity: saving || loading ? 0.5 : 1,
-              width: isMobile ? '100%' : 'auto',
-              minWidth: isMobile ? 'auto' : 320,
-            }}
-          >
-            {saving ? 'Enregistrement…' : 'Enregistrer les budgets'}
-          </button>
-        </div>
-      )}
-
       {historyOpen && (
         <HistoryModal clientId={clientId} onClose={() => setHistoryOpen(false)} c={c} isMobile={isMobile} />
       )}
@@ -765,6 +729,8 @@ function TopBar({
   onOpenWizard,
   onClickImport,
   onOpenHistory,
+  onSave,
+  saving,
   c,
   isMobile,
 }) {
@@ -806,16 +772,15 @@ function TopBar({
         </select>
       </label>
       <div style={{ flex: 1 }} />
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <button
           onClick={onOpenWizard}
           style={{
             padding: '8px 14px',
             borderRadius: 8,
             fontSize: 13,
-            fontWeight: 600,
-            border: 'none',
-            background: c.accent,
+            border: `1px solid ${c.bordure}`,
+            background: c.blanc,
             color: c.texte,
             cursor: 'pointer',
           }}
@@ -849,6 +814,24 @@ function TopBar({
           }}
         >
           Historique
+        </button>
+        <button
+          onClick={onSave}
+          disabled={saving}
+          style={{
+            padding: '10px 20px',
+            borderRadius: 8,
+            fontSize: 14,
+            fontWeight: 600,
+            border: 'none',
+            background: c.accent,
+            color: c.texte,
+            cursor: saving ? 'not-allowed' : 'pointer',
+            opacity: saving ? 0.5 : 1,
+            marginLeft: isMobile ? 0 : 4,
+          }}
+        >
+          {saving ? 'Enregistrement…' : '💾 Enregistrer'}
         </button>
       </div>
     </div>
