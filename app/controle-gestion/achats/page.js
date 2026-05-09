@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import * as XLSX from 'xlsx'
 import { supabase, getClientId } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
+import { badgeStyleFor, statutLabel } from '../../../lib/achatsHelpers'
 import Navbar from '../../../components/Navbar'
 
 function formatEuro(n) {
@@ -18,6 +20,7 @@ function formatDate(s) {
   return new Date(s).toLocaleDateString('fr-FR')
 }
 
+
 export default function AchatsListPage() {
   const router = useRouter()
   const isMobile = useIsMobile()
@@ -28,12 +31,15 @@ export default function AchatsListPage() {
   const [clientId, setClientId] = useState(null)
   const [factures, setFactures] = useState([])
   const [nbLignesByFacture, setNbLignesByFacture] = useState({})
+  const [tvaByFacture, setTvaByFacture] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [recherche, setRecherche] = useState('')
   const [dateDebut, setDateDebut] = useState('')
   const [dateFin, setDateFin] = useState('')
+  const [statutsActifs, setStatutsActifs] = useState(['bl', 'facture', 'avoir'])
   const [deleting, setDeleting] = useState(null)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -62,7 +68,7 @@ export default function AchatsListPage() {
 
     const { data: rows, error: fErr } = await supabase
       .from('achats_factures')
-      .select('id, fournisseur, numero_facture, date_facture, total_ht, statut, created_at')
+      .select('id, fournisseur, numero_facture, date_facture, total_ht, taux_tva, montant_tva, statut, created_at')
       .eq('client_id', cid)
       .is('deleted_at', null)
       .order('date_facture', { ascending: false })
@@ -75,19 +81,29 @@ export default function AchatsListPage() {
 
     const ids = (rows || []).map((r) => r.id)
     let counts = {}
+    let tvaCalculeeByFacture = {}
     if (ids.length > 0) {
       const { data: lignes } = await supabase
         .from('achats_lignes')
-        .select('facture_id')
+        .select('facture_id, montant_ht, taux_tva')
         .in('facture_id', ids)
         .eq('client_id', cid)
+      const tauxGlobalById = Object.fromEntries((rows || []).map(r => [r.id, Number(r.taux_tva) || 0]))
       for (const l of (lignes || [])) {
         counts[l.facture_id] = (counts[l.facture_id] || 0) + 1
+        const taux = l.taux_tva != null ? Number(l.taux_tva) : tauxGlobalById[l.facture_id] || 0
+        tvaCalculeeByFacture[l.facture_id] = (tvaCalculeeByFacture[l.facture_id] || 0) + (Number(l.montant_ht) || 0) * taux / 100
       }
+    }
+    // Si la facture a un montant_tva saisi, il prime sur le calcul.
+    const tvaByFacture = {}
+    for (const r of rows || []) {
+      tvaByFacture[r.id] = r.montant_tva != null ? Number(r.montant_tva) : (tvaCalculeeByFacture[r.id] || 0)
     }
 
     setFactures(rows || [])
     setNbLignesByFacture(counts)
+    setTvaByFacture(tvaByFacture)
     setLoading(false)
   }, [])
 
@@ -95,6 +111,48 @@ export default function AchatsListPage() {
     if (!authReady) return
     loadFactures()
   }, [authReady, loadFactures])
+
+  const handleExport = async () => {
+    if (!clientId) return
+    setExporting(true)
+    setError('')
+    try {
+      if (facturesFiltrees.length === 0) {
+        setError('Aucune facture à exporter.')
+        return
+      }
+      // Pied de facture : 1 ligne = 1 facture, avec HT / TVA / TTC.
+      // Le champ TVA est calculé en respectant les taux par ligne (déjà agrégé
+      // dans tvaByFacture au load).
+      const rows = facturesFiltrees.map((f) => {
+        const ht  = Number(f.total_ht) || 0
+        const tva = tvaByFacture[f.id] || 0
+        return {
+          'N° facture':   f.numero_facture || '',
+          'Date':         f.date_facture || '',
+          'Fournisseur':  f.fournisseur || '',
+          'Statut':       statutLabel(f.statut),
+          'HT':           ht,
+          'TVA':          tva,
+          'TTC':          ht + tva,
+        }
+      })
+
+      const ws = XLSX.utils.json_to_sheet(rows)
+      ws['!cols'] = [
+        { wch: 14 }, { wch: 12 }, { wch: 28 }, { wch: 9  },
+        { wch: 12 }, { wch: 12 }, { wch: 12 },
+      ]
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Factures')
+      const today = new Date().toISOString().slice(0, 10)
+      XLSX.writeFile(wb, `achats_${today}.xlsx`)
+    } catch (err) {
+      setError(`Export impossible : ${err.message}`)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const handleDelete = async (f, e) => {
     e.stopPropagation()
@@ -165,10 +223,19 @@ export default function AchatsListPage() {
     // Filtre date (sur date_facture)
     if (dateDebut && (!f.date_facture || f.date_facture < dateDebut)) return false
     if (dateFin && (!f.date_facture || f.date_facture > dateFin)) return false
+    // Filtre statut
+    const s = f.statut || 'facture'
+    if (!statutsActifs.includes(s)) return false
     return true
   })
 
+  const toggleStatut = (k) => {
+    setStatutsActifs((prev) => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])
+  }
+
   const totalHT = facturesFiltrees.reduce((s, f) => s + (Number(f.total_ht) || 0), 0)
+  const totalTVA = facturesFiltrees.reduce((s, f) => s + (tvaByFacture[f.id] || 0), 0)
+  const totalTTC = totalHT + totalTVA
 
   const th = {
     padding: isMobile ? '10px 8px' : '11px 14px',
@@ -200,7 +267,7 @@ export default function AchatsListPage() {
               Historique des factures importées
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
               onClick={() => router.push('/controle-gestion/fournisseurs')}
               style={{
@@ -210,16 +277,40 @@ export default function AchatsListPage() {
             >
               🏢 Fournisseurs
             </button>
+            <button
+              onClick={handleExport}
+              disabled={exporting || facturesFiltrees.length === 0}
+              title={facturesFiltrees.length === 0 ? 'Aucune facture à exporter' : 'Exporter les factures filtrées en Excel'}
+              style={{
+                padding: '8px 14px', borderRadius: 8, fontSize: 13,
+                border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte,
+                cursor: exporting || facturesFiltrees.length === 0 ? 'not-allowed' : 'pointer',
+                opacity: exporting || facturesFiltrees.length === 0 ? 0.6 : 1,
+              }}
+            >
+              {exporting ? 'Export…' : '⬇ Exporter Excel'}
+            </button>
             {role === 'admin' && (
-              <button
-                onClick={() => router.push('/controle-gestion/achats/import')}
-                style={{
-                  padding: '8px 14px', borderRadius: 8, fontSize: 13,
-                  border: 'none', background: c.accent, color: '#fff', cursor: 'pointer', fontWeight: 500,
-                }}
-              >
-                + Nouvelle facture
-              </button>
+              <>
+                <button
+                  onClick={() => router.push('/controle-gestion/achats/import?mode=manuel')}
+                  style={{
+                    padding: '8px 14px', borderRadius: 8, fontSize: 13,
+                    border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
+                  }}
+                >
+                  ✏️ Saisir manuellement
+                </button>
+                <button
+                  onClick={() => router.push('/controle-gestion/achats/import')}
+                  style={{
+                    padding: '8px 14px', borderRadius: 8, fontSize: 13,
+                    border: 'none', background: c.accent, color: c.texte, cursor: 'pointer', fontWeight: 500,
+                  }}
+                >
+                  + Importer (OCR)
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -283,6 +374,32 @@ export default function AchatsListPage() {
           )}
         </div>
 
+        {/* Filtre par statut */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <span style={{ fontSize: 12, color: c.texteMuted }}>Statut</span>
+          {[
+            { k: 'bl',      label: 'BL' },
+            { k: 'facture', label: 'Factures' },
+            { k: 'avoir',   label: 'Avoirs' },
+          ].map((p) => {
+            const actif = statutsActifs.includes(p.k)
+            return (
+              <button
+                key={p.k}
+                onClick={() => toggleStatut(p.k)}
+                style={{
+                  padding: '6px 10px', borderRadius: 8, fontSize: 12,
+                  border: `1px solid ${actif ? c.accent : c.bordure}`,
+                  background: actif ? c.accentClair : c.blanc,
+                  color: c.texte, cursor: 'pointer',
+                }}
+              >
+                {p.label}
+              </button>
+            )
+          })}
+        </div>
+
         {error && <p style={{ color: '#B91C1C', fontSize: 14, marginBottom: 16 }}>{error}</p>}
 
         {loading && <p style={{ color: c.texteMuted, fontSize: 14 }}>Chargement…</p>}
@@ -300,10 +417,10 @@ export default function AchatsListPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {facturesFiltrees.map((f) => {
                   const ht = Number(f.total_ht) || 0
+                  const tva = tvaByFacture[f.id] || 0
+                  const ttc = ht + tva
                   const nb = nbLignesByFacture[f.id] ?? 0
-                  const badgeStyle = f.statut === 'bl'
-                    ? { fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, background: '#FEF3C7', color: '#92400E' }
-                    : { fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, background: '#D1FAE5', color: '#065F46' }
+                  const badgeStyle = badgeStyleFor(f.statut)
                   return (
                     <div
                       key={f.id}
@@ -318,16 +435,19 @@ export default function AchatsListPage() {
                         <span style={{ fontSize: 15, fontWeight: 600, color: c.texte }}>
                           {f.fournisseur || <span style={{ color: c.texteMuted, fontWeight: 400 }}>—</span>}
                         </span>
-                        <span style={badgeStyle}>{f.statut === 'bl' ? 'BL' : 'Facture'}</span>
+                        <span style={badgeStyle}>{statutLabel(f.statut)}</span>
                       </div>
                       {/* Ligne 2 : n° facture · date */}
                       <div style={{ fontSize: 13, color: c.texteMuted, marginBottom: 8 }}>
                         {f.numero_facture ? `N° ${f.numero_facture}` : '—'}{f.date_facture ? ` · ${formatDate(f.date_facture)}` : ''}
                       </div>
-                      {/* Ligne 3 : articles + total */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      {/* Ligne 3 : articles + montants HT/TVA/TTC */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 8 }}>
                         <span style={{ fontSize: 13, color: c.texteMuted }}>{nb} article{nb !== 1 ? 's' : ''}</span>
-                        <span style={{ fontSize: 15, fontWeight: 600, color: c.texte, fontVariantNumeric: 'tabular-nums' }}>{formatEuro(ht)}</span>
+                        <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                          <div style={{ fontSize: 12, color: c.texteMuted }}>HT {formatEuro(ht)} · TVA {formatEuro(tva)}</div>
+                          <div style={{ fontSize: 16, fontWeight: 600, color: c.texte }}>{formatEuro(ttc)} <span style={{ fontSize: 11, color: c.texteMuted, fontWeight: 400 }}>TTC</span></div>
+                        </div>
                       </div>
                       {role === 'admin' && (
                         <div style={{ marginTop: 10, textAlign: 'right' }} onClick={e => e.stopPropagation()}>
@@ -344,9 +464,12 @@ export default function AchatsListPage() {
                   )
                 })}
                 {/* Total mobile */}
-                <div style={{ background: c.fond, borderRadius: 10, border: `0.5px solid ${c.bordure}`, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ background: c.fond, borderRadius: 10, border: `0.5px solid ${c.bordure}`, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 8 }}>
                   <span style={{ fontSize: 13, color: c.texteMuted }}>{facturesFiltrees.length} facture{facturesFiltrees.length !== 1 ? 's' : ''}</span>
-                  <span style={{ fontSize: 15, fontWeight: 600, color: c.texte }}>{formatEuro(totalHT)}</span>
+                  <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    <div style={{ fontSize: 12, color: c.texteMuted }}>HT {formatEuro(totalHT)} · TVA {formatEuro(totalTVA)}</div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: c.texte }}>{formatEuro(totalTTC)} <span style={{ fontSize: 11, color: c.texteMuted, fontWeight: 400 }}>TTC</span></div>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -361,13 +484,17 @@ export default function AchatsListPage() {
                         <th style={th}>Date</th>
                         <th style={th}>Statut</th>
                         <th style={thR}>Articles</th>
-                        <th style={thR}>Total HT</th>
+                        <th style={thR}>HT</th>
+                        <th style={thR}>TVA</th>
+                        <th style={thR}>TTC</th>
                         {role === 'admin' && <th style={th} />}
                       </tr>
                     </thead>
                     <tbody>
                       {facturesFiltrees.map((f, i) => {
                         const ht = Number(f.total_ht) || 0
+                        const tva = tvaByFacture[f.id] || 0
+                        const ttc = ht + tva
                         const nb = nbLignesByFacture[f.id] ?? 0
                         return (
                           <tr
@@ -387,12 +514,12 @@ export default function AchatsListPage() {
                             <td style={tdM}>{f.numero_facture || '—'}</td>
                             <td style={tdM}>{formatDate(f.date_facture)}</td>
                             <td style={td}>
-                              {f.statut === 'bl'
-                                ? <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, background: '#FEF3C7', color: '#92400E' }}>BL</span>
-                                : <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, background: '#D1FAE5', color: '#065F46' }}>Facture</span>}
+                              <span style={badgeStyleFor(f.statut)}>{statutLabel(f.statut)}</span>
                             </td>
                             <td style={tdM}>{nb}</td>
                             <td style={tdR}>{formatEuro(ht)}</td>
+                            <td style={tdR}>{formatEuro(tva)}</td>
+                            <td style={tdR}>{formatEuro(ttc)}</td>
                             {role === 'admin' && (
                               <td style={{ ...td, textAlign: 'right' }} onClick={e => e.stopPropagation()}>
                                 <button
@@ -415,6 +542,9 @@ export default function AchatsListPage() {
                         </td>
                         <td style={td} colSpan={3} />
                         <td style={{ ...tdR, color: c.texte }}>{formatEuro(totalHT)}</td>
+                        <td style={{ ...tdR, color: c.texte }}>{formatEuro(totalTVA)}</td>
+                        <td style={{ ...tdR, color: c.texte }}>{formatEuro(totalTTC)}</td>
+                        {role === 'admin' && <td style={td} />}
                       </tr>
                     </tfoot>
                   </table>

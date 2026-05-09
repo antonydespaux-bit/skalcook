@@ -1,21 +1,32 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import { useTheme } from '../../../../lib/useTheme'
 import { useRole } from '../../../../lib/useRole'
 import Navbar from '../../../../components/Navbar'
+import BackButton from '../../../../components/BackButton'
+import IngredientAutocomplete from '../../../../components/IngredientAutocomplete'
 import { normDesig, todayIso, yesterdayIso, fmtPrix, fmtDelta, fileToBase64, makeLigneId, enrichLigne } from '../../../../lib/achatsHelpers'
 
 // ─── Composant principal ─────────────────────────────────────────────────────
 
 export default function AchatsImportPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const isManuelMode = searchParams.get('mode') === 'manuel'
   const { c } = useTheme()
   const isMobile = useIsMobile()
   const { role, loading: roleLoading } = useRole()
+
+  // ── Layout ───────────────────────────────────────────────────────────────
+  // Mode OCR desktop : PDF à gauche, metadonnées + lignes en cartes à droite (Option A).
+  // Mode manuel desktop : pleine largeur, lignes en tableau.
+  // Mobile : flex column, lignes en cartes.
+  const ocrSideBySide = !isMobile && !isManuelMode
+  const useCardLayout = isMobile || ocrSideBySide
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   const [authReady, setAuthReady] = useState(false)
@@ -23,7 +34,10 @@ export default function AchatsImportPage() {
 
   // ── Machine d'état ────────────────────────────────────────────────────────
   // 'upload' | 'extracting' | 'review' | 'saving' | 'done'
-  const [step, setStep] = useState('upload')
+  const [step, setStep] = useState(isManuelMode ? 'review' : 'upload')
+
+  // ── Création auto des ingrédients manquants au save ──────────────────────
+  const [autoCreateMissing, setAutoCreateMissing] = useState(true)
 
   // ── Fichier ───────────────────────────────────────────────────────────────
   const [previewUrl, setPreviewUrl] = useState(null)
@@ -36,7 +50,9 @@ export default function AchatsImportPage() {
   const [dateFacture, setDateFacture] = useState(yesterdayIso())
   const [numeroFacture, setNumeroFacture] = useState('')
   const [statut, setStatut] = useState('facture')
-  const [tauxTva, setTauxTva] = useState(5.5) // % par défaut (alimentaire)
+  const [tauxTva, setTauxTva] = useState(5.5) // % par défaut (alimentaire) — fallback pour les lignes sans taux
+  // Total TVA saisi en pied de facture (override). null = calcul automatique.
+  const [montantTvaSaisi, setMontantTvaSaisi] = useState(null)
 
   // ── Lignes enrichies ──────────────────────────────────────────────────────
   // Chaque ligne : { _id, designation, quantite, unite, prix_unitaire_ht, remise,
@@ -47,6 +63,7 @@ export default function AchatsImportPage() {
   // ── Caches de réconciliation ──────────────────────────────────────────────
   const [fournisseurMapping, setFournisseurMapping] = useState({}) // norm → { ingredient_id }
   const [ingredientsById, setIngredientsById] = useState({})       // id   → { nom, prix_kg, unite }
+  const [tvaByIngredient, setTvaByIngredient] = useState({})       // id   → dernier taux_tva utilisé
 
   // Index nom normalisé → ingrédient (recalculé quand ingredientsById change)
   const ingredientsByNorm = useMemo(
@@ -64,7 +81,18 @@ export default function AchatsImportPage() {
     }, 0),
     [lignes]
   )
-  const montantTva = totalHtFacture * (Number(tauxTva) || 0) / 100
+  // Si une ligne a son propre taux_tva, il prime ; sinon fallback sur tauxTva global.
+  const montantTvaCalcule = useMemo(
+    () => lignes.reduce((s, l) => {
+      const r = Number(l.remise) || 0
+      const ht = (Number(l.quantite) || 0) * (Number(l.prix_unitaire_ht) || 0) * (1 - r / 100)
+      const taux = l.taux_tva != null && l.taux_tva !== '' ? Number(l.taux_tva) : Number(tauxTva) || 0
+      return s + ht * taux / 100
+    }, 0),
+    [lignes, tauxTva]
+  )
+  // Si l'utilisateur a saisi un montant TVA en pied, il prime sur le calcul.
+  const montantTva = montantTvaSaisi != null && montantTvaSaisi !== '' ? Number(montantTvaSaisi) : montantTvaCalcule
   const totalTtcFacture = totalHtFacture + montantTva
 
   // ── UX ────────────────────────────────────────────────────────────────────
@@ -118,13 +146,14 @@ export default function AchatsImportPage() {
         headers: { 'Authorization': `Bearer ${session.access_token}` },
       })
       if (!res.ok) return
-      const { mappings, ingredients } = await res.json()
+      const { mappings, ingredients, tvaByIngredient: tvaMap } = await res.json()
       setFournisseurMapping(
         Object.fromEntries((mappings || []).map(m => [m.designation_norm, m]))
       )
       setIngredientsById(
         Object.fromEntries((ingredients || []).map(i => [i.id, i]))
       )
+      setTvaByIngredient(tvaMap || {})
     } catch (err) {
       console.warn('loadReconciliation error:', err)
     }
@@ -137,8 +166,23 @@ export default function AchatsImportPage() {
   // ─── Réconciliation d'une ligne ───────────────────────────────────────────
 
   const enrichLigneLocal = useCallback((ligne) => {
-    return enrichLigne(ligne, fournisseurMapping, ingredientsById, ingredientsByNorm)
-  }, [fournisseurMapping, ingredientsById, ingredientsByNorm])
+    return enrichLigne(ligne, fournisseurMapping, ingredientsById, ingredientsByNorm, tvaByIngredient)
+  }, [fournisseurMapping, ingredientsById, ingredientsByNorm, tvaByIngredient])
+
+  // En mode manuel : amorçage avec une ligne vide dès que l'auth est prête.
+  const manuelInitDone = useRef(false)
+  useEffect(() => {
+    if (!isManuelMode || !authReady || manuelInitDone.current) return
+    manuelInitDone.current = true
+    setLignes([enrichLigneLocal({
+      _id: makeLigneId(),
+      designation: '',
+      quantite: 1,
+      unite: 'kg',
+      prix_unitaire_ht: 0,
+      remise: 0,
+    })])
+  }, [isManuelMode, authReady, enrichLigneLocal])
 
   // ─── Extraction IA ────────────────────────────────────────────────────────
 
@@ -162,6 +206,10 @@ export default function AchatsImportPage() {
       setFournisseur(result.fournisseur || '')
       setDateFacture(result.date_facture || yesterdayIso())
       setNumeroFacture(result.numero_facture || '')
+      // Si l'OCR a détecté le montant TVA en pied, on le préremplit
+      if (result.montant_tva_total != null) {
+        setMontantTvaSaisi(Number(result.montant_tva_total))
+      }
       const enriched = (result.lignes || []).map(l =>
         enrichLigneLocal({
           _id:              makeLigneId(),
@@ -169,6 +217,7 @@ export default function AchatsImportPage() {
           quantite:         Number(l.quantite) || 1,
           unite:            l.unite || '',
           prix_unitaire_ht: Number(l.prix_unitaire_ht) || 0,
+          taux_tva:         l.taux_tva != null ? Number(l.taux_tva) : null,
         })
       )
       setLignes(enriched)
@@ -235,9 +284,15 @@ export default function AchatsImportPage() {
   // ─── Édition des lignes ───────────────────────────────────────────────────
 
   const updateLigne = useCallback((id, field, value) => {
-    setLignes(prev => prev.map(l =>
-      l._id !== id ? l : enrichLigneLocal({ ...l, [field]: value })
-    ))
+    setLignes(prev => prev.map(l => {
+      if (l._id !== id) return l
+      // Si l'utilisateur modifie le prix ou la TVA lui-même, on désactive le
+      // pré-remplissage auto pour ne plus l'écraser ensuite.
+      const next = { ...l, [field]: value }
+      if (field === 'prix_unitaire_ht') next.prix_auto = false
+      if (field === 'taux_tva') next.tva_auto = false
+      return enrichLigneLocal(next)
+    }))
   }, [enrichLigneLocal])
 
   const addLigne = useCallback(() => {
@@ -318,28 +373,59 @@ export default function AchatsImportPage() {
   }, [clientId, newIngNom])
 
   const handleLinkIngredient = useCallback((ligne, ing) => {
-    const prixEff = Number(ligne.prix_unitaire_ht) * (1 - (Number(ligne.remise) || 0) / 100)
+    // L'utilisateur avait-il déjà saisi son propre prix / TVA avant le link ?
+    const userHadOwnPrice = ligne.prix_auto === false && Number(ligne.prix_unitaire_ht) > 0
+    const userHadOwnTva = ligne.tva_auto === false && ligne.taux_tva != null && ligne.taux_tva !== ''
     const prixActuel = ing.prix_kg ? Number(ing.prix_kg) : null
-    const deltaPrix = prixActuel && prixEff ? ((prixEff - prixActuel) / prixActuel) * 100 : null
+    const prixLigneFinal = userHadOwnPrice
+      ? Number(ligne.prix_unitaire_ht)
+      : (prixActuel && Number.isFinite(prixActuel) ? prixActuel : 0)
+    const remiseFactor = 1 - (Number(ligne.remise) || 0) / 100
+    const prixEff = prixLigneFinal * remiseFactor
+    const deltaPrix = prixActuel && prixEff && userHadOwnPrice
+      ? ((prixEff - prixActuel) / prixActuel) * 100
+      : null
+    // Pré-remplit la TVA depuis l'historique de l'ingrédient si l'utilisateur n'a pas saisi.
+    const tvaHist = tvaByIngredient[ing.id] != null ? Number(tvaByIngredient[ing.id]) : null
+    const tauxTvaFinal = userHadOwnTva
+      ? Number(ligne.taux_tva)
+      : (tvaHist != null && Number.isFinite(tvaHist) ? tvaHist : (ligne.taux_tva ?? null))
     setLignes(prev => prev.map(l =>
       l._id !== ligne._id ? l : {
         ...l,
-        ingredient_id:  ing.id,
-        ingredient_nom: ing.nom,
-        prix_actuel:    prixActuel,
+        prix_unitaire_ht: prixLigneFinal,
+        prix_auto:        !userHadOwnPrice,
+        taux_tva:         tauxTvaFinal,
+        tva_auto:         !userHadOwnTva,
+        ingredient_id:    ing.id,
+        ingredient_nom:   ing.nom,
+        prix_actuel:      prixActuel,
         deltaPrix,
-        reconnu:        true,
-        updatePrice:    false,
+        reconnu:          true,
+        updatePrice:      userHadOwnPrice,
       }
     ))
     setLinkingIngFor(null)
     setLinkSearch('')
-  }, [])
+  }, [tvaByIngredient])
+
+  // Sélection depuis l'autocomplete de désignation : remplit la désignation
+  // avec le nom canonique de l'ingrédient + lie l'ingrédient (pré-remplit
+  // prix et TVA via handleLinkIngredient).
+  const handleSelectFromAutocomplete = useCallback((ligne, ing) => {
+    handleLinkIngredient({ ...ligne, designation: ing.nom }, ing)
+  }, [handleLinkIngredient])
 
   const handleSave = useCallback(async (forceInsert = false) => {
     if (!fournisseur.trim()) { setError('Le nom du fournisseur est requis.'); return }
     if (!dateFacture)        { setError('La date de la facture est requise.'); return }
-    if (lignes.length === 0) { setError('Ajoutez au moins une ligne avant d\'enregistrer.'); return }
+    // Ne garde que les lignes avec une désignation non vide (les autres sont des
+    // lignes-brouillon que l'utilisateur n'a pas remplies).
+    const lignesValides = lignes.filter((l) => l.designation && l.designation.trim())
+    if (lignesValides.length === 0) {
+      setError('Ajoutez au moins une ligne avec une désignation avant d\'enregistrer.')
+      return
+    }
     setError('')
     setDuplicateWarning(null)
     setStep('saving')
@@ -352,7 +438,13 @@ export default function AchatsImportPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ clientId, fournisseur, numeroFacture, dateFacture, statut, lignes, forceInsert, fileBase64, fileMime, tauxTva: Number(tauxTva) || 0 }),
+        body: JSON.stringify({
+          clientId, fournisseur, numeroFacture, dateFacture, statut,
+          lignes: lignesValides, forceInsert, fileBase64, fileMime,
+          tauxTva: Number(tauxTva) || 0,
+          montantTva: montantTvaSaisi != null && montantTvaSaisi !== '' ? Number(montantTvaSaisi) : null,
+          autoCreateMissing,
+        }),
       })
       const result = await res.json()
 
@@ -362,16 +454,29 @@ export default function AchatsImportPage() {
         return
       }
 
-      if (!res.ok) throw new Error(result.error || 'Erreur lors de l\'enregistrement.')
+      if (!res.ok) {
+        // Remonter le détail Zod si dispo pour aider au diagnostic
+        if (result.details?.fieldErrors) {
+          const flat = Object.entries(result.details.fieldErrors)
+            .map(([k, v]) => `${k} : ${(v ).join(', ')}`)
+            .join(' · ')
+          throw new Error(`${result.error || 'Données invalides'} — ${flat}`)
+        }
+        throw new Error(result.error || 'Erreur lors de l\'enregistrement.')
+      }
 
       setPrixMajCount(result.prix_maj ?? 0)
+      // Avertir si l'upload du fichier source a échoué (stockage non bloquant)
+      if (result.file_uploaded === false) {
+        window.alert('Facture enregistrée, mais le fichier source n\'a pas pu être stocké. Vous pourrez la consulter sans aperçu PDF/image.')
+      }
       router.push('/controle-gestion/achats')
     } catch (err) {
       console.error('handleSave error:', err)
       setError(err.message || 'Erreur lors de l\'enregistrement.')
       setStep('review')
     }
-  }, [clientId, fournisseur, numeroFacture, dateFacture, statut, lignes, fileBase64, fileMime])
+  }, [clientId, fournisseur, numeroFacture, dateFacture, statut, lignes, fileBase64, fileMime, autoCreateMissing, router, tauxTva, montantTvaSaisi])
 
   // ─── Styles partagés ─────────────────────────────────────────────────────
 
@@ -428,13 +533,43 @@ export default function AchatsImportPage() {
       <Navbar section="cuisine" />
       <div style={{ padding: pad, maxWidth: 1200, margin: '0 auto' }}>
 
+        {/* Bouton retour */}
+        <div style={{ marginBottom: 12 }}>
+          <BackButton
+            fallback="/controle-gestion/achats"
+            label="← Retour aux achats"
+            style={{ background: 'transparent', border: 'none', color: c.texteMuted, fontSize: 13, padding: 0, cursor: 'pointer' }}
+          />
+        </div>
+
         {/* En-tête */}
-        <h1 style={{ margin: '0 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 700, color: c.texte }}>
-          Importation de factures
-        </h1>
-        <p style={{ margin: '0 0 28px', fontSize: 14, color: c.texteMuted }}>
-          Photographiez ou déposez une facture fournisseur — les lignes sont extraites automatiquement.
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 28 }}>
+          <div>
+            <h1 style={{ margin: '0 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 700, color: c.texte }}>
+              {isManuelMode ? 'Saisie manuelle d\'une facture' : 'Importation de factures'}
+            </h1>
+            <p style={{ margin: 0, fontSize: 14, color: c.texteMuted }}>
+              {isManuelMode
+                ? 'Saisissez les lignes une à une — créez les ingrédients manquants à la volée.'
+                : 'Photographiez ou déposez une facture fournisseur — les lignes sont extraites automatiquement.'}
+            </p>
+          </div>
+          {!isManuelMode ? (
+            <button
+              onClick={() => router.push('/controle-gestion/achats/import?mode=manuel')}
+              style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}
+            >
+              ✏️ Saisir manuellement
+            </button>
+          ) : (
+            <button
+              onClick={() => router.push('/controle-gestion/achats/import')}
+              style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}
+            >
+              📷 Importer une photo / PDF
+            </button>
+          )}
+        </div>
 
         {/* Erreur globale */}
         {error && (
@@ -558,10 +693,45 @@ export default function AchatsImportPage() {
         {/* ══ STEP : REVIEW ══════════════════════════════════════════════════ */}
         {(step === 'review' || step === 'saving') && (
           <>
-          <div style={isMobile ? { display: 'flex', flexDirection: 'column', gap: 20 } : { display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 0, alignItems: 'start' }}>
+          <div style={
+            isMobile
+              ? { display: 'flex', flexDirection: 'column', gap: 20 }
+              : isManuelMode
+                ? { display: 'block' }
+                : { display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 24, alignItems: 'start' }
+          }>
 
-            {/* ── Colonne gauche : métadonnées + lignes ── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: isMobile ? 0 : '0 24px 0 0' }}>
+            {/* ── Colonne PDF : sticky, à GAUCHE en mode OCR side-by-side ── */}
+            {ocrSideBySide && (
+              <div style={{ position: 'sticky', top: 76, height: 'calc(100vh - 90px)', display: 'flex', flexDirection: 'column' }}>
+                {previewUrl && (
+                  isPdf ? (
+                    <iframe
+                      src={previewUrl}
+                      title="Aperçu facture PDF"
+                      style={{ width: '100%', flex: 1, borderRadius: 10, border: `1px solid ${c.bordure}`, background: c.blanc }}
+                    />
+                  ) : (
+                    <img
+                      src={previewUrl}
+                      alt="Aperçu facture"
+                      style={{ width: '100%', flex: 1, objectFit: 'contain', borderRadius: 10, border: `1px solid ${c.bordure}`, background: c.blanc }}
+                    />
+                  )
+                )}
+                {!previewUrl && (
+                  <div style={{ flex: 1, background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
+                    Aucun fichier
+                  </div>
+                )}
+                <button style={{ ...btnSecondary, marginTop: 10, width: '100%' }} onClick={resetForm}>
+                  ↩ Changer de fichier
+                </button>
+              </div>
+            )}
+
+            {/* ── Colonne droite (Option A) ou pleine largeur (manuel) : métadonnées ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
               {/* Aperçu fichier — mobile uniquement */}
               {isMobile && previewUrl && (
@@ -603,6 +773,7 @@ export default function AchatsImportPage() {
                     <select style={inputS} value={statut} onChange={e => setStatut(e.target.value)}>
                       <option value="facture">Facture</option>
                       <option value="bl">Bon de livraison (BL)</option>
+                      <option value="avoir">Avoir</option>
                     </select>
                   </label>
                 </div>
@@ -618,13 +789,15 @@ export default function AchatsImportPage() {
                     />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                    TVA (%)
+                    Total TVA (€)
                     <input
                       style={inputS}
                       type="number"
-                      min="0" max="100" step="0.1"
-                      value={tauxTva}
-                      onChange={e => setTauxTva(e.target.value)}
+                      min="0" step="0.01"
+                      value={montantTvaSaisi ?? ''}
+                      placeholder={fmtPrix(montantTvaCalcule)}
+                      title="Saisissez le total TVA tel qu'il apparaît en pied de facture, ou laissez vide pour calculer automatiquement"
+                      onChange={e => setMontantTvaSaisi(e.target.value === '' ? null : e.target.value)}
                     />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
@@ -638,40 +811,8 @@ export default function AchatsImportPage() {
                 </div>
               </div>
 
-            </div>
-
-            {/* ── Colonne droite : aperçu PDF ── */}
-            {!isMobile && (
-              <div style={{ position: 'sticky', top: 76, height: 'calc(100vh - 90px)', display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${c.bordure}`, paddingLeft: 24 }}>
-                {previewUrl && (
-                  isPdf ? (
-                    <iframe
-                      src={previewUrl}
-                      title="Aperçu facture PDF"
-                      style={{ width: '100%', flex: 1, borderRadius: 10, border: `1px solid ${c.bordure}` }}
-                    />
-                  ) : (
-                    <img
-                      src={previewUrl}
-                      alt="Aperçu facture"
-                      style={{ width: '100%', flex: 1, objectFit: 'contain', borderRadius: 10, border: `1px solid ${c.bordure}`, background: c.blanc }}
-                    />
-                  )
-                )}
-                {!previewUrl && (
-                  <div style={{ flex: 1, background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
-                    Aucun fichier
-                  </div>
-                )}
-                <button style={{ ...btnSecondary, marginTop: 10, width: '100%' }} onClick={resetForm}>
-                  ↩ Changer de fichier
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* ── Lignes pleine largeur ── */}
-          <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* ── Lignes (incluses dans la colonne droite en mode side-by-side) ── */}
+          <div style={{ marginTop: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 12, overflow: 'hidden' }}>
               <div style={{ padding: '12px 16px', borderBottom: `1px solid ${c.bordure}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: c.texte }}>
@@ -684,12 +825,12 @@ export default function AchatsImportPage() {
 
                 {lignes.length === 0 && (
                   <p style={{ padding: 20, margin: 0, fontSize: 13, color: c.texteMuted, textAlign: 'center' }}>
-                    Aucune ligne. Cliquez sur "+ Ajouter une ligne" pour commencer.
+                    Aucune ligne. Cliquez sur &laquo;&nbsp;+ Ajouter une ligne&nbsp;&raquo; pour commencer.
                   </p>
                 )}
 
-                {lignes.length > 0 && !isMobile && (
-                  /* ── Tableau desktop ── */
+                {lignes.length > 0 && !useCardLayout && (
+                  /* ── Tableau desktop (mode manuel uniquement) ── */
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 950 }}>
                       <thead>
@@ -699,6 +840,7 @@ export default function AchatsImportPage() {
                           <th style={{ ...th, width: '5%' }}>Unité</th>
                           <th style={{ ...th, width: '9%', textAlign: 'right' }}>Prix HT/u</th>
                           <th style={{ ...th, width: '6%', textAlign: 'right' }}>Remise %</th>
+                          <th style={{ ...th, width: '7%', textAlign: 'right' }}>TVA %</th>
                           <th style={{ ...th, width: '9%', textAlign: 'right' }}>Total HT</th>
                           <th style={{ ...th, width: '12%', textAlign: 'center' }}>Reconnu</th>
                           <th style={{ ...th, width: '7%', textAlign: 'center' }}>Δ Prix</th>
@@ -716,11 +858,12 @@ export default function AchatsImportPage() {
                           return (
                             <tr key={l._id}>
                               <td style={td}>
-                                <input
-                                  style={{ ...inputS, fontSize: 13 }}
+                                <IngredientAutocomplete
+                                  ingredients={Object.values(ingredientsById)}
                                   value={l.designation}
-                                  placeholder="Nom du produit"
-                                  onChange={e => updateLigne(l._id, 'designation', e.target.value)}
+                                  onChange={(text) => updateLigne(l._id, 'designation', text)}
+                                  onSelect={(ing) => handleSelectFromAutocomplete(l, ing)}
+                                  inputStyle={{ ...inputS, fontSize: 13 }}
                                 />
                                 {l.ingredient_nom && (
                                   <div style={{ fontSize: 11, color: c.texteMuted, marginTop: 2 }}>→ {l.ingredient_nom}</div>
@@ -756,6 +899,15 @@ export default function AchatsImportPage() {
                                   type="number" min="0" max="100" step="0.1"
                                   value={l.remise ?? 0}
                                   onChange={e => updateLigne(l._id, 'remise', e.target.value)}
+                                />
+                              </td>
+                              <td style={{ ...td, textAlign: 'right' }}>
+                                <input
+                                  style={{ ...inputS, textAlign: 'right', width: 60 }}
+                                  type="number" min="0" max="100" step="0.1"
+                                  value={l.taux_tva ?? ''}
+                                  placeholder={String(tauxTva)}
+                                  onChange={e => updateLigne(l._id, 'taux_tva', e.target.value === '' ? null : e.target.value)}
                                 />
                               </td>
                               <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
@@ -820,7 +972,7 @@ export default function AchatsImportPage() {
                                     <button
                                       onClick={() => { setCreatingIngFor(l._id); setNewIngNom(l.designation); setLinkingIngFor(null) }}
                                       style={{ fontSize: 10, padding: '2px 6px', background: 'transparent', border: `1px solid ${c.accent}`, color: c.accent, borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                                    >＋ Créer l'ingrédient</button>
+                                    >＋ Créer l&rsquo;ingrédient</button>
                                   </div>
                                 )}
                               </td>
@@ -855,8 +1007,8 @@ export default function AchatsImportPage() {
                   </div>
                 )}
 
-                {lignes.length > 0 && isMobile && (
-                  /* ── Cards mobile ── */
+                {lignes.length > 0 && useCardLayout && (
+                  /* ── Cartes (mobile + OCR desktop side-by-side) ── */
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                     {lignes.map((l, idx) => {
                       const delta = fmtDelta(l.deltaPrix)
@@ -866,12 +1018,15 @@ export default function AchatsImportPage() {
                         <div key={l._id} style={{ padding: '14px 16px', borderBottom: idx < lignes.length - 1 ? `1px solid ${c.bordure}` : 'none' }}>
                           {/* Ligne 1 : désignation + badge */}
                           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-                            <input
-                              style={{ ...inputS, fontSize: 15, fontWeight: 500, flex: 1 }}
-                              value={l.designation}
-                              placeholder="Nom du produit"
-                              onChange={e => updateLigne(l._id, 'designation', e.target.value)}
-                            />
+                            <div style={{ flex: 1 }}>
+                              <IngredientAutocomplete
+                                ingredients={Object.values(ingredientsById)}
+                                value={l.designation}
+                                onChange={(text) => updateLigne(l._id, 'designation', text)}
+                                onSelect={(ing) => handleSelectFromAutocomplete(l, ing)}
+                                inputStyle={{ ...inputS, fontSize: 15, fontWeight: 500 }}
+                              />
+                            </div>
                             {l.reconnu ? <span style={badgeVert}>✓</span> : <span style={badgeGris}>?</span>}
                           </div>
                           {l.ingredient_nom && (
@@ -932,10 +1087,10 @@ export default function AchatsImportPage() {
                             <button
                               onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }}
                               style={{ fontSize: 11, padding: '3px 8px', background: 'transparent', border: `1px solid ${c.bordure}`, color: c.texteMuted, borderRadius: 6, cursor: 'pointer', marginBottom: 6 }}
-                            >Changer l'ingrédient lié</button>
+                            >Changer l&rsquo;ingrédient lié</button>
                           )}
-                          {/* Ligne 2 : Qté / Unité / Prix */}
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+                          {/* Ligne 2 : Qté / Unité / Prix / TVA */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
                             <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }}>
                               Quantité
                               <input style={inputS} type="number" min="0" step="0.001" value={l.quantite}
@@ -950,6 +1105,12 @@ export default function AchatsImportPage() {
                               Prix HT/u
                               <input style={inputS} type="number" min="0" step="0.01" value={l.prix_unitaire_ht}
                                 onChange={e => updateLigne(l._id, 'prix_unitaire_ht', e.target.value)} />
+                            </label>
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }}>
+                              TVA %
+                              <input style={inputS} type="number" min="0" max="100" step="0.1" value={l.taux_tva ?? ''}
+                                placeholder={String(tauxTva)}
+                                onChange={e => updateLigne(l._id, 'taux_tva', e.target.value === '' ? null : e.target.value)} />
                             </label>
                           </div>
                           {/* Ligne 3 : total + delta + actions */}
@@ -997,7 +1158,16 @@ export default function AchatsImportPage() {
             )}
 
             {/* Bouton enregistrer */}
-            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10, justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10, alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'flex-end' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: c.texteMuted, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={autoCreateMissing}
+                  onChange={e => setAutoCreateMissing(e.target.checked)}
+                  style={{ width: 16, height: 16 }}
+                />
+                Créer auto les ingrédients manquants
+              </label>
               <button
                 style={{ ...btnPrimary, opacity: step === 'saving' ? 0.6 : 1 }}
                 disabled={step === 'saving'}
@@ -1007,6 +1177,8 @@ export default function AchatsImportPage() {
               </button>
             </div>
           </div>
+            </div>{/* fin colonne droite metadonnées+lignes */}
+          </div>{/* fin wrapper grid */}
           </>
         )}
 

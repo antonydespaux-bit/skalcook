@@ -6,7 +6,7 @@ import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import { useTheme } from '../../../../lib/useTheme'
 import { useRole } from '../../../../lib/useRole'
-import { normDesig, makeLigneId } from '../../../../lib/achatsHelpers'
+import { normDesig, makeLigneId, badgeStyleFor, statutLabel } from '../../../../lib/achatsHelpers'
 import Navbar from '../../../../components/Navbar'
 import BackButton from '../../../../components/BackButton'
 
@@ -48,6 +48,7 @@ export default function AchatsDetailPage() {
   const [editDate, setEditDate] = useState('')
   const [editStatut, setEditStatut] = useState('facture')
   const [editTauxTva, setEditTauxTva] = useState(5.5)
+  const [editMontantTvaSaisi, setEditMontantTvaSaisi] = useState(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -82,7 +83,7 @@ export default function AchatsDetailPage() {
 
     const { data: fac, error: fErr } = await supabase
       .from('achats_factures')
-      .select('id, fournisseur, numero_facture, date_facture, total_ht, statut, taux_tva, fichier_url, created_at')
+      .select('id, fournisseur, numero_facture, date_facture, total_ht, statut, taux_tva, montant_tva, fichier_url, created_at')
       .eq('id', id)
       .eq('client_id', clientId)
       .maybeSingle()
@@ -93,7 +94,7 @@ export default function AchatsDetailPage() {
 
     const { data: rows, error: lErr } = await supabase
       .from('achats_lignes')
-      .select('id, designation, ingredient_id, quantite, unite, prix_unitaire_ht, remise, montant_ht, ingredients(nom)')
+      .select('id, designation, ingredient_id, quantite, unite, prix_unitaire_ht, remise, montant_ht, taux_tva, ingredients(nom)')
       .eq('facture_id', id)
       .eq('client_id', clientId)
       .order('designation')
@@ -137,6 +138,7 @@ export default function AchatsDetailPage() {
     setEditDate(facture.date_facture || '')
     setEditStatut(facture.statut || 'facture')
     setEditTauxTva(facture.taux_tva ?? 5.5)
+    setEditMontantTvaSaisi(facture.montant_tva != null ? Math.abs(Number(facture.montant_tva)) : null)
     setEditLignes(
       lignes.map((l) => ({
         _id: makeLigneId(),
@@ -145,6 +147,7 @@ export default function AchatsDetailPage() {
         unite: l.unite || '',
         prix_unitaire_ht: Number(l.prix_unitaire_ht) || 0,
         remise: Number(l.remise) || 0,
+        taux_tva: l.taux_tva != null ? Number(l.taux_tva) : null,
         ingredient_id: l.ingredient_id || null,
         ingredient_nom: l.ingredients?.nom || null,
       }))
@@ -163,7 +166,7 @@ export default function AchatsDetailPage() {
   const addEditLigne = () => {
     setEditLignes((prev) => [
       ...prev,
-      { _id: makeLigneId(), designation: '', quantite: 1, unite: '', prix_unitaire_ht: 0, remise: 0, ingredient_id: null, ingredient_nom: null },
+      { _id: makeLigneId(), designation: '', quantite: 1, unite: '', prix_unitaire_ht: 0, remise: 0, taux_tva: null, ingredient_id: null, ingredient_nom: null },
     ])
   }
   const linkIngredientToEdit = (lid, ing) => {
@@ -183,7 +186,20 @@ export default function AchatsDetailPage() {
     }, 0),
     [editLignes]
   )
-  const editMontantTva = editTotalHt * (Number(editTauxTva) || 0) / 100
+  // TVA par ligne : si la ligne a son propre taux, il prime ; sinon fallback sur editTauxTva.
+  const editMontantTvaCalcule = useMemo(
+    () => editLignes.reduce((s, l) => {
+      const r = Number(l.remise) || 0
+      const ht = (Number(l.quantite) || 0) * (Number(l.prix_unitaire_ht) || 0) * (1 - r / 100)
+      const taux = l.taux_tva != null && l.taux_tva !== '' ? Number(l.taux_tva) : Number(editTauxTva) || 0
+      return s + ht * taux / 100
+    }, 0),
+    [editLignes, editTauxTva]
+  )
+  // Saisie utilisateur prime sur le calcul.
+  const editMontantTva = editMontantTvaSaisi != null && editMontantTvaSaisi !== ''
+    ? Number(editMontantTvaSaisi)
+    : editMontantTvaCalcule
   const editTotalTtc = editTotalHt + editMontantTva
 
   const handleSaveEdit = async () => {
@@ -200,6 +216,7 @@ export default function AchatsDetailPage() {
           unite: l.unite || null,
           prix_unitaire_ht: Number(l.prix_unitaire_ht) || 0,
           remise: Number(l.remise) || 0,
+          taux_tva: l.taux_tva != null && l.taux_tva !== '' ? Number(l.taux_tva) : null,
         }))
       const res = await fetch('/api/achats/update-facture', {
         method: 'PATCH',
@@ -212,6 +229,7 @@ export default function AchatsDetailPage() {
           dateFacture: editDate,
           statut: editStatut,
           tauxTva: Number(editTauxTva) || 0,
+          montantTva: editMontantTvaSaisi != null && editMontantTvaSaisi !== '' ? Number(editMontantTvaSaisi) : null,
           lignes: lignesPayload,
         }),
       })
@@ -352,11 +370,20 @@ export default function AchatsDetailPage() {
                         <select style={inputS} value={editStatut} onChange={e => setEditStatut(e.target.value)}>
                           <option value="bl">Bon de livraison</option>
                           <option value="facture">Facture</option>
+                          <option value="avoir">Avoir</option>
                         </select>
                       </label>
                       <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted, gridColumn: isMobile ? 'auto' : 'span 2' }}>
-                        TVA (%)
-                        <input style={{ ...inputS, maxWidth: 140 }} type="number" min="0" max="100" step="0.1" value={editTauxTva} onChange={e => setEditTauxTva(e.target.value)} />
+                        Total TVA (€)
+                        <input
+                          style={{ ...inputS, maxWidth: 200 }}
+                          type="number"
+                          min="0" step="0.01"
+                          value={editMontantTvaSaisi ?? ''}
+                          placeholder={formatEuro(editMontantTvaCalcule)}
+                          title="Saisissez le total TVA tel qu'il apparaît en pied de facture, ou laissez vide pour calculer automatiquement"
+                          onChange={e => setEditMontantTvaSaisi(e.target.value === '' ? null : e.target.value)}
+                        />
                       </label>
                       <div style={{ gridColumn: isMobile ? 'auto' : 'span 2', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                         <div style={{ display: 'flex', gap: 16, fontSize: 13, color: c.texteMuted, fontVariantNumeric: 'tabular-nums' }}>
@@ -375,9 +402,7 @@ export default function AchatsDetailPage() {
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                           <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 600, color: c.texte }}>{facture.fournisseur || '—'}</div>
-                          {isBl
-                            ? <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, background: '#FEF3C7', color: '#92400E' }}>BL</span>
-                            : <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, background: '#D1FAE5', color: '#065F46' }}>Facture</span>}
+                          <span style={badgeStyleFor(facture.statut)}>{statutLabel(facture.statut)}</span>
                         </div>
                         {facture.numero_facture && <div style={{ fontSize: 13, color: c.texteMuted }}>N° {facture.numero_facture}</div>}
                         <div style={{ fontSize: 13, color: c.texteMuted }}>{formatDate(facture.date_facture)}</div>
@@ -385,11 +410,22 @@ export default function AchatsDetailPage() {
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: 11, color: c.texteMuted, fontWeight: 500, textTransform: 'uppercase' }}>Total HT</div>
                         <div style={{ fontSize: isMobile ? 20 : 26, fontWeight: 600, color: c.texte }}>{formatEuro(ht)}</div>
-                        {facture.taux_tva != null && (
-                          <div style={{ fontSize: 12, color: c.texteMuted, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
-                            TVA {Number(facture.taux_tva).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} % · TTC <strong style={{ color: c.texte }}>{formatEuro(ht * (1 + Number(facture.taux_tva) / 100))}</strong>
-                          </div>
-                        )}
+                        {(() => {
+                          // 1. Si la facture a un montant_tva saisi, il prime.
+                          // 2. Sinon, on calcule depuis les taux par ligne (avec fallback taux global).
+                          const tvaGlobale = Number(facture.taux_tva ?? 0)
+                          const montantTvaCalcule = lignes.reduce((s, l) => {
+                            const taux = l.taux_tva != null ? Number(l.taux_tva) : tvaGlobale
+                            return s + (Number(l.montant_ht) || 0) * taux / 100
+                          }, 0)
+                          const montantTva = facture.montant_tva != null ? Number(facture.montant_tva) : montantTvaCalcule
+                          if (!montantTva && !tvaGlobale) return null
+                          return (
+                            <div style={{ fontSize: 12, color: c.texteMuted, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
+                              TVA <strong style={{ color: c.texte }}>{formatEuro(montantTva)}</strong> · TTC <strong style={{ color: c.texte }}>{formatEuro(ht + montantTva)}</strong>
+                            </div>
+                          )
+                        })()}
                       </div>
                     </div>
                   )}
@@ -423,6 +459,7 @@ export default function AchatsDetailPage() {
                               <th style={th}>Unité</th>
                               <th style={thR}>Prix HT/u</th>
                               <th style={thR}>Remise %</th>
+                              <th style={thR}>TVA %</th>
                               <th style={thR}>Total HT</th>
                               <th style={th}>Ingrédient</th>
                               <th style={th} />
@@ -470,6 +507,15 @@ export default function AchatsDetailPage() {
                                       type="number" min="0" max="100" step="0.1"
                                       value={l.remise}
                                       onChange={e => updateEditLigne(l._id, 'remise', e.target.value)}
+                                    />
+                                  </td>
+                                  <td style={{ ...td, textAlign: 'right' }}>
+                                    <input
+                                      style={{ ...inputS, fontSize: 13, padding: '6px 8px', textAlign: 'right', width: 60 }}
+                                      type="number" min="0" max="100" step="0.1"
+                                      value={l.taux_tva ?? ''}
+                                      placeholder={String(editTauxTva)}
+                                      onChange={e => updateEditLigne(l._id, 'taux_tva', e.target.value === '' ? null : e.target.value)}
                                     />
                                   </td>
                                   <td style={{ ...tdR, fontVariantNumeric: 'tabular-nums' }}>{formatEuro(totalLigne)}</td>
@@ -525,7 +571,7 @@ export default function AchatsDetailPage() {
                           </tbody>
                           <tfoot>
                             <tr style={{ fontWeight: 600, background: c.fond }}>
-                              <td style={{ ...td, color: c.texte }} colSpan={5}>Total HT</td>
+                              <td style={{ ...td, color: c.texte }} colSpan={6}>Total HT</td>
                               <td style={{ ...tdR, color: c.texte }}>{formatEuro(editTotalHt)}</td>
                               <td style={td} colSpan={2} />
                             </tr>
@@ -547,6 +593,7 @@ export default function AchatsDetailPage() {
                             <th style={th}>Unité</th>
                             <th style={thR}>Prix HT/u</th>
                             <th style={thR}>Remise</th>
+                            <th style={thR}>TVA</th>
                             <th style={thR}>Total HT</th>
                             <th style={th}>Ingrédient</th>
                           </tr>
@@ -559,6 +606,7 @@ export default function AchatsDetailPage() {
                               <td style={tdM}>{l.unite || '—'}</td>
                               <td style={tdR}>{formatEuro(l.prix_unitaire_ht)}</td>
                               <td style={tdM}>{l.remise ? `${l.remise} %` : '—'}</td>
+                              <td style={tdM}>{l.taux_tva != null ? `${Number(l.taux_tva).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} %` : '—'}</td>
                               <td style={tdR}>{formatEuro(l.montant_ht)}</td>
                               <td style={td}>
                                 {l.ingredients?.nom
@@ -570,7 +618,7 @@ export default function AchatsDetailPage() {
                         </tbody>
                         <tfoot>
                           <tr style={{ fontWeight: 600, background: c.fond }}>
-                            <td style={{ ...td, color: c.texte }} colSpan={5}>Total</td>
+                            <td style={{ ...td, color: c.texte }} colSpan={6}>Total</td>
                             <td style={{ ...tdR, color: c.texte }}>{formatEuro(lignes.reduce((s, l) => s + (Number(l.montant_ht) || 0), 0))}</td>
                             <td style={td} />
                           </tr>
