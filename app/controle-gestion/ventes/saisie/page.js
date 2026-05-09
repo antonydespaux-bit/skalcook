@@ -78,7 +78,7 @@ export default function SaisieVentesPage() {
 function SaisieVentesContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const c = useTheme()
+  const { c } = useTheme()
   const isMobile = useIsMobile()
 
   const dateParam = searchParams.get('date')

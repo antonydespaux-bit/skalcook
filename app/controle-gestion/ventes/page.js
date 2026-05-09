@@ -48,7 +48,7 @@ function formatEur2(n) {
 
 export default function VentesMensuelPage() {
   const router = useRouter()
-  const c = useTheme()
+  const { c } = useTheme()
   const isMobile = useIsMobile()
 
   const [clientId, setClientId] = useState(null)
