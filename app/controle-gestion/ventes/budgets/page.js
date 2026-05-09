@@ -118,11 +118,14 @@ function joursDansMois(annee, mois, jdsTarget) {
   return count
 }
 
-// Renvoie le nb d'occurrences à utiliser : override de l'utilisateur s'il existe,
-// sinon le compte calendaire calculé. Permet à l'user de saisir 4 jeudis là
-// où le mois en compte 5 (cas typique : fermeture exceptionnelle).
-function getNbJours(annee, mois, jds, joursOverride) {
-  const ov = joursOverride?.[mois]?.[jds]
+// Renvoie le nb d'occurrences à utiliser : override de l'utilisateur s'il
+// existe, sinon le compte calendaire calculé. L'override est désormais
+// stocké par service (lunch / dinner) — un même jour de la semaine peut
+// avoir 4 occurrences le midi mais 5 le soir.
+//
+// Structure attendue : joursOverride[mois][jds][svcCode] = number
+function getNbJours(annee, mois, jds, svcCode, joursOverride) {
+  const ov = joursOverride?.[mois]?.[jds]?.[svcCode]
   if (ov != null && ov !== '') return Number(ov)
   return joursDansMois(annee, mois, jds)
 }
@@ -328,7 +331,7 @@ export default function BudgetsPage() {
           .not('mois', 'is', null),
         supabase
           .from('ca_budget_jours_override')
-          .select('mois, jour_semaine, nb_jours')
+          .select('mois, jour_semaine, service, nb_jours')
           .eq('client_id', clientId)
           .eq('annee', annee),
       ])
@@ -358,7 +361,8 @@ export default function BudgetsPage() {
       const ov = {}
       ;(overridesRes.data || []).forEach((r) => {
         if (!ov[r.mois]) ov[r.mois] = {}
-        ov[r.mois][r.jour_semaine] = r.nb_jours
+        if (!ov[r.mois][r.jour_semaine]) ov[r.mois][r.jour_semaine] = {}
+        ov[r.mois][r.jour_semaine][r.service] = r.nb_jours
       })
       setJoursOverride(ov)
     } catch (e) {
@@ -392,11 +396,10 @@ export default function BudgetsPage() {
     })
   }, [])
 
-  // Met à jour l'override local et persiste en BDD. Persistance immédiate
-  // (pas de bouton Enregistrer) pour cohérence avec un input "compteur" ;
-  // si la chaîne est vide ou égale au calcul calendaire, on supprime
-  // l'override pour revenir au défaut.
-  const updateJoursOverride = useCallback(async (mois, jds, raw) => {
+  // Met à jour l'override local et persiste en BDD pour un service précis.
+  // Persistance immédiate à chaque changement ; si la valeur saisie égale
+  // le compte calendaire, on supprime l'override pour revenir au défaut.
+  const updateJoursOverride = useCallback(async (mois, jds, svcCode, raw) => {
     if (!clientId) return
     const calCount = joursDansMois(annee, mois, jds)
     const trimmed = (raw == null ? '' : String(raw).trim())
@@ -407,8 +410,11 @@ export default function BudgetsPage() {
     setJoursOverride((prev) => {
       const next = { ...prev }
       const moisMap = { ...(prev[mois] || {}) }
-      if (isDefault) delete moisMap[jds]
-      else moisMap[jds] = num
+      const jdsMap = { ...(moisMap[jds] || {}) }
+      if (isDefault) delete jdsMap[svcCode]
+      else jdsMap[svcCode] = num
+      if (Object.keys(jdsMap).length === 0) delete moisMap[jds]
+      else moisMap[jds] = jdsMap
       if (Object.keys(moisMap).length === 0) delete next[mois]
       else next[mois] = moisMap
       return next
@@ -423,12 +429,13 @@ export default function BudgetsPage() {
           .eq('annee', annee)
           .eq('mois', mois)
           .eq('jour_semaine', jds)
+          .eq('service', svcCode)
       } else {
         await supabase
           .from('ca_budget_jours_override')
           .upsert(
-            { client_id: clientId, annee, mois, jour_semaine: jds, nb_jours: num },
-            { onConflict: 'client_id,annee,mois,jour_semaine' }
+            { client_id: clientId, annee, mois, jour_semaine: jds, service: svcCode, nb_jours: num },
+            { onConflict: 'client_id,annee,mois,jour_semaine,service' }
           )
       }
     } catch (e) {
@@ -642,7 +649,7 @@ export default function BudgetsPage() {
         for (const svc of SERVICES) {
           const cell = moisMap[`${j.code}_${lieuFilter}_${svc.code}`]
           if (!cell) continue
-          const nbre = getNbJours(annee, m, j.code, joursOverride)
+          const nbre = getNbJours(annee, m, j.code, svc.code, joursOverride)
           const couvJ = Number(cell.couverts_cible || 0)
           const tm = Number(cell.tm_cible || 0)
           t.couverts += nbre * couvJ
@@ -786,7 +793,7 @@ export default function BudgetsPage() {
                   moisMap={budgets[m] || {}}
                   updateCell={updateCell}
                   joursOverrideMois={joursOverride[m] || {}}
-                  onJoursOverrideChange={(jds, val) => updateJoursOverride(m, jds, val)}
+                  onJoursOverrideChange={(jds, svcCode, val) => updateJoursOverride(m, jds, svcCode, val)}
                   onDuplicateNext={() => duplicateMois(m, [m + 1])}
                   onDuplicateAllAfter={() => duplicateMois(m, MOIS.filter((x) => x > m))}
                   expanded={expandedMois.has(m)}
@@ -1078,10 +1085,10 @@ function MoisTable({ mois, annee, lieu, moisMap, updateCell, joursOverrideMois, 
       dinner: { nbre: 0, cvts: 0, ca: 0 },
     }
     for (const j of JOURS_SEMAINE) {
-      const nbre = getNbJours(annee, mois, j.code, { [mois]: joursOverrideMois })
       for (const svc of SERVICES) {
         const cell = moisMap[`${j.code}_${lieu.id}_${svc.code}`]
         if (!cell) continue
+        const nbre = getNbJours(annee, mois, j.code, svc.code, { [mois]: joursOverrideMois })
         const couvJ = Number(cell.couverts_cible || 0)
         const tm = Number(cell.tm_cible || 0)
         if (couvJ > 0) t[svc.code].nbre += nbre
@@ -1268,9 +1275,6 @@ function MoisTable({ mois, annee, lieu, moisMap, updateCell, joursOverrideMois, 
           <tbody>
             {JOURS_SEMAINE.map((j) => {
               const nbreCal = joursDansMois(annee, mois, j.code)
-              const override = joursOverrideMois?.[j.code]
-              const nbre = override != null ? Number(override) : nbreCal
-              const isOverridden = override != null && Number(override) !== nbreCal
               return (
                 <tr key={j.code} style={{ borderTop: `0.5px solid ${c.bordure}` }}>
                   <td
@@ -1285,6 +1289,9 @@ function MoisTable({ mois, annee, lieu, moisMap, updateCell, joursOverrideMois, 
                   </td>
                   {SERVICES.map((svc, idx) => {
                     const cell = moisMap[`${j.code}_${lieu.id}_${svc.code}`] || emptyCell()
+                    const overrideSvc = joursOverrideMois?.[j.code]?.[svc.code]
+                    const nbre = overrideSvc != null ? Number(overrideSvc) : nbreCal
+                    const isOverridden = overrideSvc != null && Number(overrideSvc) !== nbreCal
                     const couvJ = Number(cell.couverts_cible || 0)
                     const tm = Number(cell.tm_cible || 0)
                     const cvts = nbre * couvJ
@@ -1295,7 +1302,7 @@ function MoisTable({ mois, annee, lieu, moisMap, updateCell, joursOverrideMois, 
                         nbre={nbre}
                         nbreCal={nbreCal}
                         isOverridden={isOverridden}
-                        onNbreChange={(v) => onJoursOverrideChange(j.code, v)}
+                        onNbreChange={(v) => onJoursOverrideChange(j.code, svc.code, v)}
                         cell={cell}
                         cvts={cvts}
                         total={total}
@@ -1541,35 +1548,16 @@ function MoisCardsMobile({ mois, annee, lieu, moisMap, updateCell, joursOverride
       <>
       {JOURS_SEMAINE.map((j) => {
         const nbreCal = joursDansMois(annee, mois, j.code)
-        const override = joursOverrideMois?.[j.code]
-        const nbre = override != null ? Number(override) : nbreCal
-        const isOverridden = override != null && Number(override) !== nbreCal
         return (
           <div key={j.code} style={{ padding: '10px 14px', borderTop: `0.5px solid ${c.bordure}` }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: c.texte, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span>{j.label}</span>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 400, color: c.texteMuted }}>
-                Nbre :
-                <input
-                  type="number" inputMode="decimal" min="0" max="6" step="1"
-                  value={nbre}
-                  onChange={(e) => onJoursOverrideChange(j.code, e.target.value)}
-                  style={{
-                    width: 50, padding: '3px 6px', borderRadius: 4,
-                    border: `1px solid ${isOverridden ? c.accent : c.bordure}`,
-                    background: c.blanc, color: c.texte, fontSize: 12,
-                    textAlign: 'right', outline: 'none',
-                    fontWeight: isOverridden ? 600 : 400,
-                  }}
-                  title={isOverridden ? `Calendrier : ${nbreCal} jours · override actif` : 'Nb d\'occurrences (éditable)'}
-                />
-              </label>
-              {isOverridden && (
-                <span style={{ fontSize: 10, color: c.texteMuted, fontWeight: 400 }}>(cal: {nbreCal})</span>
-              )}
+            <div style={{ fontSize: 13, fontWeight: 600, color: c.texte, marginBottom: 6 }}>
+              {j.label}
             </div>
             {SERVICES.map((svc) => {
               const cell = moisMap[`${j.code}_${lieu.id}_${svc.code}`] || emptyCell()
+              const overrideSvc = joursOverrideMois?.[j.code]?.[svc.code]
+              const nbre = overrideSvc != null ? Number(overrideSvc) : nbreCal
+              const isOverridden = overrideSvc != null && Number(overrideSvc) !== nbreCal
               const couvJ = Number(cell.couverts_cible || 0)
               const tm = Number(cell.tm_cible || 0)
               const cvts = nbre * couvJ
@@ -1584,8 +1572,29 @@ function MoisCardsMobile({ mois, annee, lieu, moisMap, updateCell, joursOverride
                     marginBottom: 6,
                   }}
                 >
-                  <div style={{ fontSize: 11, color: c.texteMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>
-                    {svc.label}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 8 }}>
+                    <div style={{ fontSize: 11, color: c.texteMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                      {svc.label}
+                    </div>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: c.texteMuted }}>
+                      Nbre :
+                      <input
+                        type="number" inputMode="decimal" min="0" max="6" step="1"
+                        value={nbre}
+                        onChange={(e) => onJoursOverrideChange(j.code, svc.code, e.target.value)}
+                        style={{
+                          width: 44, padding: '3px 6px', borderRadius: 4,
+                          border: `1px solid ${isOverridden ? c.accent : c.bordure}`,
+                          background: c.blanc, color: c.texte, fontSize: 12,
+                          textAlign: 'right', outline: 'none',
+                          fontWeight: isOverridden ? 600 : 400,
+                        }}
+                        title={isOverridden ? `Calendrier : ${nbreCal} jours · override actif` : 'Nb d\'occurrences (éditable)'}
+                      />
+                      {isOverridden && (
+                        <span style={{ fontSize: 10, color: c.texteMuted }}>(cal {nbreCal})</span>
+                      )}
+                    </label>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11, color: c.texteMuted }}>
@@ -1673,10 +1682,10 @@ function SommaireSticky({ budgets, lieuId, annee, joursOverride, c }) {
       let cvts = 0
       let ca = 0
       for (const j of JOURS_SEMAINE) {
-        const nbre = getNbJours(annee, m, j.code, joursOverride)
         for (const svc of SERVICES) {
           const cell = moisMap[`${j.code}_${lieuId}_${svc.code}`]
           if (!cell) continue
+          const nbre = getNbJours(annee, m, j.code, svc.code, joursOverride)
           const couvJ = Number(cell.couverts_cible || 0)
           const tm = Number(cell.tm_cible || 0)
           cvts += nbre * couvJ
@@ -2245,15 +2254,17 @@ function RecapAnnuel({ budgets, lieux, annee, joursOverride, c, isMobile }) {
       const moisMap = budgets[m] || {}
       const colVals = {}
       let cattc = 0
-      const usedJours = new Set()
+      // usedJours est désormais indexé par (jds, svcCode) pour pouvoir
+      // sommer un nbre potentiellement différent entre midi et soir.
+      const usedJoursByService = new Set()
       for (const j of JOURS_SEMAINE) {
-        const nbre = getNbJours(annee, m, j.code, joursOverride)
         for (const col of cols) {
           const cell = moisMap[`${j.code}_${col.lieuId}_${col.svcCode}`]
           if (!cell) continue
+          const nbre = getNbJours(annee, m, j.code, col.svcCode, joursOverride)
           const couvJ = Number(cell.couverts_cible || 0)
           const tm = Number(cell.tm_cible || 0)
-          if (couvJ > 0) usedJours.add(j.code)
+          if (couvJ > 0) usedJoursByService.add(`${j.code}_${col.svcCode}`)
           const ca = nbre * couvJ * tm
           colVals[col.key] = (colVals[col.key] || 0) + ca
           cattc += ca
@@ -2265,8 +2276,17 @@ function RecapAnnuel({ budgets, lieux, annee, joursOverride, c, isMobile }) {
       const bev10 = (cattc * BEV_10_RATIO) / 1.1
       const caHt = food + bev20 + bev10
       const bev = bev20 + bev10
+      // Compte nbJours utilisé pour le CA/jour : on prend le max entre les
+      // services pour chaque jds (sinon midi compte double avec dîner).
+      const maxByJds = new Map()
+      for (const key of usedJoursByService) {
+        const [jc, svc] = key.split('_')
+        const n = getNbJours(annee, m, Number(jc), svc, joursOverride)
+        const cur = maxByJds.get(jc) || 0
+        if (n > cur) maxByJds.set(jc, n)
+      }
       let nbJours = 0
-      for (const jc of usedJours) nbJours += getNbJours(annee, m, jc, joursOverride)
+      for (const n of maxByJds.values()) nbJours += n
       return {
         mois: m,
         cols: colVals,
