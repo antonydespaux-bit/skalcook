@@ -61,6 +61,19 @@ function jsWeekdayToIso(jsWeekday) {
   return jsWeekday === 0 ? 7 : jsWeekday
 }
 
+// Combien de fois `isoJds` (1=lundi … 7=dimanche) tombe dans `mois` de `annee`.
+// Utilisé pour le Δ Budget total (équivalent à joursDansMois côté budgets).
+function nbWeekdayInMonth(annee, mois, isoJds) {
+  const lastDay = new Date(annee, mois, 0).getDate()
+  let count = 0
+  for (let d = 1; d <= lastDay; d++) {
+    const date = new Date(annee, mois - 1, d)
+    const dow = date.getDay() === 0 ? 7 : date.getDay()
+    if (dow === isoJds) count++
+  }
+  return count
+}
+
 export default function VentesMensuelPage() {
   const router = useRouter()
   const { c } = useTheme()
@@ -71,6 +84,9 @@ export default function VentesMensuelPage() {
   const [mois, setMois] = useState(currentMonthIso())
   const [rawRows, setRawRows] = useState([])
   const [budgetRows, setBudgetRows] = useState([])
+  // Overrides nb_jours par (mois, jds, service) — utilisé pour aligner le
+  // TOTAL du mois sur le Récapitulatif annuel de la page Budgets.
+  const [joursOverrideRows, setJoursOverrideRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -104,7 +120,7 @@ export default function VentesMensuelPage() {
     try {
       const { debut, fin } = monthRange(mois)
       const [y, m] = mois.split('-').map(Number)
-      const [caRes, budgetRes] = await Promise.all([
+      const [caRes, budgetRes, overrideRes] = await Promise.all([
         supabase
           .from('ca_journalier')
           .select('jour, service, couverts, ca_food, ca_bev_20, ca_bev_10, ca_autre')
@@ -119,11 +135,19 @@ export default function VentesMensuelPage() {
           .eq('client_id', clientId)
           .eq('annee', y)
           .or(`mois.is.null,mois.eq.${m}`),
+        supabase
+          .from('ca_budget_jours_override')
+          .select('mois, jour_semaine, service, nb_jours')
+          .eq('client_id', clientId)
+          .eq('annee', y)
+          .eq('mois', m),
       ])
       if (caRes.error) throw caRes.error
       if (budgetRes.error) throw budgetRes.error
+      if (overrideRes.error) throw overrideRes.error
       setRawRows(caRes.data || [])
       setBudgetRows(budgetRes.data || [])
+      setJoursOverrideRows(overrideRes.data || [])
     } catch (e) {
       setError(e.message || 'Erreur de chargement')
     } finally {
@@ -216,6 +240,44 @@ export default function VentesMensuelPage() {
     })
   }, [days, budgetByIsoJds])
 
+  // Budget MENSUEL aligné sur le Récapitulatif annuel de la page Budgets :
+  // - Ne prend que les cellules ca_budgets avec mois = monthNum (ignore les
+  //   défauts mois = NULL — la page Budgets non plus ne les affiche pas).
+  // - Multiplie chaque cellule par nbJours(mois, jds, svc) avec respect de
+  //   l'override par service (table ca_budget_jours_override).
+  // Volontairement différent de la somme jour-par-jour de daysWithBudget,
+  // qui utilise le compte calendaire strict — la coloration par jour reste
+  // basée sur le calendrier (un mardi = un mardi, on ne peut pas le couper).
+  const monthlyBudgetAligned = useMemo(() => {
+    const [yStr, mStr] = mois.split('-')
+    const annee = Number(yStr)
+    const monthNum = Number(mStr)
+    // Index overrides : Map<`${jds}_${svc}`, nb_jours>
+    const overrideMap = new Map()
+    for (const o of joursOverrideRows) {
+      if (o.mois !== monthNum) continue
+      overrideMap.set(`${o.jour_semaine}_${o.service}`, Number(o.nb_jours))
+    }
+    let total = 0
+    for (const b of budgetRows) {
+      // On ignore le fallback mois=NULL : on ne compte que les cellules
+      // explicitement définies pour ce mois (cohérent avec /budgets).
+      if (b.mois !== monthNum) continue
+      const cellTotal =
+        Number(b.ca_food_cible || 0) +
+        Number(b.ca_bev_20_cible || 0) +
+        Number(b.ca_bev_10_cible || 0) +
+        Number(b.ca_autre_cible || 0)
+      if (cellTotal === 0) continue
+      const ovKey = `${b.jour_semaine}_${b.service}`
+      const nbre = overrideMap.has(ovKey)
+        ? overrideMap.get(ovKey)
+        : nbWeekdayInMonth(annee, monthNum, b.jour_semaine)
+      total += nbre * cellTotal
+    }
+    return total
+  }, [budgetRows, joursOverrideRows, mois])
+
   const monthTotals = useMemo(() => {
     const t = {
       lunchCouverts: 0,
@@ -224,7 +286,12 @@ export default function VentesMensuelPage() {
       bev_20: 0,
       bev_10: 0,
       autre: 0,
-      budget: 0,
+      // mtdBudget : budget cumulé sur les jours déjà saisis (= somme des
+      // budgets journaliers calendaires pour chaque jour avec hasData=true).
+      // Permet de comparer au CA réel cumulé "à date renseignée" (Month to
+      // date) : l'écart représente la position vs budget sur les seuls
+      // jours pour lesquels on a de la data.
+      mtdBudget: 0,
     }
     for (const d of daysWithBudget) {
       t.lunchCouverts += d.lunchCouverts
@@ -233,7 +300,7 @@ export default function VentesMensuelPage() {
       t.bev_20 += d.bev_20
       t.bev_10 += d.bev_10
       t.autre += d.autre
-      t.budget += d.budget
+      if (d.hasData) t.mtdBudget += d.budget
     }
     const couvertsTot = t.lunchCouverts + t.dinnerCouverts
     const caTot = t.food + t.bev_20 + t.bev_10 + t.autre
@@ -241,9 +308,12 @@ export default function VentesMensuelPage() {
       ...t,
       couvertsTot,
       caTot,
+      // budget total mois entier (aligné avec le Récap annuel, overrides
+      // respectés). Sert pour la colonne "Δ Mois total".
+      budget: monthlyBudgetAligned,
       tm: couvertsTot > 0 ? caTot / couvertsTot : null,
     }
-  }, [daysWithBudget])
+  }, [daysWithBudget, monthlyBudgetAligned])
 
   if (!authChecked) return null
 
@@ -380,7 +450,8 @@ function MonthTable({ days, totals, mois, isMobile, c }) {
               <th style={head}>CA Soft</th>
               <th style={head}>Autres</th>
               <th style={head}>CA Total</th>
-              <th style={head}>Δ Budget</th>
+              <th style={head} title="Cellule jour : écart réel - budget du jour. Total : cumul réel - cumul budget sur les jours déjà saisis.">Month to date</th>
+              <th style={head} title="Réel cumulé - budget projeté du mois entier (overrides nb_jours respectés)">Δ Mois total</th>
               <th style={head}>TM</th>
               <th style={head}></th>
             </tr>
@@ -410,6 +481,7 @@ function MonthTable({ days, totals, mois, isMobile, c }) {
                 <td style={budgetCellStyle(d, cell, c)} title={budgetCellTitle(d)}>
                   {budgetCellLabel(d)}
                 </td>
+                <td style={{ ...cell, color: c.texteMuted }}>—</td>
                 <td style={cell}>{formatEur2(d.tm)}</td>
                 <td style={{ ...cell, padding: '4px 8px' }}>
                   <Link
@@ -442,8 +514,11 @@ function MonthTable({ days, totals, mois, isMobile, c }) {
               <td style={cell}>{formatEur(totals.bev_10)}</td>
               <td style={cell}>{formatEur(totals.autre)}</td>
               <td style={{ ...cell, fontWeight: 700 }}>{formatEur(totals.caTot)}</td>
-              <td style={totalBudgetCellStyle(totals, cell, c)} title={totalBudgetCellTitle(totals)}>
-                {totalBudgetCellLabel(totals)}
+              <td style={mtdCellStyle(totals, cell, c)} title={mtdCellTitle(totals)}>
+                {mtdCellLabel(totals)}
+              </td>
+              <td style={fullMonthCellStyle(totals, cell, c)} title={fullMonthCellTitle(totals)}>
+                {fullMonthCellLabel(totals)}
               </td>
               <td style={cell}>{formatEur2(totals.tm)}</td>
               <td style={cell}></td>
@@ -489,19 +564,42 @@ function budgetCellTitle(d) {
   return `Réel ${formatEur(d.caTot)} / Budget ${formatEur(d.budget)} (${ratio.toFixed(0)} %)`
 }
 
-function totalBudgetCellStyle(totals, base, c) {
+// Month to date : compare le réel cumulé sur les jours déjà saisis au
+// budget cumulé pour ces mêmes jours. Plus parlant en cours de mois qu'une
+// comparaison contre le mois entier (qui sera toujours très négative tant
+// qu'on n'a pas atteint la fin du mois).
+function mtdCellStyle(totals, base, c) {
+  const tone = budgetTone(totals.caTot, totals.mtdBudget, totals.caTot > 0)
+  const { color, bg } = tonePalette(tone, c)
+  return { ...base, color, background: bg, fontWeight: tone === 'none' ? 600 : 700 }
+}
+
+function mtdCellLabel(totals) {
+  if (!totals.mtdBudget || totals.caTot === 0) return '—'
+  return formatDeltaEur(totals.caTot - totals.mtdBudget)
+}
+
+function mtdCellTitle(totals) {
+  if (!totals.mtdBudget) return 'Aucun budget cible sur les jours déjà saisis'
+  const ratio = totals.caTot > 0 ? (totals.caTot / totals.mtdBudget) * 100 : 0
+  return `Réel ${formatEur(totals.caTot)} / Budget jours saisis ${formatEur(totals.mtdBudget)} (${ratio.toFixed(0)} %)`
+}
+
+// Δ Mois total : compare le réel cumulé au budget projeté du mois entier
+// (overrides nb_jours respectés, aligné avec le Récap annuel des budgets).
+function fullMonthCellStyle(totals, base, c) {
   const tone = budgetTone(totals.caTot, totals.budget, totals.caTot > 0)
   const { color, bg } = tonePalette(tone, c)
   return { ...base, color, background: bg, fontWeight: tone === 'none' ? 600 : 700 }
 }
 
-function totalBudgetCellLabel(totals) {
+function fullMonthCellLabel(totals) {
   if (!totals.budget || totals.caTot === 0) return '—'
   return formatDeltaEur(totals.caTot - totals.budget)
 }
 
-function totalBudgetCellTitle(totals) {
+function fullMonthCellTitle(totals) {
   if (!totals.budget) return 'Aucun budget cible défini sur le mois'
   const ratio = totals.caTot > 0 ? (totals.caTot / totals.budget) * 100 : 0
-  return `Réel ${formatEur(totals.caTot)} / Budget ${formatEur(totals.budget)} (${ratio.toFixed(0)} %)`
+  return `Réel ${formatEur(totals.caTot)} / Budget mois entier ${formatEur(totals.budget)} (${ratio.toFixed(0)} %)`
 }
