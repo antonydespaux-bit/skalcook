@@ -419,6 +419,11 @@ function MonthTable({ days, totals, mois, isMobile, c }) {
     background: c.fond,
     borderBottom: `1px solid ${c.bordure}`,
     whiteSpace: 'nowrap',
+    // Sticky sous la Navbar (hauteur 56px) : on laisse les libellés visibles
+    // pendant qu'on scrolle dans le tableau du mois.
+    position: 'sticky',
+    top: 56,
+    zIndex: 1,
   }
   const cell = {
     padding: cellPad,
@@ -428,16 +433,19 @@ function MonthTable({ days, totals, mois, isMobile, c }) {
     borderBottom: `1px solid ${c.bordure}`,
     whiteSpace: 'nowrap',
   }
+  // Pas de wrapper overflow : la sticky du thead a besoin que son ancêtre
+  // direct ne soit pas un scroll-container (overflowX:auto force overflowY
+  // en auto par spec et casse la sticky verticale). Sur mobile, le scroll
+  // horizontal se fait au niveau du body si la largeur dépasse le viewport.
   return (
     <div
       style={{
         background: c.blanc,
         borderRadius: 12,
         border: `0.5px solid ${c.bordure}`,
-        overflow: 'hidden',
       }}
     >
-      <div style={{ overflowX: 'auto' }}>
+      <div>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
           <thead>
             <tr>
