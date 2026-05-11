@@ -290,20 +290,32 @@ export default function BudgetsPage() {
   useEffect(() => {
     let cancel = false
     ;(async () => {
-      const { data: sessionData } = await supabase.auth.getSession()
-      if (cancel) return
-      if (!sessionData?.session) {
-        router.replace('/')
-        return
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        if (cancel) return
+        if (!sessionData?.session) {
+          router.replace('/')
+          return
+        }
+        let cid = await getClientId()
+        if (!cid) {
+          console.warn('getClientId vide — fallback debug:', DEBUG_FALLBACK_CLIENT_ID)
+          cid = DEBUG_FALLBACK_CLIENT_ID
+        }
+        if (cancel) return
+        setClientId(cid)
+        setAuthChecked(true)
+      } catch (e) {
+        // Si supabase.auth.getSession() ou getClientId() rejette (lock
+        // contesté en strict mode, réseau lent, etc.) on tente quand même
+        // de rendre la page avec un fallback : authChecked passe à true et
+        // un message d'erreur s'affiche au lieu d'une page blanche.
+        if (cancel) return
+        console.warn('Erreur auth budgets, fallback :', e?.message || e)
+        setClientId(DEBUG_FALLBACK_CLIENT_ID)
+        setAuthChecked(true)
+        setError("Connexion lente — la page peut prendre quelques secondes à charger. Rechargez si nécessaire.")
       }
-      let cid = await getClientId()
-      if (!cid) {
-        console.warn('getClientId vide — fallback debug:', DEBUG_FALLBACK_CLIENT_ID)
-        cid = DEBUG_FALLBACK_CLIENT_ID
-      }
-      if (cancel) return
-      setClientId(cid)
-      setAuthChecked(true)
     })()
     return () => {
       cancel = true
