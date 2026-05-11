@@ -9,6 +9,7 @@ import { useIsMobile } from '../../../../lib/useIsMobile'
 import { useTheme } from '../../../../lib/useTheme'
 import Navbar from '../../../../components/Navbar'
 import { buildBudgetsEquipesWorkbook, buildEquipesFilename } from '../../../../lib/budgetsExcelTemplate'
+import JoursFermesModal from '../../../../components/budgets/JoursFermesModal'
 
 const DEBUG_FALLBACK_CLIENT_ID = 'fa725e66-2cad-4ea4-892a-7eb3e90496a7'
 
@@ -269,6 +270,7 @@ export default function BudgetsPage() {
   const [saving, setSaving] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [joursFermesOpen, setJoursFermesOpen] = useState(false)
   const [resetConfirm, setResetConfirm] = useState(null) // 'lieu' | null
   const [importPreview, setImportPreview] = useState(null)
   const [expandedMois, setExpandedMois] = useState(() => new Set(MOIS))
@@ -547,19 +549,35 @@ export default function BudgetsPage() {
   // Le trigger d'audit log les DELETE.
   // Génère le template Excel "équipes" pour un mois donné : un onglet par
   // jour avec budgets pré-remplis et formules pour le cumulé, plus un onglet
-  // Synthèse mensuelle. Téléchargement direct via Blob.
+  // Synthèse mensuelle. Les dates listées dans ca_jours_fermes sont
+  // pré-remplies dans la colonne Exception. Téléchargement direct via Blob.
   const handleExportEquipes = useCallback(async (moisCible) => {
     if (!clientId) return
     setError('')
     setOkMsg('')
     try {
       const moisBudgets = budgets[moisCible] || {}
+      // Charge les jours fermés du mois cible (en BDD)
+      const debut = `${annee}-${String(moisCible).padStart(2, '0')}-01`
+      const finDate = new Date(annee, moisCible, 0)
+      const fin = `${annee}-${String(moisCible).padStart(2, '0')}-${String(finDate.getDate()).padStart(2, '0')}`
+      const { data: joursFermesData, error: jfErr } = await supabase
+        .from('ca_jours_fermes')
+        .select('date, motif')
+        .eq('client_id', clientId)
+        .gte('date', debut)
+        .lte('date', fin)
+      if (jfErr) throw jfErr
+      const joursFermesMap = {}
+      for (const r of (joursFermesData || [])) joursFermesMap[r.date] = r.motif
+
       const wb = await buildBudgetsEquipesWorkbook({
         annee,
         mois: moisCible,
         lieux,
         moisBudgets,
         joursOverride,
+        joursFermes: joursFermesMap,
         clientNom: 'Skalcook',
       })
       const buf = await wb.xlsx.writeBuffer()
@@ -743,6 +761,7 @@ export default function BudgetsPage() {
             onReset={() => setResetConfirm('lieu')}
             onSave={handleSave}
             onExportEquipes={handleExportEquipes}
+            onOpenJoursFermes={() => setJoursFermesOpen(true)}
             saving={saving}
             c={c}
             isMobile={isMobile}
@@ -905,6 +924,15 @@ export default function BudgetsPage() {
         <HistoryModal clientId={clientId} onClose={() => setHistoryOpen(false)} c={c} isMobile={isMobile} />
       )}
 
+      {joursFermesOpen && (
+        <JoursFermesModal
+          c={c}
+          clientId={clientId}
+          annee={annee}
+          onClose={() => setJoursFermesOpen(false)}
+        />
+      )}
+
       {importPreview && (
         <ImportPreviewModal
           preview={importPreview}
@@ -963,6 +991,7 @@ function TopBar({
   onReset,
   onSave,
   onExportEquipes,
+  onOpenJoursFermes,
   saving,
   c,
   isMobile,
@@ -1063,6 +1092,21 @@ function TopBar({
           }}
         >
           Importer Excel
+        </button>
+        <button
+          onClick={onOpenJoursFermes}
+          title="Jours fermés / fériés — pré-remplit la colonne Exception du fichier Excel équipes"
+          style={{
+            padding: '8px 14px',
+            borderRadius: 8,
+            fontSize: 13,
+            border: `1px solid ${c.bordure}`,
+            background: c.blanc,
+            color: c.texte,
+            cursor: 'pointer',
+          }}
+        >
+          🗓 Jours fermés
         </button>
         {/* Excel équipes : template pré-rempli envoyé aux équipes en début de mois */}
         <div style={{ display: 'inline-flex', alignItems: 'stretch', gap: 0 }}>

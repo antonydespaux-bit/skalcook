@@ -149,4 +149,18 @@ describe('buildBudgetsEquipesWorkbook', () => {
     // Ticket = (4000 + 1500 + 500) / 25 = 6000 / 25 = 240
     expect(mardiSheet.getCell(7, 2).value).toBe(240)
   })
+
+  it('pré-remplit la colonne Exception depuis joursFermes', async () => {
+    const wb = await buildBudgetsEquipesWorkbook({
+      annee: 2026, mois: 5, lieux, moisBudgets,
+      joursFermes: { '2026-05-01': '1er mai', '2026-05-08': 'Victoire 1945' },
+    })
+    const synth = wb.getWorksheet('Synthèse')
+    // Ligne 2 = 01-05 → motif "1er mai" en col D
+    expect(synth.getCell(2, 4).value).toBe('1er mai')
+    // Ligne 9 = 08-05 → motif "Victoire 1945"
+    expect(synth.getCell(9, 4).value).toBe('Victoire 1945')
+    // Ligne 3 = 02-05 → pas de motif (vide)
+    expect(synth.getCell(3, 4).value).toBeFalsy()
+  })
 })
