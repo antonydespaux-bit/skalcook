@@ -222,9 +222,88 @@ function Section({ c, titre, children }) {
 const ulStyle = { margin: 0, paddingLeft: 20, fontSize: 14, color: '#000', lineHeight: '1.7' }
 const liStyle = { marginBottom: 4 }
 
+// ── Section Articles (menus + suppléments) ─────────────────────────────────
+
+// Affiche les ventes par menu/supplément groupées par (type, service).
+// Pour chaque article, montre la qté vendue + % vs couverts du service.
+// `articles` : [{ id, nom, type, service }]
+// `articlesVentes` : { [article_id]: quantite }
+// `couverts` : sortie de couvertsParService(...)
+// `editable` : si true, permet d'éditer les qtés inline
+// `onChangeQte` : (articleId, qte) => void
+export function SectionArticles({ c, articles, articlesVentes, couverts, editable, onChangeQte, titre }) {
+  if (!articles || articles.length === 0) return null
+
+  // Regroupe par (type, service)
+  const groups = [
+    { type: 'menu',       service: 'lunch',  label: 'Ventes Menu Déjeuner', svcCouv: couverts.midi.real },
+    { type: 'menu',       service: 'dinner', label: 'Ventes Menu Dîner',    svcCouv: couverts.soir.real },
+    { type: 'menu',       service: 'all',    label: 'Ventes Menu (tous services)', svcCouv: couverts.total.real },
+    { type: 'supplement', service: 'lunch',  label: 'Suppléments Déjeuner', svcCouv: couverts.midi.real },
+    { type: 'supplement', service: 'dinner', label: 'Suppléments Dîner',    svcCouv: couverts.soir.real },
+    { type: 'supplement', service: 'all',    label: 'Suppléments (tous services)', svcCouv: couverts.total.real },
+  ]
+
+  const cellPad = '6px 10px'
+  const head = { padding: cellPad, background: c.fond, color: c.texteMuted, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: `1px solid ${c.bordure}` }
+  const cell = { padding: cellPad, fontSize: 13, color: c.texte, borderBottom: `0.5px solid ${c.bordure}` }
+
+  const blocks = groups.map((g) => {
+    const items = articles.filter((a) => a.type === g.type && a.service === g.service)
+    if (items.length === 0) return null
+    return (
+      <div key={`${g.type}_${g.service}`} style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: c.texte, marginBottom: 6 }}>
+          {g.label}
+        </div>
+        <div style={{ overflowX: 'auto', border: `0.5px solid ${c.bordure}`, borderRadius: 8 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={{ ...head, textAlign: 'left' }}>Nom de l&apos;article</th>
+                <th style={{ ...head, textAlign: 'right' }}>Qté vendue</th>
+                <th style={{ ...head, textAlign: 'right' }}>% vs couverts</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((a) => {
+                const qte = Number(articlesVentes?.[a.id] || 0)
+                const pct = g.svcCouv > 0 ? (qte / g.svcCouv) * 100 : null
+                return (
+                  <tr key={a.id}>
+                    <td style={{ ...cell, textAlign: 'left' }}>{a.nom}</td>
+                    <td style={{ ...cell, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {editable ? (
+                        <input
+                          type="number" min="0" step="1"
+                          value={qte || ''}
+                          onChange={(e) => onChangeQte && onChangeQte(a.id, e.target.value === '' ? 0 : Number(e.target.value))}
+                          style={{ width: 70, padding: '4px 6px', borderRadius: 4, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 13, textAlign: 'right' }}
+                        />
+                      ) : (
+                        formatNombre(qte)
+                      )}
+                    </td>
+                    <td style={{ ...cell, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                      {pct != null ? formatPctSimple(pct) : '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }).filter(Boolean)
+
+  if (blocks.length === 0) return null
+  return <Section c={c} titre={titre || 'Ventes par article'}>{blocks}</Section>
+}
+
 // ── Export agrégé pour utilisation par la page ─────────────────────────────
 
-export default function RapportSections({ c, data, debut, fin }) {
+export default function RapportSections({ c, data, debut, fin, articles, articlesVentes, editableArticles, onChangeQte }) {
   const periodeLabel = formatPeriode(debut, fin)
   // Cumul mois : du 1er au fin (ou jour de la période fin)
   const finDate = new Date(fin)
@@ -239,6 +318,17 @@ export default function RapportSections({ c, data, debut, fin }) {
       <SectionMixFoodBev c={c} mix={data.mix} titre={`Ticket moyen Food et Beverage en % vs TM total ${periodeLabel} midi et soir`} />
       <SectionCouverts c={c} couverts={data.couverts} titre={`Nombre de couverts ${periodeLabel}`} />
       <SectionCouvertsJpJ c={c} jours={data.couvertsJpJ} titre={`Couverts jour par jour Réel VS Budget ${periodeLabel}`} />
+      {articles && articles.length > 0 && (
+        <SectionArticles
+          c={c}
+          articles={articles}
+          articlesVentes={articlesVentes}
+          couverts={data.couverts}
+          editable={editableArticles}
+          onChangeQte={onChangeQte}
+          titre={`Ventes par article ${periodeLabel}`}
+        />
+      )}
     </div>
   )
 }
