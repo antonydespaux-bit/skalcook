@@ -134,10 +134,11 @@ export default function VentesMensuelPage() {
           )
           .eq('client_id', clientId)
           .eq('annee', y)
+          // mois IN (NULL, m) — couvre les défauts + override mensuel
           .or(`mois.is.null,mois.eq.${m}`),
         supabase
           .from('ca_budget_jours_override')
-          .select('mois, jour_semaine, service, nb_jours')
+          .select('mois, jour_semaine, service, lieu_service_id, nb_jours')
           .eq('client_id', clientId)
           .eq('annee', y)
           .eq('mois', m),
@@ -252,11 +253,21 @@ export default function VentesMensuelPage() {
     const [yStr, mStr] = mois.split('-')
     const annee = Number(yStr)
     const monthNum = Number(mStr)
-    // Index overrides : Map<`${jds}_${svc}`, nb_jours>
+    // Index overrides : Map<`${jds}_${svc}_${lieuId|__all__}`, nb_jours>
+    // L'override par lieu est prioritaire sur l'override global (lieu=null)
+    // qui est prioritaire sur le compte calendaire.
     const overrideMap = new Map()
     for (const o of joursOverrideRows) {
       if (o.mois !== monthNum) continue
-      overrideMap.set(`${o.jour_semaine}_${o.service}`, Number(o.nb_jours))
+      const lieuKey = o.lieu_service_id || '__all__'
+      overrideMap.set(`${o.jour_semaine}_${o.service}_${lieuKey}`, Number(o.nb_jours))
+    }
+    const lookupNbre = (jds, svc, lieuId) => {
+      const k1 = `${jds}_${svc}_${lieuId}`
+      if (overrideMap.has(k1)) return overrideMap.get(k1)
+      const k2 = `${jds}_${svc}___all__`
+      if (overrideMap.has(k2)) return overrideMap.get(k2)
+      return nbWeekdayInMonth(annee, monthNum, jds)
     }
     let total = 0
     for (const b of budgetRows) {
@@ -269,10 +280,7 @@ export default function VentesMensuelPage() {
         Number(b.ca_bev_10_cible || 0) +
         Number(b.ca_autre_cible || 0)
       if (cellTotal === 0) continue
-      const ovKey = `${b.jour_semaine}_${b.service}`
-      const nbre = overrideMap.has(ovKey)
-        ? overrideMap.get(ovKey)
-        : nbWeekdayInMonth(annee, monthNum, b.jour_semaine)
+      const nbre = lookupNbre(b.jour_semaine, b.service, b.lieu_service_id)
       total += nbre * cellTotal
     }
     return total

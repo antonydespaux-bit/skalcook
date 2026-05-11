@@ -122,13 +122,23 @@ function joursDansMois(annee, mois, jdsTarget) {
 
 // Renvoie le nb d'occurrences à utiliser : override de l'utilisateur s'il
 // existe, sinon le compte calendaire calculé. L'override est désormais
-// stocké par service (lunch / dinner) — un même jour de la semaine peut
-// avoir 4 occurrences le midi mais 5 le soir.
+// stocké par service (lunch / dinner) ET par lieu (lieu_service_id ou null
+// pour le global).
 //
-// Structure attendue : joursOverride[mois][jds][svcCode] = number
-function getNbJours(annee, mois, jds, svcCode, joursOverride) {
-  const ov = joursOverride?.[mois]?.[jds]?.[svcCode]
-  if (ov != null && ov !== '') return Number(ov)
+// Priorité de lookup : (mois, jds, svc, lieu) > (mois, jds, svc, null) > calendrier
+//
+// Structure attendue :
+//   joursOverride[mois][jds][svcCode][lieuId|'__all__'] = number
+function getNbJours(annee, mois, jds, svcCode, lieuId, joursOverride) {
+  const cellMap = joursOverride?.[mois]?.[jds]?.[svcCode]
+  if (cellMap) {
+    if (lieuId && cellMap[lieuId] != null && cellMap[lieuId] !== '') {
+      return Number(cellMap[lieuId])
+    }
+    if (cellMap.__all__ != null && cellMap.__all__ !== '') {
+      return Number(cellMap.__all__)
+    }
+  }
   return joursDansMois(annee, mois, jds)
 }
 
@@ -346,7 +356,7 @@ export default function BudgetsPage() {
           .not('mois', 'is', null),
         supabase
           .from('ca_budget_jours_override')
-          .select('mois, jour_semaine, service, nb_jours')
+          .select('mois, jour_semaine, service, lieu_service_id, nb_jours')
           .eq('client_id', clientId)
           .eq('annee', annee),
       ])
@@ -377,7 +387,9 @@ export default function BudgetsPage() {
       ;(overridesRes.data || []).forEach((r) => {
         if (!ov[r.mois]) ov[r.mois] = {}
         if (!ov[r.mois][r.jour_semaine]) ov[r.mois][r.jour_semaine] = {}
-        ov[r.mois][r.jour_semaine][r.service] = r.nb_jours
+        if (!ov[r.mois][r.jour_semaine][r.service]) ov[r.mois][r.jour_semaine][r.service] = {}
+        const lieuKey = r.lieu_service_id || '__all__'
+        ov[r.mois][r.jour_semaine][r.service][lieuKey] = r.nb_jours
       })
       setJoursOverride(ov)
     } catch (e) {
@@ -412,22 +424,29 @@ export default function BudgetsPage() {
   }, [])
 
   // Met à jour l'override local et persiste en BDD pour un service précis.
+  // `lieuId` = uuid du lieu pour un override spécifique, ou null pour le
+  // global (rétro-compat). L'UI Budgets passe toujours le lieu courant
+  // (lieuFilter) → chaque lieu a son propre override.
   // Persistance immédiate à chaque changement ; si la valeur saisie égale
   // le compte calendaire, on supprime l'override pour revenir au défaut.
-  const updateJoursOverride = useCallback(async (mois, jds, svcCode, raw) => {
+  const updateJoursOverride = useCallback(async (mois, jds, svcCode, lieuId, raw) => {
     if (!clientId) return
     const calCount = joursDansMois(annee, mois, jds)
     const trimmed = (raw == null ? '' : String(raw).trim())
     const num = trimmed === '' ? null : Math.max(0, Math.min(6, Math.round(Number(trimmed))))
     const isDefault = num == null || isNaN(num) || num === calCount
+    const lieuKey = lieuId || '__all__'
 
     // Optimistic local update
     setJoursOverride((prev) => {
       const next = { ...prev }
       const moisMap = { ...(prev[mois] || {}) }
       const jdsMap = { ...(moisMap[jds] || {}) }
-      if (isDefault) delete jdsMap[svcCode]
-      else jdsMap[svcCode] = num
+      const svcMap = { ...(jdsMap[svcCode] || {}) }
+      if (isDefault) delete svcMap[lieuKey]
+      else svcMap[lieuKey] = num
+      if (Object.keys(svcMap).length === 0) delete jdsMap[svcCode]
+      else jdsMap[svcCode] = svcMap
       if (Object.keys(jdsMap).length === 0) delete moisMap[jds]
       else moisMap[jds] = jdsMap
       if (Object.keys(moisMap).length === 0) delete next[mois]
@@ -436,21 +455,23 @@ export default function BudgetsPage() {
     })
 
     try {
+      let query = supabase
+        .from('ca_budget_jours_override')
+        .delete()
+        .eq('client_id', clientId)
+        .eq('annee', annee)
+        .eq('mois', mois)
+        .eq('jour_semaine', jds)
+        .eq('service', svcCode)
+      query = lieuId ? query.eq('lieu_service_id', lieuId) : query.is('lieu_service_id', null)
       if (isDefault) {
-        await supabase
-          .from('ca_budget_jours_override')
-          .delete()
-          .eq('client_id', clientId)
-          .eq('annee', annee)
-          .eq('mois', mois)
-          .eq('jour_semaine', jds)
-          .eq('service', svcCode)
+        await query
       } else {
         await supabase
           .from('ca_budget_jours_override')
           .upsert(
-            { client_id: clientId, annee, mois, jour_semaine: jds, service: svcCode, nb_jours: num },
-            { onConflict: 'client_id,annee,mois,jour_semaine,service' }
+            { client_id: clientId, annee, mois, jour_semaine: jds, service: svcCode, lieu_service_id: lieuId, nb_jours: num },
+            { onConflict: 'client_id,annee,mois,jour_semaine,service,lieu_service_id' }
           )
       }
     } catch (e) {
@@ -738,7 +759,7 @@ export default function BudgetsPage() {
         for (const svc of SERVICES) {
           const cell = moisMap[`${j.code}_${lieuFilter}_${svc.code}`]
           if (!cell) continue
-          const nbre = getNbJours(annee, m, j.code, svc.code, joursOverride)
+          const nbre = getNbJours(annee, m, j.code, svc.code, lieuFilter, joursOverride)
           const couvJ = Number(cell.couverts_cible || 0)
           const tm = Number(cell.tm_cible || 0)
           t.couverts += nbre * couvJ
@@ -884,7 +905,7 @@ export default function BudgetsPage() {
                   moisMap={budgets[m] || {}}
                   updateCell={updateCell}
                   joursOverrideMois={joursOverride[m] || {}}
-                  onJoursOverrideChange={(jds, svcCode, val) => updateJoursOverride(m, jds, svcCode, val)}
+                  onJoursOverrideChange={(jds, svcCode, val) => updateJoursOverride(m, jds, svcCode, selectedLieu?.id || null, val)}
                   onDuplicateNext={() => duplicateMois(m, [m + 1])}
                   onDuplicateAllAfter={() => duplicateMois(m, MOIS.filter((x) => x > m))}
                   expanded={expandedMois.has(m)}
@@ -1254,7 +1275,7 @@ function MoisTable({ mois, annee, lieu, moisMap, updateCell, joursOverrideMois, 
       for (const svc of SERVICES) {
         const cell = moisMap[`${j.code}_${lieu.id}_${svc.code}`]
         if (!cell) continue
-        const nbre = getNbJours(annee, mois, j.code, svc.code, { [mois]: joursOverrideMois })
+        const nbre = getNbJours(annee, mois, j.code, svc.code, lieu.id, { [mois]: joursOverrideMois })
         const couvJ = Number(cell.couverts_cible || 0)
         const tm = Number(cell.tm_cible || 0)
         if (couvJ > 0) t[svc.code].nbre += nbre
@@ -1455,7 +1476,11 @@ function MoisTable({ mois, annee, lieu, moisMap, updateCell, joursOverrideMois, 
                   </td>
                   {SERVICES.map((svc, idx) => {
                     const cell = moisMap[`${j.code}_${lieu.id}_${svc.code}`] || emptyCell()
-                    const overrideSvc = joursOverrideMois?.[j.code]?.[svc.code]
+                    // Lookup avec priorité lieu > global > calendrier
+                    const cellMap = joursOverrideMois?.[j.code]?.[svc.code]
+                    const overrideLieu = cellMap?.[lieu.id]
+                    const overrideAll  = cellMap?.__all__
+                    const overrideSvc = overrideLieu != null ? overrideLieu : overrideAll
                     const nbre = overrideSvc != null ? Number(overrideSvc) : nbreCal
                     const isOverridden = overrideSvc != null && Number(overrideSvc) !== nbreCal
                     const couvJ = Number(cell.couverts_cible || 0)
@@ -1721,7 +1746,11 @@ function MoisCardsMobile({ mois, annee, lieu, moisMap, updateCell, joursOverride
             </div>
             {SERVICES.map((svc) => {
               const cell = moisMap[`${j.code}_${lieu.id}_${svc.code}`] || emptyCell()
-              const overrideSvc = joursOverrideMois?.[j.code]?.[svc.code]
+              // Priorité lookup : lieu > global > calendrier
+              const cellMap = joursOverrideMois?.[j.code]?.[svc.code]
+              const overrideLieu = cellMap?.[lieu.id]
+              const overrideAll = cellMap?.__all__
+              const overrideSvc = overrideLieu != null ? overrideLieu : overrideAll
               const nbre = overrideSvc != null ? Number(overrideSvc) : nbreCal
               const isOverridden = overrideSvc != null && Number(overrideSvc) !== nbreCal
               const couvJ = Number(cell.couverts_cible || 0)
@@ -1851,7 +1880,7 @@ function SommaireSticky({ budgets, lieuId, annee, joursOverride, c }) {
         for (const svc of SERVICES) {
           const cell = moisMap[`${j.code}_${lieuId}_${svc.code}`]
           if (!cell) continue
-          const nbre = getNbJours(annee, m, j.code, svc.code, joursOverride)
+          const nbre = getNbJours(annee, m, j.code, svc.code, lieuId, joursOverride)
           const couvJ = Number(cell.couverts_cible || 0)
           const tm = Number(cell.tm_cible || 0)
           cvts += nbre * couvJ
@@ -2427,10 +2456,10 @@ function RecapAnnuel({ budgets, lieux, annee, joursOverride, c, isMobile }) {
         for (const col of cols) {
           const cell = moisMap[`${j.code}_${col.lieuId}_${col.svcCode}`]
           if (!cell) continue
-          const nbre = getNbJours(annee, m, j.code, col.svcCode, joursOverride)
+          const nbre = getNbJours(annee, m, j.code, col.svcCode, col.lieuId, joursOverride)
           const couvJ = Number(cell.couverts_cible || 0)
           const tm = Number(cell.tm_cible || 0)
-          if (couvJ > 0) usedJoursByService.add(`${j.code}_${col.svcCode}`)
+          if (couvJ > 0) usedJoursByService.add(`${j.code}_${col.svcCode}_${col.lieuId}`)
           const ca = nbre * couvJ * tm
           colVals[col.key] = (colVals[col.key] || 0) + ca
           cattc += ca
@@ -2446,8 +2475,12 @@ function RecapAnnuel({ budgets, lieux, annee, joursOverride, c, isMobile }) {
       // services pour chaque jds (sinon midi compte double avec dîner).
       const maxByJds = new Map()
       for (const key of usedJoursByService) {
-        const [jc, svc] = key.split('_')
-        const n = getNbJours(annee, m, Number(jc), svc, joursOverride)
+        // key = `${jds}_${svc}_${lieuId}`
+        const parts = key.split('_')
+        const jc = parts[0]
+        const svc = parts[1]
+        const lieuId = parts.slice(2).join('_') // uuid contient '-' pas '_', mais on rejoint au cas où
+        const n = getNbJours(annee, m, Number(jc), svc, lieuId, joursOverride)
         const cur = maxByJds.get(jc) || 0
         if (n > cur) maxByJds.set(jc, n)
       }
