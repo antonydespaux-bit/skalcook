@@ -8,6 +8,8 @@ import { useTheme } from '../../../../lib/useTheme'
 import { useRole } from '../../../../lib/useRole'
 import Navbar from '../../../../components/Navbar'
 import RapportSections from '../../../../components/rapport-hebdo/RapportSections'
+import ArticlesModal from '../../../../components/rapport-hebdo/ArticlesModal'
+import ComparaisonPanel from '../../../../components/rapport-hebdo/ComparaisonPanel'
 import {
   buildRapportData,
   semaineEnCours,
@@ -50,6 +52,17 @@ export default function RapportHebdoPage() {
   // Archives
   const [archives, setArchives] = useState([])
   const [archivesLoading, setArchivesLoading] = useState(false)
+
+  // Articles (menus / suppléments) référencés pour ce client
+  const [articles, setArticles] = useState([])
+  // Quantités saisies pour le rapport courant — { article_id: qte }
+  const [articlesVentes, setArticlesVentes] = useState({})
+  const [articlesModalOpen, setArticlesModalOpen] = useState(false)
+
+  // Mode comparaison : si actif, affiche un tableau côte à côte avec des
+  // périodes additionnelles. Données chargées à la volée.
+  const [compareMode, setCompareMode] = useState(false)
+  const [comparePeriodes, setComparePeriodes] = useState([]) // [{ debut, fin }]
 
   // ── Auth ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -148,7 +161,7 @@ export default function RapportHebdoPage() {
     try {
       const { data, error: e } = await supabase
         .from('ca_rapports_hebdo')
-        .select('id, debut, fin, titre, commentaire, created_at, updated_at')
+        .select('id, debut, fin, titre, commentaire, articles_ventes, created_at, updated_at')
         .eq('client_id', clientId)
         .order('debut', { ascending: false })
         .limit(50)
@@ -162,6 +175,25 @@ export default function RapportHebdoPage() {
   }, [clientId])
 
   useEffect(() => { if (authReady && clientId) loadArchives() }, [authReady, clientId, loadArchives])
+
+  // ── Chargement des articles ─────────────────────────────────────────────
+  const loadArticles = useCallback(async () => {
+    if (!clientId) return
+    try {
+      const { data, error: e } = await supabase
+        .from('ca_articles')
+        .select('id, nom, type, service, ordre')
+        .eq('client_id', clientId)
+        .eq('actif', true)
+        .order('type').order('service').order('ordre').order('nom')
+      if (e) throw e
+      setArticles(data || [])
+    } catch (e) {
+      console.warn('Erreur chargement articles :', e?.message || e)
+    }
+  }, [clientId])
+
+  useEffect(() => { if (authReady && clientId) loadArticles() }, [authReady, clientId, loadArticles])
 
   // ── Données dérivées ────────────────────────────────────────────────────
   const lieuxMap = useMemo(() => new Map(lieux.map((l) => [l.id, l.nom])), [lieux])
@@ -186,17 +218,22 @@ export default function RapportHebdoPage() {
     setError('')
     setOkMsg('')
     try {
+      const payload = {
+        debut, fin, commentaire,
+        titre: titre || null,
+        articles_ventes: articlesVentes || {},
+      }
       if (currentRapportId) {
         const { error: e } = await supabase
           .from('ca_rapports_hebdo')
-          .update({ debut, fin, commentaire, titre: titre || null })
+          .update(payload)
           .eq('id', currentRapportId)
         if (e) throw e
         setOkMsg('Rapport mis à jour.')
       } else {
         const { data: ins, error: e } = await supabase
           .from('ca_rapports_hebdo')
-          .insert({ client_id: clientId, debut, fin, commentaire, titre: titre || null })
+          .insert({ client_id: clientId, ...payload })
           .select('id')
           .single()
         if (e) throw e
@@ -217,6 +254,7 @@ export default function RapportHebdoPage() {
     setFin(rapport.fin)
     setCommentaire(rapport.commentaire || '')
     setTitre(rapport.titre || '')
+    setArticlesVentes(rapport.articles_ventes || {})
     setOkMsg('')
     setError('')
   }
@@ -237,14 +275,22 @@ export default function RapportHebdoPage() {
     setCurrentRapportId(null)
     setCommentaire('')
     setTitre('')
+    setArticlesVentes({})
     setOkMsg('')
     setError('')
+  }
+
+  const handleChangeArticleQte = (articleId, qte) => {
+    setArticlesVentes((prev) => ({ ...prev, [articleId]: qte }))
   }
 
   const handleCopyEmail = async () => {
     setError(''); setOkMsg('')
     try {
-      const html = buildRapportHtml({ data, debut, fin, commentaire, titre })
+      const html = buildRapportHtml({
+        data, debut, fin, commentaire, titre,
+        articles, articlesVentes,
+      })
       await copyHtmlToClipboard(html)
       setOkMsg('Rapport copié dans le presse-papier — colle dans Gmail / Outlook.')
     } catch (e) {
@@ -255,7 +301,10 @@ export default function RapportHebdoPage() {
   const handleDownloadHtml = () => {
     setError(''); setOkMsg('')
     try {
-      const html = buildRapportHtml({ data, debut, fin, commentaire, titre })
+      const html = buildRapportHtml({
+        data, debut, fin, commentaire, titre,
+        articles, articlesVentes,
+      })
       downloadHtmlFile(html, `rapport-ca_${debut}_${fin}.html`)
     } catch (e) {
       setError(e.message || 'Erreur lors du téléchargement')
@@ -289,6 +338,16 @@ export default function RapportHebdoPage() {
             <button onClick={handleSemainePrec} style={btnSecondary(c)}>Semaine précédente</button>
             <button onClick={handleSemaineCour} style={btnSecondary(c)}>Semaine en cours</button>
             <button onClick={handleNouveau} style={btnSecondary(c)} title="Nouveau rapport vide">+ Nouveau</button>
+            <button onClick={() => setArticlesModalOpen(true)} style={btnSecondary(c)}
+              title="Configurer les menus et suppléments suivis">
+              📋 Articles
+            </button>
+            <button
+              onClick={() => setCompareMode((m) => !m)}
+              style={{ ...btnSecondary(c), background: compareMode ? c.accent : c.blanc, color: compareMode ? c.texte : c.texte, fontWeight: compareMode ? 600 : 400 }}
+              title="Activer le mode comparaison de plusieurs périodes">
+              ⇄ Comparer
+            </button>
           </div>
         </div>
 
@@ -333,7 +392,13 @@ export default function RapportHebdoPage() {
             {loading ? (
               <p style={{ color: c.texteMuted, fontSize: 14 }}>Chargement des données…</p>
             ) : (
-              <RapportSections c={c} data={data} debut={debut} fin={fin} />
+              <RapportSections
+                c={c} data={data} debut={debut} fin={fin}
+                articles={articles}
+                articlesVentes={articlesVentes}
+                editableArticles
+                onChangeQte={handleChangeArticleQte}
+              />
             )}
 
             {/* Commentaires */}
@@ -402,6 +467,27 @@ export default function RapportHebdoPage() {
             )}
           </aside>
         </div>
+
+        {/* Mode comparaison */}
+        {compareMode && (
+          <ComparaisonPanel
+            c={c}
+            isMobile={isMobile}
+            clientId={clientId}
+            currentPeriode={{ debut, fin }}
+            periodes={comparePeriodes}
+            onPeriodesChange={setComparePeriodes}
+          />
+        )}
+
+        {articlesModalOpen && (
+          <ArticlesModal
+            c={c}
+            clientId={clientId}
+            onClose={() => setArticlesModalOpen(false)}
+            onChange={loadArticles}
+          />
+        )}
       </div>
     </div>
   )
