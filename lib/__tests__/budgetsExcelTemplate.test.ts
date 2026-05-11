@@ -125,6 +125,21 @@ describe('buildBudgetsEquipesWorkbook', () => {
     expect(synth.getCell(5, 3).value).toBe('Fermé')
   })
 
+  it('le Synthèse a une colonne Exception (D) avec formule Cumul utilisant SUMIF', async () => {
+    const wb = await buildBudgetsEquipesWorkbook({
+      annee: 2026, mois: 5, lieux, moisBudgets,
+    })
+    const synth = wb.getWorksheet('Synthèse')
+    // Header colonne 4 = Exception
+    expect(synth.getCell(1, 4).value).toBe('Exception')
+    // Ligne 2 (1er mai, ouvert) : K2 doit être une formule SUMIF
+    const cumulBudget = synth.getCell(2, 11).value
+    expect(cumulBudget).toHaveProperty('formula')
+    expect(cumulBudget.formula).toContain('SUMIF')
+    expect(cumulBudget.formula).toContain('D$2:D2')
+    expect(cumulBudget.formula).toContain('H$2:H2')
+  })
+
   it('pré-remplit le ticket budget sur les jours ouverts', async () => {
     const wb = await buildBudgetsEquipesWorkbook({
       annee: 2026, mois: 5, lieux, moisBudgets,
