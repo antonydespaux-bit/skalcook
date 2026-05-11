@@ -12,6 +12,7 @@ import ArticlesModal from '../../../../components/rapport-hebdo/ArticlesModal'
 import ComparaisonPanel from '../../../../components/rapport-hebdo/ComparaisonPanel'
 import {
   buildRapportData,
+  buildJoursFermesIso,
   semaineEnCours,
   semainePrecedente,
   formatPeriode,
@@ -41,6 +42,8 @@ export default function RapportHebdoPage() {
   const [lieux, setLieux] = useState([])
   const [caRows, setCaRows] = useState([])
   const [budgetRows, setBudgetRows] = useState([])
+  const [joursFermesRows, setJoursFermesRows] = useState([])
+  const [joursFermesHebdoRows, setJoursFermesHebdoRows] = useState([])
   const [loading, setLoading] = useState(false)
 
   // Commentaire et rapport courant (id si chargé depuis archive)
@@ -105,7 +108,13 @@ export default function RapportHebdoPage() {
       const [y2, m2] = fin.split('-').map(Number)
       const annees = Array.from(new Set([y1, y2]))
 
-      const [lieuxRes, caRes, budgetRes] = await Promise.all([
+      // Pour le cumul mois on a besoin aussi des CA depuis le 1er du mois
+      // de `fin` — calculé en amont pour pouvoir aussi charger les
+      // jours fermés sur cette période étendue.
+      const firstOfMonth = `${y2}-${String(m2).padStart(2, '0')}-01`
+      const debutPourCumul = firstOfMonth < debut ? firstOfMonth : debut
+
+      const [lieuxRes, caRes, budgetRes, jfRes, jfhRes] = await Promise.all([
         supabase
           .from('lieux_service')
           .select('id, nom, ordre, actif')
@@ -116,32 +125,35 @@ export default function RapportHebdoPage() {
           .from('ca_journalier')
           .select('jour, service, lieu_service_id, couverts, ca_food, ca_bev_20, ca_bev_10, ca_autre')
           .eq('client_id', clientId)
-          .gte('jour', debut)
+          .gte('jour', debutPourCumul)
           .lte('jour', fin),
         supabase
           .from('ca_budgets')
           .select('annee, mois, jour_semaine, lieu_service_id, service, couverts_cible, ca_food_cible, ca_bev_20_cible, ca_bev_10_cible, ca_autre_cible')
           .eq('client_id', clientId)
           .in('annee', annees),
+        supabase
+          .from('ca_jours_fermes')
+          .select('date, motif')
+          .eq('client_id', clientId)
+          .gte('date', debutPourCumul)
+          .lte('date', fin),
+        supabase
+          .from('ca_jours_fermes_hebdo')
+          .select('jour_semaine, motif')
+          .eq('client_id', clientId),
       ])
       if (lieuxRes.error) throw lieuxRes.error
       if (caRes.error) throw caRes.error
       if (budgetRes.error) throw budgetRes.error
+      if (jfRes.error) throw jfRes.error
+      if (jfhRes.error) throw jfhRes.error
       setLieux(lieuxRes.data || [])
       setCaRows(caRes.data || [])
       setBudgetRows(budgetRes.data || [])
-      // Pour le cumul mois, on a besoin aussi des CA depuis le 1er du mois
-      // de `fin`. On élargit si nécessaire.
-      const firstOfMonth = `${y2}-${String(m2).padStart(2, '0')}-01`
-      if (firstOfMonth < debut) {
-        const extraCa = await supabase
-          .from('ca_journalier')
-          .select('jour, service, lieu_service_id, couverts, ca_food, ca_bev_20, ca_bev_10, ca_autre')
-          .eq('client_id', clientId)
-          .gte('jour', firstOfMonth)
-          .lt('jour', debut)
-        if (!extraCa.error) setCaRows((prev) => [...(extraCa.data || []), ...prev])
-      }
+      setJoursFermesRows(jfRes.data || [])
+      setJoursFermesHebdoRows(jfhRes.data || [])
+      // (CA cumul mois inclus dans la query principale via debutPourCumul)
       void y1; void m1
     } catch (e) {
       setError(e.message || 'Erreur de chargement')
@@ -197,8 +209,18 @@ export default function RapportHebdoPage() {
 
   // ── Données dérivées ────────────────────────────────────────────────────
   const lieuxMap = useMemo(() => new Map(lieux.map((l) => [l.id, l.nom])), [lieux])
-  const data = useMemo(() => buildRapportData({ caRows, budgetRows, lieuxMap, debut, fin }),
-    [caRows, budgetRows, lieuxMap, debut, fin])
+
+  // Set des dates fermées sur la période — fermetures hebdo + dates
+  // spécifiques marquées sur Budgets CA. Permet d'exclure ces jours du
+  // calcul budget pour rester cohérent avec la projection mensuelle.
+  const joursFermesIso = useMemo(
+    () => buildJoursFermesIso(joursFermesRows, joursFermesHebdoRows, debut, fin),
+    [joursFermesRows, joursFermesHebdoRows, debut, fin]
+  )
+
+  const data = useMemo(() => buildRapportData({
+    caRows, budgetRows, lieuxMap, debut, fin, joursFermesIso,
+  }), [caRows, budgetRows, lieuxMap, debut, fin, joursFermesIso])
 
   // ── Actions ─────────────────────────────────────────────────────────────
   const handleSemainePrec = () => {
