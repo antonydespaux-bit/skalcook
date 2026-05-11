@@ -10,6 +10,17 @@ const MOIS_LABEL = [
 
 const JOURS_FR_LONG = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
 
+// ISO 1=lundi … 7=dimanche (utilisé en BDD pour ca_jours_fermes_hebdo).
+const JOURS_HEBDO = [
+  { code: 1, label: 'Lun' },
+  { code: 2, label: 'Mar' },
+  { code: 3, label: 'Mer' },
+  { code: 4, label: 'Jeu' },
+  { code: 5, label: 'Ven' },
+  { code: 6, label: 'Sam' },
+  { code: 7, label: 'Dim' },
+]
+
 // Fériés FR fixes + flottants pour pré-remplissage. Pré-rempli SEULEMENT
 // quand l'utilisateur clique sur le bouton dédié, jamais automatiquement.
 // (L'utilisateur a explicitement demandé de garder la main.)
@@ -62,32 +73,84 @@ function humanDate(iso) {
 // d'une année donnée.
 export default function JoursFermesModal({ c, clientId, annee, onClose }) {
   const [rows, setRows] = useState([])
+  // Fermetures hebdomadaires récurrentes : { [jds]: motif } pour ce client
+  const [hebdo, setHebdo] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [newDate, setNewDate] = useState('')
   const [newMotif, setNewMotif] = useState('Férié')
   const [adding, setAdding] = useState(false)
   const [filtreAnnee, setFiltreAnnee] = useState(annee)
+  const [hebdoMotif, setHebdoMotif] = useState('Fermé')
 
   const load = useCallback(async () => {
     if (!clientId) return
     setLoading(true)
     try {
-      const { data, error: e } = await supabase
-        .from('ca_jours_fermes')
-        .select('id, date, motif')
-        .eq('client_id', clientId)
-        .gte('date', `${filtreAnnee}-01-01`)
-        .lte('date', `${filtreAnnee}-12-31`)
-        .order('date')
-      if (e) throw e
-      setRows(data || [])
+      const [resDates, resHebdo] = await Promise.all([
+        supabase
+          .from('ca_jours_fermes')
+          .select('id, date, motif')
+          .eq('client_id', clientId)
+          .gte('date', `${filtreAnnee}-01-01`)
+          .lte('date', `${filtreAnnee}-12-31`)
+          .order('date'),
+        supabase
+          .from('ca_jours_fermes_hebdo')
+          .select('jour_semaine, motif')
+          .eq('client_id', clientId),
+      ])
+      if (resDates.error) throw resDates.error
+      if (resHebdo.error) throw resHebdo.error
+      setRows(resDates.data || [])
+      const hebdoMap = {}
+      for (const r of (resHebdo.data || [])) hebdoMap[r.jour_semaine] = r.motif
+      setHebdo(hebdoMap)
+      // Initialise le motif du formulaire hebdo avec le premier motif trouvé
+      const firstMotif = Object.values(hebdoMap)[0]
+      if (firstMotif) setHebdoMotif(firstMotif)
     } catch (e) {
       setError(e.message || 'Erreur de chargement')
     } finally {
       setLoading(false)
     }
   }, [clientId, filtreAnnee])
+
+  // Toggle d'un jour-de-semaine en fermeture hebdo
+  const toggleHebdo = useCallback(async (jds) => {
+    if (!clientId) return
+    setError('')
+    const wasActive = !!hebdo[jds]
+    // Optimistic UI
+    setHebdo((prev) => {
+      const next = { ...prev }
+      if (wasActive) delete next[jds]
+      else next[jds] = hebdoMotif || 'Fermé'
+      return next
+    })
+    try {
+      if (wasActive) {
+        const { error: e } = await supabase
+          .from('ca_jours_fermes_hebdo')
+          .delete()
+          .eq('client_id', clientId)
+          .eq('jour_semaine', jds)
+        if (e) throw e
+      } else {
+        const { error: e } = await supabase
+          .from('ca_jours_fermes_hebdo')
+          .upsert(
+            { client_id: clientId, jour_semaine: jds, motif: hebdoMotif || 'Fermé' },
+            { onConflict: 'client_id,jour_semaine' }
+          )
+        if (e) throw e
+      }
+    } catch (e) {
+      setError(e.message || 'Erreur lors de la mise à jour de la fermeture hebdo')
+      // Rollback optimistic
+      load()
+    }
+  }, [clientId, hebdo, hebdoMotif, load])
 
   useEffect(() => { load() }, [load])
 
@@ -207,6 +270,49 @@ export default function JoursFermesModal({ c, clientId, annee, onClose }) {
             style={{ background: 'transparent', border: 'none', fontSize: 20, color: c.texteMuted, cursor: 'pointer', lineHeight: 1 }}>
             ×
           </button>
+        </div>
+
+        {/* Section Fermeture hebdomadaire */}
+        <div style={{
+          padding: 12, marginBottom: 16, borderRadius: 10,
+          border: `0.5px solid ${c.bordure}`, background: c.fond,
+        }}>
+          <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+            Fermeture hebdomadaire
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+            {JOURS_HEBDO.map((j) => {
+              const active = !!hebdo[j.code]
+              return (
+                <button
+                  key={j.code}
+                  onClick={() => toggleHebdo(j.code)}
+                  title={active ? `${j.label} — fermé hebdo (cliquer pour retirer)` : `${j.label} — ouvert (cliquer pour marquer fermé hebdo)`}
+                  style={{
+                    padding: '6px 12px', borderRadius: 16, fontSize: 12,
+                    border: `1px solid ${active ? c.accent : c.bordure}`,
+                    background: active ? c.accent : c.blanc,
+                    color: active ? c.texte : c.texteMuted,
+                    cursor: 'pointer', fontWeight: active ? 600 : 500,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {j.label}
+                </button>
+              )
+            })}
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: c.texteMuted }}>
+            Motif appliqué aux jours sélectionnés :
+            <input
+              type="text" value={hebdoMotif} onChange={(e) => setHebdoMotif(e.target.value)}
+              placeholder="Fermé"
+              style={{
+                flex: 1, padding: '4px 8px', borderRadius: 6, fontSize: 12,
+                border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte,
+              }}
+            />
+          </label>
         </div>
 
         {/* Sélecteur année + Pré-remplir FR */}

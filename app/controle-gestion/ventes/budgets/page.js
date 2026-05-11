@@ -569,19 +569,45 @@ export default function BudgetsPage() {
     setOkMsg('')
     try {
       const moisBudgets = budgets[moisCible] || {}
-      // Charge les jours fermés du mois cible (en BDD)
+      // Charge les jours fermés du mois cible : dates spécifiques (ferié,
+      // privatisation, vacances...) ET fermetures hebdomadaires récurrentes
+      // (ex : tous les lundis). Les deux sont fusionnés dans un seul map
+      // { 'YYYY-MM-DD': motif } passé au builder Excel.
       const debut = `${annee}-${String(moisCible).padStart(2, '0')}-01`
       const finDate = new Date(annee, moisCible, 0)
       const fin = `${annee}-${String(moisCible).padStart(2, '0')}-${String(finDate.getDate()).padStart(2, '0')}`
-      const { data: joursFermesData, error: jfErr } = await supabase
-        .from('ca_jours_fermes')
-        .select('date, motif')
-        .eq('client_id', clientId)
-        .gte('date', debut)
-        .lte('date', fin)
-      if (jfErr) throw jfErr
+      const [jfRes, jfhRes] = await Promise.all([
+        supabase
+          .from('ca_jours_fermes')
+          .select('date, motif')
+          .eq('client_id', clientId)
+          .gte('date', debut)
+          .lte('date', fin),
+        supabase
+          .from('ca_jours_fermes_hebdo')
+          .select('jour_semaine, motif')
+          .eq('client_id', clientId),
+      ])
+      if (jfRes.error) throw jfRes.error
+      if (jfhRes.error) throw jfhRes.error
+
       const joursFermesMap = {}
-      for (const r of (joursFermesData || [])) joursFermesMap[r.date] = r.motif
+      // 1. Hebdo d'abord : étend chaque jour-de-semaine à toutes les dates
+      //    du mois cible qui matchent.
+      const hebdoMap = {}
+      for (const r of (jfhRes.data || [])) hebdoMap[r.jour_semaine] = r.motif
+      const lastDay = finDate.getDate()
+      for (let d = 1; d <= lastDay; d++) {
+        const date = new Date(annee, moisCible - 1, d)
+        const jds = date.getDay() === 0 ? 7 : date.getDay()
+        if (hebdoMap[jds]) {
+          const iso = `${annee}-${String(moisCible).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+          joursFermesMap[iso] = hebdoMap[jds]
+        }
+      }
+      // 2. Dates spécifiques ensuite : écrasent l'hebdo si même date
+      //    (ex : 1er mai un lundi → "1er mai" plutôt que "Fermé hebdo")
+      for (const r of (jfRes.data || [])) joursFermesMap[r.date] = r.motif
 
       const wb = await buildBudgetsEquipesWorkbook({
         annee,
