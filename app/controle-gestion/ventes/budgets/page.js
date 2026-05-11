@@ -8,6 +8,8 @@ import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import { useTheme } from '../../../../lib/useTheme'
 import Navbar from '../../../../components/Navbar'
+import { buildBudgetsEquipesWorkbook, buildEquipesFilename } from '../../../../lib/budgetsExcelTemplate'
+import JoursFermesModal from '../../../../components/budgets/JoursFermesModal'
 
 const DEBUG_FALLBACK_CLIENT_ID = 'fa725e66-2cad-4ea4-892a-7eb3e90496a7'
 
@@ -268,6 +270,7 @@ export default function BudgetsPage() {
   const [saving, setSaving] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [joursFermesOpen, setJoursFermesOpen] = useState(false)
   const [resetConfirm, setResetConfirm] = useState(null) // 'lieu' | null
   const [importPreview, setImportPreview] = useState(null)
   const [expandedMois, setExpandedMois] = useState(() => new Set(MOIS))
@@ -287,20 +290,32 @@ export default function BudgetsPage() {
   useEffect(() => {
     let cancel = false
     ;(async () => {
-      const { data: sessionData } = await supabase.auth.getSession()
-      if (cancel) return
-      if (!sessionData?.session) {
-        router.replace('/')
-        return
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        if (cancel) return
+        if (!sessionData?.session) {
+          router.replace('/')
+          return
+        }
+        let cid = await getClientId()
+        if (!cid) {
+          console.warn('getClientId vide — fallback debug:', DEBUG_FALLBACK_CLIENT_ID)
+          cid = DEBUG_FALLBACK_CLIENT_ID
+        }
+        if (cancel) return
+        setClientId(cid)
+        setAuthChecked(true)
+      } catch (e) {
+        // Si supabase.auth.getSession() ou getClientId() rejette (lock
+        // contesté en strict mode, réseau lent, etc.) on tente quand même
+        // de rendre la page avec un fallback : authChecked passe à true et
+        // un message d'erreur s'affiche au lieu d'une page blanche.
+        if (cancel) return
+        console.warn('Erreur auth budgets, fallback :', e?.message || e)
+        setClientId(DEBUG_FALLBACK_CLIENT_ID)
+        setAuthChecked(true)
+        setError("Connexion lente — la page peut prendre quelques secondes à charger. Rechargez si nécessaire.")
       }
-      let cid = await getClientId()
-      if (!cid) {
-        console.warn('getClientId vide — fallback debug:', DEBUG_FALLBACK_CLIENT_ID)
-        cid = DEBUG_FALLBACK_CLIENT_ID
-      }
-      if (cancel) return
-      setClientId(cid)
-      setAuthChecked(true)
     })()
     return () => {
       cancel = true
@@ -544,6 +559,80 @@ export default function BudgetsPage() {
 
   // Vide tous les budgets du lieu sélectionné (12 mois × 7 jours × 2 svcs).
   // Le trigger d'audit log les DELETE.
+  // Génère le template Excel "équipes" pour un mois donné : un onglet par
+  // jour avec budgets pré-remplis et formules pour le cumulé, plus un onglet
+  // Synthèse mensuelle. Les dates listées dans ca_jours_fermes sont
+  // pré-remplies dans la colonne Exception. Téléchargement direct via Blob.
+  const handleExportEquipes = useCallback(async (moisCible) => {
+    if (!clientId) return
+    setError('')
+    setOkMsg('')
+    try {
+      const moisBudgets = budgets[moisCible] || {}
+      // Charge les jours fermés du mois cible : dates spécifiques (ferié,
+      // privatisation, vacances...) ET fermetures hebdomadaires récurrentes
+      // (ex : tous les lundis). Les deux sont fusionnés dans un seul map
+      // { 'YYYY-MM-DD': motif } passé au builder Excel.
+      const debut = `${annee}-${String(moisCible).padStart(2, '0')}-01`
+      const finDate = new Date(annee, moisCible, 0)
+      const fin = `${annee}-${String(moisCible).padStart(2, '0')}-${String(finDate.getDate()).padStart(2, '0')}`
+      const [jfRes, jfhRes] = await Promise.all([
+        supabase
+          .from('ca_jours_fermes')
+          .select('date, motif')
+          .eq('client_id', clientId)
+          .gte('date', debut)
+          .lte('date', fin),
+        supabase
+          .from('ca_jours_fermes_hebdo')
+          .select('jour_semaine, motif')
+          .eq('client_id', clientId),
+      ])
+      if (jfRes.error) throw jfRes.error
+      if (jfhRes.error) throw jfhRes.error
+
+      const joursFermesMap = {}
+      // 1. Hebdo d'abord : étend chaque jour-de-semaine à toutes les dates
+      //    du mois cible qui matchent.
+      const hebdoMap = {}
+      for (const r of (jfhRes.data || [])) hebdoMap[r.jour_semaine] = r.motif
+      const lastDay = finDate.getDate()
+      for (let d = 1; d <= lastDay; d++) {
+        const date = new Date(annee, moisCible - 1, d)
+        const jds = date.getDay() === 0 ? 7 : date.getDay()
+        if (hebdoMap[jds]) {
+          const iso = `${annee}-${String(moisCible).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+          joursFermesMap[iso] = hebdoMap[jds]
+        }
+      }
+      // 2. Dates spécifiques ensuite : écrasent l'hebdo si même date
+      //    (ex : 1er mai un lundi → "1er mai" plutôt que "Fermé hebdo")
+      for (const r of (jfRes.data || [])) joursFermesMap[r.date] = r.motif
+
+      const wb = await buildBudgetsEquipesWorkbook({
+        annee,
+        mois: moisCible,
+        lieux,
+        moisBudgets,
+        joursOverride,
+        joursFermes: joursFermesMap,
+        clientNom: 'Skalcook',
+      })
+      const buf = await wb.xlsx.writeBuffer()
+      const blob = new Blob([buf], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = buildEquipesFilename(annee, moisCible)
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (e) {
+      setError(e.message || "Erreur lors de la génération du fichier Excel")
+    }
+  }, [clientId, annee, lieux, budgets, joursOverride])
+
   const handleResetLieu = useCallback(async () => {
     if (!clientId || !lieuFilter) return
     setSaving(true)
@@ -709,6 +798,8 @@ export default function BudgetsPage() {
             onOpenHistory={() => setHistoryOpen(true)}
             onReset={() => setResetConfirm('lieu')}
             onSave={handleSave}
+            onExportEquipes={handleExportEquipes}
+            onOpenJoursFermes={() => setJoursFermesOpen(true)}
             saving={saving}
             c={c}
             isMobile={isMobile}
@@ -871,6 +962,15 @@ export default function BudgetsPage() {
         <HistoryModal clientId={clientId} onClose={() => setHistoryOpen(false)} c={c} isMobile={isMobile} />
       )}
 
+      {joursFermesOpen && (
+        <JoursFermesModal
+          c={c}
+          clientId={clientId}
+          annee={annee}
+          onClose={() => setJoursFermesOpen(false)}
+        />
+      )}
+
       {importPreview && (
         <ImportPreviewModal
           preview={importPreview}
@@ -928,10 +1028,20 @@ function TopBar({
   onOpenHistory,
   onReset,
   onSave,
+  onExportEquipes,
+  onOpenJoursFermes,
   saving,
   c,
   isMobile,
 }) {
+  // Sélecteur mois pour l'export équipes (par défaut = mois courant)
+  const [exportMois, setExportMois] = useState(() => new Date().getMonth() + 1)
+  const [exporting, setExporting] = useState(false)
+  const handleExport = async () => {
+    if (!onExportEquipes || exporting) return
+    setExporting(true)
+    try { await onExportEquipes(exportMois) } finally { setExporting(false) }
+  }
   return (
     <div
       style={{
@@ -1021,6 +1131,62 @@ function TopBar({
         >
           Importer Excel
         </button>
+        <button
+          onClick={onOpenJoursFermes}
+          title="Jours fermés / fériés — pré-remplit la colonne Exception du fichier Excel équipes"
+          style={{
+            padding: '8px 14px',
+            borderRadius: 8,
+            fontSize: 13,
+            border: `1px solid ${c.bordure}`,
+            background: c.blanc,
+            color: c.texte,
+            cursor: 'pointer',
+          }}
+        >
+          🗓 Jours fermés
+        </button>
+        {/* Excel équipes : template pré-rempli envoyé aux équipes en début de mois */}
+        <div style={{ display: 'inline-flex', alignItems: 'stretch', gap: 0 }}>
+          <select
+            value={exportMois}
+            onChange={(e) => setExportMois(Number(e.target.value))}
+            disabled={exporting}
+            style={{
+              padding: '8px 8px',
+              borderRadius: '8px 0 0 8px',
+              fontSize: 13,
+              border: `1px solid ${c.bordure}`,
+              borderRight: 'none',
+              background: c.blanc,
+              color: c.texte,
+              cursor: exporting ? 'not-allowed' : 'pointer',
+            }}
+            title="Mois à exporter"
+          >
+            {MOIS.map((m) => (
+              <option key={m} value={m}>{MOIS_LABEL[m]}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            title="Génère un Excel avec 1 onglet par jour, budgets pré-remplis et formules de cumul"
+            style={{
+              padding: '8px 14px',
+              borderRadius: '0 8px 8px 0',
+              fontSize: 13,
+              border: `1px solid ${c.bordure}`,
+              background: c.accent,
+              color: c.texte,
+              cursor: exporting ? 'not-allowed' : 'pointer',
+              fontWeight: 500,
+              opacity: exporting ? 0.6 : 1,
+            }}
+          >
+            {exporting ? 'Génération…' : '📤 Excel équipes'}
+          </button>
+        </div>
         <button
           onClick={onOpenHistory}
           style={{
