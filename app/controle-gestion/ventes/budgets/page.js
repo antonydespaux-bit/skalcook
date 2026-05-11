@@ -8,6 +8,7 @@ import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import { useTheme } from '../../../../lib/useTheme'
 import Navbar from '../../../../components/Navbar'
+import { buildBudgetsEquipesWorkbook, buildEquipesFilename } from '../../../../lib/budgetsExcelTemplate'
 
 const DEBUG_FALLBACK_CLIENT_ID = 'fa725e66-2cad-4ea4-892a-7eb3e90496a7'
 
@@ -544,6 +545,38 @@ export default function BudgetsPage() {
 
   // Vide tous les budgets du lieu sélectionné (12 mois × 7 jours × 2 svcs).
   // Le trigger d'audit log les DELETE.
+  // Génère le template Excel "équipes" pour un mois donné : un onglet par
+  // jour avec budgets pré-remplis et formules pour le cumulé, plus un onglet
+  // Synthèse mensuelle. Téléchargement direct via Blob.
+  const handleExportEquipes = useCallback(async (moisCible) => {
+    if (!clientId) return
+    setError('')
+    setOkMsg('')
+    try {
+      const moisBudgets = budgets[moisCible] || {}
+      const wb = await buildBudgetsEquipesWorkbook({
+        annee,
+        mois: moisCible,
+        lieux,
+        moisBudgets,
+        joursOverride,
+        clientNom: 'Skalcook',
+      })
+      const buf = await wb.xlsx.writeBuffer()
+      const blob = new Blob([buf], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = buildEquipesFilename(annee, moisCible)
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (e) {
+      setError(e.message || "Erreur lors de la génération du fichier Excel")
+    }
+  }, [clientId, annee, lieux, budgets, joursOverride])
+
   const handleResetLieu = useCallback(async () => {
     if (!clientId || !lieuFilter) return
     setSaving(true)
@@ -709,6 +742,7 @@ export default function BudgetsPage() {
             onOpenHistory={() => setHistoryOpen(true)}
             onReset={() => setResetConfirm('lieu')}
             onSave={handleSave}
+            onExportEquipes={handleExportEquipes}
             saving={saving}
             c={c}
             isMobile={isMobile}
@@ -928,10 +962,19 @@ function TopBar({
   onOpenHistory,
   onReset,
   onSave,
+  onExportEquipes,
   saving,
   c,
   isMobile,
 }) {
+  // Sélecteur mois pour l'export équipes (par défaut = mois courant)
+  const [exportMois, setExportMois] = useState(() => new Date().getMonth() + 1)
+  const [exporting, setExporting] = useState(false)
+  const handleExport = async () => {
+    if (!onExportEquipes || exporting) return
+    setExporting(true)
+    try { await onExportEquipes(exportMois) } finally { setExporting(false) }
+  }
   return (
     <div
       style={{
@@ -1021,6 +1064,47 @@ function TopBar({
         >
           Importer Excel
         </button>
+        {/* Excel équipes : template pré-rempli envoyé aux équipes en début de mois */}
+        <div style={{ display: 'inline-flex', alignItems: 'stretch', gap: 0 }}>
+          <select
+            value={exportMois}
+            onChange={(e) => setExportMois(Number(e.target.value))}
+            disabled={exporting}
+            style={{
+              padding: '8px 8px',
+              borderRadius: '8px 0 0 8px',
+              fontSize: 13,
+              border: `1px solid ${c.bordure}`,
+              borderRight: 'none',
+              background: c.blanc,
+              color: c.texte,
+              cursor: exporting ? 'not-allowed' : 'pointer',
+            }}
+            title="Mois à exporter"
+          >
+            {MOIS.map((m) => (
+              <option key={m} value={m}>{MOIS_LABEL[m]}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            title="Génère un Excel avec 1 onglet par jour, budgets pré-remplis et formules de cumul"
+            style={{
+              padding: '8px 14px',
+              borderRadius: '0 8px 8px 0',
+              fontSize: 13,
+              border: `1px solid ${c.bordure}`,
+              background: c.accent,
+              color: c.texte,
+              cursor: exporting ? 'not-allowed' : 'pointer',
+              fontWeight: 500,
+              opacity: exporting ? 0.6 : 1,
+            }}
+          >
+            {exporting ? 'Génération…' : '📤 Excel équipes'}
+          </button>
+        </div>
         <button
           onClick={onOpenHistory}
           style={{
