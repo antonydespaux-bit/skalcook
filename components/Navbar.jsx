@@ -204,6 +204,7 @@ export default function Navbar({ section = 'cuisine' }) {
             { label: 'Mercuriale',    path: '/controle-gestion/mercuriale' },
             ...(role === 'admin' || role === 'directeur' ? [{ label: 'Analyses',      path: '/controle-gestion/analyses' }] : []),
             { label: 'Suivi CA',      path: '/controle-gestion/ventes' },
+            ...(role === 'admin' || role === 'directeur' ? [{ label: 'Rapport hebdo',  path: '/controle-gestion/ventes/rapport-hebdo' }] : []),
             { label: 'Budgets CA',    path: '/controle-gestion/ventes/budgets' },
             ...(role === 'admin' ? [{ label: 'Import ventes', path: '/controle-gestion/import' }] : []),
           ]
