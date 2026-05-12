@@ -30,7 +30,7 @@ export default function ComparaisonPanel({ c, isMobile, clientId, currentPeriode
     const [y2] = fin.split('-').map(Number)
     const annees = Array.from(new Set([y1, y2]))
     const [lieuxRes, caRes, budgetRes, jfRes, jfhRes] = await Promise.all([
-      supabase.from('lieux_service').select('id, nom').eq('client_id', clientId).eq('actif', true),
+      supabase.from('lieux_service').select('id, nom, parent_lieu_service_id').eq('client_id', clientId).eq('actif', true),
       supabase.from('ca_journalier')
         .select('jour, service, lieu_service_id, couverts, ca_food, ca_bev_20, ca_bev_10, ca_autre')
         .eq('client_id', clientId).gte('jour', debut).lte('jour', fin),
@@ -45,10 +45,18 @@ export default function ComparaisonPanel({ c, isMobile, clientId, currentPeriode
     if (budgetRes.error) throw budgetRes.error
     if (jfRes.error) throw jfRes.error
     if (jfhRes.error) throw jfhRes.error
-    const lieuxMap = new Map((lieuxRes.data || []).map((l) => [l.id, l.nom]))
+    // lieuxMap : remappe les enfants vers le label du parent (Table du chef
+    // → "Salle à manger") pour que les agrégations groupent analytiquement.
+    const noms = new Map((lieuxRes.data || []).map((l) => [l.id, l.nom]))
+    const lieuToParent = new Map((lieuxRes.data || []).map((l) => [l.id, l.parent_lieu_service_id || l.id]))
+    const lieuxMap = new Map((lieuxRes.data || []).map((l) => [
+      l.id, noms.get(l.parent_lieu_service_id || l.id) || l.nom,
+    ]))
+    // Remappe lieu_service_id sur chaque row vers le parent
+    const remap = (r) => ({ ...r, lieu_service_id: lieuToParent.get(r.lieu_service_id) || r.lieu_service_id })
     return {
-      caRows: caRes.data || [],
-      budgetRows: budgetRes.data || [],
+      caRows: (caRes.data || []).map(remap),
+      budgetRows: (budgetRes.data || []).map(remap),
       lieuxMap,
       joursFermesRows: jfRes.data || [],
       joursFermesHebdoRows: jfhRes.data || [],

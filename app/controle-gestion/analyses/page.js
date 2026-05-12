@@ -142,7 +142,7 @@ export default function AnalysesPage() {
       const [lieuxRes, layoutRes] = await Promise.all([
         supabase
           .from('lieux_service')
-          .select('id, nom, ordre')
+          .select('id, nom, ordre, parent_lieu_service_id')
           .eq('client_id', cid)
           .eq('actif', true)
           .order('ordre').order('nom'),
@@ -316,41 +316,60 @@ export default function AnalysesPage() {
   const filterJoursActive = joursSelected.length > 0 && joursSelected.length < ALL_JOURS.length
   const joursSet = useMemo(() => new Set(joursSelected), [joursSelected])
 
+  // ── Grouping par parent_lieu_service_id ──────────────────────────────────
+  // Certains lieux sont des enfants analytiques (ex : Table du chef →
+  // Salle à manger). On les remap pour que les agrégations et le filtre
+  // les groupent sous leur parent. Le FilterBar n'affiche que les parents
+  // (les enfants sont implicitement inclus quand on filtre le parent).
+  const lieuxAffiches = useMemo(() => lieux.filter((l) => !l.parent_lieu_service_id), [lieux])
+  const lieuToParent = useMemo(() => {
+    const m = new Map()
+    for (const l of lieux) m.set(l.id, l.parent_lieu_service_id || l.id)
+    return m
+  }, [lieux])
+  const remapRow = useCallback(
+    (r) => ({ ...r, lieu_service_id: lieuToParent.get(r.lieu_service_id) || r.lieu_service_id }),
+    [lieuToParent]
+  )
+
   const filterRows = useCallback((rows) => {
-    const filterLieu = lieuxSelected.length > 0 && lieuxSelected.length < lieux.length
+    const filterLieu = lieuxSelected.length > 0 && lieuxSelected.length < lieuxAffiches.length
     const filterService = servicesSelected.length > 0 && servicesSelected.length < ALL_SERVICES.length
-    if (!filterLieu && !filterService && !filterJoursActive) return rows
+    if (!filterLieu && !filterService && !filterJoursActive) return rows.map(remapRow)
     const lieuxSet = new Set(lieuxSelected)
     const servicesSet = new Set(servicesSelected)
-    return rows.filter((r) => {
-      if (filterLieu && !lieuxSet.has(r.lieu_service_id)) return false
-      if (filterService && !servicesSet.has(r.service)) return false
+    return rows.reduce((acc, raw) => {
+      const r = remapRow(raw)
+      if (filterLieu && !lieuxSet.has(r.lieu_service_id)) return acc
+      if (filterService && !servicesSet.has(r.service)) return acc
       if (filterJoursActive) {
         const date = new Date(`${r.jour}T00:00:00`)
         const isoJds = date.getDay() === 0 ? 7 : date.getDay()
-        if (!joursSet.has(isoJds)) return false
+        if (!joursSet.has(isoJds)) return acc
       }
-      return true
-    })
-  }, [lieuxSelected, servicesSelected, lieux.length, filterJoursActive, joursSet])
+      acc.push(r)
+      return acc
+    }, [])
+  }, [lieuxSelected, servicesSelected, lieuxAffiches.length, filterJoursActive, joursSet, remapRow])
 
   const filterBudgets = useCallback((budgetRowsByYear) => {
-    const filterLieu = lieuxSelected.length > 0 && lieuxSelected.length < lieux.length
+    const filterLieu = lieuxSelected.length > 0 && lieuxSelected.length < lieuxAffiches.length
     const filterService = servicesSelected.length > 0 && servicesSelected.length < ALL_SERVICES.length
-    if (!filterLieu && !filterService && !filterJoursActive) return budgetRowsByYear
     const lieuxSet = new Set(lieuxSelected)
     const servicesSet = new Set(servicesSelected)
     const out = {}
     for (const [annee, rows] of Object.entries(budgetRowsByYear)) {
-      out[annee] = rows.filter((r) => {
-        if (filterLieu && !lieuxSet.has(r.lieu_service_id)) return false
-        if (filterService && !servicesSet.has(r.service)) return false
-        if (filterJoursActive && !joursSet.has(r.jour_semaine)) return false
-        return true
-      })
+      out[annee] = rows.reduce((acc, raw) => {
+        const r = remapRow(raw)
+        if (filterLieu && !lieuxSet.has(r.lieu_service_id)) return acc
+        if (filterService && !servicesSet.has(r.service)) return acc
+        if (filterJoursActive && !joursSet.has(r.jour_semaine)) return acc
+        acc.push(r)
+        return acc
+      }, [])
     }
     return out
-  }, [lieuxSelected, servicesSelected, lieux.length, filterJoursActive, joursSet])
+  }, [lieuxSelected, servicesSelected, lieuxAffiches.length, filterJoursActive, joursSet, remapRow])
 
   // ── Totals + days + budget ───────────────────────────────────────────────
   const filteredRows = useMemo(() => filterRows(rawCa), [rawCa, filterRows])
@@ -442,12 +461,24 @@ export default function AnalysesPage() {
   // sélectionnées. "Tous" (tableau vide) compte aussi comme split potentiel
   // si plusieurs valeurs existent — dans ce cas on split par défaut sur la
   // dimension lieu (plus parlant que service à 2 valeurs).
-  const lieuxLabels = useMemo(() => new Map(lieux.map((l) => [l.id, l.nom])), [lieux])
+  // lieuxLabels = Map<id, label_du_parent_ou_self> — utilisé par les
+  // helpers d'agrégation. Comme les rows sont déjà remappées vers le
+  // parent, ce Map ne sert qu'à résoudre les labels (uniquement parents
+  // apparaîtront).
+  const lieuxLabels = useMemo(() => {
+    const noms = new Map(lieux.map((l) => [l.id, l.nom]))
+    const out = new Map()
+    for (const l of lieux) {
+      const parentId = l.parent_lieu_service_id || l.id
+      out.set(l.id, noms.get(parentId) || l.nom)
+    }
+    return out
+  }, [lieux])
   const splitByLieu = useMemo(() => {
     if (lieuxSelected.length >= 2) return true
-    if (lieuxSelected.length === 0 && lieux.length >= 2) return true // "Tous" + plusieurs lieux
+    if (lieuxSelected.length === 0 && lieuxAffiches.length >= 2) return true // "Tous" + plusieurs lieux
     return false
-  }, [lieuxSelected.length, lieux.length])
+  }, [lieuxSelected.length, lieuxAffiches.length])
   const splitByService = useMemo(() => {
     if (servicesSelected.length === ALL_SERVICES.length) return true
     if (servicesSelected.length === 0) return false // "Tous" mais pas split par défaut
@@ -484,7 +515,7 @@ export default function AnalysesPage() {
 
   const breakdowns = useMemo(() => {
     const make = (metric) => ({
-      byLieu: lieux.length >= 2 ? buildBreakdown(seriesByLieu, metric) : null,
+      byLieu: lieuxAffiches.length >= 2 ? buildBreakdown(seriesByLieu, metric) : null,
       byService: buildBreakdown(seriesByService, metric),
     })
     return {
@@ -492,7 +523,7 @@ export default function AnalysesPage() {
       caTtc: make('caTtc'),
       caHt: make('caHt'),
     }
-  }, [seriesByLieu, seriesByService, lieux.length])
+  }, [seriesByLieu, seriesByService, lieuxAffiches.length])
 
   // Days par série (pour line charts multi-séries + perf jour-semaine)
   const daysBySerie = useMemo(() => {
@@ -652,7 +683,7 @@ export default function AnalysesPage() {
 
   // ── Actions TopBar : export Excel + impression ───────────────────────────
   const handleExportExcel = () => {
-    const lieuLabel = lieuxSelected.length === 0 || lieuxSelected.length === lieux.length
+    const lieuLabel = lieuxSelected.length === 0 || lieuxSelected.length === lieuxAffiches.length
       ? 'Tous lieux'
       : lieuxSelected.map((id) => lieuxLabels.get(id) || id).join(', ')
     const serviceLabel = servicesSelected.length === 0 || servicesSelected.length === ALL_SERVICES.length
@@ -733,7 +764,7 @@ export default function AnalysesPage() {
           dateDebut={dateDebut} dateFin={dateFin}
           onDateDebut={setDateDebut} onDateFin={setDateFin}
           comparaison={comparaison} onComparaison={setComparaison}
-          lieux={lieux}
+          lieux={lieuxAffiches}
           lieuxSelected={lieuxSelected} onLieuxSelected={setLieuxSelected}
           servicesSelected={servicesSelected} onServicesSelected={setServicesSelected}
           joursSelected={joursSelected} onJoursSelected={setJoursSelected}
