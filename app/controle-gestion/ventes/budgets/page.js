@@ -427,14 +427,29 @@ export default function BudgetsPage() {
   // `lieuId` = uuid du lieu pour un override spécifique, ou null pour le
   // global (rétro-compat). L'UI Budgets passe toujours le lieu courant
   // (lieuFilter) → chaque lieu a son propre override.
-  // Persistance immédiate à chaque changement ; si la valeur saisie égale
-  // le compte calendaire, on supprime l'override pour revenir au défaut.
+  //
+  // Logique "isDefault" : la valeur saisie est-elle équivalente à ce qui
+  // s'afficherait SANS override pour ce lieu ? Le fallback prend en compte :
+  //   1. Un override global existant (lieu=null) sur ce (mois, jds, svc)
+  //   2. Sinon le compte calendaire
+  // → si la valeur tapée = fallback, on supprime l'override par-lieu pour
+  //   éviter une row redondante. Sinon on save un per-lieu qui prime sur le
+  //   global (cas typique : global=4 et l'user veut 5 sur ce lieu spécifique).
   const updateJoursOverride = useCallback(async (mois, jds, svcCode, lieuId, raw) => {
     if (!clientId) return
     const calCount = joursDansMois(annee, mois, jds)
+    const globalOverride = joursOverride?.[mois]?.[jds]?.[svcCode]?.__all__
+    const effectiveFallback = (globalOverride != null && globalOverride !== '')
+      ? Number(globalOverride)
+      : calCount
     const trimmed = (raw == null ? '' : String(raw).trim())
     const num = trimmed === '' ? null : Math.max(0, Math.min(6, Math.round(Number(trimmed))))
-    const isDefault = num == null || isNaN(num) || num === calCount
+    // Si l'user édite sur un lieu spécifique : on supprime le per-lieu
+    //   uniquement si la valeur == fallback (global ou calendrier).
+    // Si l'user édite globalement (lieuId=null) : on supprime si == calendrier.
+    const isDefault = num == null || isNaN(num) || (
+      lieuId ? num === effectiveFallback : num === calCount
+    )
     const lieuKey = lieuId || '__all__'
 
     // Optimistic local update
@@ -477,7 +492,7 @@ export default function BudgetsPage() {
     } catch (e) {
       setError(e.message || 'Erreur lors de l\'enregistrement de l\'override')
     }
-  }, [clientId, annee])
+  }, [clientId, annee, joursOverride])
 
   // Copie les valeurs Couv/TM d'un mois source vers un ou plusieurs mois cibles.
   const duplicateMois = useCallback((moisSource, moisCibles) => {
