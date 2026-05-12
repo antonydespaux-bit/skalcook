@@ -117,7 +117,7 @@ export default function RapportHebdoPage() {
       const [lieuxRes, caRes, budgetRes, jfRes, jfhRes] = await Promise.all([
         supabase
           .from('lieux_service')
-          .select('id, nom, ordre, actif')
+          .select('id, nom, ordre, actif, parent_lieu_service_id')
           .eq('client_id', clientId)
           .eq('actif', true)
           .order('ordre').order('nom'),
@@ -208,7 +208,35 @@ export default function RapportHebdoPage() {
   useEffect(() => { if (authReady && clientId) loadArticles() }, [authReady, clientId, loadArticles])
 
   // ── Données dérivées ────────────────────────────────────────────────────
-  const lieuxMap = useMemo(() => new Map(lieux.map((l) => [l.id, l.nom])), [lieux])
+  // lieuxMap = Map<id, label_du_parent_ou_self> — les enfants pointent
+  // vers le nom de leur parent pour que les agrégations groupent
+  // analytiquement. Ex : Table du chef → "Salle à manger".
+  const lieuxMap = useMemo(() => {
+    const noms = new Map(lieux.map((l) => [l.id, l.nom]))
+    const out = new Map()
+    for (const l of lieux) {
+      const parentId = l.parent_lieu_service_id || l.id
+      out.set(l.id, noms.get(parentId) || l.nom)
+    }
+    return out
+  }, [lieux])
+
+  // Remap chaque row vers le parent (ou self si pas de parent) — toutes
+  // les fonctions de calcul (tmParLieuService, etc.) groupent par
+  // lieu_service_id qui pointe maintenant vers le parent.
+  const lieuToParent = useMemo(() => {
+    const m = new Map()
+    for (const l of lieux) m.set(l.id, l.parent_lieu_service_id || l.id)
+    return m
+  }, [lieux])
+  const caRowsRemap = useMemo(
+    () => caRows.map((r) => ({ ...r, lieu_service_id: lieuToParent.get(r.lieu_service_id) || r.lieu_service_id })),
+    [caRows, lieuToParent]
+  )
+  const budgetRowsRemap = useMemo(
+    () => budgetRows.map((r) => ({ ...r, lieu_service_id: lieuToParent.get(r.lieu_service_id) || r.lieu_service_id })),
+    [budgetRows, lieuToParent]
+  )
 
   // Set des dates fermées sur la période — fermetures hebdo + dates
   // spécifiques marquées sur Budgets CA. Permet d'exclure ces jours du
@@ -219,8 +247,8 @@ export default function RapportHebdoPage() {
   )
 
   const data = useMemo(() => buildRapportData({
-    caRows, budgetRows, lieuxMap, debut, fin, joursFermesIso,
-  }), [caRows, budgetRows, lieuxMap, debut, fin, joursFermesIso])
+    caRows: caRowsRemap, budgetRows: budgetRowsRemap, lieuxMap, debut, fin, joursFermesIso,
+  }), [caRowsRemap, budgetRowsRemap, lieuxMap, debut, fin, joursFermesIso])
 
   // ── Actions ─────────────────────────────────────────────────────────────
   const handleSemainePrec = () => {
