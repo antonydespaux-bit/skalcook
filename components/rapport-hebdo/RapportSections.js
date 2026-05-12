@@ -11,7 +11,7 @@ import {
 const SERVICE_LABEL = { lunch: 'déjeuner', dinner: 'dîner' }
 
 export function SectionCaTtc({ c, data, periodeLabel, cumulLabel }) {
-  const { ca, caMois } = data
+  const { ca, caMois, autreCa, autreCaMois } = data
   return (
     <div style={{ marginBottom: 20 }}>
       <p style={{ margin: '0 0 10px', fontSize: 14, color: c.texte }}>
@@ -21,6 +21,11 @@ export function SectionCaTtc({ c, data, periodeLabel, cumulLabel }) {
         {ca.ratio != null && <> soit <strong style={{ color: ca.ratio >= 0 ? c.vert : c.rouge }}>
           {formatPct(ca.ratio)}
         </strong></>}
+        {autreCa > 0 && (
+          <span style={{ color: c.texteMuted, fontStyle: 'italic' }}>
+            {' '}— dont <strong>{formatEur(autreCa)}</strong> d&apos;Autre CA (privatisations, frais)
+          </span>
+        )}
       </p>
       <p style={{ margin: '0 0 10px', fontSize: 14, color: c.texte }}>
         Le CATTC réalisé {cumulLabel} s&apos;élève à{' '}
@@ -29,8 +34,36 @@ export function SectionCaTtc({ c, data, periodeLabel, cumulLabel }) {
         {caMois.ratio != null && <> soit <strong style={{ color: caMois.ratio >= 0 ? c.vert : c.rouge }}>
           {formatPct(caMois.ratio)}
         </strong></>}
+        {autreCaMois > 0 && (
+          <span style={{ color: c.texteMuted, fontStyle: 'italic' }}>
+            {' '}— dont <strong>{formatEur(autreCaMois)}</strong> d&apos;Autre CA
+          </span>
+        )}
       </p>
     </div>
+  )
+}
+
+// Option C — Liste détaillée des "Autres CA" par lieu × service.
+// N'affiche rien si aucun lieu n'a saisi d'autre CA sur la période.
+export function SectionAutresCa({ c, autreCaDetail, autreCa, titre }) {
+  if (!autreCaDetail || autreCaDetail.length === 0) return null
+  return (
+    <Section c={c} titre={titre || 'Autres CA (privatisations, frais…)'}>
+      <ul style={ulStyle}>
+        {autreCaDetail.map((r) => (
+          <li key={`${r.lieu_id}_${r.service}`} style={liStyle}>
+            <strong>{r.lieu_label} {SERVICE_LABEL[r.service]}</strong> :{' '}
+            <strong>{formatEur(r.ca_autre)}</strong>
+          </li>
+        ))}
+        {autreCaDetail.length > 1 && (
+          <li style={{ ...liStyle, marginTop: 6, paddingTop: 6, borderTop: `0.5px solid ${c.bordure}`, fontWeight: 600 }}>
+            Total <strong>{formatEur(autreCa)}</strong>
+          </li>
+        )}
+      </ul>
+    </Section>
   )
 }
 
@@ -318,6 +351,12 @@ export default function RapportSections({ c, data, debut, fin, articles, article
       <SectionMixFoodBev c={c} mix={data.mix} titre={`Ticket moyen Food et Beverage en % vs TM total ${periodeLabel} midi et soir`} />
       <SectionCouverts c={c} couverts={data.couverts} titre={`Nombre de couverts ${periodeLabel}`} />
       <SectionCouvertsJpJ c={c} jours={data.couvertsJpJ} titre={`Couverts jour par jour Réel VS Budget ${periodeLabel}`} />
+      <SectionAutresCa
+        c={c}
+        autreCaDetail={data.autreCaDetail}
+        autreCa={data.autreCa}
+        titre={`Autres CA (privatisations, frais…) ${periodeLabel}`}
+      />
       {articles && articles.length > 0 && (
         <SectionArticles
           c={c}

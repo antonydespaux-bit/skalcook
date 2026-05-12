@@ -7,6 +7,9 @@ import {
   mixFoodBev,
   couvertsParService,
   couvertsJourParJour,
+  autreCaSurPeriode,
+  autreCaCumulMois,
+  autreCaParLieuService,
   buildRapportData,
   semaineEnCours,
   semainePrecedente,
@@ -134,6 +137,63 @@ describe('buildRapportData', () => {
     expect(r.couverts.total.real).toBe(65)
     expect(r.tmLieux).toHaveLength(2)
     expect(r.couvertsJpJ).toHaveLength(1)
+    // Pas d'autre CA dans la fixture → 0 et liste vide
+    expect(r.autreCa).toBe(0)
+    expect(r.autreCaMois).toBe(0)
+    expect(r.autreCaDetail).toEqual([])
+  })
+})
+
+describe('autreCa helpers', () => {
+  // Fixture dédiée — privatisations à La Cave / Salle (1 mer + 1 sam)
+  const rowsAutre = [
+    { jour: '2026-05-06', service: 'lunch',  lieu_service_id: 'L2', couverts: 12,
+      ca_food: 2100, ca_bev_20: 1018, ca_bev_10: 196, ca_autre: 600 },
+    { jour: '2026-05-09', service: 'dinner', lieu_service_id: 'L1', couverts: 36,
+      ca_food: 9793, ca_bev_20: 4492, ca_bev_10: 414, ca_autre: 250 },
+    // ca_autre = 0 → ignoré dans la liste détaillée
+    { jour: '2026-05-09', service: 'lunch',  lieu_service_id: 'L1', couverts: 25,
+      ca_food: 3691, ca_bev_20: 1519, ca_bev_10: 351, ca_autre: 0 },
+    // Hors période (mois suivant) → ignoré
+    { jour: '2026-06-02', service: 'dinner', lieu_service_id: 'L2', couverts: 5,
+      ca_food: 1000, ca_bev_20: 0, ca_bev_10: 0, ca_autre: 999 },
+  ]
+
+  it('autreCaSurPeriode somme ca_autre des lignes dans la période', () => {
+    expect(autreCaSurPeriode(rowsAutre, '2026-05-04', '2026-05-10')).toBe(850)
+  })
+
+  it('autreCaSurPeriode = 0 si rien à reporter', () => {
+    expect(autreCaSurPeriode(rowsAutre, '2026-05-01', '2026-05-03')).toBe(0)
+  })
+
+  it('autreCaCumulMois remonte au 1er du mois de `fin`', () => {
+    // fin = 9 mai → cumul du 01-09 mai inclut les deux lignes (600 + 250)
+    expect(autreCaCumulMois(rowsAutre, '2026-05-09')).toBe(850)
+    // fin = 06 mai → seul le mercredi compte (la ligne du 09 est postérieure)
+    expect(autreCaCumulMois(rowsAutre, '2026-05-06')).toBe(600)
+  })
+
+  it('autreCaParLieuService liste uniquement les ca_autre > 0, triée', () => {
+    const res = autreCaParLieuService(rowsAutre, lieuxMap, '2026-05-04', '2026-05-10')
+    expect(res).toHaveLength(2)
+    // Tri alphabétique : "Salle à manger" avant "Table de partage"
+    expect(res[0]).toMatchObject({ lieu_label: 'Salle à manger', service: 'dinner', ca_autre: 250 })
+    expect(res[1]).toMatchObject({ lieu_label: 'Table de partage', service: 'lunch', ca_autre: 600 })
+  })
+
+  it('autreCaParLieuService renvoie [] si aucune ligne avec ca_autre', () => {
+    expect(autreCaParLieuService(caRows, lieuxMap, '2026-05-05', '2026-05-05')).toEqual([])
+  })
+
+  it('buildRapportData expose autreCa, autreCaMois et autreCaDetail', () => {
+    const r = buildRapportData({
+      caRows: rowsAutre, budgetRows: [], lieuxMap,
+      debut: '2026-05-04', fin: '2026-05-10',
+    })
+    expect(r.autreCa).toBe(850)
+    expect(r.autreCaMois).toBe(850)
+    expect(r.autreCaDetail).toHaveLength(2)
   })
 })
 
