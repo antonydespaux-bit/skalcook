@@ -86,6 +86,22 @@ export const parseFactureSchema = z.object({
   ]),
 })
 
+// ── Import Excel pied de facture ───────────────────────────────────────────
+// Import en masse de "pieds de facture" (entêtes seuls, sans lignes détaillées)
+// depuis un fichier Excel. Chaque row → 1 facture + 1 ligne fictive globale
+// portant le total HT, pour rester compatible avec le schéma qui exige ≥1 ligne.
+export const bulkImportHeadersSchema = z.object({
+  clientId: clientIdSchema,
+  rows: z.array(z.object({
+    fournisseur:   z.string().min(1, 'Fournisseur requis').max(255),
+    dateFacture:   z.string().min(1, 'Date requise'),
+    numeroFacture: z.string().max(100).nullable().optional(),
+    totalHt:       z.coerce.number(),
+  })).min(1, 'Au moins une ligne').max(1000, 'Trop de lignes (max 1000)'),
+})
+
+export type BulkImportHeadersInput = z.infer<typeof bulkImportHeadersSchema>
+
 // ── Mercuriale query ───────────────────────────────────────────────────────
 export const mercurialeQuerySchema = z.object({
   client_id: clientIdSchema,

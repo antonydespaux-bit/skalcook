@@ -302,6 +302,16 @@ export default function AchatsListPage() {
                   ✏️ Saisir manuellement
                 </button>
                 <button
+                  onClick={() => router.push('/controle-gestion/achats/import-excel')}
+                  title="Import en masse depuis un Excel (pied de facture)"
+                  style={{
+                    padding: '8px 14px', borderRadius: 8, fontSize: 13,
+                    border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
+                  }}
+                >
+                  📊 Importer Excel
+                </button>
+                <button
                   onClick={() => router.push('/controle-gestion/achats/import')}
                   style={{
                     padding: '8px 14px', borderRadius: 8, fontSize: 13,

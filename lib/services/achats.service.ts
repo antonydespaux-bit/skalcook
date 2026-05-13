@@ -4,7 +4,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { SaveFactureInput, CreateIngredientInput } from '../validators/achats.schema'
+import type { SaveFactureInput, CreateIngredientInput, BulkImportHeadersInput } from '../validators/achats.schema'
 import { ConflictError, ValidationError, NotFoundError } from '../errors'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -289,6 +289,83 @@ export async function saveFacture(
     auto_created: autoCreatedCount,
     file_uploaded: fileExpected ? !!fichierUrl : null,
   }
+}
+
+// ── Bulk import "pieds de facture" depuis Excel ───────────────────────────
+// Import sans détail de lignes : chaque row du fichier devient 1 facture
+// + 1 ligne fictive "Facture (import Excel)" portant le total HT. Permet de
+// rentrer rapidement un historique d'achats sans saisir les articles.
+// N'effectue PAS de blocage sur doublon : la couleur dans le preview UI
+// indique les n° factures déjà présents — l'utilisateur arbitre.
+export async function bulkImportHeaders(
+  db: SupabaseClient,
+  input: BulkImportHeadersInput,
+  userId: string,
+) {
+  const { clientId, rows } = input
+
+  // 1. Upsert tous les fournisseurs uniques (case-insensitive)
+  const uniqueNoms = [...new Set(rows.map(r => r.fournisseur.trim()).filter(Boolean))]
+  const fournisseurIdByNom: Record<string, string | null> = {}
+  await Promise.all(uniqueNoms.map(async (nom) => {
+    fournisseurIdByNom[nom.toLowerCase()] = await upsertFournisseur(db, clientId, nom)
+  }))
+
+  // 2. Insert factures (header) — en batch
+  const facturesPayload = rows.map((r) => {
+    const nom = r.fournisseur.trim()
+    return {
+      client_id: clientId,
+      fournisseur: nom,
+      fournisseur_id: fournisseurIdByNom[nom.toLowerCase()] ?? null,
+      numero_facture: r.numeroFacture?.trim() || null,
+      date_facture: r.dateFacture,
+      total_ht: r.totalHt,
+      statut: 'facture' as const,
+    }
+  })
+
+  const { data: inserted, error: fErr } = await db
+    .from('achats_factures')
+    .insert(facturesPayload)
+    .select('id, numero_facture')
+
+  if (fErr) throw new Error(fErr.message)
+  if (!inserted || inserted.length !== rows.length) {
+    throw new Error('Insertion incomplète des factures.')
+  }
+
+  // 3. Insert 1 ligne fictive par facture (pour respecter le schéma "≥1 ligne")
+  const lignesPayload = inserted.map((f, i) => ({
+    facture_id: f.id,
+    client_id: clientId,
+    designation: 'Facture (import Excel)',
+    ingredient_id: null,
+    quantite: 1,
+    unite: null,
+    prix_unitaire_ht: rows[i].totalHt,
+    remise: 0,
+    montant_ht: rows[i].totalHt,
+    taux_tva: null,
+  }))
+
+  const { error: lErr } = await db.from('achats_lignes').insert(lignesPayload)
+  if (lErr) {
+    // Rollback : supprime les factures qu'on vient d'insérer
+    await db.from('achats_factures').delete().in('id', inserted.map(f => f.id))
+    throw new Error(lErr.message)
+  }
+
+  // 4. Audit log
+  await db.from('transactions_api').insert({
+    client_id: clientId,
+    type: 'achats_import',
+    source: 'bulk_headers_excel',
+    payload_json: { count: rows.length, facture_ids: inserted.map(f => f.id) },
+    user_id: userId,
+  })
+
+  return { imported: inserted.length, facture_ids: inserted.map(f => f.id) }
 }
 
 export async function updateFacture(
