@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTheme } from '../lib/useTheme'
 import { EMOJI_GROUPS, ALL_EMOJIS } from '../lib/emojiData'
 
@@ -10,17 +11,16 @@ import { EMOJI_GROUPS, ALL_EMOJIS } from '../lib/emojiData'
  * Usage :
  *   <EmojiPicker value={emoji} onChange={setEmoji} />
  *
- * UX : un bouton compact affichant l'émoji actuel (ou un placeholder), qui
- * ouvre un popover contenant des onglets par catégorie + une recherche
- * textuelle. Le popover se ferme automatiquement après sélection ou au clic
- * en dehors.
+ * Le popover est rendu via un Portal React dans `document.body` avec position
+ * fixed calculée depuis le trigger. Ça lui permet de survoler n'importe quel
+ * conteneur parent, même s'il a un `overflow: hidden` ou un z-index bas.
  *
  * Props :
  *  - value     : émoji actuellement sélectionné (string)
  *  - onChange  : (emoji: string) => void
- *  - size      : 'sm' | 'md' (taille du bouton trigger, défaut 'md')
+ *  - size      : 'sm' | 'md' (taille du trigger, défaut 'md')
  *  - disabled  : désactive l'ouverture
- *  - placement : 'bottom' | 'top' (défaut 'bottom') — sens d'ouverture du popover
+ *  - placement : 'bottom' (défaut) ou 'top'
  */
 export default function EmojiPicker({
   value = '',
@@ -33,14 +33,45 @@ export default function EmojiPicker({
   const [open, setOpen] = useState(false)
   const [activeGroup, setActiveGroup] = useState(EMOJI_GROUPS[0].id)
   const [search, setSearch] = useState('')
-  const containerRef = useRef(null)
+  // Rect du trigger pour positionner le popover. Recalculé à chaque ouverture
+  // et lors d'un scroll/resize tant que le popover est ouvert.
+  // Pas besoin d'un état `mounted` séparé : `open` est false au premier render
+  // (SSR comme client), donc le createPortal ne s'exécute que côté client.
+  const [rect, setRect] = useState(null)
+
+  const triggerRef = useRef(null)
+  const popoverRef = useRef(null)
   const searchInputRef = useRef(null)
 
-  // Fermer au clic en dehors
+  // Recalcule la position quand on ouvre le picker
+  useEffect(() => {
+    if (open && triggerRef.current) {
+      setRect(triggerRef.current.getBoundingClientRect())
+    }
+  }, [open])
+
+  // Reposition en cas de scroll ou resize pendant que le popover est ouvert
+  useEffect(() => {
+    if (!open) return
+    const handler = () => {
+      if (triggerRef.current) setRect(triggerRef.current.getBoundingClientRect())
+    }
+    window.addEventListener('scroll', handler, true)
+    window.addEventListener('resize', handler)
+    return () => {
+      window.removeEventListener('scroll', handler, true)
+      window.removeEventListener('resize', handler)
+    }
+  }, [open])
+
+  // Fermer au clic en dehors (trigger ET popover)
   useEffect(() => {
     if (!open) return
     const handler = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
+      if (
+        !triggerRef.current?.contains(e.target) &&
+        !popoverRef.current?.contains(e.target)
+      ) {
         setOpen(false)
       }
     }
@@ -48,9 +79,15 @@ export default function EmojiPicker({
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  // Focus automatique sur le champ recherche à l'ouverture.
-  // Le reset du champ recherche est fait dans le handler de toggle, pas ici,
-  // pour éviter un setState synchrone dans un effect (cascading renders).
+  // Fermer à l'appui sur Échap
+  useEffect(() => {
+    if (!open) return
+    const handler = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [open])
+
+  // Focus auto sur le champ recherche à l'ouverture
   useEffect(() => {
     if (!open) return
     const t = setTimeout(() => searchInputRef.current?.focus(), 30)
@@ -76,13 +113,29 @@ export default function EmojiPicker({
     setOpen(false)
   }
 
+  // Position du popover : on l'ancre sur le trigger via le rect courant.
+  // Largeur de référence 320px, clamp dans la viewport avec marge de 8px.
+  const popoverWidth = 320
+  const popoverPosStyle = rect
+    ? (() => {
+        const left = Math.max(
+          8,
+          Math.min(rect.left, (typeof window !== 'undefined' ? window.innerWidth : 0) - popoverWidth - 8)
+        )
+        if (placement === 'top') {
+          return { left, bottom: (typeof window !== 'undefined' ? window.innerHeight : 0) - rect.top + 6 }
+        }
+        return { left, top: rect.bottom + 6 }
+      })()
+    : {}
+
   return (
-    <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
+    <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => {
           if (disabled) return
-          // Reset la recherche à l'ouverture pour repartir d'une grille neuve.
           if (!open) setSearch('')
           setOpen(o => !o)
         }}
@@ -106,15 +159,14 @@ export default function EmojiPicker({
         {value || <span style={{ fontSize: 14, color: c.texteMuted }}>＋</span>}
       </button>
 
-      {open && (
+      {open && rect && createPortal(
         <div
+          ref={popoverRef}
           style={{
-            position: 'absolute',
-            [placement === 'top' ? 'bottom' : 'top']: triggerSize + 6,
-            left: 0,
-            zIndex: 1000,
-            width: 320,
-            maxWidth: 'calc(100vw - 32px)',
+            position: 'fixed',
+            zIndex: 10000,
+            width: popoverWidth,
+            maxWidth: 'calc(100vw - 16px)',
             background: c.blanc,
             border: `1px solid ${c.bordure}`,
             borderRadius: 12,
@@ -123,6 +175,7 @@ export default function EmojiPicker({
             display: 'flex',
             flexDirection: 'column',
             gap: 8,
+            ...popoverPosStyle,
           }}
         >
           {/* Recherche */}
@@ -212,8 +265,9 @@ export default function EmojiPicker({
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   )
 }
