@@ -44,6 +44,8 @@ export default function IngredientsPage() {
 
   // Edition inline ingrédient
   const [editionId, setEditionId] = useState(null)
+  const [editionNom, setEditionNom] = useState('')
+  const [editionUnite, setEditionUnite] = useState('')
   const [editionPrix, setEditionPrix] = useState('')
   const [editionCategorie, setEditionCategorie] = useState('')
 
@@ -226,25 +228,43 @@ export default function IngredientsPage() {
     } finally { setSavingCat(false) }
   }
 
-  // ── Édition inline prix + catégorie ──────────────────────────────────────
+  // ── Édition inline nom + unité + prix + catégorie ────────────────────────
   const startEdition = (ing) => {
     setEditionId(ing.id)
+    setEditionNom(ing.nom || '')
+    setEditionUnite(ing.unite || '')
     setEditionPrix(ing.prix_kg ? String(ing.prix_kg) : '')
     setEditionCategorie(ing.categorie_id || '')
   }
 
   const saveEdition = async (id) => {
+    const nomTrim = editionNom.trim()
+    if (!nomTrim) {
+      window.alert('Le nom de l\'ingrédient ne peut pas être vide.')
+      return
+    }
     try {
       const clientId = await getClientId()
       const { error } = await supabase.from('ingredients').update({
+        nom: nomTrim,
+        unite: editionUnite.trim() || null,
         prix_kg: editionPrix ? parseFloat(editionPrix.replace(',', '.')) : null,
         categorie_id: editionCategorie || null
       }).eq('id', id).eq('client_id', clientId)
-      if (error) throw error
+      if (error) {
+        // Contrainte UNIQUE globale sur le nom : un autre établissement a déjà
+        // réservé ce nom. On remonte un message clair plutôt qu'un échec silencieux.
+        if (error.code === '23505' || /duplicate key/i.test(error.message)) {
+          window.alert(`Le nom "${nomTrim}" est déjà utilisé par un autre établissement. Modifie légèrement le nom (ex : ajoute une marque ou une précision).`)
+          return
+        }
+        throw error
+      }
       setEditionId(null)
       await loadAll()
     } catch (err) {
       console.error('Edit error:', err)
+      window.alert('Erreur lors de la modification de l\'ingrédient.')
     }
   }
 
@@ -461,17 +481,25 @@ export default function IngredientsPage() {
                           <input type="checkbox" checked={selection.includes(ing.id)} onChange={() => toggleSelection(ing.id)} style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: c.accent }} />
                         </td>
                         <td style={{ padding: '10px 16px', fontWeight: '500', color: c.texte }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span>{ing.nom}</span>
-                            {Array.isArray(ing.fiche_ingredients) && ing.fiche_ingredients.length > 0 && (
-                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22C55E', display: 'inline-block' }} title="Utilisé en fiche technique" />
-                            )}
-                            {ing.categorie_id == null && (
-                              <span style={{ fontSize: '11px', color: '#9A3412', background: '#FFEDD5', border: '0.5px solid #FDBA74', borderRadius: '999px', padding: '1px 8px' }}>
-                                ⚠️ À catégoriser
-                              </span>
-                            )}
-                          </div>
+                          {editionId === ing.id ? (
+                            <input type="text" value={editionNom} onChange={e => setEditionNom(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') saveEdition(ing.id); if (e.key === 'Escape') setEditionId(null) }}
+                              style={{ width: '100%', padding: '4px 8px', borderRadius: '6px', border: `0.5px solid ${c.accent}`, fontSize: '13px', outline: 'none', background: c.blanc, color: c.texte }}
+                              autoFocus
+                            />
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span>{ing.nom}</span>
+                              {Array.isArray(ing.fiche_ingredients) && ing.fiche_ingredients.length > 0 && (
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22C55E', display: 'inline-block' }} title="Utilisé en fiche technique" />
+                              )}
+                              {ing.categorie_id == null && (
+                                <span style={{ fontSize: '11px', color: '#9A3412', background: '#FFEDD5', border: '0.5px solid #FDBA74', borderRadius: '999px', padding: '1px 8px' }}>
+                                  ⚠️ À catégoriser
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="sk-td">
                           {editionId === ing.id ? (
@@ -497,7 +525,17 @@ export default function IngredientsPage() {
                             <span style={{ color: c.texte }}>{ing.prix_kg ? `${Number(ing.prix_kg).toFixed(2)} €` : '—'}</span>
                           )}
                         </td>
-                        <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texteMuted }}>{ing.unite || '—'}</td>
+                        <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texteMuted }}>
+                          {editionId === ing.id ? (
+                            <input type="text" value={editionUnite} onChange={e => setEditionUnite(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') saveEdition(ing.id); if (e.key === 'Escape') setEditionId(null) }}
+                              placeholder="kg, L, pièce…"
+                              style={{ width: '70px', padding: '4px 8px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', outline: 'none', textAlign: 'right', background: c.blanc, color: c.texte }}
+                            />
+                          ) : (
+                            <span>{ing.unite || '—'}</span>
+                          )}
+                        </td>
                         {peutModifier && (
                           <td className="sk-td sk-td--right">
                             {editionId === ing.id ? (
