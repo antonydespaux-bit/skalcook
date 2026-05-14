@@ -9,6 +9,7 @@ import { log } from '../../lib/useLog'
 import Navbar from '../../components/Navbar'
 import Pagination from '../../components/Pagination'
 import ChefLoader from '../../components/ChefLoader'
+import EmojiPicker from '../../components/EmojiPicker'
 import { Badge } from '../../components/ui'
 
 const PAGE_SIZE = 30
@@ -534,14 +535,12 @@ export default function IngredientsPage() {
             {ajoutCatVisible && peutModifier && (
               <div style={{ background: c.blanc, borderRadius: '12px', padding: '20px', border: `1px solid ${c.accent}`, marginBottom: '16px' }}>
                 <div style={{ fontSize: '13px', fontWeight: '600', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Nouvelle catégorie</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '10px', marginBottom: '10px' }}>
-                  <div>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', marginBottom: '10px' }}>
+                  <div style={{ flexShrink: 0 }}>
                     <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Emoji</label>
-                    <input type="text" value={nouvelleCatEmoji} onChange={e => setNouvelleCatEmoji(e.target.value)} maxLength={2}
-                      style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '22px', outline: 'none', textAlign: 'center', background: c.blanc }}
-                    />
+                    <EmojiPicker value={nouvelleCatEmoji} onChange={setNouvelleCatEmoji} />
                   </div>
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom *</label>
                     <input type="text" value={nouvelleCatNom} onChange={e => setNouvelleCatNom(e.target.value)}
                       placeholder="Ex : Viandes & Volailles"

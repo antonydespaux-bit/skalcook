@@ -9,9 +9,7 @@ import { useIsMobile } from '../../lib/useIsMobile'
 import { INVENTAIRE_FREQUENCES, JOURS_SEMAINE } from '../../lib/constants'
 import Navbar from '../../components/Navbar'
 import ChefLoader from '../../components/ChefLoader'
-
-const EMOJIS_LIEUX = ['🍽', '🌅', '🍷', '🛎', '🏨', '🌿', '🎭', '☕', '🍸', '🌊', '🏔', '🌃']
-const EMOJIS_CATS = ['🥗', '🍖', '🍮', '🥪', '⚙️', '🍹', '🍷', '🍺', '🥤', '🥃', '🍾', '🧃', '🥩', '🐟', '🧀', '🍰', '🫕', '🥘']
+import EmojiPicker from '../../components/EmojiPicker'
 
 export default function SettingsPage() {
   const [onglet, setOnglet] = useState('lieux')
@@ -243,10 +241,7 @@ export default function SettingsPage() {
       }}>
         {isEditing ? (
           <>
-            <select value={localLieu.emoji} onChange={e => setLocalLieu({ ...localLieu, emoji: e.target.value })}
-              style={{ padding: '6px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '18px', background: c.blanc }}>
-              {EMOJIS_LIEUX.map(e => <option key={e} value={e}>{e}</option>)}
-            </select>
+            <EmojiPicker value={localLieu.emoji} onChange={emoji => setLocalLieu({ ...localLieu, emoji })} size="sm" />
             <input value={localLieu.nom} onChange={e => setLocalLieu({ ...localLieu, nom: e.target.value })}
               style={{ flex: 1, padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.accent}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
             />
@@ -280,10 +275,7 @@ export default function SettingsPage() {
       }}>
         {isEditing ? (
           <>
-            <select value={localCat.emoji} onChange={e => setLocalCat({ ...localCat, emoji: e.target.value })}
-              style={{ padding: '6px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '18px', background: c.blanc }}>
-              {EMOJIS_CATS.map(e => <option key={e} value={e}>{e}</option>)}
-            </select>
+            <EmojiPicker value={localCat.emoji} onChange={emoji => setLocalCat({ ...localCat, emoji })} size="sm" />
             <input value={localCat.nom} onChange={e => setLocalCat({ ...localCat, nom: e.target.value })}
               style={{ flex: 1, padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.accent}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
             />
@@ -352,12 +344,9 @@ export default function SettingsPage() {
             <div style={{ background: c.blanc, borderRadius: '12px', padding: '20px', border: `0.5px solid ${c.bordure}` }}>
               <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Nouveau lieu de service</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'flex-end' }}>
-                <div style={{ width: isMobile ? '64px' : '80px', flexShrink: 0 }}>
+                <div style={{ flexShrink: 0 }}>
                   <label style={{ fontSize: '12px', color: c.texteMuted, display: 'block', marginBottom: '6px' }}>Emoji</label>
-                  <select value={newLieuEmoji} onChange={e => setNewLieuEmoji(e.target.value)}
-                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '20px', background: c.blanc, textAlign: 'center' }}>
-                    {EMOJIS_LIEUX.map(e => <option key={e} value={e}>{e}</option>)}
-                  </select>
+                  <EmojiPicker value={newLieuEmoji} onChange={setNewLieuEmoji} />
                 </div>
                 <div style={{ flex: '1 1 160px' }}>
                   <label style={{ fontSize: '12px', color: c.texteMuted, display: 'block', marginBottom: '6px' }}>Nom *</label>
@@ -423,12 +412,9 @@ export default function SettingsPage() {
             <div style={{ background: c.blanc, borderRadius: '12px', padding: '20px', border: `0.5px solid ${c.bordure}` }}>
               <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Nouvelle catégorie</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'flex-end' }}>
-                <div style={{ width: isMobile ? '64px' : '80px', flexShrink: 0 }}>
+                <div style={{ flexShrink: 0 }}>
                   <label style={{ fontSize: '12px', color: c.texteMuted, display: 'block', marginBottom: '6px' }}>Emoji</label>
-                  <select value={newCatEmoji} onChange={e => setNewCatEmoji(e.target.value)}
-                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '20px', background: c.blanc, textAlign: 'center' }}>
-                    {EMOJIS_CATS.map(e => <option key={e} value={e}>{e}</option>)}
-                  </select>
+                  <EmojiPicker value={newCatEmoji} onChange={setNewCatEmoji} />
                 </div>
                 <div style={{ flex: '1 1 160px' }}>
                   <label style={{ fontSize: '12px', color: c.texteMuted, display: 'block', marginBottom: '6px' }}>Nom *</label>
