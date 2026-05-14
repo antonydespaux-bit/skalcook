@@ -20,6 +20,31 @@ function formatDate(s) {
   return new Date(s).toLocaleDateString('fr-FR')
 }
 
+// Cellule d'en-tête cliquable pour trier sur la colonne `col`. Affiche un
+// indicateur visuel (▲ asc, ▼ desc, ↕ inactif) à droite du libellé.
+function SortHeader({ col, label, baseStyle, sortBy, sortDir, onSort, c, right = false }) {
+  const active = sortBy === col
+  return (
+    <th
+      onClick={() => onSort(col)}
+      style={{
+        ...baseStyle,
+        cursor: 'pointer',
+        userSelect: 'none',
+        color: active ? c.texte : baseStyle.color,
+      }}
+      title={`Trier par ${label.toLowerCase()}`}
+    >
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: right ? 'flex-end' : 'flex-start', width: '100%' }}>
+        {label}
+        <span style={{ fontSize: 9, opacity: active ? 1 : 0.35 }}>
+          {active ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}
+        </span>
+      </span>
+    </th>
+  )
+}
+
 
 export default function AchatsListPage() {
   const router = useRouter()
@@ -40,6 +65,10 @@ export default function AchatsListPage() {
   const [statutsActifs, setStatutsActifs] = useState(['bl', 'facture', 'avoir'])
   const [deleting, setDeleting] = useState(null)
   const [exporting, setExporting] = useState(false)
+  // Tri : colonne active + sens. Par défaut : date décroissante (= comportement
+  // du .order() côté query Supabase).
+  const [sortBy, setSortBy] = useState('date_facture')
+  const [sortDir, setSortDir] = useState('desc')
 
   useEffect(() => {
     let cancelled = false
@@ -233,8 +262,59 @@ export default function AchatsListPage() {
     setStatutsActifs((prev) => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])
   }
 
-  const totalHT = facturesFiltrees.reduce((s, f) => s + (Number(f.total_ht) || 0), 0)
-  const totalTVA = facturesFiltrees.reduce((s, f) => s + (tvaByFacture[f.id] || 0), 0)
+  // Sens par défaut pour chaque colonne (asc pour les textes, desc pour les
+  // dates et montants, où on veut voir le plus récent / le plus gros en premier).
+  const DEFAULT_SORT_DIR = {
+    fournisseur: 'asc',
+    numero_facture: 'asc',
+    date_facture: 'desc',
+    statut: 'asc',
+    articles: 'desc',
+    ht: 'desc',
+    tva: 'desc',
+    ttc: 'desc',
+  }
+
+  const handleSort = (col) => {
+    if (sortBy === col) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(col)
+      setSortDir(DEFAULT_SORT_DIR[col] || 'asc')
+    }
+  }
+
+  // Pas de useMemo / useCallback ici : on est placés après un early return
+  // conditionnel (auth), les hooks ne peuvent pas être appelés. Le tri reste
+  // peu coûteux à recalculer à chaque render (~quelques dizaines de factures).
+  const getSortValue = (f, col) => {
+    switch (col) {
+      case 'fournisseur':    return (f.fournisseur || '').toLowerCase()
+      case 'numero_facture': return (f.numero_facture || '').toLowerCase()
+      case 'date_facture':   return f.date_facture || ''
+      case 'statut':         return f.statut || 'facture'
+      case 'articles':       return nbLignesByFacture[f.id] ?? 0
+      case 'ht':             return Number(f.total_ht) || 0
+      case 'tva':            return tvaByFacture[f.id] || 0
+      case 'ttc':            return (Number(f.total_ht) || 0) + (tvaByFacture[f.id] || 0)
+      default:               return ''
+    }
+  }
+
+  const facturesAffichees = [...facturesFiltrees].sort((a, b) => {
+    const va = getSortValue(a, sortBy)
+    const vb = getSortValue(b, sortBy)
+    let cmp
+    if (typeof va === 'number' && typeof vb === 'number') {
+      cmp = va - vb
+    } else {
+      cmp = String(va).localeCompare(String(vb), 'fr', { numeric: true, sensitivity: 'base' })
+    }
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
+  const totalHT = facturesAffichees.reduce((s, f) => s + (Number(f.total_ht) || 0), 0)
+  const totalTVA = facturesAffichees.reduce((s, f) => s + (tvaByFacture[f.id] || 0), 0)
   const totalTTC = totalHT + totalTVA
 
   const th = {
@@ -425,7 +505,30 @@ export default function AchatsListPage() {
             ) : isMobile ? (
               /* ── Vue cartes mobile ── */
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {facturesFiltrees.map((f) => {
+                {/* Sélecteur de tri (équivalent mobile des en-têtes cliquables desktop) */}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: c.texteMuted }}>
+                  <span>Trier par</span>
+                  <select
+                    value={sortBy}
+                    onChange={e => { setSortBy(e.target.value); setSortDir(DEFAULT_SORT_DIR[e.target.value] || 'asc') }}
+                    style={{ padding: '6px 8px', borderRadius: 6, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 12 }}
+                  >
+                    <option value="fournisseur">Fournisseur</option>
+                    <option value="numero_facture">N° de facture</option>
+                    <option value="date_facture">Date</option>
+                    <option value="statut">Statut</option>
+                    <option value="ht">Montant HT</option>
+                    <option value="ttc">Montant TTC</option>
+                  </select>
+                  <button
+                    onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+                    title={sortDir === 'asc' ? 'Croissant (A→Z, 0→9)' : 'Décroissant (Z→A, 9→0)'}
+                    style={{ padding: '6px 10px', borderRadius: 6, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 12, cursor: 'pointer' }}
+                  >
+                    {sortDir === 'asc' ? '▲ A-Z' : '▼ Z-A'}
+                  </button>
+                </div>
+                {facturesAffichees.map((f) => {
                   const ht = Number(f.total_ht) || 0
                   const tva = tvaByFacture[f.id] || 0
                   const ttc = ht + tva
@@ -489,19 +592,19 @@ export default function AchatsListPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: c.fond }}>
-                        <th style={th}>Fournisseur</th>
-                        <th style={th}>N° Facture</th>
-                        <th style={th}>Date</th>
-                        <th style={th}>Statut</th>
-                        <th style={thR}>Articles</th>
-                        <th style={thR}>HT</th>
-                        <th style={thR}>TVA</th>
-                        <th style={thR}>TTC</th>
+                        <SortHeader col="fournisseur"    label="Fournisseur" baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
+                        <SortHeader col="numero_facture" label="N° Facture"  baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
+                        <SortHeader col="date_facture"   label="Date"        baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
+                        <SortHeader col="statut"         label="Statut"      baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
+                        <SortHeader col="articles"       label="Articles"    baseStyle={thR} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} right />
+                        <SortHeader col="ht"             label="HT"          baseStyle={thR} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} right />
+                        <SortHeader col="tva"            label="TVA"         baseStyle={thR} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} right />
+                        <SortHeader col="ttc"            label="TTC"         baseStyle={thR} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} right />
                         {role === 'admin' && <th style={th} />}
                       </tr>
                     </thead>
                     <tbody>
-                      {facturesFiltrees.map((f, i) => {
+                      {facturesAffichees.map((f, i) => {
                         const ht = Number(f.total_ht) || 0
                         const tva = tvaByFacture[f.id] || 0
                         const ttc = ht + tva

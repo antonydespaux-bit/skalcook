@@ -206,7 +206,17 @@ export async function saveFacture(
     .select()
     .single()
 
-  if (fErr) throw new Error(fErr.message)
+  if (fErr) {
+    // La DB a une contrainte UNIQUE (client_id, numero_facture) qui rejette
+    // même les inserts forceInsert. On remonte un message clair plutôt qu'un
+    // 500 opaque pour que l'UI puisse aiguiller l'utilisateur.
+    if (fErr.code === '23505' || /duplicate key/i.test(fErr.message)) {
+      throw new ConflictError(
+        `Une facture avec le numéro "${numeroFacture}" existe déjà en base pour ce client. Modifiez le numéro de facture ou supprimez l'ancienne avant de réimporter.`
+      )
+    }
+    throw new Error(fErr.message)
+  }
 
   // 5. Insert lines
   const lignesInsert = lignes.map((l) => {

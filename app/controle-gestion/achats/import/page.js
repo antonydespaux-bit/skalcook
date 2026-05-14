@@ -115,6 +115,17 @@ export default function AchatsImportPage() {
   const [linkingIngFor, setLinkingIngFor] = useState(null)
   const [linkSearch, setLinkSearch] = useState('')
 
+  // ── Multi-factures (un PDF peut contenir plusieurs factures à la suite) ──
+  // extractedFactures = null si pas encore extrait ou si extraction vide.
+  // Sinon array brut tel que renvoyé par /api/achats/parse-facture, qu'on
+  // navigue via currentFactureIdx. Les modifs utilisateur sur la facture
+  // courante sont re-snapshotées dans ce tableau quand on change d'index.
+  const [extractedFactures, setExtractedFactures] = useState(null)
+  const [currentFactureIdx, setCurrentFactureIdx] = useState(0)
+  const [savedFactureIdxs, setSavedFactureIdxs] = useState(() => new Set())
+  // Flash de succès affiché après chaque save en multi-factures (s'estompe).
+  const [lastSavedFlash, setLastSavedFlash] = useState(null)
+
   // ── Refs ──────────────────────────────────────────────────────────────────
   const fileInputRef = useRef(null)
 
@@ -190,6 +201,98 @@ export default function AchatsImportPage() {
     })])
   }, [isManuelMode, authReady, enrichLigneLocal])
 
+  // ─── Multi-factures : helpers de chargement / snapshot / navigation ───────
+
+  // Pousse une facture brute (telle que renvoyée par l'OCR ou snapshotée) dans
+  // le state d'édition courant. Reset aussi les warnings/erreurs liés au save.
+  const loadFactureIntoState = useCallback((facture) => {
+    setFournisseur(facture.fournisseur || '')
+    setDateFacture(facture.date_facture || yesterdayIso())
+    setNumeroFacture(facture.numero_facture || '')
+    setStatut(facture.statut || 'facture')
+    setTotalHtSaisi(facture.total_ht_facture != null ? Number(facture.total_ht_facture) : null)
+    setMontantTvaSaisi(facture.montant_tva_total != null ? Number(facture.montant_tva_total) : null)
+    setTotalTtcSaisi(facture.total_ttc_facture != null ? Number(facture.total_ttc_facture) : null)
+    const enriched = (facture.lignes || []).map(l =>
+      enrichLigneLocal({
+        _id:              makeLigneId(),
+        designation:      l.designation || '',
+        quantite:         Number(l.quantite) || 1,
+        unite:            l.unite || '',
+        prix_unitaire_ht: Number(l.prix_unitaire_ht) || 0,
+        taux_tva:         l.taux_tva != null ? Number(l.taux_tva) : null,
+      })
+    )
+    setLignes(enriched)
+    setError('')
+    setDuplicateWarning(null)
+  }, [enrichLigneLocal])
+
+  // Vérification doublon par numéro de facture (réutilisé après extraction
+  // et après chaque navigation entre factures d'un même PDF).
+  const checkDuplicate = useCallback(async (numeroFact) => {
+    setDuplicateWarning(null)
+    if (!numeroFact?.trim() || !clientId) return
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const dupRes = await fetch(
+        `/api/achats/check-duplicate?clientId=${clientId}&numeroFacture=${encodeURIComponent(numeroFact.trim())}`,
+        { headers: { 'Authorization': `Bearer ${session.access_token}` } }
+      )
+      if (dupRes.ok || dupRes.status === 409) {
+        const payload = await dupRes.json().catch(() => null)
+        if (payload?.existing) setDuplicateWarning(payload.existing)
+      }
+    } catch {
+      // Pas bloquant : le check sera refait côté serveur au save.
+    }
+  }, [clientId])
+
+  // Capture le state d'édition courant pour le re-stocker dans extractedFactures
+  // (utilisé avant de basculer sur une autre facture, pour ne pas perdre les
+  // modifs si l'utilisateur revient dessus).
+  const snapshotCurrent = useCallback(() => ({
+    fournisseur,
+    date_facture: dateFacture,
+    numero_facture: numeroFacture,
+    statut,
+    total_ht_facture: totalHtSaisi != null && totalHtSaisi !== '' ? Number(totalHtSaisi) : null,
+    montant_tva_total: montantTvaSaisi != null && montantTvaSaisi !== '' ? Number(montantTvaSaisi) : null,
+    total_ttc_facture: totalTtcSaisi != null && totalTtcSaisi !== '' ? Number(totalTtcSaisi) : null,
+    lignes: lignes.map(l => ({
+      designation:      l.designation,
+      quantite:         l.quantite,
+      unite:            l.unite,
+      prix_unitaire_ht: l.prix_unitaire_ht,
+      taux_tva:         l.taux_tva,
+    })),
+  }), [fournisseur, dateFacture, numeroFacture, statut, totalHtSaisi, montantTvaSaisi, totalTtcSaisi, lignes])
+
+  const goToFacture = useCallback((idx) => {
+    if (!extractedFactures) return
+    if (idx < 0 || idx >= extractedFactures.length || idx === currentFactureIdx) return
+    // Persiste les éditions sur la facture courante avant de basculer.
+    const snapshot = snapshotCurrent()
+    setExtractedFactures(prev => {
+      if (!prev) return prev
+      const next = [...prev]
+      next[currentFactureIdx] = snapshot
+      return next
+    })
+    setCurrentFactureIdx(idx)
+    loadFactureIntoState(extractedFactures[idx])
+    checkDuplicate(extractedFactures[idx].numero_facture)
+    setLastSavedFlash(null)
+  }, [extractedFactures, currentFactureIdx, snapshotCurrent, loadFactureIntoState, checkDuplicate])
+
+  // Le flash de succès s'estompe au bout de 4 secondes pour ne pas rester
+  // collé en permanence sur la facture en cours.
+  useEffect(() => {
+    if (!lastSavedFlash) return
+    const t = setTimeout(() => setLastSavedFlash(null), 4000)
+    return () => clearTimeout(t)
+  }, [lastSavedFlash])
+
   // ─── Extraction IA ────────────────────────────────────────────────────────
 
   const extractFromImage = useCallback(async (file) => {
@@ -209,47 +312,32 @@ export default function AchatsImportPage() {
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Erreur extraction')
 
-      setFournisseur(result.fournisseur || '')
-      setDateFacture(result.date_facture || yesterdayIso())
-      setNumeroFacture(result.numero_facture || '')
-      // Pré-remplit les totaux extraits du pied de facture (override des
-      // totaux calculés depuis les lignes ; l'utilisateur peut modifier).
-      if (result.total_ht_facture != null) setTotalHtSaisi(Number(result.total_ht_facture))
-      if (result.montant_tva_total != null) setMontantTvaSaisi(Number(result.montant_tva_total))
-      if (result.total_ttc_facture != null) setTotalTtcSaisi(Number(result.total_ttc_facture))
-      const enriched = (result.lignes || []).map(l =>
-        enrichLigneLocal({
-          _id:              makeLigneId(),
-          designation:      l.designation || '',
-          quantite:         Number(l.quantite) || 1,
-          unite:            l.unite || '',
-          prix_unitaire_ht: Number(l.prix_unitaire_ht) || 0,
-          taux_tva:         l.taux_tva != null ? Number(l.taux_tva) : null,
-        })
-      )
-      setLignes(enriched)
+      const factures = Array.isArray(result.factures) ? result.factures : []
+      setSavedFactureIdxs(new Set())
 
-      // Vérification doublon dès l'extraction, avant que l'utilisateur clique sur Enregistrer
-      if (result.numero_facture?.trim()) {
-        const dupRes = await fetch(
-          `/api/achats/check-duplicate?clientId=${clientId}&numeroFacture=${encodeURIComponent(result.numero_facture.trim())}`,
-          { headers: { 'Authorization': `Bearer ${session.access_token}` } }
-        )
-        // 200 = pas de doublon, 409 = doublon trouvé (avec body { duplicate, existing })
-        if (dupRes.ok || dupRes.status === 409) {
-          const payload = await dupRes.json().catch(() => null)
-          if (payload?.existing) setDuplicateWarning(payload.existing)
-        }
+      if (factures.length === 0) {
+        // OCR n'a rien retourné : on bascule en review avec un formulaire vide.
+        setExtractedFactures(null)
+        setCurrentFactureIdx(0)
+        setLignes([])
+        setStep('review')
+        return
       }
+
+      setExtractedFactures(factures)
+      setCurrentFactureIdx(0)
+      loadFactureIntoState(factures[0])
+      await checkDuplicate(factures[0].numero_facture)
 
       setStep('review')
     } catch (err) {
       console.error('Extraction IA échouée :', err)
       setExtractError(err.message || 'Extraction échouée')
+      setExtractedFactures(null)
       setLignes([])
       setStep('review')
     }
-  }, [clientId, enrichLigneLocal])
+  }, [clientId, loadFactureIntoState, checkDuplicate])
 
   // ─── Sélection de fichier (mobile input + desktop drop partagé) ───────────
 
@@ -333,6 +421,14 @@ export default function AchatsImportPage() {
     setError('')
     setExtractError('')
     setPrixMajCount(0)
+    setExtractedFactures(null)
+    setCurrentFactureIdx(0)
+    setSavedFactureIdxs(new Set())
+    setLastSavedFlash(null)
+    setDuplicateWarning(null)
+    setTotalHtSaisi(null)
+    setMontantTvaSaisi(null)
+    setTotalTtcSaisi(null)
   }, [])
 
   // ─── Sauvegarde ───────────────────────────────────────────────────────────
@@ -436,8 +532,33 @@ export default function AchatsImportPage() {
       setError('Ajoutez au moins une ligne avec une désignation avant d\'enregistrer.')
       return
     }
+    // Doublon déjà signalé : empêche l'aller-retour inutile au serveur. L'utilisateur
+    // doit explicitement cliquer "Importer quand même" (qui appelle handleSave(true)).
+    if (duplicateWarning && !forceInsert) {
+      setError(`Cette facture (n° ${numeroFacture}) est déjà en base. Utilisez le bandeau d'avertissement en haut pour annuler ou forcer l'import.`)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+
     setError('')
-    setDuplicateWarning(null)
+    if (forceInsert) setDuplicateWarning(null)
+
+    // Multi-factures : si c'est la dernière restante à enregistrer, demande
+    // une confirmation explicite avant le save final.
+    if (extractedFactures && extractedFactures.length > 1) {
+      const seraToutSave =
+        savedFactureIdxs.size + (savedFactureIdxs.has(currentFactureIdx) ? 0 : 1) >= extractedFactures.length
+      if (seraToutSave) {
+        const total = extractedFactures.length
+        const ok = window.confirm(
+          `Vous êtes sur le point d'enregistrer la dernière facture restante.\n\n` +
+          `Au total, ${total} facture${total > 1 ? 's' : ''} auront été enregistrées depuis ce PDF.\n\n` +
+          `Confirmer ?`
+        )
+        if (!ok) return
+      }
+    }
+
     setStep('saving')
 
     try {
@@ -480,13 +601,43 @@ export default function AchatsImportPage() {
       if (result.file_uploaded === false) {
         window.alert('Facture enregistrée, mais le fichier source n\'a pas pu être stocké. Vous pourrez la consulter sans aperçu PDF/image.')
       }
+
+      // Mode multi-factures : on marque la courante comme enregistrée et on
+      // cherche la prochaine non-enregistrée pour la charger automatiquement.
+      // S'il n'y en a plus → redirect vers la liste des achats comme avant.
+      if (extractedFactures && extractedFactures.length > 1) {
+        const newSaved = new Set(savedFactureIdxs)
+        newSaved.add(currentFactureIdx)
+        setSavedFactureIdxs(newSaved)
+
+        // Mémorise le numéro de la facture qu'on vient d'enregistrer pour le
+        // flash de succès qui s'affichera sur la facture suivante.
+        const savedNumero = extractedFactures[currentFactureIdx]?.numero_facture || `Facture ${currentFactureIdx + 1}`
+
+        // Cherche la prochaine facture non-save (cyclique : on commence à idx+1)
+        let nextIdx = null
+        for (let i = 1; i <= extractedFactures.length; i++) {
+          const candidate = (currentFactureIdx + i) % extractedFactures.length
+          if (!newSaved.has(candidate)) { nextIdx = candidate; break }
+        }
+
+        if (nextIdx != null) {
+          setCurrentFactureIdx(nextIdx)
+          loadFactureIntoState(extractedFactures[nextIdx])
+          await checkDuplicate(extractedFactures[nextIdx].numero_facture)
+          setLastSavedFlash(`✓ ${savedNumero} enregistrée — ${newSaved.size} / ${extractedFactures.length} factures sauvegardées`)
+          setStep('review')
+          return
+        }
+      }
+
       router.push('/controle-gestion/achats')
     } catch (err) {
       console.error('handleSave error:', err)
       setError(err.message || 'Erreur lors de l\'enregistrement.')
       setStep('review')
     }
-  }, [clientId, fournisseur, numeroFacture, dateFacture, statut, lignes, fileBase64, fileMime, autoCreateMissing, router, tauxTva, montantTvaSaisi])
+  }, [clientId, fournisseur, numeroFacture, dateFacture, statut, lignes, fileBase64, fileMime, autoCreateMissing, router, tauxTva, montantTvaSaisi, extractedFactures, currentFactureIdx, savedFactureIdxs, loadFactureIntoState, checkDuplicate, duplicateWarning])
 
   // ─── Styles partagés ─────────────────────────────────────────────────────
 
@@ -603,16 +754,38 @@ export default function AchatsImportPage() {
                 Importée le {new Date(duplicateWarning.created_at).toLocaleDateString('fr-FR')}
               </span>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button
                 onClick={() => setDuplicateWarning(null)}
                 style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #D97706', background: 'transparent', color: '#92400E', cursor: 'pointer', fontSize: 13 }}
               >
                 Annuler
               </button>
+              {/* En multi-factures : permet de sauter cette facture pour passer à la suivante non-save */}
+              {extractedFactures && extractedFactures.length > 1 && (
+                <button
+                  onClick={() => {
+                    // Cherche la prochaine facture non-save (peu importe l'ordre)
+                    let nextIdx = null
+                    for (let i = 1; i <= extractedFactures.length; i++) {
+                      const candidate = (currentFactureIdx + i) % extractedFactures.length
+                      if (!savedFactureIdxs.has(candidate) && candidate !== currentFactureIdx) {
+                        nextIdx = candidate
+                        break
+                      }
+                    }
+                    if (nextIdx != null) goToFacture(nextIdx)
+                    else setDuplicateWarning(null)
+                  }}
+                  style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #D97706', background: c.blanc, color: '#92400E', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                >
+                  ⏭ Passer cette facture
+                </button>
+              )}
               <button
                 onClick={() => handleSave(true)}
                 style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: '#D97706', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                title="Tentera de forcer l'import. Échouera si une facture avec le même numéro existe déjà en base."
               >
                 Importer quand même
               </button>
@@ -759,6 +932,69 @@ export default function AchatsImportPage() {
               {extractError && (
                 <div style={{ background: c.orangeClair, border: `1px solid ${c.orange}`, borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#92400E' }}>
                   ⚠️ Extraction IA échouée ({extractError}). Saisissez les lignes manuellement.
+                </div>
+              )}
+
+              {/* Multi-factures : sélecteur de facture courante */}
+              {extractedFactures && extractedFactures.length > 1 && (
+                <div style={{ background: c.accentClair || c.fond, border: `1px solid ${c.accent}`, borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: c.texte }}>
+                      📑 {extractedFactures.length} factures détectées dans le PDF
+                    </div>
+                    <div style={{ fontSize: 12, color: c.texteMuted }}>
+                      {savedFactureIdxs.size} / {extractedFactures.length} enregistrée{savedFactureIdxs.size > 1 ? 's' : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => goToFacture(currentFactureIdx - 1)}
+                      disabled={currentFactureIdx === 0 || step === 'saving'}
+                      style={{ ...btnSecondary, padding: '6px 12px', width: 'auto', opacity: currentFactureIdx === 0 ? 0.4 : 1 }}
+                    >
+                      ← Précédente
+                    </button>
+                    <select
+                      value={currentFactureIdx}
+                      onChange={e => goToFacture(Number(e.target.value))}
+                      disabled={step === 'saving'}
+                      style={{ ...inputS, flex: 1, minWidth: 180 }}
+                    >
+                      {extractedFactures.map((f, idx) => (
+                        <option key={idx} value={idx}>
+                          {savedFactureIdxs.has(idx) ? '✓ ' : ''}
+                          Facture {idx + 1}/{extractedFactures.length}
+                          {f.numero_facture ? ` — ${f.numero_facture}` : ' — (sans numéro)'}
+                          {f.statut === 'avoir' ? ' · Avoir' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => goToFacture(currentFactureIdx + 1)}
+                      disabled={currentFactureIdx === extractedFactures.length - 1 || step === 'saving'}
+                      style={{ ...btnSecondary, padding: '6px 12px', width: 'auto', opacity: currentFactureIdx === extractedFactures.length - 1 ? 0.4 : 1 }}
+                    >
+                      Suivante →
+                    </button>
+                  </div>
+                  {savedFactureIdxs.has(currentFactureIdx) && (
+                    <div style={{ fontSize: 12, color: c.vert, fontWeight: 600 }}>
+                      ✓ Cette facture a déjà été enregistrée. Vous pouvez la modifier et l&apos;enregistrer à nouveau, ou passer à la suivante.
+                    </div>
+                  )}
+                  {!savedFactureIdxs.has(currentFactureIdx)
+                    && savedFactureIdxs.size === extractedFactures.length - 1 && (
+                    <div style={{ fontSize: 12, color: c.accent, fontWeight: 600 }}>
+                      🏁 Dernière facture restante. Après l&apos;enregistrement, vous serez redirigé vers la liste des achats.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Flash de succès après chaque enregistrement en multi-factures */}
+              {lastSavedFlash && (
+                <div style={{ background: c.vertClair, border: `1px solid ${c.vert}`, borderRadius: 8, padding: '10px 14px', fontSize: 13, color: c.vert, fontWeight: 600 }}>
+                  {lastSavedFlash}
                 </div>
               )}
 
@@ -984,7 +1220,10 @@ export default function AchatsImportPage() {
                                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                                     <span style={badgeVert}>✓ Reconnu</span>
                                     {l.ingredient_nom && <span style={{ fontSize: 10, color: c.texteMuted }}>{l.ingredient_nom}</span>}
-                                    <button onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }} style={{ fontSize: 10, padding: '1px 5px', background: 'transparent', border: `1px solid ${c.bordure}`, color: c.texteMuted, borderRadius: 4, cursor: 'pointer', marginTop: 2 }}>Changer</button>
+                                    <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+                                      <button onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }} style={{ fontSize: 10, padding: '1px 5px', background: 'transparent', border: `1px solid ${c.bordure}`, color: c.texteMuted, borderRadius: 4, cursor: 'pointer' }}>Changer</button>
+                                      <button onClick={() => { setCreatingIngFor(l._id); setNewIngNom(l.designation); setLinkingIngFor(null) }} style={{ fontSize: 10, padding: '1px 5px', background: 'transparent', border: `1px solid ${c.accent}`, color: c.accent, borderRadius: 4, cursor: 'pointer' }} title="Créer un nouvel ingrédient au lieu de relier à un existant">＋ Nouveau</button>
+                                    </div>
                                   </div>
                                 ) : (
                                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -1108,10 +1347,17 @@ export default function AchatsImportPage() {
                               >＋ Créer</button>
                             </div>
                           ) : (
-                            <button
-                              onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }}
-                              style={{ fontSize: 11, padding: '3px 8px', background: 'transparent', border: `1px solid ${c.bordure}`, color: c.texteMuted, borderRadius: 6, cursor: 'pointer', marginBottom: 6 }}
-                            >Changer l&rsquo;ingrédient lié</button>
+                            <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+                              <button
+                                onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }}
+                                style={{ fontSize: 11, padding: '3px 8px', background: 'transparent', border: `1px solid ${c.bordure}`, color: c.texteMuted, borderRadius: 6, cursor: 'pointer' }}
+                              >Changer l&rsquo;ingrédient lié</button>
+                              <button
+                                onClick={() => { setCreatingIngFor(l._id); setNewIngNom(l.designation); setLinkingIngFor(null) }}
+                                style={{ fontSize: 11, padding: '3px 8px', background: 'transparent', border: `1px solid ${c.accent}`, color: c.accent, borderRadius: 6, cursor: 'pointer' }}
+                                title="Créer un nouvel ingrédient au lieu de relier à un existant"
+                              >＋ Créer un nouveau</button>
+                            </div>
                           )}
                           {/* Ligne 2 : Qté / Unité / Prix / TVA */}
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
@@ -1197,7 +1443,13 @@ export default function AchatsImportPage() {
                 disabled={step === 'saving'}
                 onClick={() => handleSave()}
               >
-                {step === 'saving' ? 'Enregistrement…' : '💾 Enregistrer les achats et mettre à jour les prix'}
+                {step === 'saving'
+                  ? 'Enregistrement…'
+                  : extractedFactures && extractedFactures.length > 1
+                    ? savedFactureIdxs.size + (savedFactureIdxs.has(currentFactureIdx) ? 0 : 1) < extractedFactures.length
+                      ? `💾 Enregistrer la facture ${currentFactureIdx + 1}/${extractedFactures.length} et passer à la suivante`
+                      : `🏁 Valider la dernière facture et terminer l'import`
+                    : '💾 Enregistrer les achats et mettre à jour les prix'}
               </button>
             </div>
           </div>
