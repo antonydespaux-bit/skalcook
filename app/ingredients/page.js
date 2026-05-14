@@ -42,6 +42,11 @@ export default function IngredientsPage() {
   const [nouvelleCatEmoji, setNouvelleCatEmoji] = useState('📦')
   const [savingCat, setSavingCat] = useState(false)
 
+  // Édition inline d'une catégorie existante (vue Catégories)
+  const [editionCatId, setEditionCatId] = useState(null)
+  const [editionCatNom, setEditionCatNom] = useState('')
+  const [editionCatEmoji, setEditionCatEmoji] = useState('')
+
   // Edition inline ingrédient
   const [editionId, setEditionId] = useState(null)
   const [editionNom, setEditionNom] = useState('')
@@ -265,6 +270,63 @@ export default function IngredientsPage() {
     } catch (err) {
       console.error('Edit error:', err)
       window.alert('Erreur lors de la modification de l\'ingrédient.')
+    }
+  }
+
+  // ── Édition / suppression d'une catégorie d'ingrédient ──────────────────
+  const startCatEdition = (cat) => {
+    setEditionCatId(cat.id)
+    setEditionCatNom(cat.nom || '')
+    setEditionCatEmoji(cat.emoji || '📦')
+  }
+
+  const saveCatEdition = async (id) => {
+    const nomTrim = editionCatNom.trim()
+    if (!nomTrim) {
+      window.alert('Le nom de la catégorie ne peut pas être vide.')
+      return
+    }
+    try {
+      const clientId = await getClientId()
+      const { error } = await supabase.from('categories_ingredients').update({
+        nom: nomTrim,
+        emoji: editionCatEmoji || '📦',
+      }).eq('id', id).eq('client_id', clientId)
+      if (error) throw error
+      setEditionCatId(null)
+      await loadAll()
+    } catch (err) {
+      console.error('Edit cat error:', err)
+      window.alert('Erreur lors de la modification de la catégorie.')
+    }
+  }
+
+  const supprimerCategorie = async (cat) => {
+    const nbIngs = ingredients.filter(i => i.categorie_id === cat.id).length
+    const message = nbIngs > 0
+      ? `Supprimer la catégorie "${cat.nom}" ?\n\n${nbIngs} ingrédient${nbIngs > 1 ? 's' : ''} y ${nbIngs > 1 ? 'sont' : 'est'} rattaché${nbIngs > 1 ? 's' : ''} — ${nbIngs > 1 ? 'ils passeront' : 'il passera'} en "Sans catégorie".`
+      : `Supprimer la catégorie "${cat.nom}" ?`
+    if (!window.confirm(message)) return
+    try {
+      const clientId = await getClientId()
+      // Détache d'abord les ingrédients de la catégorie pour éviter une FK
+      // violation (si la contrainte est ON DELETE RESTRICT).
+      if (nbIngs > 0) {
+        const { error: detachErr } = await supabase.from('ingredients')
+          .update({ categorie_id: null })
+          .eq('categorie_id', cat.id)
+          .eq('client_id', clientId)
+        if (detachErr) throw detachErr
+      }
+      const { error } = await supabase.from('categories_ingredients')
+        .delete()
+        .eq('id', cat.id)
+        .eq('client_id', clientId)
+      if (error) throw error
+      await loadAll()
+    } catch (err) {
+      console.error('Delete cat error:', err)
+      window.alert('Erreur lors de la suppression de la catégorie.')
     }
   }
 
@@ -598,16 +660,38 @@ export default function IngredientsPage() {
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
               {categories.map(cat => {
                 const ingsChat = ingredients.filter(i => i.categorie_id === cat.id)
+                const isEditing = editionCatId === cat.id
                 return (
-                  <div key={cat.id} style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
+                  <div key={cat.id} style={{ background: c.blanc, borderRadius: '12px', border: `${isEditing ? '1px' : '0.5px'} solid ${isEditing ? c.accent : c.bordure}`, overflow: 'hidden' }}>
                     <div style={{ padding: '16px', borderBottom: `0.5px solid ${c.bordure}`, display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: c.accentClair, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', flexShrink: 0 }}>
-                        {cat.emoji}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '15px', fontWeight: '500', color: c.texte }}>{cat.nom}</div>
-                        <div style={{ fontSize: '12px', color: c.texteMuted }}>{ingsChat.length} ingrédient{ingsChat.length > 1 ? 's' : ''}</div>
-                      </div>
+                      {isEditing ? (
+                        <>
+                          <EmojiPicker value={editionCatEmoji} onChange={setEditionCatEmoji} size="sm" />
+                          <input type="text" value={editionCatNom} onChange={e => setEditionCatNom(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') saveCatEdition(cat.id); if (e.key === 'Escape') setEditionCatId(null) }}
+                            autoFocus
+                            style={{ flex: 1, padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.accent}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
+                          />
+                          <button onClick={() => saveCatEdition(cat.id)} style={{ background: c.accent, color: 'white', border: 'none', borderRadius: '6px', padding: '7px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}>✓</button>
+                          <button onClick={() => setEditionCatId(null)} style={{ background: c.fond, color: c.texteMuted, border: `0.5px solid ${c.bordure}`, borderRadius: '6px', padding: '7px 10px', fontSize: '12px', cursor: 'pointer' }}>✕</button>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: c.accentClair, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', flexShrink: 0 }}>
+                            {cat.emoji}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '15px', fontWeight: '500', color: c.texte }}>{cat.nom}</div>
+                            <div style={{ fontSize: '12px', color: c.texteMuted }}>{ingsChat.length} ingrédient{ingsChat.length > 1 ? 's' : ''}</div>
+                          </div>
+                          {peutModifier && (
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              <button onClick={() => startCatEdition(cat)} title="Modifier" style={{ background: 'transparent', border: `0.5px solid ${c.bordure}`, borderRadius: '6px', padding: '6px 10px', fontSize: '12px', cursor: 'pointer', color: c.texteMuted }}>✏️</button>
+                              <button onClick={() => supprimerCategorie(cat)} title="Supprimer" style={{ background: 'transparent', border: '0.5px solid #FECACA', borderRadius: '6px', padding: '6px 10px', fontSize: '12px', cursor: 'pointer', color: '#DC2626' }}>🗑</button>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                     <div style={{ padding: '12px 16px', maxHeight: '160px', overflowY: 'auto' }}>
                       {ingsChat.length === 0 ? (
