@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import * as XLSX from 'xlsx'
 import { supabase, getClientId } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
@@ -46,8 +46,13 @@ function SortHeader({ col, label, baseStyle, sortBy, sortDir, onSort, c, right =
 }
 
 
+// Statuts par défaut (tous actifs) — utilisés pour décider si on omet le
+// param d'URL `statuts` (cas neutre).
+const STATUTS_DEFAUT = ['bl', 'facture', 'avoir']
+
 export default function AchatsListPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const isMobile = useIsMobile()
   const { c } = useTheme()
 
@@ -59,16 +64,48 @@ export default function AchatsListPage() {
   const [tvaByFacture, setTvaByFacture] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [recherche, setRecherche] = useState('')
-  const [dateDebut, setDateDebut] = useState('')
-  const [dateFin, setDateFin] = useState('')
-  const [statutsActifs, setStatutsActifs] = useState(['bl', 'facture', 'avoir'])
+  // Filtres + tri : initialisés depuis l'URL pour que le retour navigateur
+  // (← Back) restaure naturellement l'état après être allé voir une facture.
+  // Ne pas mettre searchParams en dépendance de useState : le lazy initializer
+  // ne tourne qu'au premier mount, ce qui est exactement ce qu'on veut
+  // (remount = page revisitée = re-init depuis l'URL fraîche).
+  const [recherche, setRecherche] = useState(() => searchParams.get('q') || '')
+  const [dateDebut, setDateDebut] = useState(() => searchParams.get('du') || '')
+  const [dateFin, setDateFin] = useState(() => searchParams.get('au') || '')
+  const [statutsActifs, setStatutsActifs] = useState(() => {
+    const s = searchParams.get('statuts')
+    if (!s) return STATUTS_DEFAUT
+    const parsed = s.split(',').filter(v => STATUTS_DEFAUT.includes(v))
+    return parsed.length > 0 ? parsed : STATUTS_DEFAUT
+  })
   const [deleting, setDeleting] = useState(null)
   const [exporting, setExporting] = useState(false)
   // Tri : colonne active + sens. Par défaut : date décroissante (= comportement
   // du .order() côté query Supabase).
-  const [sortBy, setSortBy] = useState('date_facture')
-  const [sortDir, setSortDir] = useState('desc')
+  const [sortBy, setSortBy] = useState(() => searchParams.get('tri') || 'date_facture')
+  const [sortDir, setSortDir] = useState(() => searchParams.get('sens') === 'asc' ? 'asc' : 'desc')
+
+  // Synchronise les filtres vers l'URL (sans entrée d'historique supplémentaire
+  // pour ne pas spammer le bouton back). Le retour depuis une facture remontera
+  // le composant avec ces query params → state ré-initialisé correctement.
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (recherche) params.set('q', recherche)
+    if (dateDebut) params.set('du', dateDebut)
+    if (dateFin) params.set('au', dateFin)
+    const allStatuts =
+      statutsActifs.length === STATUTS_DEFAUT.length
+      && STATUTS_DEFAUT.every(s => statutsActifs.includes(s))
+    if (!allStatuts) params.set('statuts', statutsActifs.join(','))
+    if (sortBy !== 'date_facture') params.set('tri', sortBy)
+    if (sortDir !== 'desc') params.set('sens', sortDir)
+
+    const qs = params.toString()
+    const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+    if (newUrl !== window.location.pathname + window.location.search) {
+      window.history.replaceState(null, '', newUrl)
+    }
+  }, [recherche, dateDebut, dateFin, statutsActifs, sortBy, sortDir])
 
   useEffect(() => {
     let cancelled = false
