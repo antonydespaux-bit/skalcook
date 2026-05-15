@@ -391,16 +391,23 @@ export default function AnalysesPage() {
     const out = {}
     for (const [annee, rows] of Object.entries(budgetRowsByYear)) {
       out[annee] = rows.reduce((acc, raw) => {
-        const r = remapRow(raw)
-        if (filterLieu && !lieuxSet.has(r.lieu_service_id)) return acc
-        if (filterService && !servicesSet.has(r.service)) return acc
-        if (filterJoursActive && !joursSet.has(r.jour_semaine)) return acc
-        acc.push(r)
+        // Filtre par lieu via parent (ex: filtre "Salle à manger" inclut
+        // les enfants "Table du chef"). Mais on NE remap PAS le lieu_service_id
+        // de la row : sinon deux enfants d'un même parent partageraient la
+        // même clé (jds, lieu_parent, svc) dans budgetByIsoJdsForMonth et
+        // s'écraseraient mutuellement au lieu d'additionner leurs budgets.
+        // On ajoute juste `lieu_parent_id` pour que dailyBudgetForCell
+        // (mode split) puisse matcher via le parent.
+        const parentOrSelf = lieuToParent.get(raw.lieu_service_id) || raw.lieu_service_id
+        if (filterLieu && !lieuxSet.has(parentOrSelf)) return acc
+        if (filterService && !servicesSet.has(raw.service)) return acc
+        if (filterJoursActive && !joursSet.has(raw.jour_semaine)) return acc
+        acc.push({ ...raw, lieu_parent_id: parentOrSelf })
         return acc
       }, [])
     }
     return out
-  }, [lieuxSelected, servicesSelected, lieuxAffiches.length, filterJoursActive, joursSet, remapRow])
+  }, [lieuxSelected, servicesSelected, lieuxAffiches.length, filterJoursActive, joursSet, lieuToParent])
 
   // ── Totals + days + budget ───────────────────────────────────────────────
   const filteredRows = useMemo(() => filterRows(rawCa), [rawCa, filterRows])
