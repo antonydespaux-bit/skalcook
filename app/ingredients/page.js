@@ -257,10 +257,11 @@ export default function IngredientsPage() {
         categorie_id: editionCategorie || null
       }).eq('id', id).eq('client_id', clientId)
       if (error) {
-        // Contrainte UNIQUE globale sur le nom : un autre établissement a déjà
-        // réservé ce nom. On remonte un message clair plutôt qu'un échec silencieux.
+        // Contrainte UNIQUE (client_id, nom) depuis 2026-05-15 : un autre
+        // ingrédient de cet établissement a déjà ce nom (ex: même renommage en
+        // boucle, ou race condition entre 2 onglets).
         if (error.code === '23505' || /duplicate key/i.test(error.message)) {
-          window.alert(`Le nom "${nomTrim}" est déjà utilisé par un autre établissement. Modifie légèrement le nom (ex : ajoute une marque ou une précision).`)
+          window.alert(`Le nom "${nomTrim}" est déjà utilisé par un autre ingrédient de votre établissement.`)
           return
         }
         throw error
