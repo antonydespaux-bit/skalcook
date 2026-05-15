@@ -102,11 +102,6 @@ export const bulkImportHeadersSchema = z.object({
 
 export type BulkImportHeadersInput = z.infer<typeof bulkImportHeadersSchema>
 
-// ── Mercuriale query ───────────────────────────────────────────────────────
-export const mercurialeQuerySchema = z.object({
-  client_id: clientIdSchema,
-})
-
 // ── Reconciliation query ───────────────────────────────────────────────────
 export const reconciliationQuerySchema = z.object({
   client_id: clientIdSchema,
