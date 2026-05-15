@@ -221,13 +221,15 @@ export default function AnalysesPage() {
         : Promise.resolve({ data: [], error: null })
 
       // Overrides nb_jours (fermetures exceptionnelles) sur toutes les années
-      // couvertes par la plage et la comparaison. Une seule query suffit, le
-      // volume est petit (≤ 84 lignes/an = 12 mois × 7 jours).
+      // couvertes par la plage et la comparaison. Une override peut être
+      // global (service=null, lieu=null) ou ciblé sur un service précis
+      // (lunch/dinner) et/ou un lieu précis. Lookup côté code avec priorité
+      // (lieu_specifique, svc) > (NULL, svc_specifique) > (NULL, NULL).
       const overridesYears = Array.from(new Set([...years, ...compareYears]))
       const overridesQuery = overridesYears.length > 0
         ? supabase
             .from('ca_budget_jours_override')
-            .select('annee, mois, jour_semaine, nb_jours')
+            .select('annee, mois, jour_semaine, service, lieu_service_id, nb_jours')
             .eq('client_id', clientId)
             .in('annee', overridesYears)
         : Promise.resolve({ data: [], error: null })
@@ -246,9 +248,16 @@ export default function AnalysesPage() {
         return acc
       }, {})
 
+      // Indexation par clé fully-qualified (annee, mois, jds, service, lieu).
+      // Le lookup côté caAnalyses.js fait la priorité (lieu, svc) > (NULL, svc) > (NULL, NULL).
       const overridesMap = new Map()
       for (const o of overridesRes.data || []) {
-        overridesMap.set(`${o.annee}_${o.mois}_${o.jour_semaine}`, Number(o.nb_jours))
+        const svcKey = o.service ?? '__all__'
+        const lieuKey = o.lieu_service_id ?? '__all__'
+        overridesMap.set(
+          `${o.annee}_${o.mois}_${o.jour_semaine}_${svcKey}_${lieuKey}`,
+          Number(o.nb_jours)
+        )
       }
 
       setRawCa(caRes.data || [])

@@ -212,7 +212,8 @@ describe('periodBudgetTotal', () => {
     const rows = [
       { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
     ]
-    const overrides = new Map([['2026_5_1', 3]])
+    // Clé override "global" (service=null, lieu=null) → s'applique à toutes les cellules
+    const overrides = new Map([['2026_5_1___all_____all__', 3]])
     const total = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31', null, overrides)
     expect(total).toBe(300)
   })
@@ -224,9 +225,25 @@ describe('periodBudgetTotal', () => {
     const rows = [
       { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
     ]
-    const overrides = new Map([['2026_5_1', 3]])
+    const overrides = new Map([['2026_5_1___all_____all__', 3]])
     const total = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-15', null, overrides)
     expect(total).toBe(150)
+  })
+
+  it('cas Joia : un override service=dinner ne zéroter pas le service=lunch du même jds', () => {
+    // Joia : pas de service dimanche soir → override dim/dinner = 0.
+    // Le dim midi (lunch) doit garder son budget normal (4 lundis × 100 = 400).
+    const rows = [
+      { jour_semaine: 7, lieu_service_id: 'L1', service: 'lunch',  mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      { jour_semaine: 7, lieu_service_id: 'L1', service: 'dinner', mois: null, ca_food_cible: 50,  ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+    ]
+    // 4 dimanches en mai 2026 (3, 10, 17, 24, 31 = 5 dim en réalité). Vérif :
+    // Mai 2026 commence par ven → 3, 10, 17, 24, 31 = 5 dimanches.
+    // Override dim/dinner = 0 → ratio dinner = 0/5 = 0 → dinner total = 0
+    // Lunch : pas d'override → ratio = 1 → 5 dim × 100 = 500.
+    const overrides = new Map([['2026_5_7_dinner___all__', 0]])
+    const total = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31', null, overrides)
+    expect(total).toBe(500)
   })
 
   it('aucun override fourni → comportement identique à l\'ancien', () => {
