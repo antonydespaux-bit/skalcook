@@ -557,9 +557,9 @@ export async function deleteFacture(
 
 /**
  * Cherche un ingrédient existant pour ce client (par nom case-insensitive),
- * sinon le crée. Si la création échoue à cause de l'unique global sur `nom`
- * (la contrainte est sur `nom` seul, pas par client_id), c'est qu'un autre
- * établissement utilise déjà ce nom — on remonte une ConflictError exploitable.
+ * sinon le crée. Depuis la migration 2026-05-15, la contrainte unique est
+ * scopée par client (`UNIQUE (client_id, nom)`), donc le seul cas de conflit
+ * possible est une race condition au sein du même client.
  */
 export async function findOrCreateIngredient(
   db: SupabaseClient,
@@ -595,9 +595,11 @@ export async function findOrCreateIngredient(
     .single()
 
   if (error) {
-    // Conflit unique global → un autre établissement a réservé ce nom
+    // Conflit (client_id, nom) — l'ingrédient existe déjà dans cet établissement.
+    // En pratique le lookup `ilike` ci-dessus l'aurait trouvé sauf si une autre
+    // transaction l'a inséré entre les deux requêtes (race condition).
     if (error.code === '23505' || /duplicate key/i.test(error.message)) {
-      throw new ConflictError(`L'ingrédient "${nomTrim}" est déjà utilisé par un autre établissement. Modifie légèrement le nom.`)
+      throw new ConflictError(`L'ingrédient "${nomTrim}" existe déjà dans votre établissement.`)
     }
     throw new Error(error.message)
   }
