@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase, getClientId } from '../../../lib/supabase'
+import { aggregateTotals } from '../../../lib/caAnalyses'
 
 function firstDayOfMonthIso(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
@@ -15,17 +16,20 @@ export default function KpiCaMtd({ c, isMobile }) {
       const clientId = await getClientId()
       if (!clientId) { setLoading(false); return }
       const debut = firstDayOfMonthIso()
+      // Source = ca_journalier (saisie CA agrégé par jour × lieu × service),
+      // alignée avec /controle-gestion/ventes et /controle-gestion/analyses.
+      // L'ancien widget lisait ventes_journalieres (saisie fiche-par-fiche)
+      // → restituait 0 € pour les clients qui ne saisissent pas ticket par
+      // ticket. aggregateTotals applique le TTC → HT par catégorie (food/soft
+      // 10 %, alcool 20 %) cohéremment avec les autres pages.
       const { data } = await supabase
-        .from('ventes_journalieres')
-        .select('quantite_vendue, prix_vente_net')
+        .from('ca_journalier')
+        .select('couverts, ca_food, ca_bev_20, ca_bev_10, ca_autre')
         .eq('client_id', clientId)
         .gte('jour', debut)
       if (cancelled) return
-      const total = (data || []).reduce(
-        (sum, row) => sum + (Number(row.quantite_vendue) || 0) * (Number(row.prix_vente_net) || 0),
-        0,
-      )
-      setCa(total)
+      const totals = aggregateTotals(data || [])
+      setCa(totals.caHt)
       setLoading(false)
     })()
     return () => { cancelled = true }
