@@ -56,6 +56,31 @@ describe('getPeriodDates', () => {
     const jan15 = new Date(2026, 0, 15)
     expect(getPeriodDates('mois-precedent', jan15)).toEqual({ debut: '2025-12-01', fin: '2025-12-31' })
   })
+
+  it('mois-precedent résiste au DST (fin octobre → 31 et pas 30)', () => {
+    // 1er novembre 2026 : on s'attend à "octobre 2026 entier" = 01→31/10.
+    // L'ancien calcul `firstOfMonth - 86400000ms` retournait le 30/10 à cause
+    // du changement d'heure d'hiver (1h récupérée la nuit du 24 → 25 oct).
+    const nov1 = new Date(2026, 10, 1)
+    expect(getPeriodDates('mois-precedent', nov1)).toEqual({ debut: '2026-10-01', fin: '2026-10-31' })
+  })
+
+  it('mois-precedent fonctionne pour tous les mois sur plusieurs années (sanity)', () => {
+    // Boucle 2024-2027 × 12 mois : vérifie que `fin` est toujours le dernier
+    // jour du mois précédent (et non un jour avant).
+    for (let y = 2024; y <= 2027; y++) {
+      for (let m = 0; m < 12; m++) {
+        const today = new Date(y, m, 1) // 1er du mois courant
+        const { debut, fin } = getPeriodDates('mois-precedent', today) || {}
+        // Le mois précédent : m-1, ou 11 si m=0 ; année y, ou y-1 si m=0
+        const expectedMois = m === 0 ? 12 : m
+        const expectedAnnee = m === 0 ? y - 1 : y
+        const lastDay = new Date(expectedAnnee, expectedMois, 0).getDate()
+        expect(debut).toBe(`${expectedAnnee}-${String(expectedMois).padStart(2,'0')}-01`)
+        expect(fin).toBe(`${expectedAnnee}-${String(expectedMois).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`)
+      }
+    }
+  })
 })
 
 describe('shiftPeriodByYears', () => {
@@ -257,6 +282,23 @@ describe('periodBudgetTotal', () => {
     expect(sansArg).toBe(400)
     expect(avecArgNull).toBe(400)
     expect(avecMapVide).toBe(400)
+  })
+
+  it('cas Marsan : deux lieux enfants d\'un même parent ADDITIONNENT leurs budgets (ne s\'écrasent pas)', () => {
+    // Marsan a "Table du chef" enfant de "Salle à manger", et "La cave" enfant
+    // de "Table de partage". Avant le fix, le remap parent côté filterBudgets
+    // écrasait les rows enfants entre elles dans budgetByIsoJdsForMonth.
+    // Ici on simule deux enfants distincts avec le même jds/service/parent :
+    // la fonction caAnalyses.js NE remap PAS, donc les deux cellules
+    // distinctes (lieu_enfant1 vs lieu_enfant2) survivent et s'additionnent.
+    const rows = [
+      // Enfant 1 : Salle à manger principale (200/jour lundi midi)
+      { jour_semaine: 1, lieu_service_id: 'enfant1', service: 'lunch', mois: null, ca_food_cible: 200, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      // Enfant 2 : Table du chef (50/jour lundi midi) — même jds/svc/parent
+      { jour_semaine: 1, lieu_service_id: 'enfant2', service: 'lunch', mois: null, ca_food_cible: 50,  ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+    ]
+    // Plage 04→04/05/2026 = 1 lundi → total attendu = 200 + 50 = 250
+    expect(periodBudgetTotal({ 2026: rows }, '2026-05-04', '2026-05-04')).toBe(250)
   })
 })
 
