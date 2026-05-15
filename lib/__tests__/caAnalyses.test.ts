@@ -141,6 +141,32 @@ describe('budgetByIsoJdsForMonth', () => {
     ]
     expect(budgetByIsoJdsForMonth(rows, 5).get(1)).toBe(130)
   })
+
+  it('n\'utilise PAS une row d\'un autre mois comme fallback (cas Joia)', () => {
+    // Cas réel : Joia a un budget Dimanche en JANVIER (mois=1, 15400). On
+    // demande le budget pour MAI (monthNum=5). L'ancienne version pouvait
+    // accidentellement prendre la row janvier comme "défaut" pour mai.
+    // Nouvelle version : ignore les rows mois ≠ 5 et ≠ null.
+    const rows = [
+      { jour_semaine: 7, lieu_service_id: 'L1', service: 'lunch', mois: 1, ca_food_cible: 15400, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+    ]
+    expect(budgetByIsoJdsForMonth(rows, 5).get(7)).toBeUndefined()
+    expect(budgetByIsoJdsForMonth(rows, 1).get(7)).toBe(15400)
+  })
+
+  it('override d\'un autre mois ne contamine pas le mois demandé même si listé en premier', () => {
+    // Garantit l'indépendance par rapport à l'ordre de la query Supabase.
+    const rows = [
+      // Override février (en premier dans l'array)
+      { jour_semaine: 7, lieu_service_id: 'L1', service: 'lunch', mois: 2, ca_food_cible: 20000, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      // Défaut annuel
+      { jour_semaine: 7, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 10000, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+    ]
+    // Pour janvier (pas d'override) → on doit prendre le défaut 10 000, pas l'override février
+    expect(budgetByIsoJdsForMonth(rows, 1).get(7)).toBe(10000)
+    // Pour février → override 20 000
+    expect(budgetByIsoJdsForMonth(rows, 2).get(7)).toBe(20000)
+  })
 })
 
 describe('periodBudgetTotal', () => {
