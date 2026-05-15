@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { useMemo } from 'react'
 import {
   formatEur, formatEur2, formatDeltaEur,
+  dailyBudgetForCell,
   rowsByDayAndSerie,
 } from '../../../lib/caAnalyses'
 
@@ -10,12 +11,12 @@ const JOURS_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi',
 // Tableau dense jour par jour pour la période sélectionnée. Deux modes :
 //   - cumulé (isSplit=false) : 1 ligne par jour avec couv midi/soir
 //   - split (isSplit=true) : 1 ligne par (jour × série) avec colonnes Lieu
-//     et/ou Service ajoutées en tête. Le Δ Budget reste calculé au niveau
-//     du jour entier (le budget par lieu × service serait techniquement
-//     possible mais sortirait du scope PR 6).
+//     et/ou Service ajoutées en tête. Le Δ Budget est calculé par cellule
+//     (jour × lieu × service) en respectant les overrides nb_jours.
 export default function SectionTableauJourJour({
   c, isMobile, days, totals,
   isSplit, splitByLieu, splitByService, filteredRows, lieuxLabels,
+  filteredBudgetByYear, overridesNbJours,
 }) {
   if (isSplit) {
     return (
@@ -23,6 +24,8 @@ export default function SectionTableauJourJour({
         c={c} isMobile={isMobile}
         filteredRows={filteredRows} lieuxLabels={lieuxLabels}
         splitByLieu={splitByLieu} splitByService={splitByService}
+        filteredBudgetByYear={filteredBudgetByYear}
+        overridesNbJours={overridesNbJours}
       />
     )
   }
@@ -122,7 +125,10 @@ function CumulatedTable({ c, isMobile, days, totals }) {
 
 // ── Vue split : 1 ligne par (jour × série) ──────────────────────────────────
 
-function SplitTable({ c, isMobile, filteredRows, lieuxLabels, splitByLieu, splitByService }) {
+function SplitTable({
+  c, isMobile, filteredRows, lieuxLabels, splitByLieu, splitByService,
+  filteredBudgetByYear, overridesNbJours,
+}) {
   const splitDims = []
   if (splitByLieu) splitDims.push('lieu')
   if (splitByService) splitDims.push('service')
@@ -138,10 +144,16 @@ function SplitTable({ c, isMobile, filteredRows, lieuxLabels, splitByLieu, split
       if (splitByLieu) parts.push(lieuLabel)
       if (splitByService) parts.push(serviceLabel)
       const serieKey = parts.join(' / ')
-      const key = `${r.jour}__${serieKey}`
+      // Clé d'agrégation : (jour, lieu, service) quand split = lieu + service.
+      // Si seulement split par lieu, agrège les 2 services. Idem inversement.
+      const lieuKey = splitByLieu ? r.lieu_service_id : 'ALL'
+      const svcKey = splitByService ? r.service : 'ALL'
+      const key = `${r.jour}__${lieuKey}__${svcKey}`
       if (!map.has(key)) {
         map.set(key, {
           iso: r.jour, lieu: lieuLabel, service: serviceLabel, serie: serieKey,
+          lieu_service_id: splitByLieu ? r.lieu_service_id : null,
+          service_key: splitByService ? r.service : null,
           couverts: 0, food: 0, bev_20: 0, bev_10: 0, autre: 0,
         })
       }
@@ -157,19 +169,24 @@ function SplitTable({ c, isMobile, filteredRows, lieuxLabels, splitByLieu, split
         const caTot = v.food + v.bev_20 + v.bev_10 + v.autre
         const tm = v.couverts > 0 ? caTot / v.couverts : null
         const date = new Date(`${v.iso}T00:00:00`)
-        return { ...v, caTot, tm, jsWeekday: date.getDay() }
+        // Budget cible pour cette cellule (jour × [lieu] × [service])
+        const budget = filteredBudgetByYear
+          ? dailyBudgetForCell(filteredBudgetByYear, v.iso, v.lieu_service_id, v.service_key, overridesNbJours)
+          : 0
+        return { ...v, caTot, tm, budget, jsWeekday: date.getDay() }
       })
       .sort((a, b) => a.iso !== b.iso ? a.iso.localeCompare(b.iso) : a.serie.localeCompare(b.serie, 'fr'))
-  }, [filteredRows, lieuxLabels, splitByLieu, splitByService])
+  }, [filteredRows, lieuxLabels, splitByLieu, splitByService, filteredBudgetByYear, overridesNbJours])
 
   const totals = useMemo(() => {
-    const t = { couverts: 0, food: 0, bev_20: 0, bev_10: 0, autre: 0 }
+    const t = { couverts: 0, food: 0, bev_20: 0, bev_10: 0, autre: 0, budget: 0 }
     for (const r of rows) {
       t.couverts += r.couverts
       t.food += r.food
       t.bev_20 += r.bev_20
       t.bev_10 += r.bev_10
       t.autre += r.autre
+      t.budget += r.budget || 0
     }
     t.caTtc = t.food + t.bev_20 + t.bev_10 + t.autre
     t.tm = t.couverts > 0 ? t.caTtc / t.couverts : null
@@ -203,27 +220,35 @@ function SplitTable({ c, isMobile, filteredRows, lieuxLabels, splitByLieu, split
               <th style={head}>CA Soft</th>
               <th style={head}>Autres</th>
               <th style={head}>CA Total</th>
+              <th style={head}>Δ Budget</th>
               <th style={head}>TM</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => (
-              <tr key={`${r.iso}__${r.serie}__${i}`} style={{
-                background: r.jsWeekday === 0 || r.jsWeekday === 6 ? c.fond : 'transparent',
-              }}>
-                <td style={{ ...cell, textAlign: 'left', fontWeight: 500 }}>{r.iso.slice(8)}/{r.iso.slice(5, 7)}</td>
-                <td style={{ ...cell, textAlign: 'left', color: c.texteMuted }}>{JOURS_FR[r.jsWeekday].slice(0, 3)}</td>
-                {splitByLieu && <td style={{ ...cell, textAlign: 'left' }}>{r.lieu}</td>}
-                {splitByService && <td style={{ ...cell, textAlign: 'left', color: c.texteMuted }}>{r.service}</td>}
-                <td style={cell}>{r.couverts || '—'}</td>
-                <td style={cell}>{formatEur(r.food)}</td>
-                <td style={cell}>{formatEur(r.bev_20)}</td>
-                <td style={cell}>{formatEur(r.bev_10)}</td>
-                <td style={cell}>{formatEur(r.autre)}</td>
-                <td style={{ ...cell, fontWeight: 600 }}>{formatEur(r.caTot)}</td>
-                <td style={cell}>{formatEur2(r.tm)}</td>
-              </tr>
-            ))}
+            {rows.map((r, i) => {
+              const hasData = r.caTot > 0 || r.couverts > 0
+              return (
+                <tr key={`${r.iso}__${r.serie}__${i}`} style={{
+                  background: r.jsWeekday === 0 || r.jsWeekday === 6 ? c.fond : 'transparent',
+                }}>
+                  <td style={{ ...cell, textAlign: 'left', fontWeight: 500 }}>{r.iso.slice(8)}/{r.iso.slice(5, 7)}</td>
+                  <td style={{ ...cell, textAlign: 'left', color: c.texteMuted }}>{JOURS_FR[r.jsWeekday].slice(0, 3)}</td>
+                  {splitByLieu && <td style={{ ...cell, textAlign: 'left' }}>{r.lieu}</td>}
+                  {splitByService && <td style={{ ...cell, textAlign: 'left', color: c.texteMuted }}>{r.service}</td>}
+                  <td style={cell}>{r.couverts || '—'}</td>
+                  <td style={cell}>{formatEur(r.food)}</td>
+                  <td style={cell}>{formatEur(r.bev_20)}</td>
+                  <td style={cell}>{formatEur(r.bev_10)}</td>
+                  <td style={cell}>{formatEur(r.autre)}</td>
+                  <td style={{ ...cell, fontWeight: 600 }}>{formatEur(r.caTot)}</td>
+                  <td style={budgetCellStyle({ caTot: r.caTot, budget: r.budget, hasData }, cell, c)}
+                      title={budgetCellTitle({ caTot: r.caTot, budget: r.budget })}>
+                    {budgetCellLabel({ caTot: r.caTot, budget: r.budget, hasData })}
+                  </td>
+                  <td style={cell}>{formatEur2(r.tm)}</td>
+                </tr>
+              )
+            })}
           </tbody>
           <tfoot>
             <tr style={{ background: c.fond, fontWeight: 600 }}>
@@ -234,6 +259,9 @@ function SplitTable({ c, isMobile, filteredRows, lieuxLabels, splitByLieu, split
               <td style={cell}>{formatEur(totals.bev_10)}</td>
               <td style={cell}>{formatEur(totals.autre)}</td>
               <td style={{ ...cell, fontWeight: 700 }}>{formatEur(totals.caTtc)}</td>
+              <td style={totalBudgetCellStyle(totals, cell, c)} title={totalBudgetCellTitle(totals)}>
+                {totalBudgetCellLabel(totals)}
+              </td>
               <td style={cell}>{formatEur2(totals.tm)}</td>
             </tr>
           </tfoot>
@@ -266,8 +294,11 @@ function makeStyles(c, isMobile) {
 
 // ── Helpers Δ Budget (mêmes règles que /controle-gestion/ventes) ────────────
 function budgetTone(real, budget, hasData) {
-  if (!budget) return 'none'
   if (!hasData) return 'none'
+  // Pas de budget configuré mais on a du réel → on affiche le delta en gris
+  // neutre ("info"), pour que l'utilisateur voit la perf sans laisser croire
+  // qu'il a battu un objectif (puisqu'il n'y a pas d'objectif).
+  if (!budget) return 'info'
   if (real >= budget) return 'success'
   if (real < budget * 0.95) return 'danger'
   return 'warning'
@@ -277,22 +308,26 @@ function tonePalette(tone, c) {
   if (tone === 'success') return { color: c.vert, bg: c.vertClair }
   if (tone === 'danger') return { color: c.rouge, bg: c.rougeClair }
   if (tone === 'warning') return { color: c.orange, bg: c.orangeClair }
+  if (tone === 'info') return { color: c.texteMuted, bg: c.fond }
   return { color: c.texteMuted, bg: 'transparent' }
 }
 
 function budgetCellStyle(d, base, c) {
   const tone = budgetTone(d.caTot, d.budget, d.hasData)
   const { color, bg } = tonePalette(tone, c)
-  return { ...base, color, background: bg, fontWeight: tone === 'none' ? 400 : 600 }
+  return { ...base, color, background: bg, fontWeight: tone === 'none' || tone === 'info' ? 500 : 600 }
 }
 
 function budgetCellLabel(d) {
-  if (!d.budget || !d.hasData) return '—'
-  return formatDeltaEur(d.caTot - d.budget)
+  if (!d.hasData) return '—'
+  // Quand pas de budget configuré : on affiche le delta (= caTot - 0 = caTot)
+  // pour signaler la valeur réelle. Le ton "info" + le tooltip indiquent que
+  // c'est sans référence budget.
+  return formatDeltaEur(d.caTot - (d.budget || 0))
 }
 
 function budgetCellTitle(d) {
-  if (!d.budget) return 'Pas de budget cible pour ce jour de la semaine'
+  if (!d.budget) return 'Aucun budget configuré pour ce jour de la semaine — configurez-le dans Suivi CA → Budgets'
   const ratio = d.caTot > 0 ? (d.caTot / d.budget) * 100 : 0
   return `Réel ${formatEur(d.caTot)} / Budget ${formatEur(d.budget)} (${ratio.toFixed(0)} %)`
 }
@@ -300,12 +335,12 @@ function budgetCellTitle(d) {
 function totalBudgetCellStyle(totals, base, c) {
   const tone = budgetTone(totals.caTtc, totals.budget, totals.caTtc > 0)
   const { color, bg } = tonePalette(tone, c)
-  return { ...base, color, background: bg, fontWeight: tone === 'none' ? 600 : 700 }
+  return { ...base, color, background: bg, fontWeight: tone === 'none' || tone === 'info' ? 600 : 700 }
 }
 
 function totalBudgetCellLabel(totals) {
-  if (!totals.budget || totals.caTtc === 0) return '—'
-  return formatDeltaEur(totals.caTtc - totals.budget)
+  if (totals.caTtc === 0) return '—'
+  return formatDeltaEur(totals.caTtc - (totals.budget || 0))
 }
 
 function totalBudgetCellTitle(totals) {

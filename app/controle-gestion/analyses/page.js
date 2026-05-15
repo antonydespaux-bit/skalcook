@@ -632,7 +632,7 @@ export default function AnalysesPage() {
       case 'section-top-bottom-jours':
         return <SectionTopBottomJours c={c} isMobile={isMobile} topBottom={topBottom} />
       case 'section-tableau-jour-jour':
-        return <SectionTableauJourJour c={c} isMobile={isMobile} days={daysWithBudget} totals={tableauTotals} isSplit={isSplit} splitByLieu={splitByLieu} splitByService={splitByService} filteredRows={filteredRows} lieuxLabels={lieuxLabels} />
+        return <SectionTableauJourJour c={c} isMobile={isMobile} days={daysWithBudget} totals={tableauTotals} isSplit={isSplit} splitByLieu={splitByLieu} splitByService={splitByService} filteredRows={filteredRows} lieuxLabels={lieuxLabels} filteredBudgetByYear={filteredBudgetByYear} overridesNbJours={overridesNbJours} />
       case 'kpi-food-cost-moyen':
         return (
           <KpiFoodCostMoyen
