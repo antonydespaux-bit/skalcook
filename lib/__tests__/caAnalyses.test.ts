@@ -170,13 +170,23 @@ describe('budgetByIsoJdsForMonth', () => {
 })
 
 describe('periodBudgetTotal', () => {
+  // Convention sémantique : `ca_food_cible` (et ses cousins bev_20/10/autre)
+  // stockent le TOTAL MENSUEL pour le couple (jds, lieu, service), tel que
+  // saisi dans /controle-gestion/ventes/budgets (les cellules affichent
+  // explicitement "TOTAL" = somme des occurrences du mois).
+  //
+  // periodBudgetTotal divise donc par le nb naturel d'occurrences du jds
+  // dans le mois pour obtenir un budget JOURNALIER, qu'il somme sur les
+  // jours de la plage.
+
   it('somme correctement sur une période en agrégeant par jour-de-semaine', () => {
-    // Période : 2026-05-04 (lundi) → 2026-05-06 (mercredi) = 3 jours
-    // Budget : lundi=100, mardi=200, mercredi=300
+    // Mai 2026 : 4 lundis (4,11,18,25), 4 mardis, 4 mercredis. Budget MENSUEL
+    // total : lundi=400, mardi=800, mercredi=1200 → journalier 100, 200, 300.
+    // Plage 04→06/05 = 1 lundi + 1 mardi + 1 mercredi → 100+200+300 = 600.
     const rows = [
-      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
-      { jour_semaine: 2, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 200, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
-      { jour_semaine: 3, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 300, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 400,  ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      { jour_semaine: 2, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 800,  ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      { jour_semaine: 3, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 1200, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
     ]
     const total = periodBudgetTotal({ 2026: rows }, '2026-05-04', '2026-05-06')
     expect(total).toBe(600)
@@ -184,33 +194,47 @@ describe('periodBudgetTotal', () => {
 
   it('gère les périodes à cheval sur deux années', () => {
     // Période : 2025-12-31 (mercredi) → 2026-01-01 (jeudi)
+    // Décembre 2025 : 5 mercredis (3,10,17,24,31). Budget mensuel mer = 500 → journalier 100.
+    // Janvier 2026 : 5 jeudis (1,8,15,22,29). Budget mensuel jeu = 1000 → journalier 200.
+    // Total = 100 + 200 = 300.
     const rows2025 = [
-      { jour_semaine: 3, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      { jour_semaine: 3, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 500,  ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
     ]
     const rows2026 = [
-      { jour_semaine: 4, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 200, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      { jour_semaine: 4, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 1000, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
     ]
     const total = periodBudgetTotal({ 2025: rows2025, 2026: rows2026 }, '2025-12-31', '2026-01-01')
     expect(total).toBe(300)
   })
 
   it('filtre par jour-de-semaine si isoJdsFilter fourni', () => {
-    // Lundi et mardi avec budget différent — filtrer sur lundi seul
+    // Budget mensuel lundi = 400 (mai → 4 lundis → journalier 100).
+    // Période 04→05/05 (lun puis mar). Filtre = lundi → total = 100.
     const rows = [
-      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
-      { jour_semaine: 2, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 200, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 400, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      { jour_semaine: 2, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 800, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
     ]
-    // Période 2026-05-04 → 2026-05-05 (lundi puis mardi). Filtre = lundi seulement.
     const total = periodBudgetTotal({ 2026: rows }, '2026-05-04', '2026-05-05', new Set([1]))
     expect(total).toBe(100)
   })
 
-  it('applique le ratio override nb_jours sur le mois entier', () => {
-    // Mai 2026 contient 4 lundis (4, 11, 18, 25). Override dit "3 lundis"
-    // (ex : un lundi férié). Budget lundi = 100. Sans override : 4 × 100 = 400.
-    // Avec override : 3 × 100 = 300 (ratio 3/4 appliqué aux 4 lundis comptés).
+  it('mois entier dans la plage → total = budget mensuel saisi', () => {
+    // Sanity check : sur le mois entier (avec ses 4 lundis), on retombe pile
+    // sur la valeur saisie en base. C'est la propriété fondamentale qui rend
+    // la saisie "TOTAL mois" cohérente avec l'affichage.
     const rows = [
-      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 400, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+    ]
+    const total = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31')
+    expect(total).toBe(400)
+  })
+
+  it('applique le ratio override nb_jours sur le mois entier', () => {
+    // Mai 2026 : 4 lundis. Budget mensuel = 400 → journalier 100.
+    // Override "3 lundis travaillés" (1 férié) → ratio 3/4.
+    // Total = 4 × 100 × 3/4 = 300.
+    const rows = [
+      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 400, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
     ]
     const overrides = new Map([['2026_5_1', 3]])
     const total = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31', null, overrides)
@@ -218,28 +242,34 @@ describe('periodBudgetTotal', () => {
   })
 
   it('ratio override scale proportionnellement quand la plage ne couvre qu\'une partie du mois', () => {
-    // Plage 2026-05-01 → 2026-05-15 : couvre 2 lundis (4, 11) sur 4 du mois.
-    // Override dit "3 lundis sur le mois" → ratio 3/4 = 0.75.
-    // Résultat attendu : 2 × 100 × 0.75 = 150.
+    // Plage 01→15/05 = 2 lundis (4, 11). Budget mensuel = 400 → journalier 100.
+    // Override 3/4 → ratio 0.75. Total = 2 × 100 × 0.75 = 150.
     const rows = [
-      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 400, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
     ]
     const overrides = new Map([['2026_5_1', 3]])
     const total = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-15', null, overrides)
     expect(total).toBe(150)
   })
 
-  it('aucun override fourni → comportement identique à l\'ancien', () => {
-    // Mai 2026 : 4 lundis × 100 = 400.
+  it('aucun override fourni → résultat = total mois saisi', () => {
+    // Mai 2026 : 4 lundis. Budget mensuel = 400 → 4 × 100 = 400.
     const rows = [
-      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 400, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
     ]
-    const sansArg = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31')
-    const avecArgNull = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31', null, null)
-    const avecMapVide = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31', null, new Map())
-    expect(sansArg).toBe(400)
-    expect(avecArgNull).toBe(400)
-    expect(avecMapVide).toBe(400)
+    expect(periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31')).toBe(400)
+    expect(periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31', null, null)).toBe(400)
+    expect(periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31', null, new Map())).toBe(400)
+  })
+
+  it('cas Joia : un dimanche unique extrait le budget journalier correct', () => {
+    // Joia mai 2026 : dimanche midi saisi à 23 375 € (TOTAL des 5 dimanches).
+    // Pour le 03/05 dim seul : budget = 23 375 / 5 = 4 675 €.
+    const rows = [
+      { jour_semaine: 7, lieu_service_id: 'L1', service: 'lunch', mois: 5, ca_food_cible: 15193.75, ca_bev_20_cible: 6545, ca_bev_10_cible: 1636.25, ca_autre_cible: 0 },
+    ]
+    const total = periodBudgetTotal({ 2026: rows }, '2026-05-03', '2026-05-03')
+    expect(total).toBe(4675)
   })
 })
 
