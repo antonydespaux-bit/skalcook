@@ -178,6 +178,43 @@ describe('periodBudgetTotal', () => {
     const total = periodBudgetTotal({ 2026: rows }, '2026-05-04', '2026-05-05', new Set([1]))
     expect(total).toBe(100)
   })
+
+  it('applique le ratio override nb_jours sur le mois entier', () => {
+    // Mai 2026 contient 4 lundis (4, 11, 18, 25). Override dit "3 lundis"
+    // (ex : un lundi férié). Budget lundi = 100. Sans override : 4 × 100 = 400.
+    // Avec override : 3 × 100 = 300 (ratio 3/4 appliqué aux 4 lundis comptés).
+    const rows = [
+      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+    ]
+    const overrides = new Map([['2026_5_1', 3]])
+    const total = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31', null, overrides)
+    expect(total).toBe(300)
+  })
+
+  it('ratio override scale proportionnellement quand la plage ne couvre qu\'une partie du mois', () => {
+    // Plage 2026-05-01 → 2026-05-15 : couvre 2 lundis (4, 11) sur 4 du mois.
+    // Override dit "3 lundis sur le mois" → ratio 3/4 = 0.75.
+    // Résultat attendu : 2 × 100 × 0.75 = 150.
+    const rows = [
+      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+    ]
+    const overrides = new Map([['2026_5_1', 3]])
+    const total = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-15', null, overrides)
+    expect(total).toBe(150)
+  })
+
+  it('aucun override fourni → comportement identique à l\'ancien', () => {
+    // Mai 2026 : 4 lundis × 100 = 400.
+    const rows = [
+      { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+    ]
+    const sansArg = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31')
+    const avecArgNull = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31', null, null)
+    const avecMapVide = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31', null, new Map())
+    expect(sansArg).toBe(400)
+    expect(avecArgNull).toBe(400)
+    expect(avecMapVide).toBe(400)
+  })
 })
 
 describe('pickGranularity', () => {
