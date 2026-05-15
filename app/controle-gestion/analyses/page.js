@@ -103,6 +103,9 @@ export default function AnalysesPage() {
   // budgetByYear : { 2026: rows, 2025: rows } pour gérer périodes à cheval.
   const [budgetByYear, setBudgetByYear] = useState({})
   const [budgetByYearCompare, setBudgetByYearCompare] = useState({})
+  // Overrides nb_jours (fermetures exceptionnelles) configurés sur /budgets.
+  // Stockés en Map<`${annee}_${mois}_${jds}`, nb_jours> pour lookup O(1).
+  const [overridesNbJours, setOverridesNbJours] = useState(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -217,23 +220,42 @@ export default function AnalysesPage() {
             .in('annee', compareYears)
         : Promise.resolve({ data: [], error: null })
 
-      const [caRes, compareCaRes, budgetRes, compareBudgetRes] = await Promise.all([
-        caQuery, compareCaQuery, budgetQuery, compareBudgetQuery,
+      // Overrides nb_jours (fermetures exceptionnelles) sur toutes les années
+      // couvertes par la plage et la comparaison. Une seule query suffit, le
+      // volume est petit (≤ 84 lignes/an = 12 mois × 7 jours).
+      const overridesYears = Array.from(new Set([...years, ...compareYears]))
+      const overridesQuery = overridesYears.length > 0
+        ? supabase
+            .from('ca_budget_jours_override')
+            .select('annee, mois, jour_semaine, nb_jours')
+            .eq('client_id', clientId)
+            .in('annee', overridesYears)
+        : Promise.resolve({ data: [], error: null })
+
+      const [caRes, compareCaRes, budgetRes, compareBudgetRes, overridesRes] = await Promise.all([
+        caQuery, compareCaQuery, budgetQuery, compareBudgetQuery, overridesQuery,
       ])
       if (caRes.error) throw caRes.error
       if (compareCaRes.error) throw compareCaRes.error
       if (budgetRes.error) throw budgetRes.error
       if (compareBudgetRes.error) throw compareBudgetRes.error
+      if (overridesRes.error) throw overridesRes.error
 
       const groupByYear = (rows) => rows.reduce((acc, r) => {
         ;(acc[r.annee] ||= []).push(r)
         return acc
       }, {})
 
+      const overridesMap = new Map()
+      for (const o of overridesRes.data || []) {
+        overridesMap.set(`${o.annee}_${o.mois}_${o.jour_semaine}`, Number(o.nb_jours))
+      }
+
       setRawCa(caRes.data || [])
       setRawCaCompare(compareCaRes.data || [])
       setBudgetByYear(groupByYear(budgetRes.data || []))
       setBudgetByYearCompare(groupByYear(compareBudgetRes.data || []))
+      setOverridesNbJours(overridesMap)
     } catch (e) {
       setError(e.message || 'Erreur de chargement')
     } finally {
@@ -390,8 +412,8 @@ export default function AnalysesPage() {
   }, [filteredRows, dateDebut, dateFin, filterJoursActive, joursSet])
 
   const periodBudget = useMemo(
-    () => periodBudgetTotal(filteredBudgetByYear, dateDebut, dateFin, filterJoursActive ? joursSet : null),
-    [filteredBudgetByYear, dateDebut, dateFin, filterJoursActive, joursSet]
+    () => periodBudgetTotal(filteredBudgetByYear, dateDebut, dateFin, filterJoursActive ? joursSet : null, overridesNbJours),
+    [filteredBudgetByYear, dateDebut, dateFin, filterJoursActive, joursSet, overridesNbJours]
   )
 
   const compareBudgetRange = useMemo(
@@ -401,8 +423,8 @@ export default function AnalysesPage() {
 
   const periodBudgetCompare = useMemo(() => {
     if (!compareBudgetRange) return 0
-    return periodBudgetTotal(filteredCompareBudgetByYear, compareBudgetRange.debut, compareBudgetRange.fin, filterJoursActive ? joursSet : null)
-  }, [filteredCompareBudgetByYear, compareBudgetRange, filterJoursActive, joursSet])
+    return periodBudgetTotal(filteredCompareBudgetByYear, compareBudgetRange.debut, compareBudgetRange.fin, filterJoursActive ? joursSet : null, overridesNbJours)
+  }, [filteredCompareBudgetByYear, compareBudgetRange, filterJoursActive, joursSet, overridesNbJours])
 
   // ── Comparison props injectés dans les KPIs ──────────────────────────────
   // - 'aucune' → pas de comparaison
@@ -428,10 +450,10 @@ export default function AnalysesPage() {
   // passer joursSet ici : on est déjà filtré au niveau de `days`.
   const daysWithBudget = useMemo(() => {
     return days.map((d) => {
-      const budget = periodBudgetTotal(filteredBudgetByYear, d.iso, d.iso)
+      const budget = periodBudgetTotal(filteredBudgetByYear, d.iso, d.iso, null, overridesNbJours)
       return { ...d, budget }
     })
-  }, [days, filteredBudgetByYear])
+  }, [days, filteredBudgetByYear, overridesNbJours])
 
   const tableauTotals = useMemo(() => {
     let lunchCouverts = 0, dinnerCouverts = 0, budget = 0
