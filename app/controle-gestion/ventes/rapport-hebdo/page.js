@@ -117,7 +117,7 @@ export default function RapportHebdoPage() {
       const [lieuxRes, caRes, budgetRes, jfRes, jfhRes] = await Promise.all([
         supabase
           .from('lieux_service')
-          .select('id, nom, ordre, actif, parent_lieu_service_id')
+          .select('id, nom, ordre, actif, parent_lieu_service_id, couverts_indicatifs')
           .eq('client_id', clientId)
           .eq('actif', true)
           .order('ordre').order('nom'),
@@ -224,18 +224,32 @@ export default function RapportHebdoPage() {
   // Remap chaque row vers le parent (ou self si pas de parent) — toutes
   // les fonctions de calcul (tmParLieuService, etc.) groupent par
   // lieu_service_id qui pointe maintenant vers le parent.
+  // Pour les lieux marqués `couverts_indicatifs` (ex: Marsan Privat),
+  // on force couverts/couverts_cible à 0 — le CA reste compté.
   const lieuToParent = useMemo(() => {
     const m = new Map()
     for (const l of lieux) m.set(l.id, l.parent_lieu_service_id || l.id)
     return m
   }, [lieux])
+  const lieuxIndicatifs = useMemo(
+    () => new Set(lieux.filter((l) => l.couverts_indicatifs).map((l) => l.id)),
+    [lieux]
+  )
   const caRowsRemap = useMemo(
-    () => caRows.map((r) => ({ ...r, lieu_service_id: lieuToParent.get(r.lieu_service_id) || r.lieu_service_id })),
-    [caRows, lieuToParent]
+    () => caRows.map((r) => ({
+      ...r,
+      lieu_service_id: lieuToParent.get(r.lieu_service_id) || r.lieu_service_id,
+      couverts: lieuxIndicatifs.has(r.lieu_service_id) ? 0 : r.couverts,
+    })),
+    [caRows, lieuToParent, lieuxIndicatifs]
   )
   const budgetRowsRemap = useMemo(
-    () => budgetRows.map((r) => ({ ...r, lieu_service_id: lieuToParent.get(r.lieu_service_id) || r.lieu_service_id })),
-    [budgetRows, lieuToParent]
+    () => budgetRows.map((r) => ({
+      ...r,
+      lieu_service_id: lieuToParent.get(r.lieu_service_id) || r.lieu_service_id,
+      couverts_cible: lieuxIndicatifs.has(r.lieu_service_id) ? 0 : r.couverts_cible,
+    })),
+    [budgetRows, lieuToParent, lieuxIndicatifs]
   )
 
   // Set des dates fermées — étendu sur [1er du mois de `fin`, fin] pour
