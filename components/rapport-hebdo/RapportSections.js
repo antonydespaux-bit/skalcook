@@ -163,7 +163,14 @@ export function SectionCouvertsJpJ({ c, jours, titre }) {
     if (ratio > -10) return c.orange
     return c.rouge
   }
-  // Total
+  // Total par jour (midi + soir) et total global
+  const computeJourTotal = (j) => {
+    const real = j.midi.real + j.soir.real
+    const budget = j.midi.budget + j.soir.budget
+    const delta = real - budget
+    const ratio = budget > 0 ? (delta / budget) * 100 : null
+    return { real, budget, delta, ratio }
+  }
   const total = jours.reduce((acc, j) => {
     acc.midi.real += j.midi.real
     acc.midi.budget += j.midi.budget
@@ -175,15 +182,21 @@ export function SectionCouvertsJpJ({ c, jours, titre }) {
   total.midi.ratio = total.midi.budget > 0 ? (total.midi.delta / total.midi.budget) * 100 : null
   total.soir.delta = total.soir.real - total.soir.budget
   total.soir.ratio = total.soir.budget > 0 ? (total.soir.delta / total.soir.budget) * 100 : null
+  const totalJour = {
+    real: total.midi.real + total.soir.real,
+    budget: total.midi.budget + total.soir.budget,
+  }
+  totalJour.ratio = totalJour.budget > 0 ? ((totalJour.real - totalJour.budget) / totalJour.budget) * 100 : null
   return (
     <Section c={c} titre={titre || 'Couverts jour par jour Réel VS Budget'}>
       <div style={{ overflowX: 'auto', border: `0.5px solid ${c.bordure}`, borderRadius: 8 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
           <thead>
             <tr>
               <th style={{ ...head, textAlign: 'left' }} rowSpan={2}>Jour</th>
               <th style={head} colSpan={4}>MIDI</th>
               <th style={head} colSpan={4}>SOIR</th>
+              <th style={head} colSpan={3}>TOTAL JOUR</th>
             </tr>
             <tr>
               <th style={head}>Reel</th>
@@ -194,26 +207,37 @@ export function SectionCouvertsJpJ({ c, jours, titre }) {
               <th style={head}>Budget</th>
               <th style={head}>Écart Nb</th>
               <th style={head}>Écart %</th>
+              <th style={head}>Reel</th>
+              <th style={head}>Budget</th>
+              <th style={head}>Écart %</th>
             </tr>
           </thead>
           <tbody>
-            {jours.map((j) => (
-              <tr key={j.iso}>
-                <td style={{ ...cell, textAlign: 'left', fontWeight: 500 }}>{j.jour_fr}</td>
-                <td style={cell}>{formatNombre(j.midi.real)}</td>
-                <td style={cell}>{formatNombre(j.midi.budget)}</td>
-                <td style={cell}>{j.midi.delta !== 0 ? formatNombre(j.midi.delta) : '—'}</td>
-                <td style={{ ...cell, background: ratioBg(j.midi.ratio), color: ratioColor(j.midi.ratio), fontWeight: 600 }}>
-                  {formatPct(j.midi.ratio)}
-                </td>
-                <td style={cell}>{formatNombre(j.soir.real)}</td>
-                <td style={cell}>{formatNombre(j.soir.budget)}</td>
-                <td style={cell}>{j.soir.delta !== 0 ? formatNombre(j.soir.delta) : '—'}</td>
-                <td style={{ ...cell, background: ratioBg(j.soir.ratio), color: ratioColor(j.soir.ratio), fontWeight: 600 }}>
-                  {formatPct(j.soir.ratio)}
-                </td>
-              </tr>
-            ))}
+            {jours.map((j) => {
+              const tj = computeJourTotal(j)
+              return (
+                <tr key={j.iso}>
+                  <td style={{ ...cell, textAlign: 'left', fontWeight: 500 }}>{j.jour_fr}</td>
+                  <td style={cell}>{formatNombre(j.midi.real)}</td>
+                  <td style={cell}>{formatNombre(j.midi.budget)}</td>
+                  <td style={cell}>{j.midi.delta !== 0 ? formatNombre(j.midi.delta) : '—'}</td>
+                  <td style={{ ...cell, background: ratioBg(j.midi.ratio), color: ratioColor(j.midi.ratio), fontWeight: 600 }}>
+                    {formatPct(j.midi.ratio)}
+                  </td>
+                  <td style={cell}>{formatNombre(j.soir.real)}</td>
+                  <td style={cell}>{formatNombre(j.soir.budget)}</td>
+                  <td style={cell}>{j.soir.delta !== 0 ? formatNombre(j.soir.delta) : '—'}</td>
+                  <td style={{ ...cell, background: ratioBg(j.soir.ratio), color: ratioColor(j.soir.ratio), fontWeight: 600 }}>
+                    {formatPct(j.soir.ratio)}
+                  </td>
+                  <td style={{ ...cell, fontWeight: 600 }}>{formatNombre(tj.real)}</td>
+                  <td style={{ ...cell, fontWeight: 600 }}>{formatNombre(tj.budget)}</td>
+                  <td style={{ ...cell, background: ratioBg(tj.ratio), color: ratioColor(tj.ratio), fontWeight: 700 }}>
+                    {formatPct(tj.ratio)}
+                  </td>
+                </tr>
+              )
+            })}
             <tr style={{ background: c.fond, fontWeight: 600 }}>
               <td style={{ ...cell, textAlign: 'left' }}>Total</td>
               <td style={cell}>{formatNombre(total.midi.real)}</td>
@@ -227,6 +251,11 @@ export function SectionCouvertsJpJ({ c, jours, titre }) {
               <td style={cell}></td>
               <td style={{ ...cell, background: ratioBg(total.soir.ratio), color: ratioColor(total.soir.ratio) }}>
                 {formatPct(total.soir.ratio)}
+              </td>
+              <td style={cell}>{formatNombre(totalJour.real)}</td>
+              <td style={cell}>{formatNombre(totalJour.budget)}</td>
+              <td style={{ ...cell, background: ratioBg(totalJour.ratio), color: ratioColor(totalJour.ratio), fontWeight: 700 }}>
+                {formatPct(totalJour.ratio)}
               </td>
             </tr>
           </tbody>
