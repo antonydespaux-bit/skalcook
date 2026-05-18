@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useEscapeClose } from '../../lib/useEscapeClose'
 
 const TYPE_LABEL = { menu: 'Menu', supplement: 'Supplément' }
 const SERVICE_LABEL = { lunch: 'Déjeuner', dinner: 'Dîner', all: 'Les deux' }
@@ -38,11 +39,7 @@ export default function ArticlesModal({ c, clientId, onClose, onChange }) {
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  useEscapeClose(onClose)
 
   const handleAdd = async () => {
     if (!clientId || !newNom.trim()) return

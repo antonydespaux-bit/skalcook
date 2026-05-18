@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import {
   buildRapportData, buildJoursFermesIso, formatEur, formatNombre, formatPct, formatPeriode,
 } from '../../lib/rapportHebdo'
+import { colorForRatio } from '../../lib/colorRatio'
 
 // Panel de comparaison multi-périodes : sous l'éditeur de rapport courant.
 // L'utilisateur peut ajouter 1 à N périodes additionnelles et voir un
@@ -155,7 +156,7 @@ export default function ComparaisonPanel({ c, isMobile, clientId, currentPeriode
           <td key={i} style={numStyle}>
             {v != null ? fmt(v) : '—'}
             {ratio != null && (
-              <span style={{ fontSize: 11, color: ratio >= 0 ? c.vert : c.rouge, marginLeft: 6, fontWeight: 600 }}>
+              <span style={{ fontSize: 11, color: colorForRatio(ratio, c), marginLeft: 6, fontWeight: 600 }}>
                 {formatPct(ratio)}
               </span>
             )}

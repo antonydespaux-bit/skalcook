@@ -9,6 +9,8 @@ import { useRole } from '../../../../lib/useRole'
 import Navbar from '../../../../components/Navbar'
 import BackButton from '../../../../components/BackButton'
 import IngredientAutocomplete from '../../../../components/IngredientAutocomplete'
+import FournisseurAutocomplete from '../../../../components/FournisseurAutocomplete'
+import { useFournisseursConnus } from '../../../../lib/useFournisseursConnus'
 import { normDesig, todayIso, yesterdayIso, fmtPrix, fmtDelta, fileToBase64, makeLigneId, enrichLigne } from '../../../../lib/achatsHelpers'
 
 // ─── Composant principal ─────────────────────────────────────────────────────
@@ -67,7 +69,7 @@ export default function AchatsImportPage() {
   const [fournisseurMapping, setFournisseurMapping] = useState({}) // norm → { ingredient_id }
   // Liste des fournisseurs déjà connus pour ce client — autocomplete sur
   // le champ "Fournisseur" pour éviter les doublons ("Metro" vs "METRO").
-  const [fournisseursConnus, setFournisseursConnus] = useState([])
+  const fournisseursConnus = useFournisseursConnus(clientId)
   const [ingredientsById, setIngredientsById] = useState({})       // id   → { nom, prix_kg, unite }
   const [tvaByIngredient, setTvaByIngredient] = useState({})       // id   → dernier taux_tva utilisé
 
@@ -182,21 +184,6 @@ export default function AchatsImportPage() {
   useEffect(() => {
     if (authReady && clientId) loadReconciliation()
   }, [authReady, clientId, loadReconciliation])
-
-  // Charge la liste des fournisseurs existants pour l'autocomplete.
-  useEffect(() => {
-    if (!clientId) return
-    let cancel = false
-    ;(async () => {
-      const { data } = await supabase
-        .from('fournisseurs')
-        .select('nom')
-        .eq('client_id', clientId)
-        .order('nom')
-      if (!cancel) setFournisseursConnus((data || []).map((f) => f.nom).filter(Boolean))
-    })()
-    return () => { cancel = true }
-  }, [clientId])
 
   // ─── Réconciliation d'une ligne ───────────────────────────────────────────
 
@@ -1042,17 +1029,12 @@ export default function AchatsImportPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
                     Fournisseur *
-                    <input
-                      style={inputS}
+                    <FournisseurAutocomplete
                       value={fournisseur}
-                      onChange={e => setFournisseur(e.target.value)}
-                      placeholder="Nom du fournisseur"
-                      list="fournisseurs-connus"
-                      autoComplete="off"
+                      onChange={setFournisseur}
+                      options={fournisseursConnus}
+                      style={inputS}
                     />
-                    <datalist id="fournisseurs-connus">
-                      {fournisseursConnus.map((nom) => <option key={nom} value={nom} />)}
-                    </datalist>
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
                     Date de la facture *

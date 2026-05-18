@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useEscapeClose } from '../../lib/useEscapeClose'
 
 // Modal de personnalisation des widgets, partagée entre les écrans à widgets
 // (dashboard cuisine, page Analyses, …). Le catalogue, le layout par défaut
@@ -52,11 +53,7 @@ export default function WidgetsCustomizeModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  useEscapeClose(onClose)
 
   const { kpis, sections } = splitByGroup(draft, widgetById, modulesActifs, isWidgetAvailable)
 
