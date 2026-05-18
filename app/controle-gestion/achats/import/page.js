@@ -65,6 +65,9 @@ export default function AchatsImportPage() {
 
   // ── Caches de réconciliation ──────────────────────────────────────────────
   const [fournisseurMapping, setFournisseurMapping] = useState({}) // norm → { ingredient_id }
+  // Liste des fournisseurs déjà connus pour ce client — autocomplete sur
+  // le champ "Fournisseur" pour éviter les doublons ("Metro" vs "METRO").
+  const [fournisseursConnus, setFournisseursConnus] = useState([])
   const [ingredientsById, setIngredientsById] = useState({})       // id   → { nom, prix_kg, unite }
   const [tvaByIngredient, setTvaByIngredient] = useState({})       // id   → dernier taux_tva utilisé
 
@@ -179,6 +182,21 @@ export default function AchatsImportPage() {
   useEffect(() => {
     if (authReady && clientId) loadReconciliation()
   }, [authReady, clientId, loadReconciliation])
+
+  // Charge la liste des fournisseurs existants pour l'autocomplete.
+  useEffect(() => {
+    if (!clientId) return
+    let cancel = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('fournisseurs')
+        .select('nom')
+        .eq('client_id', clientId)
+        .order('nom')
+      if (!cancel) setFournisseursConnus((data || []).map((f) => f.nom).filter(Boolean))
+    })()
+    return () => { cancel = true }
+  }, [clientId])
 
   // ─── Réconciliation d'une ligne ───────────────────────────────────────────
 
@@ -1004,7 +1022,17 @@ export default function AchatsImportPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
                     Fournisseur *
-                    <input style={inputS} value={fournisseur} onChange={e => setFournisseur(e.target.value)} placeholder="Nom du fournisseur" />
+                    <input
+                      style={inputS}
+                      value={fournisseur}
+                      onChange={e => setFournisseur(e.target.value)}
+                      placeholder="Nom du fournisseur"
+                      list="fournisseurs-connus"
+                      autoComplete="off"
+                    />
+                    <datalist id="fournisseurs-connus">
+                      {fournisseursConnus.map((nom) => <option key={nom} value={nom} />)}
+                    </datalist>
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
                     Date de la facture *

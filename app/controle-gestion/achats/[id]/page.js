@@ -61,6 +61,9 @@ export default function AchatsDetailPage() {
   const [linkingIngFor, setLinkingIngFor] = useState(null)
   const [linkSearch, setLinkSearch] = useState('')
 
+  // Liste des fournisseurs connus pour autocomplete sur edit
+  const [fournisseursConnus, setFournisseursConnus] = useState([])
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -147,6 +150,22 @@ export default function AchatsDetailPage() {
   }, [clientId])
 
   useEffect(() => { if (authReady && clientId) loadIngredients() }, [authReady, clientId, loadIngredients])
+
+  // Liste des fournisseurs déjà connus du client (autocomplete sur le champ
+  // "Fournisseur" en édition — évite les doublons "Metro" vs "METRO").
+  useEffect(() => {
+    if (!clientId) return
+    let cancel = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('fournisseurs')
+        .select('nom')
+        .eq('client_id', clientId)
+        .order('nom')
+      if (!cancel) setFournisseursConnus((data || []).map((f) => f.nom).filter(Boolean))
+    })()
+    return () => { cancel = true }
+  }, [clientId])
 
   const openEdit = () => {
     setEditFournisseur(facture.fournisseur || '')
@@ -402,7 +421,16 @@ export default function AchatsDetailPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
                       <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
                         Fournisseur
-                        <input style={inputS} value={editFournisseur} onChange={e => setEditFournisseur(e.target.value)} />
+                        <input
+                          style={inputS}
+                          value={editFournisseur}
+                          onChange={e => setEditFournisseur(e.target.value)}
+                          list="fournisseurs-connus-edit"
+                          autoComplete="off"
+                        />
+                        <datalist id="fournisseurs-connus-edit">
+                          {fournisseursConnus.map((nom) => <option key={nom} value={nom} />)}
+                        </datalist>
                       </label>
                       <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
                         N° de facture / BL
