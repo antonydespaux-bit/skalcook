@@ -62,6 +62,19 @@ export const deleteFactureSchema = z.object({
   clientId:  clientIdSchema,
 })
 
+// ── Fusionner plusieurs BL en une facture consolidée ──────────────────────
+export const fusionnerBlsSchema = z.object({
+  clientId:      clientIdSchema,
+  blIds:         z.array(uuidSchema).min(2, 'Sélectionne au moins 2 BL'),
+  numeroFacture: z.string().min(1, 'Numéro de facture requis').max(100),
+  dateFacture:   z.string().min(1, 'Date requise'),
+  totalHt:       z.coerce.number(),
+  montantTva:    z.coerce.number().nullable().optional(),
+  tauxTva:       z.coerce.number().min(0).max(100).nullable().optional(),
+})
+
+export type FusionnerBlsInput = z.infer<typeof fusionnerBlsSchema>
+
 // ── Check duplicate ────────────────────────────────────────────────────────
 export const checkDuplicateSchema = z.object({
   clientId:      clientIdSchema,

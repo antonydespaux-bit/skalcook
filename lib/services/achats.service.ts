@@ -4,7 +4,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { SaveFactureInput, CreateIngredientInput, BulkImportHeadersInput } from '../validators/achats.schema'
+import type { SaveFactureInput, CreateIngredientInput, BulkImportHeadersInput, FusionnerBlsInput } from '../validators/achats.schema'
 import { ConflictError, ValidationError, NotFoundError } from '../errors'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -531,6 +531,126 @@ export async function updateFacture(
 
   if (error) throw new Error(error.message)
   return { updated: true }
+}
+
+/**
+ * Fusionne plusieurs BL en une seule facture consolidée.
+ *
+ * Comportement :
+ *   1. Vérifie : tous les BL appartiennent au client, statut='bl', non
+ *      supprimés, non déjà fusionnés, même fournisseur.
+ *   2. Crée une nouvelle facture (statut='facture') avec les valeurs
+ *      saisies (numero, date, HT, TVA).
+ *   3. Déplace toutes les lignes des BL vers la nouvelle facture.
+ *   4. Met les BL à zéro : total_ht=0, montant_tva=0, et garde un lien
+ *      `facture_consolidee_id` vers la nouvelle facture pour traçabilité.
+ *
+ * Pas de transaction PostgreSQL "vraie" via le client JS de Supabase :
+ * en cas d'erreur sur l'une des étapes 3-4, on tente un rollback de la
+ * facture créée à l'étape 2.
+ */
+export async function fusionnerBls(
+  db: SupabaseClient,
+  input: FusionnerBlsInput,
+  userId: string,
+) {
+  const { clientId, blIds, numeroFacture, dateFacture, totalHt, montantTva, tauxTva } = input
+
+  // 1. Charge et vérifie les BL
+  const { data: bls, error: blErr } = await db
+    .from('achats_factures')
+    .select('id, fournisseur, fournisseur_id, statut, deleted_at, facture_consolidee_id')
+    .in('id', blIds)
+    .eq('client_id', clientId)
+
+  if (blErr) throw new Error(blErr.message)
+  if (!bls || bls.length !== blIds.length) {
+    throw new NotFoundError('Un ou plusieurs BL introuvables.')
+  }
+  for (const b of bls) {
+    if (b.deleted_at) throw new ValidationError(`Le BL ${b.id} est supprimé.`)
+    if (b.statut !== 'bl') throw new ValidationError(`Le document ${b.id} n'est pas un BL (statut=${b.statut}).`)
+    if (b.facture_consolidee_id) throw new ValidationError(`Le BL ${b.id} a déjà été fusionné.`)
+  }
+  const fournisseurs = new Set(bls.map((b) => (b.fournisseur || '').trim().toLowerCase()))
+  if (fournisseurs.size > 1) {
+    throw new ValidationError('Tous les BL doivent provenir du même fournisseur.')
+  }
+  const fournisseurNom = bls[0].fournisseur || ''
+  const fournisseurId = bls[0].fournisseur_id || null
+
+  // 2. Crée la facture consolidée
+  const { data: facture, error: fErr } = await db
+    .from('achats_factures')
+    .insert({
+      client_id: clientId,
+      fournisseur: fournisseurNom,
+      fournisseur_id: fournisseurId,
+      numero_facture: numeroFacture.trim(),
+      date_facture: dateFacture,
+      total_ht: totalHt,
+      montant_tva: montantTva ?? null,
+      taux_tva: tauxTva ?? null,
+      statut: 'facture',
+    })
+    .select('id')
+    .single()
+
+  if (fErr) {
+    if (fErr.code === '23505' || /duplicate key/i.test(fErr.message)) {
+      throw new ConflictError(`Une facture avec le numéro "${numeroFacture}" existe déjà.`)
+    }
+    throw new Error(fErr.message)
+  }
+
+  // 3. Déplace les lignes des BL vers la facture consolidée
+  const { error: mvErr } = await db
+    .from('achats_lignes')
+    .update({ facture_id: facture.id })
+    .in('facture_id', blIds)
+    .eq('client_id', clientId)
+
+  if (mvErr) {
+    await db.from('achats_factures').delete().eq('id', facture.id)
+    throw new Error(`Erreur lors du déplacement des lignes : ${mvErr.message}`)
+  }
+
+  // 4. Met les BL à zéro + pointe vers la facture consolidée
+  const { error: upErr } = await db
+    .from('achats_factures')
+    .update({
+      total_ht: 0,
+      montant_tva: 0,
+      facture_consolidee_id: facture.id,
+    })
+    .in('id', blIds)
+    .eq('client_id', clientId)
+
+  if (upErr) {
+    // Best-effort rollback : on remet les lignes sur leur BL d'origine.
+    // Pas possible sans tracking de l'origine de chaque ligne ; on
+    // remet juste sur le 1er BL pour ne rien perdre.
+    await db.from('achats_lignes').update({ facture_id: blIds[0] }).eq('facture_id', facture.id)
+    await db.from('achats_factures').delete().eq('id', facture.id)
+    throw new Error(`Erreur lors de la mise à zéro des BL : ${upErr.message}`)
+  }
+
+  // 5. Audit log
+  await db.from('transactions_api').insert({
+    client_id: clientId,
+    type: 'achats_fusion_bl',
+    source: 'liste_achats',
+    payload_json: {
+      facture_id: facture.id,
+      bl_ids: blIds,
+      fournisseur: fournisseurNom,
+      total_ht: totalHt,
+      montant_tva: montantTva,
+    },
+    user_id: userId,
+  })
+
+  return { facture_id: facture.id, bls_fusionnes: blIds.length }
 }
 
 export async function deleteFacture(
