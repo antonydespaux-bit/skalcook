@@ -238,13 +238,17 @@ export default function RapportHebdoPage() {
     [budgetRows, lieuToParent]
   )
 
-  // Set des dates fermées sur la période — fermetures hebdo + dates
-  // spécifiques marquées sur Budgets CA. Permet d'exclure ces jours du
-  // calcul budget pour rester cohérent avec la projection mensuelle.
-  const joursFermesIso = useMemo(
-    () => buildJoursFermesIso(joursFermesRows, joursFermesHebdoRows, debut, fin),
-    [joursFermesRows, joursFermesHebdoRows, debut, fin]
-  )
+  // Set des dates fermées — étendu sur [1er du mois de `fin`, fin] pour
+  // couvrir aussi le cumul mois (caTtcCumulMois itère depuis le 1er du
+  // mois). Si on se limitait à [debut, fin], les fermetures hebdo des
+  // jours hors-semaine (ex: lundis et dimanches du début du mois) ne
+  // seraient pas exclues du cumul mois et gonfleraient le CA budget.
+  const joursFermesIso = useMemo(() => {
+    const [y2, m2] = fin.split('-').map(Number)
+    const firstOfMonth = `${y2}-${String(m2).padStart(2, '0')}-01`
+    const debutEtendu = firstOfMonth < debut ? firstOfMonth : debut
+    return buildJoursFermesIso(joursFermesRows, joursFermesHebdoRows, debutEtendu, fin)
+  }, [joursFermesRows, joursFermesHebdoRows, debut, fin])
 
   const data = useMemo(() => buildRapportData({
     caRows: caRowsRemap, budgetRows: budgetRowsRemap, lieuxMap, debut, fin, joursFermesIso,
