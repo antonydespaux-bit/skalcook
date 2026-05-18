@@ -2,6 +2,12 @@ import Anthropic from '@anthropic-ai/sdk'
 import { apiHandler } from '../../../../lib/apiHandler'
 import { z } from 'zod'
 
+// Étend le timeout de la function Vercel à 60s (par défaut: 10s sur Hobby,
+// 60s déjà max sur Pro sans cette directive). L'OCR Claude peut prendre
+// 20-40s sur un PDF multi-pages, sans compter les retries en cas d'erreur
+// transitoire.
+export const maxDuration = 60
+
 // Instancié lazy à la première requête : assure que process.env.ANTHROPIC_API_KEY
 // est bien chargé (utile en dev Turbopack) et permet de retourner une erreur
 // claire si la clé manque, au lieu d'un 500 opaque.
@@ -12,6 +18,48 @@ function getAnthropic(): Anthropic {
   if (!key) throw new Error('ANTHROPIC_API_KEY non défini côté serveur.')
   anthropicClient = new Anthropic({ apiKey: key })
   return anthropicClient
+}
+
+// Retry avec backoff exponentiel sur les erreurs transitoires Anthropic :
+//   429 = rate limit, 502/503 = bad gateway, 529 = overloaded.
+// Ces erreurs sont la cause #1 des "lecture IA échouée" observés en série
+// (après plusieurs scans rapprochés).
+async function callAnthropicWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  let lastErr: unknown
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (err: unknown) {
+      lastErr = err
+      const e = err as { status?: number; response?: { status?: number } }
+      const status = e?.status ?? e?.response?.status
+      const isTransient = status === 429 || status === 502 || status === 503 || status === 529
+      if (!isTransient || attempt === maxRetries) throw err
+      const delayMs = Math.min(1000 * Math.pow(2, attempt), 8000)
+      console.warn(`[parse-facture] Erreur transitoire ${status}, retry dans ${delayMs}ms (attempt ${attempt + 1}/${maxRetries})`)
+      await new Promise((r) => setTimeout(r, delayMs))
+    }
+  }
+  throw lastErr
+}
+
+// Traduit une erreur Anthropic en message clair pour l'UI.
+function formatAnthropicError(err: unknown): { status: number; message: string } {
+  const e = err as { status?: number; message?: string }
+  const status = e?.status ?? 500
+  if (status === 429) {
+    return { status: 429, message: 'L\'IA est saturée (trop de demandes simultanées). Attendez 10-20 secondes et réessayez.' }
+  }
+  if (status === 529 || status === 503) {
+    return { status: 503, message: 'L\'IA Anthropic est temporairement surchargée. Réessayez dans une minute.' }
+  }
+  if (status === 401 || status === 403) {
+    return { status: 500, message: 'Clé API Anthropic invalide ou expirée — contacte le support.' }
+  }
+  if (status === 400) {
+    return { status: 400, message: `Format de fichier rejeté par l'IA : ${e?.message ?? 'unknown'}` }
+  }
+  return { status: 500, message: e?.message ?? 'Erreur inconnue côté IA.' }
 }
 
 const schema = z.object({
@@ -113,20 +161,27 @@ export const POST = apiHandler({
       ? { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: fileBase64 } }
       : { type: 'image' as const, source: { type: 'base64' as const, media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif', data: fileBase64 } }
 
-    const message = await getAnthropic().messages.create({
-      model: 'claude-opus-4-7',
-      // 8192 : marge pour un PDF multi-factures (1 facture ~ 500-1500 tokens en sortie).
-      max_tokens: 8192,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            contentBlock,
-            { type: 'text', text: PROMPT_EXTRACTION },
-          ],
-        },
-      ],
-    })
+    let message
+    try {
+      message = await callAnthropicWithRetry(() => getAnthropic().messages.create({
+        model: 'claude-opus-4-7',
+        // 8192 : marge pour un PDF multi-factures (1 facture ~ 500-1500 tokens en sortie).
+        max_tokens: 8192,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              contentBlock,
+              { type: 'text', text: PROMPT_EXTRACTION },
+            ],
+          },
+        ],
+      }))
+    } catch (err) {
+      const formatted = formatAnthropicError(err)
+      console.error('[parse-facture] Erreur Anthropic après retry :', formatted, err)
+      return Response.json({ error: formatted.message }, { status: formatted.status })
+    }
 
     // Trouve le premier bloc de type 'text' (évite de planter si un thinking block précède)
     const textBlock = message.content.find((b) => b.type === 'text')
