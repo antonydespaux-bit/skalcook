@@ -7,6 +7,7 @@
 import {
   formatEur, formatPct, formatPctSimple, formatNombre, formatPeriode,
 } from '../../lib/rapportHebdo'
+import { colorForRatio } from '../../lib/colorRatio'
 
 const SERVICE_LABEL = { lunch: 'déjeuner', dinner: 'dîner' }
 
@@ -18,7 +19,7 @@ export function SectionCaTtc({ c, data, periodeLabel, cumulLabel }) {
         <strong>Le CATTC réalisé {periodeLabel}</strong> s&apos;élève à{' '}
         <strong>{formatEur(ca.real)}</strong> pour un budget de{' '}
         <strong>{formatEur(ca.budget)}</strong>
-        {ca.ratio != null && <> soit <strong style={{ color: ca.ratio >= 0 ? c.vert : c.rouge }}>
+        {ca.ratio != null && <> soit <strong style={{ color: colorForRatio(ca.ratio, c) }}>
           {formatPct(ca.ratio)}
         </strong></>}
         {autreCa > 0 && (
@@ -31,7 +32,7 @@ export function SectionCaTtc({ c, data, periodeLabel, cumulLabel }) {
         Le CATTC réalisé {cumulLabel} s&apos;élève à{' '}
         <strong>{formatEur(caMois.real)}</strong> pour un budget de{' '}
         <strong>{formatEur(caMois.budget)}</strong>
-        {caMois.ratio != null && <> soit <strong style={{ color: caMois.ratio >= 0 ? c.vert : c.rouge }}>
+        {caMois.ratio != null && <> soit <strong style={{ color: colorForRatio(caMois.ratio, c) }}>
           {formatPct(caMois.ratio)}
         </strong></>}
         {autreCaMois > 0 && (
@@ -79,7 +80,7 @@ export function SectionTicketMoyenLieux({ c, tmLieux, titre }) {
             pour un budget de{' '}
             <strong>{r.budget_tm != null ? formatEur(r.budget_tm) : '—'}</strong>
             {r.ratio_tm != null && <>, soit{' '}
-              <strong style={{ color: r.ratio_tm >= 0 ? c.vert : c.rouge }}>{formatPct(r.ratio_tm)}</strong>
+              <strong style={{ color: colorForRatio(r.ratio_tm, c) }}>{formatPct(r.ratio_tm)}</strong>
             </>}
           </li>
         ))}
@@ -94,7 +95,7 @@ export function SectionTmFoodBev({ c, tmFb, titre }) {
       Ticket moyen <strong>{label}</strong>{' '}
       <strong>{real != null ? formatEur(real) : '—'}</strong>{' '}
       pour un budget de <strong>{budget != null ? formatEur(budget) : '—'}</strong>
-      {ratio != null && <>, soit <strong style={{ color: ratio >= 0 ? c.vert : c.rouge }}>{formatPct(ratio)}</strong></>}
+      {ratio != null && <>, soit <strong style={{ color: colorForRatio(ratio, c) }}>{formatPct(ratio)}</strong></>}
     </li>
   )
   return (
@@ -133,12 +134,12 @@ export function SectionCouverts({ c, couverts, titre }) {
         <li style={liStyle}>
           <strong>Déjeuner</strong> : <strong>{formatNombre(couverts.midi.real)}</strong> couverts pour un budget de{' '}
           <strong>{formatNombre(couverts.midi.budget)}</strong>
-          {couverts.midi.ratio != null && <> soit <strong style={{ color: couverts.midi.ratio >= 0 ? c.vert : c.rouge }}>{formatPct(couverts.midi.ratio)}</strong></>}
+          {couverts.midi.ratio != null && <> soit <strong style={{ color: colorForRatio(couverts.midi.ratio, c) }}>{formatPct(couverts.midi.ratio)}</strong></>}
         </li>
         <li style={liStyle}>
           <strong>Dîner</strong> : <strong>{formatNombre(couverts.soir.real)}</strong> couverts pour un budget de{' '}
           <strong>{formatNombre(couverts.soir.budget)}</strong>
-          {couverts.soir.ratio != null && <> soit <strong style={{ color: couverts.soir.ratio >= 0 ? c.vert : c.rouge }}>{formatPct(couverts.soir.ratio)}</strong></>}
+          {couverts.soir.ratio != null && <> soit <strong style={{ color: colorForRatio(couverts.soir.ratio, c) }}>{formatPct(couverts.soir.ratio)}</strong></>}
         </li>
       </ul>
     </Section>

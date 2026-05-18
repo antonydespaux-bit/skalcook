@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useEscapeClose } from '../../lib/useEscapeClose'
 
 const MOIS_LABEL = [
   '', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -154,11 +155,7 @@ export default function JoursFermesModal({ c, clientId, annee, onClose }) {
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  useEscapeClose(onClose)
 
   const handleAdd = async () => {
     if (!clientId || !newDate || !newMotif.trim()) return

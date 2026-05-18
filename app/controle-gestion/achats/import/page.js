@@ -9,6 +9,8 @@ import { useRole } from '../../../../lib/useRole'
 import Navbar from '../../../../components/Navbar'
 import BackButton from '../../../../components/BackButton'
 import IngredientAutocomplete from '../../../../components/IngredientAutocomplete'
+import FournisseurAutocomplete from '../../../../components/FournisseurAutocomplete'
+import { useFournisseursConnus } from '../../../../lib/useFournisseursConnus'
 import { normDesig, todayIso, yesterdayIso, fmtPrix, fmtDelta, fileToBase64, makeLigneId, enrichLigne } from '../../../../lib/achatsHelpers'
 
 // ─── Composant principal ─────────────────────────────────────────────────────
@@ -67,7 +69,7 @@ export default function AchatsImportPage() {
   const [fournisseurMapping, setFournisseurMapping] = useState({}) // norm → { ingredient_id }
   // Liste des fournisseurs déjà connus pour ce client — autocomplete sur
   // le champ "Fournisseur" pour éviter les doublons ("Metro" vs "METRO").
-  const [fournisseursConnus, setFournisseursConnus] = useState([])
+  const fournisseursConnus = useFournisseursConnus(clientId)
   const [ingredientsById, setIngredientsById] = useState({})       // id   → { nom, prix_kg, unite }
   const [tvaByIngredient, setTvaByIngredient] = useState({})       // id   → dernier taux_tva utilisé
 
@@ -182,21 +184,6 @@ export default function AchatsImportPage() {
   useEffect(() => {
     if (authReady && clientId) loadReconciliation()
   }, [authReady, clientId, loadReconciliation])
-
-  // Charge la liste des fournisseurs existants pour l'autocomplete.
-  useEffect(() => {
-    if (!clientId) return
-    let cancel = false
-    ;(async () => {
-      const { data } = await supabase
-        .from('fournisseurs')
-        .select('nom')
-        .eq('client_id', clientId)
-        .order('nom')
-      if (!cancel) setFournisseursConnus((data || []).map((f) => f.nom).filter(Boolean))
-    })()
-    return () => { cancel = true }
-  }, [clientId])
 
   // ─── Réconciliation d'une ligne ───────────────────────────────────────────
 
@@ -371,7 +358,7 @@ export default function AchatsImportPage() {
 
   // ─── Sélection de fichier (mobile input + desktop drop partagé) ───────────
 
-  const handleFileSelected = useCallback(async (selectedFile) => {
+  const handleFileSelected = useCallback(async (selectedFile, { runOcr = true } = {}) => {
     if (!selectedFile) return
     const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
     if (!allowed.includes(selectedFile.type)) {
@@ -382,13 +369,30 @@ export default function AchatsImportPage() {
     setPreviewUrl(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(selectedFile) })
     setIsPdf(selectedFile.type === 'application/pdf')
     setError('')
-    setExtractError('')
-    setLignes([])
 
-    // PDF et images : extraction IA (l'API Anthropic supporte les PDFs via type 'document')
-    setStep('extracting')
-    await extractFromImage(selectedFile)
+    if (runOcr) {
+      // Mode OCR : on reset les lignes et on lance l'extraction IA.
+      setExtractError('')
+      setLignes([])
+      setStep('extracting')
+      await extractFromImage(selectedFile)
+    } else {
+      // Mode manuel : on attache juste le fichier (sera uploadé au save) sans
+      // toucher aux lignes que l'utilisateur a peut-être déjà saisies.
+      const base64 = await fileToBase64(selectedFile)
+      setFileBase64(base64)
+      setFileMime(selectedFile.type)
+    }
   }, [extractFromImage])
+
+  // Détache le fichier joint en mode manuel sans toucher au formulaire.
+  // (À ne pas confondre avec resetForm qui vide tout l'écran.)
+  const handleDetachFile = useCallback(() => {
+    setPreviewUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null })
+    setIsPdf(false)
+    setFileBase64(null)
+    setFileMime(null)
+  }, [])
 
   // ─── Drag & drop (desktop) ───────────────────────────────────────────────
 
@@ -1036,23 +1040,81 @@ export default function AchatsImportPage() {
                 </div>
               )}
 
+              {/* Pièce jointe (mode manuel uniquement — en OCR, le fichier
+                  est déjà attaché via le step upload). Permet de joindre une
+                  facture PDF/photo SANS déclencher l'OCR. */}
+              {isManuelMode && (
+                <div style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 12, padding: 16 }}>
+                  <p style={{ margin: '0 0 12px', fontWeight: 600, fontSize: 14, color: c.texte }}>
+                    Pièce jointe <span style={{ fontWeight: 400, color: c.texteMuted, fontSize: 12 }}>(optionnel)</span>
+                  </p>
+                  {!fileBase64 ? (
+                    <>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        id="file-attach-manuel"
+                        style={{ display: 'none' }}
+                        onChange={e => handleFileSelected(e.target.files?.[0], { runOcr: false })}
+                      />
+                      <button
+                        type="button"
+                        style={btnSecondary}
+                        onClick={() => document.getElementById('file-attach-manuel').click()}
+                      >
+                        📎 Joindre la facture (PDF / photo)
+                      </button>
+                      <p style={{ margin: '8px 0 0', fontSize: 12, color: c.texteMuted }}>
+                        Le fichier sera stocké avec la facture pour consultation, sans extraction automatique.
+                      </p>
+                    </>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 12, alignItems: isMobile ? 'stretch' : 'flex-start' }}>
+                      {previewUrl && (
+                        isPdf ? (
+                          <iframe
+                            src={previewUrl}
+                            title="Aperçu pièce jointe"
+                            style={{ width: isMobile ? '100%' : 200, height: 160, borderRadius: 8, border: `1px solid ${c.bordure}` }}
+                          />
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={previewUrl}
+                            alt="Aperçu pièce jointe"
+                            style={{ width: isMobile ? '100%' : 200, height: 160, objectFit: 'contain', borderRadius: 8, border: `1px solid ${c.bordure}`, background: c.blanc }}
+                          />
+                        )
+                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+                        <p style={{ margin: 0, fontSize: 13, color: c.texte }}>
+                          {isPdf ? '📄 PDF joint' : '🖼️ Photo jointe'}
+                        </p>
+                        <button
+                          type="button"
+                          style={{ ...btnSecondary, alignSelf: 'flex-start' }}
+                          onClick={handleDetachFile}
+                        >
+                          ✕ Retirer la pièce jointe
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Métadonnées de la facture */}
               <div style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 12, padding: 16 }}>
                 <p style={{ margin: '0 0 12px', fontWeight: 600, fontSize: 14, color: c.texte }}>Informations de la facture</p>
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
                     Fournisseur *
-                    <input
-                      style={inputS}
+                    <FournisseurAutocomplete
                       value={fournisseur}
-                      onChange={e => setFournisseur(e.target.value)}
-                      placeholder="Nom du fournisseur"
-                      list="fournisseurs-connus"
-                      autoComplete="off"
+                      onChange={setFournisseur}
+                      options={fournisseursConnus}
+                      style={inputS}
                     />
-                    <datalist id="fournisseurs-connus">
-                      {fournisseursConnus.map((nom) => <option key={nom} value={nom} />)}
-                    </datalist>
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
                     Date de la facture *
