@@ -62,8 +62,16 @@ function formatAnthropicError(err: unknown): { status: number; message: string }
   return { status: 500, message: e?.message ?? 'Erreur inconnue côté IA.' }
 }
 
+// 7 MB de base64 ≈ 5 MB de fichier brut. Garde-fou anti-DoS : un base64 de
+// plusieurs centaines de MB ferait exploser la mémoire de la function avant
+// même d'arriver à Claude (qui rejette de toute façon au-delà de 5 MB image
+// ou 32 MB PDF). Marge confortable pour des PDF de factures multi-pages.
+const MAX_BASE64_LENGTH = 7_000_000
+
 const schema = z.object({
-  fileBase64: z.string().min(1, 'fileBase64 requis'),
+  fileBase64: z.string()
+    .min(1, 'fileBase64 requis')
+    .max(MAX_BASE64_LENGTH, 'Fichier trop volumineux (max ≈ 5 MB).'),
   mimeType: z.enum(
     ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'],
     { error: 'Type MIME non supporté. Utilisez JPEG, PNG, WebP ou PDF.' }
@@ -179,7 +187,14 @@ export const POST = apiHandler({
       }))
     } catch (err) {
       const formatted = formatAnthropicError(err)
-      console.error('[parse-facture] Erreur Anthropic après retry :', formatted, err)
+      // On log seulement status + message ; l'objet err complet d'Anthropic peut
+      // contenir des fragments de prompt système ou des headers internes.
+      const e = err as { status?: number; message?: string }
+      console.error('[parse-facture] Erreur Anthropic après retry :', {
+        status: e?.status ?? null,
+        message: e?.message?.slice(0, 200) ?? null,
+        formatted,
+      })
       return Response.json({ error: formatted.message }, { status: formatted.status })
     }
 
