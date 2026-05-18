@@ -194,7 +194,9 @@ export const POST = apiHandler({
     let message
     try {
       message = await callAnthropicWithRetry(() => getAnthropic().messages.create({
-        model: 'claude-opus-4-7',
+        // Sonnet 4.6 : ~5× moins cher qu'Opus pour une qualité OCR quasi-équivalente
+        // sur des factures fournisseur (PDF tabulaire, scans).
+        model: 'claude-sonnet-4-6',
         // 8192 : marge pour un PDF multi-factures (1 facture ~ 500-1500 tokens en sortie).
         max_tokens: 8192,
         messages: [
