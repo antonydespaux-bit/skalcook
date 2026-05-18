@@ -313,11 +313,10 @@ export default function AchatsImportPage() {
 
   // ─── Extraction IA ────────────────────────────────────────────────────────
 
-  const extractFromImage = useCallback(async (file) => {
+  // Coeur de l'appel OCR, factorisé pour pouvoir réessayer sans re-upload.
+  const runExtraction = useCallback(async (base64, mime) => {
+    setExtractError('')
     try {
-      const base64 = await fileToBase64(file)
-      setFileBase64(base64)
-      setFileMime(file.type)
       const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/achats/parse-facture', {
         method: 'POST',
@@ -325,7 +324,7 @@ export default function AchatsImportPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ fileBase64: base64, mimeType: file.type, clientId }),
+        body: JSON.stringify({ fileBase64: base64, mimeType: mime, clientId }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Erreur extraction')
@@ -334,7 +333,6 @@ export default function AchatsImportPage() {
       setSavedFactureIdxs(new Set())
 
       if (factures.length === 0) {
-        // OCR n'a rien retourné : on bascule en review avec un formulaire vide.
         setExtractedFactures(null)
         setCurrentFactureIdx(0)
         setLignes([])
@@ -346,7 +344,6 @@ export default function AchatsImportPage() {
       setCurrentFactureIdx(0)
       loadFactureIntoState(factures[0])
       await checkDuplicate(factures[0].numero_facture)
-
       setStep('review')
     } catch (err) {
       console.error('Extraction IA échouée :', err)
@@ -356,6 +353,21 @@ export default function AchatsImportPage() {
       setStep('review')
     }
   }, [clientId, loadFactureIntoState, checkDuplicate])
+
+  const extractFromImage = useCallback(async (file) => {
+    const base64 = await fileToBase64(file)
+    setFileBase64(base64)
+    setFileMime(file.type)
+    await runExtraction(base64, file.type)
+  }, [runExtraction])
+
+  // Permet de réessayer l'OCR sans re-sélectionner le fichier — utile quand
+  // l'IA Anthropic est saturée (rate limit, overload transitoire).
+  const retryExtraction = useCallback(async () => {
+    if (!fileBase64 || !fileMime) return
+    setStep('extracting')
+    await runExtraction(fileBase64, fileMime)
+  }, [fileBase64, fileMime, runExtraction])
 
   // ─── Sélection de fichier (mobile input + desktop drop partagé) ───────────
 
@@ -948,8 +960,16 @@ export default function AchatsImportPage() {
 
               {/* Bandeau extraction échouée */}
               {extractError && (
-                <div style={{ background: c.orangeClair, border: `1px solid ${c.orange}`, borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#92400E' }}>
-                  ⚠️ Extraction IA échouée ({extractError}). Saisissez les lignes manuellement.
+                <div style={{ background: c.orangeClair, border: `1px solid ${c.orange}`, borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#92400E', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ flex: 1, minWidth: 0 }}>⚠️ {extractError}</span>
+                  {fileBase64 && (
+                    <button
+                      onClick={retryExtraction}
+                      style={{ padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, border: '1px solid #F59E0B', background: '#FBBF24', color: '#78350F', cursor: 'pointer' }}
+                    >
+                      🔄 Réessayer
+                    </button>
+                  )}
                 </div>
               )}
 
