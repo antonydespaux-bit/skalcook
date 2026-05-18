@@ -44,9 +44,28 @@ async function callAnthropicWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): 
 }
 
 // Traduit une erreur Anthropic en message clair pour l'UI.
+// Le SDK Anthropic expose le détail dans `err.error.message` quand le serveur
+// renvoie un payload structuré (invalid_request_error, billing, etc.).
 function formatAnthropicError(err: unknown): { status: number; message: string } {
-  const e = err as { status?: number; message?: string }
+  const e = err as {
+    status?: number
+    message?: string
+    error?: { type?: string; message?: string }
+  }
   const status = e?.status ?? 500
+  const innerMessage = e?.error?.message ?? e?.message ?? ''
+  const innerLower = innerMessage.toLowerCase()
+
+  // Crédits Anthropic épuisés → Anthropic renvoie 400/invalid_request_error
+  // mais ce n'est PAS un problème de format de fichier. On distingue pour
+  // éviter d'envoyer le user chercher un bug côté PDF.
+  if (innerLower.includes('credit balance') || innerLower.includes('billing')) {
+    return {
+      status: 402,
+      message: 'Crédits Anthropic épuisés — l\'administrateur doit recharger le compte sur console.anthropic.com (Plans & Billing).',
+    }
+  }
+
   if (status === 429) {
     return { status: 429, message: 'L\'IA est saturée (trop de demandes simultanées). Attendez 10-20 secondes et réessayez.' }
   }
@@ -57,9 +76,12 @@ function formatAnthropicError(err: unknown): { status: number; message: string }
     return { status: 500, message: 'Clé API Anthropic invalide ou expirée — contacte le support.' }
   }
   if (status === 400) {
-    return { status: 400, message: `Format de fichier rejeté par l'IA : ${e?.message ?? 'unknown'}` }
+    // Vrai 400 : payload mal formé (PDF illisible, taille, type MIME). On
+    // n'inclut PAS le message brut d'Anthropic — il dump souvent tout le
+    // JSON du body et confond l'utilisateur.
+    return { status: 400, message: 'Format de fichier rejeté par l\'IA — PDF illisible ou non supporté.' }
   }
-  return { status: 500, message: e?.message ?? 'Erreur inconnue côté IA.' }
+  return { status: 500, message: 'Erreur inconnue côté IA.' }
 }
 
 // 7 MB de base64 ≈ 5 MB de fichier brut. Garde-fou anti-DoS : un base64 de
