@@ -33,6 +33,9 @@ export default function AchatsDetailPage() {
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
   const [facture, setFacture] = useState(null)
+  // Si ce BL a été fusionné, on garde un mini-récap de la facture cible
+  // pour afficher la bannière + lien.
+  const [factureConsolidee, setFactureConsolidee] = useState(null)
   const [lignes, setLignes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -83,7 +86,7 @@ export default function AchatsDetailPage() {
 
     const { data: fac, error: fErr } = await supabase
       .from('achats_factures')
-      .select('id, fournisseur, numero_facture, date_facture, total_ht, statut, taux_tva, montant_tva, fichier_url, created_at')
+      .select('id, fournisseur, numero_facture, date_facture, total_ht, statut, taux_tva, montant_tva, fichier_url, facture_consolidee_id, created_at')
       .eq('id', id)
       .eq('client_id', clientId)
       .maybeSingle()
@@ -91,6 +94,19 @@ export default function AchatsDetailPage() {
     if (fErr) { setError(fErr.message); setLoading(false); return }
     if (!fac) { setError('Facture introuvable.'); setLoading(false); return }
     setFacture(fac)
+
+    // Si ce BL a été fusionné, charge un mini-récap de la facture cible
+    if (fac.facture_consolidee_id) {
+      const { data: parent } = await supabase
+        .from('achats_factures')
+        .select('id, numero_facture, date_facture')
+        .eq('id', fac.facture_consolidee_id)
+        .eq('client_id', clientId)
+        .maybeSingle()
+      setFactureConsolidee(parent || null)
+    } else {
+      setFactureConsolidee(null)
+    }
 
     const { data: rows, error: lErr } = await supabase
       .from('achats_lignes')
@@ -281,6 +297,7 @@ export default function AchatsDetailPage() {
 
   const ht = facture ? Number(facture.total_ht) || 0 : 0
   const isBl = facture?.statut === 'bl'
+  const estFusionne = !!facture?.facture_consolidee_id
 
   const th  = { padding: isMobile ? '10px 8px' : '11px 14px', textAlign: 'left',  fontWeight: 600, fontSize: 11, color: c.texteMuted, textTransform: 'uppercase', borderBottom: `1px solid ${c.bordure}`, whiteSpace: 'nowrap' }
   const thR = { ...th, textAlign: 'right' }
@@ -305,7 +322,7 @@ export default function AchatsDetailPage() {
           />
           {role === 'admin' && !loading && facture && (
             <div style={{ display: 'flex', gap: 8 }}>
-              {isBl && (
+              {isBl && !estFusionne && (
                 <button onClick={handleConfirmFacture} disabled={saving}
                   style={{ padding: '7px 14px', borderRadius: 8, fontSize: 13, border: 'none', background: '#059669', color: '#fff', cursor: 'pointer', fontWeight: 500 }}>
                   ✓ Confirmer comme facture
@@ -325,6 +342,36 @@ export default function AchatsDetailPage() {
 
         {error && <p style={{ color: '#B91C1C', fontSize: 14, margin: '8px 0' }}>{error}</p>}
         {loading && <p style={{ color: c.texteMuted, fontSize: 14 }}>Chargement…</p>}
+
+        {/* Bannière BL fusionné — pointe vers la facture consolidée */}
+        {estFusionne && (
+          <div style={{
+            margin: '12px 0', padding: '10px 14px', borderRadius: 8,
+            background: '#FEF3C7', border: '1px solid #F59E0B', color: '#78350F',
+            fontSize: 13, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          }}>
+            <span>📎</span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              Ce BL a été fusionné dans la facture
+              {factureConsolidee?.numero_facture ? <strong> {factureConsolidee.numero_facture}</strong> : ' consolidée'}
+              {factureConsolidee?.date_facture && (
+                <span style={{ opacity: 0.75 }}> du {new Date(factureConsolidee.date_facture).toLocaleDateString('fr-FR')}</span>
+              )}
+              . Ses lignes et totaux ont été transférés (ce BL n&apos;est plus compté pour éviter le double-comptage).
+            </span>
+            {factureConsolidee?.id && (
+              <button
+                onClick={() => router.push(`/controle-gestion/achats/${factureConsolidee.id}`)}
+                style={{
+                  padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                  border: '1px solid #F59E0B', background: '#FBBF24', color: '#78350F', cursor: 'pointer',
+                }}
+              >
+                Voir la facture →
+              </button>
+            )}
+          </div>
+        )}
 
         {!loading && facture && (
           <>

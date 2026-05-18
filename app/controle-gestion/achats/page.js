@@ -80,6 +80,11 @@ export default function AchatsListPage() {
   })
   const [deleting, setDeleting] = useState(null)
   const [exporting, setExporting] = useState(false)
+  // Sélection multi-BL pour fusion en une facture consolidée.
+  // Set des id de BL cochés. Modal de fusion conditionnée à ≥ 2 sélectionnés.
+  const [selectedBlIds, setSelectedBlIds] = useState(() => new Set())
+  const [fusionModalOpen, setFusionModalOpen] = useState(false)
+  const [fusionning, setFusionning] = useState(false)
   // Tri : colonne active + sens. Par défaut : date décroissante (= comportement
   // du .order() côté query Supabase).
   const [sortBy, setSortBy] = useState(() => searchParams.get('tri') || 'date_facture')
@@ -134,7 +139,7 @@ export default function AchatsListPage() {
 
     const { data: rows, error: fErr } = await supabase
       .from('achats_factures')
-      .select('id, fournisseur, numero_facture, date_facture, total_ht, taux_tva, montant_tva, statut, created_at')
+      .select('id, fournisseur, numero_facture, date_facture, total_ht, taux_tva, montant_tva, statut, facture_consolidee_id, created_at')
       .eq('client_id', cid)
       .is('deleted_at', null)
       .order('date_facture', { ascending: false })
@@ -217,6 +222,60 @@ export default function AchatsListPage() {
       setError(`Export impossible : ${err.message}`)
     } finally {
       setExporting(false)
+    }
+  }
+
+  // Toggle d'une case BL. Garantit qu'on ne coche que des BL non fusionnés.
+  const toggleSelect = (id, e) => {
+    e.stopPropagation()
+    setSelectedBlIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const clearSelection = () => setSelectedBlIds(new Set())
+
+  // Stats sur la sélection courante : nb, fournisseurs distincts, totaux.
+  const selectedBls = factures.filter((f) => selectedBlIds.has(f.id))
+  const selectedFournisseurs = [...new Set(selectedBls.map((b) => (b.fournisseur || '').trim().toLowerCase()).filter(Boolean))]
+  const sameFournisseur = selectedFournisseurs.length <= 1
+  const selectedTotalHt = selectedBls.reduce((s, b) => s + (Number(b.total_ht) || 0), 0)
+  const selectedTotalTva = selectedBls.reduce((s, b) => s + (tvaByFacture[b.id] || 0), 0)
+
+  const handleFusion = async (numero, date, totalHt, montantTva) => {
+    if (!clientId || selectedBlIds.size < 2) return
+    setFusionning(true)
+    setError('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/achats/fusionner-bl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          clientId,
+          blIds: [...selectedBlIds],
+          numeroFacture: numero,
+          dateFacture: date,
+          totalHt,
+          montantTva: montantTva ?? null,
+        }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || j.message || 'Erreur lors de la fusion')
+      }
+      const result = await res.json()
+      setFusionModalOpen(false)
+      clearSelection()
+      await loadFactures()
+      // Redirige vers la facture créée pour vérif rapide
+      if (result.facture_id) router.push(`/controle-gestion/achats/${result.facture_id}`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setFusionning(false)
     }
   }
 
@@ -571,20 +630,35 @@ export default function AchatsListPage() {
                   const ttc = ht + tva
                   const nb = nbLignesByFacture[f.id] ?? 0
                   const badgeStyle = badgeStyleFor(f.statut)
+                  const isSelectableBl = role === 'admin' && f.statut === 'bl' && !f.facture_consolidee_id
+                  const isSelected = selectedBlIds.has(f.id)
                   return (
                     <div
                       key={f.id}
                       onClick={() => router.push(`/controle-gestion/achats/${f.id}`)}
                       style={{
-                        background: c.blanc, borderRadius: 10, border: `0.5px solid ${c.bordure}`,
+                        background: isSelected ? c.accentClair : c.blanc, borderRadius: 10,
+                        border: `${isSelected ? '1.5px' : '0.5px'} solid ${isSelected ? c.accent : c.bordure}`,
                         padding: '14px 16px', cursor: 'pointer',
                       }}
                     >
-                      {/* Ligne 1 : fournisseur + badge */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <span style={{ fontSize: 15, fontWeight: 600, color: c.texte }}>
-                          {f.fournisseur || <span style={{ color: c.texteMuted, fontWeight: 400 }}>—</span>}
-                        </span>
+                      {/* Ligne 1 : checkbox (BL seul) + fournisseur + badge */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                          {isSelectableBl && (
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => toggleSelect(f.id, e)}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ cursor: 'pointer', width: 18, height: 18 }}
+                              aria-label={`Sélectionner BL ${f.numero_facture || ''}`}
+                            />
+                          )}
+                          <span style={{ fontSize: 15, fontWeight: 600, color: c.texte, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {f.fournisseur || <span style={{ color: c.texteMuted, fontWeight: 400 }}>—</span>}
+                          </span>
+                        </div>
                         <span style={badgeStyle}>{statutLabel(f.statut)}</span>
                       </div>
                       {/* Ligne 2 : n° facture · date */}
@@ -629,6 +703,7 @@ export default function AchatsListPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: c.fond }}>
+                        {role === 'admin' && <th style={{ ...th, width: 32, padding: '11px 8px' }} aria-label="Sélection" />}
                         <SortHeader col="fournisseur"    label="Fournisseur" baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
                         <SortHeader col="numero_facture" label="N° Facture"  baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
                         <SortHeader col="date_facture"   label="Date"        baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
@@ -646,18 +721,33 @@ export default function AchatsListPage() {
                         const tva = tvaByFacture[f.id] || 0
                         const ttc = ht + tva
                         const nb = nbLignesByFacture[f.id] ?? 0
+                        const isSelectableBl = role === 'admin' && f.statut === 'bl' && !f.facture_consolidee_id
+                        const isSelected = selectedBlIds.has(f.id)
                         return (
                           <tr
                             key={f.id}
                             onClick={() => router.push(`/controle-gestion/achats/${f.id}`)}
                             style={{
                               cursor: 'pointer',
-                              background: i % 2 === 0 ? c.blanc : c.fond,
+                              background: isSelected ? c.accentClair : (i % 2 === 0 ? c.blanc : c.fond),
                               transition: 'background 0.12s',
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = c.accentClair}
-                            onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? c.blanc : c.fond}
+                            onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = c.accentClair }}
+                            onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = i % 2 === 0 ? c.blanc : c.fond }}
                           >
+                            {role === 'admin' && (
+                              <td style={{ ...td, padding: '11px 8px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                                {isSelectableBl ? (
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => toggleSelect(f.id, e)}
+                                    style={{ cursor: 'pointer', width: 16, height: 16 }}
+                                    aria-label={`Sélectionner BL ${f.numero_facture || ''}`}
+                                  />
+                                ) : null}
+                              </td>
+                            )}
                             <td style={{ ...td, fontWeight: 500 }}>
                               {f.fournisseur || <span style={{ color: c.texteMuted }}>—</span>}
                             </td>
@@ -687,6 +777,7 @@ export default function AchatsListPage() {
                     </tbody>
                     <tfoot>
                       <tr style={{ fontWeight: 600, background: c.fond }}>
+                        {role === 'admin' && <td style={td} />}
                         <td style={{ ...td, color: c.texte }}>
                           {facturesFiltrees.length} facture{facturesFiltrees.length !== 1 ? 's' : ''}
                         </td>
@@ -704,6 +795,190 @@ export default function AchatsListPage() {
           </>
         )}
       </div>
+
+      {/* Barre flottante de fusion (visible dès qu'au moins 1 BL est coché) */}
+      {selectedBlIds.size > 0 && (
+        <div style={{
+          position: 'fixed', left: 16, right: 16, bottom: 16,
+          maxWidth: 720, margin: '0 auto',
+          background: c.blanc, borderRadius: 12,
+          border: `1px solid ${c.bordure}`,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+          padding: '12px 16px',
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          zIndex: 50,
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: c.texte }}>
+              {selectedBlIds.size} BL sélectionné{selectedBlIds.size > 1 ? 's' : ''}
+              {sameFournisseur && selectedBls[0]?.fournisseur && (
+                <span style={{ fontWeight: 400, color: c.texteMuted, marginLeft: 6 }}>
+                  — {selectedBls[0].fournisseur}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: c.texteMuted, marginTop: 2 }}>
+              {sameFournisseur
+                ? `Total HT : ${formatEuro(selectedTotalHt)} · TVA : ${formatEuro(selectedTotalTva)}`
+                : `⚠ Fournisseurs différents (${selectedFournisseurs.length}) — fusion impossible`}
+            </div>
+          </div>
+          <button
+            onClick={clearSelection}
+            style={{
+              padding: '8px 14px', borderRadius: 8, fontSize: 13,
+              border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
+            }}
+          >
+            Annuler
+          </button>
+          <button
+            onClick={() => setFusionModalOpen(true)}
+            disabled={selectedBlIds.size < 2 || !sameFournisseur}
+            title={
+              selectedBlIds.size < 2 ? 'Sélectionne au moins 2 BL'
+              : !sameFournisseur ? 'Tous les BL doivent être du même fournisseur'
+              : 'Fusionner les BL sélectionnés en une facture'
+            }
+            style={{
+              padding: '8px 16px', borderRadius: 8, fontSize: 13,
+              border: 'none',
+              background: (selectedBlIds.size < 2 || !sameFournisseur) ? c.bordure : c.accent,
+              color: c.texte, fontWeight: 600,
+              cursor: (selectedBlIds.size < 2 || !sameFournisseur) ? 'not-allowed' : 'pointer',
+              opacity: (selectedBlIds.size < 2 || !sameFournisseur) ? 0.6 : 1,
+            }}
+          >
+            Fusionner en facture →
+          </button>
+        </div>
+      )}
+
+      {/* Modal de fusion */}
+      {fusionModalOpen && (
+        <FusionModal
+          c={c}
+          isMobile={isMobile}
+          selectedBls={selectedBls}
+          totalHt={selectedTotalHt}
+          totalTva={selectedTotalTva}
+          onClose={() => setFusionModalOpen(false)}
+          onSubmit={handleFusion}
+          submitting={fusionning}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Modal de fusion BL → facture ──────────────────────────────────────────
+// Pré-rempli avec les sommes des BL sélectionnés. L'utilisateur peut
+// ajuster numero, date, HT et TVA avant validation.
+function FusionModal({ c, isMobile, selectedBls, totalHt, totalTva, onClose, onSubmit, submitting }) {
+  const [numero, setNumero] = useState('')
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [ht, setHt] = useState(() => Number(totalHt || 0).toFixed(2))
+  const [tva, setTva] = useState(() => Number(totalTva || 0).toFixed(2))
+  const ttc = (Number(ht) || 0) + (Number(tva) || 0)
+
+  const submit = (e) => {
+    e.preventDefault()
+    if (!numero.trim() || !date) return
+    onSubmit(numero.trim(), date, Number(ht) || 0, Number(tva) || 0)
+  }
+
+  const input = {
+    width: '100%', padding: '8px 10px', borderRadius: 8,
+    border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte,
+    fontSize: 14, boxSizing: 'border-box',
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 16, zIndex: 100,
+      }}
+    >
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={submit}
+        style={{
+          background: c.blanc, borderRadius: 12, padding: isMobile ? 16 : 24,
+          maxWidth: 480, width: '100%',
+          maxHeight: '90vh', overflowY: 'auto',
+        }}
+      >
+        <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600, color: c.texte }}>
+          Fusionner {selectedBls.length} BL en facture
+        </h2>
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: c.texteMuted }}>
+          Fournisseur : <strong style={{ color: c.texte }}>{selectedBls[0]?.fournisseur || '—'}</strong><br />
+          Les lignes des BL seront déplacées vers la nouvelle facture, et les BL passeront à zéro.
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <label style={{ display: 'block' }}>
+            <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 4 }}>N° facture *</div>
+            <input
+              type="text" value={numero} onChange={(e) => setNumero(e.target.value)}
+              placeholder="ex: FA-2026-042" required style={input}
+            />
+          </label>
+          <label style={{ display: 'block' }}>
+            <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 4 }}>Date facture *</div>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required style={input} />
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+            <label>
+              <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 4 }}>Total HT</div>
+              <input
+                type="number" step="0.01" value={ht}
+                onChange={(e) => setHt(e.target.value)} style={input}
+              />
+            </label>
+            <label>
+              <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 4 }}>Montant TVA</div>
+              <input
+                type="number" step="0.01" value={tva}
+                onChange={(e) => setTva(e.target.value)} style={input}
+              />
+            </label>
+            <label>
+              <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 4 }}>TTC (auto)</div>
+              <input
+                type="text" readOnly value={ttc.toFixed(2)}
+                style={{ ...input, background: c.fond, color: c.texteMuted }}
+              />
+            </label>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
+          <button
+            type="button" onClick={onClose} disabled={submitting}
+            style={{
+              padding: '8px 14px', borderRadius: 8, fontSize: 13,
+              border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
+            }}
+          >
+            Annuler
+          </button>
+          <button
+            type="submit" disabled={submitting || !numero.trim() || !date}
+            style={{
+              padding: '8px 16px', borderRadius: 8, fontSize: 13,
+              border: 'none', background: c.accent, color: c.texte, fontWeight: 600,
+              cursor: submitting ? 'wait' : 'pointer',
+              opacity: (submitting || !numero.trim() || !date) ? 0.6 : 1,
+            }}
+          >
+            {submitting ? 'Création…' : 'Créer la facture'}
+          </button>
+        </div>
+      </form>
     </div>
   )
 }
