@@ -30,7 +30,7 @@ export default function ComparaisonPanel({ c, isMobile, clientId, currentPeriode
     const [y2] = fin.split('-').map(Number)
     const annees = Array.from(new Set([y1, y2]))
     const [lieuxRes, caRes, budgetRes, jfRes, jfhRes] = await Promise.all([
-      supabase.from('lieux_service').select('id, nom, parent_lieu_service_id').eq('client_id', clientId).eq('actif', true),
+      supabase.from('lieux_service').select('id, nom, parent_lieu_service_id, couverts_indicatifs').eq('client_id', clientId).eq('actif', true),
       supabase.from('ca_journalier')
         .select('jour, service, lieu_service_id, couverts, ca_food, ca_bev_20, ca_bev_10, ca_autre')
         .eq('client_id', clientId).gte('jour', debut).lte('jour', fin),
@@ -49,14 +49,26 @@ export default function ComparaisonPanel({ c, isMobile, clientId, currentPeriode
     // → "Salle à manger") pour que les agrégations groupent analytiquement.
     const noms = new Map((lieuxRes.data || []).map((l) => [l.id, l.nom]))
     const lieuToParent = new Map((lieuxRes.data || []).map((l) => [l.id, l.parent_lieu_service_id || l.id]))
+    const lieuxIndicatifs = new Set((lieuxRes.data || []).filter((l) => l.couverts_indicatifs).map((l) => l.id))
     const lieuxMap = new Map((lieuxRes.data || []).map((l) => [
       l.id, noms.get(l.parent_lieu_service_id || l.id) || l.nom,
     ]))
-    // Remappe lieu_service_id sur chaque row vers le parent
-    const remap = (r) => ({ ...r, lieu_service_id: lieuToParent.get(r.lieu_service_id) || r.lieu_service_id })
+    // Remappe lieu_service_id sur chaque row vers le parent. Pour les
+    // lieux indicatifs (Marsan Privat), couverts/couverts_cible forcés à
+    // 0 — le CA reste compté.
+    const remapCa = (r) => ({
+      ...r,
+      lieu_service_id: lieuToParent.get(r.lieu_service_id) || r.lieu_service_id,
+      couverts: lieuxIndicatifs.has(r.lieu_service_id) ? 0 : r.couverts,
+    })
+    const remapBudget = (r) => ({
+      ...r,
+      lieu_service_id: lieuToParent.get(r.lieu_service_id) || r.lieu_service_id,
+      couverts_cible: lieuxIndicatifs.has(r.lieu_service_id) ? 0 : r.couverts_cible,
+    })
     return {
-      caRows: (caRes.data || []).map(remap),
-      budgetRows: (budgetRes.data || []).map(remap),
+      caRows: (caRes.data || []).map(remapCa),
+      budgetRows: (budgetRes.data || []).map(remapBudget),
       lieuxMap,
       joursFermesRows: jfRes.data || [],
       joursFermesHebdoRows: jfhRes.data || [],
