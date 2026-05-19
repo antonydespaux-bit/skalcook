@@ -114,14 +114,14 @@ export default function InventairePage() {
 
   if (loading) return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar section="cuisine" />
+      <Navbar section={role === 'bar' ? 'bar' : 'cuisine'} />
       <ChefLoader />
     </div>
   )
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar section="cuisine" />
+      <Navbar section={role === 'bar' ? 'bar' : 'cuisine'} />
 
       <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '1000px', margin: '0 auto' }}>
 

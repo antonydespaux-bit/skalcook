@@ -151,6 +151,13 @@ export default function Navbar({ section = 'cuisine' }) {
             ...(hasModule('ingredients') && peutModifier ? [{ label: 'Ingrédients',  path: '/bar/ingredients' }] : []),
           ]
         },
+        ...(hasModule('gestion') ? [{
+          label: 'Gestion',
+          paths: ['/inventaire'],
+          items: [
+            { label: 'Inventaire', path: '/inventaire' },
+          ]
+        }] : []),
       ].filter(g => g.items.length > 0)
     : [
         {

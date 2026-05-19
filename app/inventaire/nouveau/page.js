@@ -126,7 +126,7 @@ export default function NouvelInventairePage() {
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar section="cuisine" />
+      <Navbar section={role === 'bar' ? 'bar' : 'cuisine'} />
 
       <div style={{ padding: isMobile ? '16px' : '24px', maxWidth: '600px', margin: '0 auto' }}>
 
