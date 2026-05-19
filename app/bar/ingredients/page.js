@@ -100,18 +100,50 @@ export default function BarIngredientsPage() {
   }
 
   const supprimerSelection = async () => {
-    if (!confirm(`Supprimer ${selection.length} ingrédient${selection.length > 1 ? 's' : ''} ?`)) return
+    const selSet = new Set(selection)
+    const ingsConcernes = ingredients.filter(i => selSet.has(i.id))
+    const nbLiesAFiches = ingsConcernes.reduce(
+      (s, i) => s + (Array.isArray(i.fiche_bar_ingredients) ? i.fiche_bar_ingredients.length : 0),
+      0
+    )
+    const message = nbLiesAFiches > 0
+      ? `Supprimer ${selection.length} ingrédient${selection.length > 1 ? 's' : ''} bar ?\n\n${nbLiesAFiches} ligne${nbLiesAFiches > 1 ? 's' : ''} de fiches bar ${nbLiesAFiches > 1 ? 'seront retirées' : 'sera retirée'} en cascade (les coûts des fiches concernées devront être recalculés).\n\nAction irréversible.`
+      : `Supprimer ${selection.length} ingrédient${selection.length > 1 ? 's' : ''} bar ? Action irréversible.`
+    if (!confirm(message)) return
     setSupprimant(true)
-    const clientId = await getClientId()
-    if (!clientId) { setSupprimant(false); return }
-    await supabase.from('ingredients_bar').delete().in('id', selection).eq('client_id', clientId)
-    await log({
-      action: 'SUPPRESSION', entite: 'ingredient_bar',
-      entite_nom: `${selection.length} ingrédients`, section: 'bar',
-      details: `IDs: ${selection.join(', ')}`
-    })
-    await loadIngredients()
-    setSupprimant(false)
+    try {
+      const clientId = await getClientId()
+      if (!clientId) return
+      const CHUNK = 500
+      const chunks = []
+      for (let i = 0; i < selection.length; i += CHUNK) {
+        chunks.push(selection.slice(i, i + CHUNK))
+      }
+      for (const ids of chunks) {
+        // Cascade : supprime d'abord les lignes de fiches bar liées
+        // (sinon la FK fiche_bar_ingredients.ingredient_id bloque).
+        const { error: errFiches } = await supabase
+          .from('fiche_bar_ingredients')
+          .delete()
+          .in('ingredient_id', ids)
+          .eq('client_id', clientId)
+        if (errFiches) throw errFiches
+        // Détache l'historique des inventaires (les lignes restent visibles).
+        await supabase.from('inventaire_lignes').update({ ingredient_id: null }).in('ingredient_id', ids).eq('client_id', clientId)
+        // Suppression des ingrédients bar de ce chunk
+        const { error } = await supabase.from('ingredients_bar').delete().in('id', ids).eq('client_id', clientId)
+        if (error) throw error
+      }
+      await log({
+        action: 'SUPPRESSION', entite: 'ingredient_bar',
+        entite_nom: `${selection.length} ingrédients`, section: 'bar',
+        details: `${selection.length} supprimés, ${nbLiesAFiches} lignes de fiches bar retirées en cascade`,
+      })
+      await loadIngredients()
+    } catch (err) {
+      console.error('Delete bar error:', err)
+      alert(`Erreur lors de la suppression : ${err.message || err.code || 'inconnue'}`)
+    } finally { setSupprimant(false) }
   }
 
   const ajouterIngredient = async () => {
