@@ -519,10 +519,9 @@ export async function deleteInventaire(
     .maybeSingle()
 
   if (!inv) throw new NotFoundError('Inventaire introuvable.')
-  if (inv.statut === 'valide') {
-    throw new ValidationError('Impossible de supprimer un inventaire validé.')
-  }
 
+  // La suppression est gardée par le guard adminOrSuperadmin côté route.
+  // L'UI affiche déjà un warning explicite pour les inventaires validés.
   // Delete lines then header
   await db.from('inventaire_lignes').delete().eq('inventaire_id', inventaireId)
   const { error } = await db.from('inventaires').delete().eq('id', inventaireId)
