@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase, getClientId } from '../../../lib/supabase'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '../../../lib/useTheme'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import Navbar from '../../../components/Navbar'
@@ -11,8 +11,21 @@ export default function DetailInventairePage() {
   const params = useParams()
   const inventaireId = params.id
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { c } = useTheme()
   const isMobile = useIsMobile()
+
+  // Préserve le contexte ?section= entre la liste et le détail/saisie pour
+  // que la navbar reste cohérente (cf. #113). Le param URL prime sur la
+  // section de l'inventaire — sinon un admin venant de bar perdrait son
+  // contexte en ouvrant un inventaire 'global'.
+  const sectionParam = searchParams.get('section')
+  const queryString = sectionParam === 'bar' || sectionParam === 'cuisine' ? `?section=${sectionParam}` : ''
+  const navbarSection = inv => {
+    if (sectionParam === 'bar') return 'bar'
+    if (sectionParam === 'cuisine') return 'cuisine'
+    return inv?.section === 'bar' ? 'bar' : 'cuisine'
+  }
 
   const [inventaire, setInventaire] = useState(null)
   const [lignes, setLignes] = useState([])
@@ -31,7 +44,7 @@ export default function DetailInventairePage() {
       supabase.from('inventaire_lignes').select('*').eq('inventaire_id', inventaireId).eq('client_id', clientId).order('nom_ingredient'),
     ])
 
-    if (!inv) { router.push('/inventaire'); return }
+    if (!inv) { router.push(`/inventaire${queryString}`); return }
     setInventaire(inv)
     setLignes(lig || [])
     setLoading(false)
@@ -67,7 +80,7 @@ export default function DetailInventairePage() {
 
   if (loading) return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar section="cuisine" />
+      <Navbar section={sectionParam === 'bar' ? 'bar' : 'cuisine'} />
       <ChefLoader />
     </div>
   )
@@ -96,14 +109,14 @@ export default function DetailInventairePage() {
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar section={inventaire?.section === 'bar' ? 'bar' : 'cuisine'} />
+      <Navbar section={navbarSection(inventaire)} />
 
       <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '800px', margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{ marginBottom: '20px' }}>
           <button
-            onClick={() => router.push('/inventaire')}
+            onClick={() => router.push(`/inventaire${queryString}`)}
             style={{ background: 'none', border: 'none', color: c.texteMuted, fontSize: '13px', cursor: 'pointer', padding: 0, marginBottom: '12px' }}
           >
             ← Inventaires
@@ -211,7 +224,7 @@ export default function DetailInventairePage() {
         {isBrouillon && (
           <div style={{ display: 'flex', gap: '10px', marginTop: '20px', flexWrap: 'wrap' }}>
             <button
-              onClick={() => router.push(`/inventaire/${inventaireId}/saisie`)}
+              onClick={() => router.push(`/inventaire/${inventaireId}/saisie${queryString}`)}
               style={{
                 flex: 1, padding: '14px', background: c.blanc,
                 border: `1px solid ${c.accent}`, color: c.accent,

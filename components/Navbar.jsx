@@ -155,7 +155,7 @@ export default function Navbar({ section = 'cuisine' }) {
           label: 'Gestion',
           paths: ['/inventaire'],
           items: [
-            { label: 'Inventaire', path: '/inventaire' },
+            { label: 'Inventaire', path: '/inventaire?section=bar' },
           ]
         }] : []),
       ].filter(g => g.items.length > 0)

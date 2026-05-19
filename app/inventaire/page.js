@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { supabase, getClientId } from '../../lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
 import { useIsMobile } from '../../lib/useIsMobile'
@@ -19,21 +19,34 @@ export default function InventairePage() {
   const [filtre, setFiltre] = useState('tous')
   const [deleting, setDeleting] = useState(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { c } = useTheme()
   const { role } = useRole()
   const isMobile = useIsMobile()
 
-  useEffect(() => { loadInventaires() }, [])
+  // ?section=bar (depuis la navbar bar) ou ?section=cuisine filtre la liste
+  // et force la navbar côté contexte utilisateur. Sans param, l'utilisateur
+  // voit tout (utile pour admin/directeur).
+  const sectionParam = searchParams.get('section')
+  const sectionFiltre = sectionParam === 'bar' || sectionParam === 'cuisine' ? sectionParam : null
+  const navbarSection = sectionFiltre || (role === 'bar' ? 'bar' : 'cuisine')
+  const queryString = sectionFiltre ? `?section=${sectionFiltre}` : ''
+
+  useEffect(() => { loadInventaires() }, [sectionFiltre])
 
   const loadInventaires = async () => {
     const clientId = await getClientId()
     if (!clientId) { router.push('/'); return }
 
-    const { data } = await supabase
+    let query = supabase
       .from('inventaires')
       .select('*')
       .eq('client_id', clientId)
-      .order('date_inventaire', { ascending: false })
+    if (sectionFiltre) {
+      // Inclut les inventaires "global" qui couvrent les deux sections.
+      query = query.in('section', [sectionFiltre, 'global'])
+    }
+    const { data } = await query.order('date_inventaire', { ascending: false })
 
     setInventaires(data || [])
 
@@ -114,14 +127,14 @@ export default function InventairePage() {
 
   if (loading) return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar section={role === 'bar' ? 'bar' : 'cuisine'} />
+      <Navbar section={navbarSection} />
       <ChefLoader />
     </div>
   )
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar section={role === 'bar' ? 'bar' : 'cuisine'} />
+      <Navbar section={navbarSection} />
 
       <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '1000px', margin: '0 auto' }}>
 
@@ -135,7 +148,7 @@ export default function InventairePage() {
           </div>
           {(role === 'admin' || role === 'cuisine' || role === 'bar') && (
             <button
-              onClick={() => router.push('/inventaire/nouveau')}
+              onClick={() => router.push(`/inventaire/nouveau${queryString}`)}
               style={{ padding: '10px 20px', background: c.accent, color: 'white', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}
             >
               + Nouvel inventaire
@@ -224,7 +237,7 @@ export default function InventairePage() {
         {/* ── Banner brouillon ── */}
         {brouillon && (
           <div
-            onClick={() => router.push(`/inventaire/${brouillon.id}/saisie`)}
+            onClick={() => router.push(`/inventaire/${brouillon.id}/saisie${queryString}`)}
             style={{
               padding: '16px', background: '#FFFBEB', border: '0.5px solid #FDE68A',
               borderRadius: '12px', marginBottom: '16px', cursor: 'pointer',
@@ -272,7 +285,7 @@ export default function InventairePage() {
             {filtered.map(inv => (
               <div
                 key={inv.id}
-                onClick={() => router.push(inv.statut === 'brouillon' ? `/inventaire/${inv.id}/saisie` : `/inventaire/${inv.id}`)}
+                onClick={() => router.push((inv.statut === 'brouillon' ? `/inventaire/${inv.id}/saisie` : `/inventaire/${inv.id}`) + queryString)}
                 style={{
                   padding: '16px', background: c.blanc,
                   border: `0.5px solid ${c.bordure}`, borderRadius: '12px',
@@ -302,7 +315,7 @@ export default function InventairePage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {(role === 'admin' || role === 'cuisine' || role === 'bar') && inv.statut === 'brouillon' && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); router.push(`/inventaire/${inv.id}/saisie`) }}
+                      onClick={(e) => { e.stopPropagation(); router.push(`/inventaire/${inv.id}/saisie${queryString}`) }}
                       style={{
                         padding: '6px 10px', background: 'none',
                         border: `0.5px solid ${c.bordure}`, borderRadius: '8px',

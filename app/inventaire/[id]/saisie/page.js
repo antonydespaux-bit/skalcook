@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase, getClientId } from '../../../../lib/supabase'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '../../../../lib/useTheme'
 import { useRole } from '../../../../lib/useRole'
 import { useIsMobile } from '../../../../lib/useIsMobile'
@@ -13,9 +13,15 @@ export default function SaisieInventairePage() {
   const params = useParams()
   const inventaireId = params.id
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { c } = useTheme()
   const { role } = useRole()
   const isMobile = useIsMobile()
+
+  // Préserve le contexte ?section= (bar / cuisine) entre les pages
+  // inventaire pour que la navbar reste cohérente.
+  const sectionParam = searchParams.get('section')
+  const queryString = sectionParam === 'bar' || sectionParam === 'cuisine' ? `?section=${sectionParam}` : ''
 
   const [inventaire, setInventaire] = useState(null)
   const [lignes, setLignes] = useState([])
@@ -49,8 +55,8 @@ export default function SaisieInventairePage() {
       .eq('client_id', clientId)
       .maybeSingle()
 
-    if (!inv) { router.push('/inventaire'); return }
-    if (inv.statut === 'valide') { router.push(`/inventaire/${inventaireId}`); return }
+    if (!inv) { router.push(`/inventaire${queryString}`); return }
+    if (inv.statut === 'valide') { router.push(`/inventaire/${inventaireId}${queryString}`); return }
     setInventaire(inv)
 
     // Charger les lignes
@@ -146,7 +152,7 @@ export default function SaisieInventairePage() {
         body: JSON.stringify({ inventaireId, clientId })
       })
       if (res.ok) {
-        router.push(`/inventaire/${inventaireId}`)
+        router.push(`/inventaire/${inventaireId}${queryString}`)
       } else {
         const json = await res.json()
         alert(json.error || 'Erreur lors de la validation.')
@@ -203,14 +209,14 @@ export default function SaisieInventairePage() {
 
   if (loading) return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar section="cuisine" />
+      <Navbar section={sectionParam === 'bar' ? 'bar' : 'cuisine'} />
       <ChefLoader />
     </div>
   )
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar section={inventaire?.section === 'bar' ? 'bar' : 'cuisine'} />
+      <Navbar section={sectionParam === 'bar' ? 'bar' : sectionParam === 'cuisine' ? 'cuisine' : (inventaire?.section === 'bar' ? 'bar' : 'cuisine')} />
 
       <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '700px', margin: '0 auto' }}>
 
@@ -218,7 +224,7 @@ export default function SaisieInventairePage() {
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <button
-              onClick={() => router.push('/inventaire')}
+              onClick={() => router.push(`/inventaire${queryString}`)}
               style={{ background: 'none', border: 'none', color: c.texteMuted, fontSize: '13px', cursor: 'pointer', padding: 0 }}
             >
               ← Inventaires
@@ -416,7 +422,7 @@ export default function SaisieInventairePage() {
         <div style={{ position: 'sticky', bottom: '16px', padding: '12px 0', marginTop: '16px' }}>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
-              onClick={() => router.push('/inventaire')}
+              onClick={() => router.push(`/inventaire${queryString}`)}
               style={{
                 flex: 1, padding: '14px', background: c.blanc,
                 border: `0.5px solid ${c.bordure}`, borderRadius: '12px',
