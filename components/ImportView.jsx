@@ -214,6 +214,57 @@ export default function ImportView({ section = 'cuisine' }) {
       return
     }
 
+    // Création automatique des catégories absentes du fichier.
+    // On recharge l'état serveur (au cas où la page est ouverte depuis un
+    // moment) pour ne pas créer un doublon d'une catégorie existante.
+    let categoriesCreees = 0
+    const catMap = {}
+    if (cfg.hasCategories) {
+      const { data: existingCats } = await supabase
+        .from(cfg.categoriesTable)
+        .select('id, nom, ordre')
+        .eq('client_id', clientId)
+      ;(existingCats || []).forEach(cat => {
+        catMap[cat.nom.toLowerCase().trim()] = cat.id
+      })
+
+      const unknownNames = [...new Set(
+        donneesSelectionnees
+          .map(ing => (ing.categorieNom || '').trim())
+          .filter(nom => nom && !catMap[nom.toLowerCase()])
+      )]
+
+      if (unknownNames.length > 0) {
+        const maxOrdre = (existingCats || []).reduce((m, c) => Math.max(m, c.ordre || 0), 0)
+        const toInsert = unknownNames.map((nom, idx) => ({
+          nom,
+          emoji: '📦',
+          client_id: clientId,
+          ordre: maxOrdre + idx + 1,
+        }))
+        const { data: created, error: errCat } = await supabase
+          .from(cfg.categoriesTable)
+          .insert(toInsert)
+          .select('id, nom')
+        if (errCat) {
+          setLoading(false)
+          alert(`Erreur lors de la création des catégories : ${errCat.message}`)
+          return
+        }
+        ;(created || []).forEach(cat => {
+          catMap[cat.nom.toLowerCase().trim()] = cat.id
+        })
+        categoriesCreees = (created || []).length
+      }
+    }
+
+    const itemsToImport = donneesSelectionnees.map(ing => {
+      if (!cfg.hasCategories) return ing
+      const lookup = (ing.categorieNom || '').toLowerCase().trim()
+      const resolvedId = lookup ? catMap[lookup] : null
+      return { ...ing, categorie_id: resolvedId || null }
+    })
+
     const { count: dejaPresents, error: errCount } = await supabase
       .from(cfg.table)
       .select('*', { count: 'exact', head: true })
@@ -236,8 +287,8 @@ export default function ImportView({ section = 'cuisine' }) {
     let categoriesAssignees = 0
     const total = totalSelectionnes
 
-    for (let i = 0; i < donneesSelectionnees.length; i += batchSize) {
-      const batch = donneesSelectionnees.slice(i, i + batchSize)
+    for (let i = 0; i < itemsToImport.length; i += batchSize) {
+      const batch = itemsToImport.slice(i, i + batchSize)
       for (const ing of batch) {
         try {
           if (cfg.hasCategories) {
@@ -333,7 +384,10 @@ export default function ImportView({ section = 'cuisine' }) {
 
     setLoading(false)
     const res = { importes, misAJour, erreurs, total, ignores }
-    if (cfg.hasCategories) res.categoriesAssignees = categoriesAssignees
+    if (cfg.hasCategories) {
+      res.categoriesAssignees = categoriesAssignees
+      res.categoriesCreees = categoriesCreees
+    }
     setResultat(res)
     setEtape('')
   }
@@ -411,11 +465,11 @@ export default function ImportView({ section = 'cuisine' }) {
                 <strong style={{ color: c.texte }}>Colonne A</strong><span>Nom de l&apos;article <span style={{ color: '#DC2626' }}>*</span></span>
                 <strong style={{ color: c.texte }}>Colonne B</strong><span>Prix HT en € (avec . ou ,)</span>
                 <strong style={{ color: c.texte }}>Colonne C</strong><span>Unité ({cfg.unitExamples})</span>
-                <strong style={{ color: accent }}>Colonne D</strong><span style={{ color: accent }}>Catégorie (doit correspondre exactement)</span>
+                <strong style={{ color: accent }}>Colonne D</strong><span style={{ color: accent }}>Catégorie (créée automatiquement si elle n&apos;existe pas)</span>
               </div>
               <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `0.5px solid ${c.bordure}`, fontSize: '12px' }}>
                 <div style={{ color: green, marginBottom: '2px' }}>✓ Les prix existants seront mis à jour automatiquement</div>
-                <div style={{ color: accent }}>✓ La catégorie doit correspondre exactement à une catégorie existante</div>
+                <div style={{ color: accent }}>✓ Les catégories absentes sont créées et liées aux ingrédients</div>
               </div>
             </div>
           ) : (
@@ -434,19 +488,19 @@ export default function ImportView({ section = 'cuisine' }) {
 
           {/* Alerte cat\u00e9gories inconnues (cuisine only) */}
           {cfg.hasCategories && categoriesInconnues.length > 0 && (
-            <div style={{ background: '#FEF3C7', border: '0.5px solid #FDE68A', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px' }}>
-              <div style={{ fontSize: '13px', fontWeight: '500', color: '#92400E', marginBottom: '8px' }}>
-                ⚠️ {categoriesInconnues.length} catégorie{categoriesInconnues.length > 1 ? 's' : ''} non reconnue{categoriesInconnues.length > 1 ? 's' : ''} :
+            <div style={{ background: accentBg, border: `0.5px solid ${accent}40`, borderRadius: '8px', padding: '12px 16px', marginBottom: '16px' }}>
+              <div style={{ fontSize: '13px', fontWeight: '500', color: accent, marginBottom: '8px' }}>
+                ✨ {categoriesInconnues.length} nouvelle{categoriesInconnues.length > 1 ? 's' : ''} catégorie{categoriesInconnues.length > 1 ? 's' : ''} à créer :
               </div>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {categoriesInconnues.map(cat => (
-                  <span key={cat} style={{ background: '#FDE68A', color: '#92400E', borderRadius: '20px', padding: '2px 10px', fontSize: '12px', fontWeight: '500' }}>
+                  <span key={cat} style={{ background: c.blanc, color: accent, borderRadius: '20px', padding: '2px 10px', fontSize: '12px', fontWeight: '500', border: `0.5px solid ${accent}40` }}>
                     {cat}
                   </span>
                 ))}
               </div>
-              <div style={{ fontSize: '12px', color: '#92400E', marginTop: '8px' }}>
-                Ces ingrédients seront importés sans catégorie. Créez d&apos;abord les catégories manquantes dans la page Ingrédients.
+              <div style={{ fontSize: '12px', color: accent, marginTop: '8px' }}>
+                Ces catégories seront créées automatiquement à l&apos;import et les ingrédients y seront rattachés.
               </div>
             </div>
           )}
@@ -562,11 +616,12 @@ export default function ImportView({ section = 'cuisine' }) {
             </div>
 
             {cfg.hasCategories ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', marginBottom: '14px' }}>
                 {[
                   { label: 'Nouveaux', value: resultat.importes, color: green },
                   { label: 'Mis \u00e0 jour', value: resultat.misAJour, color: '#D97706' },
-                  { label: 'Cat\u00e9gories', value: resultat.categoriesAssignees, color: accent },
+                  { label: 'Cat. cr\u00e9\u00e9es', value: resultat.categoriesCreees || 0, color: accent },
+                  { label: 'Cat. assign.', value: resultat.categoriesAssignees, color: accent },
                   { label: 'Erreurs', value: resultat.erreurs, color: resultat.erreurs > 0 ? '#DC2626' : c.texte },
                 ].map((s, i) => (
                   <div key={i} style={{ background: c.blanc, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>

@@ -172,17 +172,57 @@ export default function IngredientsPage() {
 
   // ── Suppression ───────────────────────────────────────────────────────────
   const supprimerSelection = async () => {
-    if (!confirm(`Supprimer ${selection.length} ingrédient${selection.length > 1 ? 's' : ''} ? Action irréversible.`)) return
+    const selSet = new Set(selection)
+    const ingsConcernes = ingredients.filter(i => selSet.has(i.id))
+    const nbLiesAFiches = ingsConcernes.reduce(
+      (s, i) => s + (Array.isArray(i.fiche_ingredients) ? i.fiche_ingredients.length : 0),
+      0
+    )
+    const message = nbLiesAFiches > 0
+      ? `Supprimer ${selection.length} ingrédient${selection.length > 1 ? 's' : ''} ?\n\n${nbLiesAFiches} ligne${nbLiesAFiches > 1 ? 's' : ''} de fiches techniques ${nbLiesAFiches > 1 ? 'seront retirées' : 'sera retirée'} en cascade (les coûts des fiches concernées devront être recalculés).\n\nAction irréversible.`
+      : `Supprimer ${selection.length} ingrédient${selection.length > 1 ? 's' : ''} ? Action irréversible.`
+    if (!confirm(message)) return
     setSupprimant(true)
     try {
       const clientId = await getClientId()
-      const { error } = await supabase.from('ingredients').delete().in('id', selection).eq('client_id', clientId)
-      if (error) throw error
-      await log({ action: 'SUPPRESSION', entite: 'ingredient', entite_nom: `${selection.length} ingrédients`, section: 'cuisine', details: `IDs: ${selection.join(', ')}` })
+      // 1709 UUIDs en un seul .in() risque de dépasser la longueur d'URL côté
+      // PostgREST. On chunke à 500 IDs par opération.
+      const CHUNK = 500
+      const chunks = []
+      for (let i = 0; i < selection.length; i += CHUNK) {
+        chunks.push(selection.slice(i, i + CHUNK))
+      }
+      for (const ids of chunks) {
+        // Cascade : supprime d'abord les lignes de fiches techniques liées
+        // (sinon la FK fiche_ingredients.ingredient_id bloque la suppression).
+        const { error: errFiches } = await supabase
+          .from('fiche_ingredients')
+          .delete()
+          .in('ingredient_id', ids)
+          .eq('client_id', clientId)
+        if (errFiches) throw errFiches
+        // Détache l'historique (achats, inventaires, mapping fournisseur) pour
+        // garder les factures/inventaires lisibles même après suppression.
+        await Promise.all([
+          supabase.from('achats_lignes').update({ ingredient_id: null }).in('ingredient_id', ids).eq('client_id', clientId),
+          supabase.from('inventaire_lignes').update({ ingredient_id: null }).in('ingredient_id', ids).eq('client_id', clientId),
+          supabase.from('fournisseur_mapping').update({ ingredient_id: null }).in('ingredient_id', ids).eq('client_id', clientId),
+        ])
+        // Suppression des ingrédients de ce chunk
+        const { error } = await supabase.from('ingredients').delete().in('id', ids).eq('client_id', clientId)
+        if (error) throw error
+      }
+      await log({
+        action: 'SUPPRESSION',
+        entite: 'ingredient',
+        entite_nom: `${selection.length} ingrédients`,
+        section: 'cuisine',
+        details: `${selection.length} supprimés, ${nbLiesAFiches} lignes de fiches retirées en cascade`,
+      })
       await loadAll()
     } catch (err) {
       console.error('Delete error:', err)
-      alert('Erreur lors de la suppression')
+      alert(`Erreur lors de la suppression : ${err.message || err.code || 'inconnue'}`)
     } finally { setSupprimant(false) }
   }
 
