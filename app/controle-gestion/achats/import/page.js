@@ -1186,18 +1186,15 @@ export default function AchatsImportPage() {
           {/* ── Lignes (incluses dans la colonne droite en mode side-by-side) ── */}
           <div style={{ marginTop: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 12, overflow: 'hidden' }}>
-              <div style={{ padding: '12px 16px', borderBottom: `1px solid ${c.bordure}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ padding: '12px 16px', borderBottom: `1px solid ${c.bordure}` }}>
                 <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: c.texte }}>
                   Lignes de la facture{lignes.length > 0 && ` (${lignes.length})`}
                 </p>
-                <button style={{ ...btnSecondary, padding: '6px 12px', fontSize: 13, width: 'auto' }} onClick={addLigne}>
-                  + Ajouter une ligne
-                </button>
               </div>
 
                 {lignes.length === 0 && (
                   <p style={{ padding: 20, margin: 0, fontSize: 13, color: c.texteMuted, textAlign: 'center' }}>
-                    Aucune ligne. Cliquez sur &laquo;&nbsp;+ Ajouter une ligne&nbsp;&raquo; pour commencer.
+                    Aucune ligne. Cliquez sur &laquo;&nbsp;+ Ajouter une ligne&nbsp;&raquo; ci-dessous pour commencer.
                   </p>
                 )}
 
@@ -1524,6 +1521,12 @@ export default function AchatsImportPage() {
                     })}
                   </div>
                 )}
+
+                <div style={{ padding: '12px 16px', borderTop: lignes.length > 0 ? `1px solid ${c.bordure}` : 'none' }}>
+                  <button style={{ ...btnSecondary, padding: '6px 12px', fontSize: 13, width: 'auto' }} onClick={addLigne}>
+                    + Ajouter une ligne
+                  </button>
+                </div>
             </div>
 
             {/* Récapitulatif total */}
