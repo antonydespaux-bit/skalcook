@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase, getClientId } from '../lib/supabase'
 import { useRouter } from 'next/navigation'
+import * as XLSX from 'xlsx'
 import { useIsMobile } from '../lib/useIsMobile'
 import { useTheme } from '../lib/useTheme'
 import { useRole } from '../lib/useRole'
@@ -267,6 +268,27 @@ export default function IngredientsView({ section = 'cuisine' }) {
     } finally { setSupprimant(false) }
   }
 
+  // ── Export Excel ──────────────────────────────────────────────────────────
+  // Exporte la liste filtrée (mêmes colonnes que le modèle d'import, pour
+  // permettre un round-trip "export → édition → ré-import").
+  const exporterExcel = () => {
+    const rows = [
+      ['Nom', 'Prix HT (€)', 'Unité', 'Catégorie'],
+      ...ingredientsFiltres.map(i => [
+        i.nom,
+        i.prix_kg != null ? Number(i.prix_kg) : '',
+        i.unite || '',
+        i.categories_ingredients?.nom || '',
+      ])
+    ]
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 10 }, { wch: 25 }]
+    XLSX.utils.book_append_sheet(wb, ws, section === 'bar' ? 'Ingrédients bar' : 'Ingrédients')
+    const dateStr = new Date().toISOString().slice(0, 10)
+    XLSX.writeFile(wb, `ingredients_${section}_${dateStr}.xlsx`)
+  }
+
   // ── Ajout ingrédient ──────────────────────────────────────────────────────
   const ajouterIngredient = async () => {
     if (!nouveauNom.trim()) return
@@ -475,6 +497,17 @@ export default function IngredientsView({ section = 'cuisine' }) {
                     borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '500', cursor: 'pointer'
                   }}>{supprimant ? '...' : `🗑 Supprimer (${selection.length})`}</button>
                 )}
+                <button
+                  onClick={exporterExcel}
+                  disabled={ingredientsFiltres.length === 0}
+                  title={ingredientsFiltres.length === 0 ? 'Aucun ingrédient à exporter' : `Exporter ${ingredientsFiltres.length} ingrédient${ingredientsFiltres.length > 1 ? 's' : ''}`}
+                  style={{
+                    background: c.blanc, color: c.texteMuted, border: `0.5px solid ${c.bordure}`,
+                    borderRadius: '8px', padding: '8px 12px', fontSize: '13px',
+                    cursor: ingredientsFiltres.length === 0 ? 'not-allowed' : 'pointer',
+                    opacity: ingredientsFiltres.length === 0 ? 0.5 : 1,
+                  }}
+                >{isMobile ? '📤' : '📤 Export Excel'}</button>
                 {peutModifier && (
                   <button onClick={() => router.push(cfg.importPath)} style={{
                     background: c.blanc, color: c.texteMuted, border: `0.5px solid ${c.bordure}`,
