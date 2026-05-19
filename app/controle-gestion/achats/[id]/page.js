@@ -499,22 +499,17 @@ export default function AchatsDetailPage() {
                 </div>
 
                 {/* Lignes */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ marginBottom: 12 }}>
                   <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: c.texte }}>
                     Articles ({editing ? editLignes.length : lignes.length})
                   </h2>
-                  {editing && (
-                    <button onClick={addEditLigne}
-                      style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer', fontSize: 13 }}>
-                      + Ajouter une ligne
-                    </button>
-                  )}
                 </div>
 
                 {editing ? (
                   /* ── Mode édition ── */
-                  editLignes.length === 0 ? (
-                    <p style={{ color: c.texteMuted, fontSize: 14 }}>Aucune ligne. Cliquez sur « + Ajouter une ligne ».</p>
+                  <>
+                  {editLignes.length === 0 ? (
+                    <p style={{ color: c.texteMuted, fontSize: 14 }}>Aucune ligne. Cliquez sur « + Ajouter une ligne » ci-dessous.</p>
                   ) : (
                     <div style={{ background: c.blanc, borderRadius: 12, border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
                       <div style={{ overflowX: 'auto' }}>
@@ -646,7 +641,14 @@ export default function AchatsDetailPage() {
                         </table>
                       </div>
                     </div>
-                  )
+                  )}
+                  <div style={{ marginTop: 12 }}>
+                    <button onClick={addEditLigne}
+                      style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer', fontSize: 13 }}>
+                      + Ajouter une ligne
+                    </button>
+                  </div>
+                  </>
                 ) : lignes.length === 0 ? (
                   <p style={{ color: c.texteMuted, fontSize: 14 }}>Aucun article enregistré.</p>
                 ) : (
