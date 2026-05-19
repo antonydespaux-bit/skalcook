@@ -614,6 +614,114 @@ export async function addLigne(
   return ligne
 }
 
+// ── Import inventaire depuis Excel ─────────────────────────────────────────
+
+export async function importInventaire(
+  db: SupabaseClient,
+  clientId: string,
+  section: 'cuisine' | 'bar',
+  dateInventaire: string,
+  lignes: { nom: string; quantite: number }[]
+) {
+  const isBar = section === 'bar'
+  const table = isBar ? 'ingredients_bar' : 'ingredients'
+  const defaultUnit = isBar ? 'cl' : 'kg'
+
+  // 1. Dédoublonne les lignes par nom (insensible à la casse). Si l'utilisateur
+  // a deux fois le même ingrédient dans le fichier, on garde le dernier.
+  const lignesByNorm = new Map<string, { nom: string; quantite: number }>()
+  for (const l of lignes) {
+    const nomTrim = l.nom.trim()
+    if (!nomTrim) continue
+    lignesByNorm.set(nomTrim.toLowerCase(), { nom: nomTrim, quantite: l.quantite })
+  }
+  const lignesUniq = Array.from(lignesByNorm.values())
+
+  // 2. Charge les ingrédients existants pour ce client (filtre par nom
+  // insensible à la casse). On garde tout l'historique pour matcher.
+  const { data: existing } = await db
+    .from(table)
+    .select('id, nom, unite, prix_kg')
+    .eq('client_id', clientId)
+  const ingByNom = new Map<string, { id: string; nom: string; unite: string | null; prix_kg: number | null }>()
+  for (const ing of existing ?? []) {
+    ingByNom.set(ing.nom.toLowerCase().trim(), ing as never)
+  }
+
+  // 3. Crée les ingrédients manquants (prix=null, unite par défaut selon section).
+  const toCreate: { nom: string; client_id: string; unite: string }[] = []
+  for (const l of lignesUniq) {
+    if (!ingByNom.has(l.nom.toLowerCase())) {
+      toCreate.push({ nom: l.nom, client_id: clientId, unite: defaultUnit })
+    }
+  }
+  let nbCrees = 0
+  if (toCreate.length > 0) {
+    const { data: created, error: errCreate } = await db
+      .from(table)
+      .insert(toCreate)
+      .select('id, nom, unite, prix_kg')
+    if (errCreate) throw new Error(`Création ingrédients : ${errCreate.message}`)
+    for (const ing of created ?? []) {
+      ingByNom.set(ing.nom.toLowerCase().trim(), ing as never)
+    }
+    nbCrees = created?.length ?? 0
+  }
+
+  // 4. Crée l'inventaire (statut='valide' pour qu'il serve de baseline aux
+  // calculs de stock_theorique futurs — c'est le comportement demandé).
+  const { data: inventaire, error: invErr } = await db
+    .from('inventaires')
+    .insert({
+      client_id: clientId,
+      type: 'complet',
+      section,
+      statut: 'valide',
+      date_inventaire: dateInventaire,
+      periode_debut: null,
+      periode_fin: dateInventaire,
+      date_validation: new Date().toISOString(),
+    })
+    .select()
+    .single()
+  if (invErr) throw new Error(`Création inventaire : ${invErr.message}`)
+
+  // 5. Insère les lignes d'inventaire avec les quantités importées.
+  const ligneRows = lignesUniq.map((l) => {
+    const ing = ingByNom.get(l.nom.toLowerCase())!
+    const coutUnit = Number(ing.prix_kg) || 0
+    const qReelle = Number(l.quantite) || 0
+    return {
+      inventaire_id: inventaire.id,
+      client_id: clientId,
+      ingredient_id: ing.id,
+      section,
+      nom_ingredient: ing.nom,
+      unite: ing.unite,
+      quantite_theorique: null,
+      quantite_reelle: round3(qReelle),
+      ecart: null,
+      cout_unitaire: coutUnit,
+      valeur_stock: round3(qReelle * coutUnit),
+      est_critique: false,
+    }
+  })
+
+  // Chunk les inserts pour gros volumes (PostgREST request size limit).
+  const CHUNK = 500
+  for (let i = 0; i < ligneRows.length; i += CHUNK) {
+    const batch = ligneRows.slice(i, i + CHUNK)
+    const { error: ligErr } = await db.from('inventaire_lignes').insert(batch)
+    if (ligErr) throw new Error(`Insertion lignes : ${ligErr.message}`)
+  }
+
+  return {
+    inventaire,
+    nb_lignes: lignesUniq.length,
+    nb_ingredients_crees: nbCrees,
+  }
+}
+
 // ── Utilities ──────────────────────────────────────────────────────────────
 
 function round3(n: number): number {
