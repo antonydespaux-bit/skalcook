@@ -1,0 +1,862 @@
+'use client'
+import { useState, useEffect, useMemo } from 'react'
+import { supabase, getClientId } from '../lib/supabase'
+import { useRouter } from 'next/navigation'
+import { useIsMobile } from '../lib/useIsMobile'
+import { useTheme } from '../lib/useTheme'
+import { useRole } from '../lib/useRole'
+import { log } from '../lib/useLog'
+import Navbar from './Navbar'
+import Pagination from './Pagination'
+import ChefLoader from './ChefLoader'
+import EmojiPicker from './EmojiPicker'
+import { Badge } from './ui'
+
+const PAGE_SIZE = 30
+
+const UNITES = ['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce']
+
+// Configuration par section. La table `categories_ingredients` est partagée
+// entre cuisine et bar (colonne `section` qui filtre).
+const CONFIG = {
+  cuisine: {
+    table: 'ingredients',
+    ficheRelation: 'fiche_ingredients',
+    ficheRelationField: 'fiche_ingredients',
+    defaultUnit: 'kg',
+    roles: ['admin', 'cuisine', 'directeur'],
+    rolesModif: ['admin', 'cuisine'],
+    redirectOnWrongRole: (role) => role === 'bar' ? '/bar/dashboard' : '/dashboard',
+    importPath: '/import',
+    logEntite: 'ingredient',
+    logSection: 'cuisine',
+    placeholderNom: 'Ex : Beurre doux',
+    usedLabel: 'Utilisés en cuisine',
+    // Tables à détacher (set ingredient_id=null) avant suppression — laissent
+    // l'historique des factures/inventaires lisible même après suppression.
+    detachTables: ['achats_lignes', 'inventaire_lignes', 'fournisseur_mapping'],
+  },
+  bar: {
+    table: 'ingredients_bar',
+    ficheRelation: 'fiche_bar_ingredients',
+    ficheRelationField: 'fiche_bar_ingredients',
+    defaultUnit: 'cl',
+    roles: ['admin', 'bar', 'directeur'],
+    rolesModif: ['admin', 'bar'],
+    redirectOnWrongRole: () => '/dashboard',
+    importPath: '/bar/import',
+    logEntite: 'ingredient_bar',
+    logSection: 'bar',
+    placeholderNom: 'Ex : Rhum Havana Club',
+    usedLabel: 'Utilisés en bar',
+    detachTables: ['inventaire_lignes'],
+  },
+}
+
+export default function IngredientsView({ section = 'cuisine' }) {
+  const cfg = CONFIG[section]
+  const [ingredients, setIngredients] = useState([])
+  const [categories, setCategories] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [recherche, setRecherche] = useState('')
+  const [filtreCategorie, setFiltreCategorie] = useState('toutes')
+  const [filterUsage, setFilterUsage] = useState('all') // 'all' | 'used' | 'unused' | 'uncategorized'
+  const [vue, setVue] = useState('liste') // 'liste' | 'categories' | 'inflation'
+  const [selection, setSelection] = useState([])
+  const [supprimant, setSupprimant] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [page, setPage] = useState(1)
+
+  // Formulaire ajout ingrédient
+  const [ajoutVisible, setAjoutVisible] = useState(false)
+  const [nouveauNom, setNouveauNom] = useState('')
+  const [nouveauPrix, setNouveauPrix] = useState('')
+  const [nouvelleUnite, setNouvelleUnite] = useState(cfg.defaultUnit)
+  const [nouvelleCategorie, setNouvelleCategorie] = useState('')
+
+  // Formulaire ajout catégorie
+  const [ajoutCatVisible, setAjoutCatVisible] = useState(false)
+  const [nouvelleCatNom, setNouvelleCatNom] = useState('')
+  const [nouvelleCatEmoji, setNouvelleCatEmoji] = useState('📦')
+  const [savingCat, setSavingCat] = useState(false)
+
+  // Édition inline d'une catégorie existante (vue Catégories)
+  const [editionCatId, setEditionCatId] = useState(null)
+  const [editionCatNom, setEditionCatNom] = useState('')
+  const [editionCatEmoji, setEditionCatEmoji] = useState('')
+
+  // Edition inline ingrédient
+  const [editionId, setEditionId] = useState(null)
+  const [editionNom, setEditionNom] = useState('')
+  const [editionUnite, setEditionUnite] = useState('')
+  const [editionPrix, setEditionPrix] = useState('')
+  const [editionCategorie, setEditionCategorie] = useState('')
+
+  const router = useRouter()
+  const isMobile = useIsMobile()
+  const { c } = useTheme()
+  const { role, loading: roleLoading } = useRole()
+
+  const peutModifier = cfg.rolesModif.includes(role)
+
+  useEffect(() => {
+    checkUser()
+    loadAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (!roleLoading && role && !cfg.roles.includes(role)) {
+      router.push(cfg.redirectOnWrongRole(role))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, roleLoading])
+
+  const checkUser = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) router.push('/')
+    } catch { router.push('/') }
+  }
+
+  const loadAll = async () => {
+    try {
+      setLoading(true)
+      const clientId = await getClientId()
+      if (!clientId) { router.push('/'); return }
+
+      const [{ data: ings, error: errIngs }, { data: cats, error: errCats }] = await Promise.all([
+        supabase.from(cfg.table)
+          .select(`*, categories_ingredients(id, nom, emoji), ${cfg.ficheRelation}(id)`)
+          .eq('client_id', clientId)
+          .eq('est_sous_fiche', false)
+          .order('nom')
+          .limit(5000),
+        supabase.from('categories_ingredients')
+          .select('*')
+          .eq('client_id', clientId)
+          .eq('section', section)
+          .order('ordre')
+      ])
+
+      if (errIngs) throw errIngs
+      if (errCats) throw errCats
+
+      setIngredients(ings || [])
+      setCategories(cats || [])
+      setSelection([])
+    } catch (err) {
+      console.error('Load error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── Filtres ──────────────────────────────────────────────────────────────
+  const ingredientsFiltres = useMemo(() => ingredients.filter(i => {
+    const matchRecherche = i.nom.toLowerCase().includes(recherche.toLowerCase())
+    let matchCat = false
+    if (filtreCategorie === 'toutes') {
+      matchCat = true
+    } else if (filtreCategorie === 'sans_categorie') {
+      matchCat = i.categorie_id === null || i.categorie_id === undefined || i.categorie_id === ''
+    } else {
+      matchCat = i.categorie_id === filtreCategorie
+    }
+    const fiches = i[cfg.ficheRelationField]
+    const isUsed = Array.isArray(fiches) && fiches.length > 0
+    const isUncategorized = i.categorie_id == null
+    const matchUsage =
+      filterUsage === 'all' ||
+      (filterUsage === 'used' ? isUsed : false) ||
+      (filterUsage === 'unused' ? !isUsed : false) ||
+      (filterUsage === 'uncategorized' ? isUncategorized : false)
+    return matchRecherche && matchCat && matchUsage
+  }), [ingredients, recherche, filtreCategorie, filterUsage, cfg.ficheRelationField])
+
+  // Remettre à la page 1 quand les filtres changent
+  useEffect(() => { setPage(1) }, [recherche, filtreCategorie, filterUsage])
+
+  const totalPages = Math.max(1, Math.ceil(ingredientsFiltres.length / PAGE_SIZE))
+  const ingredientsPagines = useMemo(
+    () => ingredientsFiltres.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [ingredientsFiltres, page]
+  )
+
+  // ── Stats inflation par catégorie ─────────────────────────────────────────
+  const statsParCategorie = useMemo(() => {
+    return categories.map(cat => {
+      const ings = ingredients.filter(i => i.categorie_id === cat.id && i.prix_kg > 0)
+      if (ings.length === 0) return { ...cat, nb: 0, prixMoyen: 0, prixMin: 0, prixMax: 0 }
+      const prix = ings.map(i => Number(i.prix_kg))
+      return {
+        ...cat,
+        nb: ings.length,
+        prixMoyen: prix.reduce((a, b) => a + b, 0) / prix.length,
+        prixMin: Math.min(...prix),
+        prixMax: Math.max(...prix),
+      }
+    }).filter(s => s.nb > 0)
+  }, [categories, ingredients])
+
+  const sansCategorie = useMemo(() =>
+    ingredients.filter(i => !i.categorie_id && i.prix_kg > 0),
+    [ingredients]
+  )
+
+  // ── Sélection ─────────────────────────────────────────────────────────────
+  const toggleSelection = (id) => setSelection(prev =>
+    prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+  )
+  const toggleTout = () => setSelection(
+    selection.length === ingredientsFiltres.length ? [] : ingredientsFiltres.map(i => i.id)
+  )
+
+  // ── Suppression ───────────────────────────────────────────────────────────
+  const supprimerSelection = async () => {
+    const selSet = new Set(selection)
+    const ingsConcernes = ingredients.filter(i => selSet.has(i.id))
+    const nbLiesAFiches = ingsConcernes.reduce(
+      (s, i) => s + (Array.isArray(i[cfg.ficheRelationField]) ? i[cfg.ficheRelationField].length : 0),
+      0
+    )
+    const message = nbLiesAFiches > 0
+      ? `Supprimer ${selection.length} ingrédient${selection.length > 1 ? 's' : ''} ?\n\n${nbLiesAFiches} ligne${nbLiesAFiches > 1 ? 's' : ''} de fiches techniques ${nbLiesAFiches > 1 ? 'seront retirées' : 'sera retirée'} en cascade (les coûts des fiches concernées devront être recalculés).\n\nAction irréversible.`
+      : `Supprimer ${selection.length} ingrédient${selection.length > 1 ? 's' : ''} ? Action irréversible.`
+    if (!confirm(message)) return
+    setSupprimant(true)
+    try {
+      const clientId = await getClientId()
+      // 1709 UUIDs en un seul .in() risque de dépasser la longueur d'URL côté
+      // PostgREST. On chunke à 500 IDs par opération.
+      const CHUNK = 500
+      const chunks = []
+      for (let i = 0; i < selection.length; i += CHUNK) {
+        chunks.push(selection.slice(i, i + CHUNK))
+      }
+      for (const ids of chunks) {
+        // Cascade : supprime d'abord les lignes de fiches techniques liées
+        // (sinon la FK fiche_ingredients.ingredient_id bloque la suppression).
+        const { error: errFiches } = await supabase
+          .from(cfg.ficheRelation)
+          .delete()
+          .in('ingredient_id', ids)
+          .eq('client_id', clientId)
+        if (errFiches) throw errFiches
+        // Détache l'historique pour garder factures/inventaires lisibles.
+        await Promise.all(
+          cfg.detachTables.map(tbl =>
+            supabase.from(tbl).update({ ingredient_id: null }).in('ingredient_id', ids).eq('client_id', clientId)
+          )
+        )
+        // Suppression des ingrédients de ce chunk
+        const { error } = await supabase.from(cfg.table).delete().in('id', ids).eq('client_id', clientId)
+        if (error) throw error
+      }
+      await log({
+        action: 'SUPPRESSION',
+        entite: cfg.logEntite,
+        entite_nom: `${selection.length} ingrédients`,
+        section: cfg.logSection,
+        details: `${selection.length} supprimés, ${nbLiesAFiches} lignes de fiches retirées en cascade`,
+      })
+      await loadAll()
+    } catch (err) {
+      console.error('Delete error:', err)
+      alert(`Erreur lors de la suppression : ${err.message || err.code || 'inconnue'}`)
+    } finally { setSupprimant(false) }
+  }
+
+  // ── Ajout ingrédient ──────────────────────────────────────────────────────
+  const ajouterIngredient = async () => {
+    if (!nouveauNom.trim()) return
+    setSaving(true)
+    try {
+      const clientId = await getClientId()
+      if (!clientId) return
+      const { error } = await supabase.from(cfg.table).insert([{
+        nom: nouveauNom.trim(),
+        prix_kg: nouveauPrix ? parseFloat(nouveauPrix.replace(',', '.')) : null,
+        unite: nouvelleUnite,
+        client_id: clientId,
+        categorie_id: nouvelleCategorie || null
+      }])
+      if (error) throw error
+      await log({ action: 'CREATION', entite: cfg.logEntite, entite_nom: nouveauNom.trim(), section: cfg.logSection })
+      setNouveauNom(''); setNouveauPrix(''); setNouvelleUnite(cfg.defaultUnit); setNouvelleCategorie('')
+      setAjoutVisible(false)
+      await loadAll()
+    } catch (err) {
+      console.error('Add error:', err)
+      alert('Erreur lors de l\'ajout')
+    } finally { setSaving(false) }
+  }
+
+  // ── Ajout catégorie ───────────────────────────────────────────────────────
+  const ajouterCategorie = async () => {
+    if (!nouvelleCatNom.trim()) return
+    setSavingCat(true)
+    try {
+      const clientId = await getClientId()
+      if (!clientId) return
+      const { error } = await supabase.from('categories_ingredients').insert([{
+        nom: nouvelleCatNom.trim(),
+        emoji: nouvelleCatEmoji,
+        client_id: clientId,
+        section,
+        ordre: categories.length + 1
+      }])
+      if (error) throw error
+      setNouvelleCatNom(''); setNouvelleCatEmoji('📦')
+      setAjoutCatVisible(false)
+      await loadAll()
+    } catch (err) {
+      console.error('Add cat error:', err)
+    } finally { setSavingCat(false) }
+  }
+
+  // ── Édition inline nom + unité + prix + catégorie ────────────────────────
+  const startEdition = (ing) => {
+    setEditionId(ing.id)
+    setEditionNom(ing.nom || '')
+    setEditionUnite(ing.unite || '')
+    setEditionPrix(ing.prix_kg ? String(ing.prix_kg) : '')
+    setEditionCategorie(ing.categorie_id || '')
+  }
+
+  const saveEdition = async (id) => {
+    const nomTrim = editionNom.trim()
+    if (!nomTrim) {
+      window.alert('Le nom de l\'ingrédient ne peut pas être vide.')
+      return
+    }
+    try {
+      const clientId = await getClientId()
+      const { error } = await supabase.from(cfg.table).update({
+        nom: nomTrim,
+        unite: editionUnite.trim() || null,
+        prix_kg: editionPrix ? parseFloat(editionPrix.replace(',', '.')) : null,
+        categorie_id: editionCategorie || null
+      }).eq('id', id).eq('client_id', clientId)
+      if (error) {
+        // Contrainte UNIQUE (client_id, nom) : un autre ingrédient de cet
+        // établissement a déjà ce nom.
+        if (error.code === '23505' || /duplicate key/i.test(error.message)) {
+          window.alert(`Le nom "${nomTrim}" est déjà utilisé par un autre ingrédient de votre établissement.`)
+          return
+        }
+        throw error
+      }
+      setEditionId(null)
+      await loadAll()
+    } catch (err) {
+      console.error('Edit error:', err)
+      window.alert('Erreur lors de la modification de l\'ingrédient.')
+    }
+  }
+
+  // ── Édition / suppression d'une catégorie d'ingrédient ──────────────────
+  const startCatEdition = (cat) => {
+    setEditionCatId(cat.id)
+    setEditionCatNom(cat.nom || '')
+    setEditionCatEmoji(cat.emoji || '📦')
+  }
+
+  const saveCatEdition = async (id) => {
+    const nomTrim = editionCatNom.trim()
+    if (!nomTrim) {
+      window.alert('Le nom de la catégorie ne peut pas être vide.')
+      return
+    }
+    try {
+      const clientId = await getClientId()
+      const { error } = await supabase.from('categories_ingredients').update({
+        nom: nomTrim,
+        emoji: editionCatEmoji || '📦',
+      }).eq('id', id).eq('client_id', clientId)
+      if (error) throw error
+      setEditionCatId(null)
+      await loadAll()
+    } catch (err) {
+      console.error('Edit cat error:', err)
+      window.alert('Erreur lors de la modification de la catégorie.')
+    }
+  }
+
+  const supprimerCategorie = async (cat) => {
+    const nbIngs = ingredients.filter(i => i.categorie_id === cat.id).length
+    const message = nbIngs > 0
+      ? `Supprimer la catégorie "${cat.nom}" ?\n\n${nbIngs} ingrédient${nbIngs > 1 ? 's' : ''} y ${nbIngs > 1 ? 'sont' : 'est'} rattaché${nbIngs > 1 ? 's' : ''} — ${nbIngs > 1 ? 'ils passeront' : 'il passera'} en "Sans catégorie".`
+      : `Supprimer la catégorie "${cat.nom}" ?`
+    if (!window.confirm(message)) return
+    try {
+      const clientId = await getClientId()
+      // Détache d'abord les ingrédients de la catégorie pour éviter une FK
+      // violation (si la contrainte est ON DELETE RESTRICT).
+      if (nbIngs > 0) {
+        const { error: detachErr } = await supabase.from(cfg.table)
+          .update({ categorie_id: null })
+          .eq('categorie_id', cat.id)
+          .eq('client_id', clientId)
+        if (detachErr) throw detachErr
+      }
+      const { error } = await supabase.from('categories_ingredients')
+        .delete()
+        .eq('id', cat.id)
+        .eq('client_id', clientId)
+      if (error) throw error
+      await loadAll()
+    } catch (err) {
+      console.error('Delete cat error:', err)
+      window.alert('Erreur lors de la suppression de la catégorie.')
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  return (
+    <div style={{ minHeight: '100vh', background: c.fond }}>
+      <Navbar section={section} />
+
+      <div style={{ padding: isMobile ? '12px' : '24px', maxWidth: '1100px', margin: '0 auto' }}>
+
+        {/* KPIs */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '20px' }}>
+          {[
+            { label: 'Total ingrédients', value: ingredients.length },
+            { label: 'Catégories', value: categories.length },
+            { label: 'Sans catégorie', value: ingredients.filter(i => !i.categorie_id).length },
+          ].map((s, i) => (
+            <div key={i} style={{ background: c.blanc, borderRadius: '10px', padding: '14px 16px', border: `0.5px solid ${c.bordure}` }}>
+              <div className="sk-label-muted" style={{ color: c.texteMuted, fontSize: '10px' }}>{s.label}</div>
+              <div style={{ fontSize: '24px', fontWeight: '500', color: c.texte, marginTop: '4px' }}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Onglets vues */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', background: c.blanc, padding: '4px', borderRadius: '10px', border: `0.5px solid ${c.bordure}`, width: 'fit-content' }}>
+          {[
+            { id: 'liste', label: '📋 Liste' },
+            { id: 'categories', label: '🗂 Catégories' },
+            { id: 'inflation', label: '📈 Inflation' },
+          ].map(tab => (
+            <button key={tab.id} onClick={() => setVue(tab.id)} style={{
+              padding: '7px 14px', borderRadius: '7px', fontSize: '13px', border: 'none',
+              cursor: 'pointer', fontWeight: vue === tab.id ? '500' : '400',
+              background: vue === tab.id ? c.accent : 'transparent',
+              color: vue === tab.id ? 'white' : c.texteMuted,
+              transition: 'all 0.15s'
+            }}>{tab.label}</button>
+          ))}
+        </div>
+
+        {/* ── VUE LISTE ── */}
+        {vue === 'liste' && (
+          <>
+            {/* Barre d'actions */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input type="text" placeholder="Rechercher un ingrédient..."
+                value={recherche} onChange={e => setRecherche(e.target.value)}
+                style={{ flex: 1, minWidth: '180px', padding: '10px 14px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: c.blanc, outline: 'none', color: c.texte }}
+              />
+              <select value={filtreCategorie} onChange={e => setFiltreCategorie(e.target.value)}
+                style={{ padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer' }}>
+                <option value="toutes">Toutes catégories</option>
+                <option value="sans_categorie">📦 Sans catégorie</option>
+                {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.emoji} {cat.nom}</option>)}
+              </select>
+              <span style={{ fontSize: '12px', color: c.texteMuted, whiteSpace: 'nowrap' }}>
+                {ingredientsFiltres.length}{selection.length > 0 && ` — ${selection.length} sél.`}
+              </span>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                {selection.length > 0 && peutModifier && (
+                  <button onClick={supprimerSelection} disabled={supprimant} style={{
+                    background: '#DC2626', color: 'white', border: 'none',
+                    borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '500', cursor: 'pointer'
+                  }}>{supprimant ? '...' : `🗑 Supprimer (${selection.length})`}</button>
+                )}
+                {peutModifier && (
+                  <button onClick={() => router.push(cfg.importPath)} style={{
+                    background: c.blanc, color: c.texteMuted, border: `0.5px solid ${c.bordure}`,
+                    borderRadius: '8px', padding: '8px 12px', fontSize: '13px', cursor: 'pointer'
+                  }}>{isMobile ? '📥' : '📥 Import Excel'}</button>
+                )}
+                {peutModifier && (
+                  <button onClick={() => setAjoutVisible(!ajoutVisible)} style={{
+                    background: c.accent, color: 'white', border: 'none',
+                    borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '500', cursor: 'pointer'
+                  }}>+ {!isMobile && 'Nouvel ingrédient'}</button>
+                )}
+              </div>
+            </div>
+
+            {/* Filtres d'utilisation */}
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
+              {[
+                { id: 'all', label: 'Tous' },
+                { id: 'used', label: cfg.usedLabel },
+                { id: 'unused', label: 'Non utilisés' },
+                { id: 'uncategorized', label: 'Sans catégorie' }
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => setFilterUsage(opt.id)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '999px',
+                    border: `0.5px solid ${filterUsage === opt.id ? c.accent : c.bordure}`,
+                    background: filterUsage === opt.id ? c.accentClair : c.blanc,
+                    color: filterUsage === opt.id ? c.accent : c.texteMuted,
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Formulaire ajout */}
+            {ajoutVisible && peutModifier && (
+              <div style={{ background: c.blanc, borderRadius: '12px', padding: '20px', border: `1px solid ${c.accent}`, marginBottom: '16px' }}>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Nouvel ingrédient</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div>
+                    <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom *</label>
+                    <input type="text" value={nouveauNom} onChange={e => setNouveauNom(e.target.value)}
+                      placeholder={cfg.placeholderNom}
+                      onKeyDown={e => e.key === 'Enter' && ajouterIngredient()}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix HT (€)</label>
+                      <input type="text" value={nouveauPrix} onChange={e => setNouveauPrix(e.target.value)}
+                        placeholder="Ex : 4.50"
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Unité</label>
+                      <select value={nouvelleUnite} onChange={e => setNouvelleUnite(e.target.value)}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: c.blanc, outline: 'none', color: c.texte }}>
+                        {UNITES.map(u => <option key={u}>{u}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Catégorie</label>
+                      <select value={nouvelleCategorie} onChange={e => setNouvelleCategorie(e.target.value)}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: c.blanc, outline: 'none', color: c.texte }}>
+                        <option value="">Sans catégorie</option>
+                        {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.emoji} {cat.nom}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <button onClick={ajouterIngredient} disabled={saving || !nouveauNom.trim()} style={{
+                    width: '100%', padding: '12px', background: saving || !nouveauNom.trim() ? c.texteMuted : c.accent,
+                    color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '500',
+                    cursor: saving || !nouveauNom.trim() ? 'not-allowed' : 'pointer'
+                  }}>{saving ? 'Ajout en cours...' : 'Ajouter l\'ingrédient'}</button>
+                </div>
+              </div>
+            )}
+
+            {/* Table ingrédients */}
+            {loading ? (
+              <ChefLoader />
+            ) : ingredientsFiltres.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px', background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, color: c.texteMuted, fontSize: '14px' }}>
+                Aucun ingrédient trouvé
+              </div>
+            ) : isMobile ? (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', padding: '10px 12px', background: c.blanc, borderRadius: '8px', border: `0.5px solid ${c.bordure}` }}>
+                  <input type="checkbox" checked={selection.length === ingredientsFiltres.length && ingredientsFiltres.length > 0} onChange={toggleTout} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: c.accent }} />
+                  <span style={{ fontSize: '13px', color: c.texteMuted }}>{selection.length === ingredientsFiltres.length ? 'Tout désélectionner' : 'Tout sélectionner'}</span>
+                </div>
+                {ingredientsPagines.map(ing => (
+                  <div key={ing.id} style={{ background: selection.includes(ing.id) ? c.accentClair : c.blanc, borderRadius: '8px', padding: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <input type="checkbox" checked={selection.includes(ing.id)} onChange={() => toggleSelection(ing.id)} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: c.accent, flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '14px', fontWeight: '500', color: c.texte, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span>{ing.nom}</span>
+                        {Array.isArray(ing[cfg.ficheRelationField]) && ing[cfg.ficheRelationField].length > 0 && (
+                          <span style={{ fontSize: '11px', color: '#166534', background: '#DCFCE7', border: '0.5px solid #86EFAC', borderRadius: '999px', padding: '1px 8px' }}>
+                            🟢 Utilisé
+                          </span>
+                        )}
+                        {ing.categorie_id == null && (
+                          <span style={{ fontSize: '11px', color: '#9A3412', background: '#FFEDD5', border: '0.5px solid #FDBA74', borderRadius: '999px', padding: '1px 8px' }}>
+                            ⚠️ À catégoriser
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '12px', color: c.texteMuted, marginTop: '2px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <span>{ing.prix_kg ? `${Number(ing.prix_kg).toFixed(2)} €` : '—'} / {ing.unite || '—'}</span>
+                        {ing.categories_ingredients && (
+                          <span style={{ background: c.accentClair, color: c.accent, borderRadius: '20px', padding: '1px 8px', fontSize: '11px' }}>
+                            {ing.categories_ingredients.emoji} {ing.categories_ingredients.nom}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ background: c.principal }}>
+                      <th style={{ padding: '10px 16px', width: '40px' }}>
+                        <input type="checkbox" checked={selection.length === ingredientsFiltres.length && ingredientsFiltres.length > 0} onChange={toggleTout} style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: c.accent }} />
+                      </th>
+                      {['Nom', 'Catégorie', 'Prix HT', 'Unité', ...(peutModifier ? ['Action'] : [])].map(h => (
+                        <th key={h} style={{ padding: '10px 16px', textAlign: h === 'Nom' || h === 'Catégorie' ? 'left' : 'right', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ingredientsPagines.map((ing, i) => (
+                      <tr key={ing.id} style={{ borderBottom: i < ingredientsPagines.length - 1 ? `0.5px solid ${c.bordure}` : 'none', background: selection.includes(ing.id) ? c.accentClair : c.blanc }}>
+                        <td className="sk-td">
+                          <input type="checkbox" checked={selection.includes(ing.id)} onChange={() => toggleSelection(ing.id)} style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: c.accent }} />
+                        </td>
+                        <td style={{ padding: '10px 16px', fontWeight: '500', color: c.texte }}>
+                          {editionId === ing.id ? (
+                            <input type="text" value={editionNom} onChange={e => setEditionNom(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') saveEdition(ing.id); if (e.key === 'Escape') setEditionId(null) }}
+                              style={{ width: '100%', padding: '4px 8px', borderRadius: '6px', border: `0.5px solid ${c.accent}`, fontSize: '13px', outline: 'none', background: c.blanc, color: c.texte }}
+                              autoFocus
+                            />
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span>{ing.nom}</span>
+                              {Array.isArray(ing[cfg.ficheRelationField]) && ing[cfg.ficheRelationField].length > 0 && (
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22C55E', display: 'inline-block' }} title="Utilisé en fiche technique" />
+                              )}
+                              {ing.categorie_id == null && (
+                                <span style={{ fontSize: '11px', color: '#9A3412', background: '#FFEDD5', border: '0.5px solid #FDBA74', borderRadius: '999px', padding: '1px 8px' }}>
+                                  ⚠️ À catégoriser
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="sk-td">
+                          {editionId === ing.id ? (
+                            <select value={editionCategorie} onChange={e => setEditionCategorie(e.target.value)}
+                              style={{ padding: '4px 8px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer' }}>
+                              <option value="">Sans catégorie</option>
+                              {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.emoji} {cat.nom}</option>)}
+                            </select>
+                          ) : ing.categories_ingredients ? (
+                            <Badge bg={c.accentClair} color={c.accent} size="sm">
+                              {ing.categories_ingredients.emoji} {ing.categories_ingredients.nom}
+                            </Badge>
+                          ) : (
+                            <span style={{ color: c.texteMuted, fontSize: '12px' }}>—</span>
+                          )}
+                        </td>
+                        <td className="sk-td sk-td--right">
+                          {editionId === ing.id ? (
+                            <input type="text" value={editionPrix} onChange={e => setEditionPrix(e.target.value)}
+                              style={{ width: '80px', padding: '4px 8px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', outline: 'none', textAlign: 'right', background: c.blanc, color: c.texte }}
+                            />
+                          ) : (
+                            <span style={{ color: c.texte }}>{ing.prix_kg ? `${Number(ing.prix_kg).toFixed(2)} €` : '—'}</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texteMuted }}>
+                          {editionId === ing.id ? (
+                            <input type="text" value={editionUnite} onChange={e => setEditionUnite(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') saveEdition(ing.id); if (e.key === 'Escape') setEditionId(null) }}
+                              placeholder="kg, L, pièce…"
+                              style={{ width: '70px', padding: '4px 8px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', outline: 'none', textAlign: 'right', background: c.blanc, color: c.texte }}
+                            />
+                          ) : (
+                            <span>{ing.unite || '—'}</span>
+                          )}
+                        </td>
+                        {peutModifier && (
+                          <td className="sk-td sk-td--right">
+                            {editionId === ing.id ? (
+                              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                <button onClick={() => saveEdition(ing.id)} style={{ background: c.accent, color: 'white', border: 'none', borderRadius: '6px', padding: '4px 10px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}>✓</button>
+                                <button onClick={() => setEditionId(null)} style={{ background: c.fond, color: c.texteMuted, border: `0.5px solid ${c.bordure}`, borderRadius: '6px', padding: '4px 10px', fontSize: '12px', cursor: 'pointer' }}>✕</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => startEdition(ing)} style={{ background: 'transparent', color: c.texteMuted, border: `0.5px solid ${c.bordure}`, borderRadius: '6px', padding: '4px 10px', fontSize: '12px', cursor: 'pointer' }}>✏️ Modifier</button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          </>
+        )}
+
+        {/* ── VUE CATÉGORIES ── */}
+        {vue === 'categories' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+              {peutModifier && (
+                <button onClick={() => setAjoutCatVisible(!ajoutCatVisible)} style={{
+                  background: c.accent, color: 'white', border: 'none',
+                  borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '500', cursor: 'pointer'
+                }}>+ Nouvelle catégorie</button>
+              )}
+            </div>
+
+            {ajoutCatVisible && peutModifier && (
+              <div style={{ background: c.blanc, borderRadius: '12px', padding: '20px', border: `1px solid ${c.accent}`, marginBottom: '16px' }}>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>Nouvelle catégorie</div>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', marginBottom: '10px' }}>
+                  <div style={{ flexShrink: 0 }}>
+                    <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Emoji</label>
+                    <EmojiPicker value={nouvelleCatEmoji} onChange={setNouvelleCatEmoji} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom *</label>
+                    <input type="text" value={nouvelleCatNom} onChange={e => setNouvelleCatNom(e.target.value)}
+                      placeholder="Ex : Viandes & Volailles"
+                      onKeyDown={e => e.key === 'Enter' && ajouterCategorie()}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
+                    />
+                  </div>
+                </div>
+                <button onClick={ajouterCategorie} disabled={savingCat || !nouvelleCatNom.trim()} style={{
+                  width: '100%', padding: '12px', background: savingCat || !nouvelleCatNom.trim() ? c.texteMuted : c.accent,
+                  color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '500',
+                  cursor: savingCat || !nouvelleCatNom.trim() ? 'not-allowed' : 'pointer'
+                }}>{savingCat ? 'Création...' : 'Créer la catégorie'}</button>
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
+              {categories.map(cat => {
+                const ingsChat = ingredients.filter(i => i.categorie_id === cat.id)
+                const isEditing = editionCatId === cat.id
+                return (
+                  <div key={cat.id} style={{ background: c.blanc, borderRadius: '12px', border: `${isEditing ? '1px' : '0.5px'} solid ${isEditing ? c.accent : c.bordure}`, overflow: 'hidden' }}>
+                    <div style={{ padding: '16px', borderBottom: `0.5px solid ${c.bordure}`, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      {isEditing ? (
+                        <>
+                          <EmojiPicker value={editionCatEmoji} onChange={setEditionCatEmoji} size="sm" />
+                          <input type="text" value={editionCatNom} onChange={e => setEditionCatNom(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') saveCatEdition(cat.id); if (e.key === 'Escape') setEditionCatId(null) }}
+                            autoFocus
+                            style={{ flex: 1, padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.accent}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
+                          />
+                          <button onClick={() => saveCatEdition(cat.id)} style={{ background: c.accent, color: 'white', border: 'none', borderRadius: '6px', padding: '7px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}>✓</button>
+                          <button onClick={() => setEditionCatId(null)} style={{ background: c.fond, color: c.texteMuted, border: `0.5px solid ${c.bordure}`, borderRadius: '6px', padding: '7px 10px', fontSize: '12px', cursor: 'pointer' }}>✕</button>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: c.accentClair, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', flexShrink: 0 }}>
+                            {cat.emoji}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '15px', fontWeight: '500', color: c.texte }}>{cat.nom}</div>
+                            <div style={{ fontSize: '12px', color: c.texteMuted }}>{ingsChat.length} ingrédient{ingsChat.length > 1 ? 's' : ''}</div>
+                          </div>
+                          {peutModifier && (
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              <button onClick={() => startCatEdition(cat)} title="Modifier" style={{ background: 'transparent', border: `0.5px solid ${c.bordure}`, borderRadius: '6px', padding: '6px 10px', fontSize: '12px', cursor: 'pointer', color: c.texteMuted }}>✏️</button>
+                              <button onClick={() => supprimerCategorie(cat)} title="Supprimer" style={{ background: 'transparent', border: '0.5px solid #FECACA', borderRadius: '6px', padding: '6px 10px', fontSize: '12px', cursor: 'pointer', color: '#DC2626' }}>🗑</button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <div style={{ padding: '12px 16px', maxHeight: '160px', overflowY: 'auto' }}>
+                      {ingsChat.length === 0 ? (
+                        <div style={{ fontSize: '13px', color: c.texteMuted, fontStyle: 'italic' }}>Aucun ingrédient</div>
+                      ) : ingsChat.slice(0, 8).map(ing => (
+                        <div key={ing.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: `0.5px solid ${c.fond}` }}>
+                          <span style={{ fontSize: '13px', color: c.texte }}>{ing.nom}</span>
+                          <span style={{ fontSize: '12px', color: c.texteMuted }}>{ing.prix_kg ? `${Number(ing.prix_kg).toFixed(2)} €` : '—'}</span>
+                        </div>
+                      ))}
+                      {ingsChat.length > 8 && (
+                        <div style={{ fontSize: '12px', color: c.texteMuted, marginTop: '6px', fontStyle: 'italic' }}>+ {ingsChat.length - 8} autres</div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+              {/* Sans catégorie */}
+              {sansCategorie.length > 0 && (
+                <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden', opacity: 0.7 }}>
+                  <div style={{ padding: '16px', borderBottom: `0.5px solid ${c.bordure}`, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>📦</div>
+                    <div>
+                      <div style={{ fontSize: '15px', fontWeight: '500', color: c.texte }}>Sans catégorie</div>
+                      <div style={{ fontSize: '12px', color: c.texteMuted }}>{sansCategorie.length} ingrédient{sansCategorie.length > 1 ? 's' : ''}</div>
+                    </div>
+                  </div>
+                  <div style={{ padding: '10px 16px' }}>
+                    <div style={{ fontSize: '12px', color: c.texteMuted, fontStyle: 'italic' }}>Assignez une catégorie depuis la vue Liste</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ── VUE INFLATION ── */}
+        {vue === 'inflation' && (
+          <div>
+            <div style={{ background: '#FEF3C7', border: '0.5px solid #FDE68A', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', fontSize: '13px', color: '#92400E' }}>
+              💡 Ces statistiques affichent le prix moyen HT par catégorie. Mettez à jour les prix régulièrement pour suivre l&apos;inflation de vos matières premières.
+            </div>
+
+            <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ background: c.principal }}>
+                    {['Catégorie', 'Nb ingr.', 'Prix moyen HT', 'Prix min', 'Prix max', 'Écart'].map(h => (
+                      <th key={h} style={{ padding: '12px 16px', textAlign: h === 'Catégorie' ? 'left' : 'right', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {statsParCategorie.map((stat, i) => {
+                    const ecart = stat.prixMax - stat.prixMin
+                    const ecartPct = stat.prixMin > 0 ? ((ecart / stat.prixMin) * 100).toFixed(0) : 0
+                    return (
+                      <tr key={stat.id} style={{ borderBottom: i < statsParCategorie.length - 1 ? `0.5px solid ${c.bordure}` : 'none' }}
+                        onMouseEnter={e => e.currentTarget.style.background = c.fond}
+                        onMouseLeave={e => e.currentTarget.style.background = c.blanc}
+                      >
+                        <td className="sk-td">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ fontSize: '18px' }}>{stat.emoji}</span>
+                            <span style={{ fontWeight: '500', color: c.texte }}>{stat.nom}</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'right', color: c.texteMuted }}>{stat.nb}</td>
+                        <td className="sk-td sk-td--right" style={{ fontWeight: '500', color: c.texte }}>{stat.prixMoyen.toFixed(2)} €</td>
+                        <td style={{ padding: '14px 16px', textAlign: 'right', color: '#16A34A' }}>{stat.prixMin.toFixed(2)} €</td>
+                        <td style={{ padding: '14px 16px', textAlign: 'right', color: '#DC2626' }}>{stat.prixMax.toFixed(2)} €</td>
+                        <td className="sk-td sk-td--right">
+                          <Badge bg={ecartPct > 50 ? '#FEE2E2' : ecartPct > 20 ? '#FEF3C7' : '#DCFCE7'} color={ecartPct > 50 ? '#DC2626' : ecartPct > 20 ? '#D97706' : '#16A34A'} size="sm">{ecart.toFixed(2)} € ({ecartPct}%)</Badge>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
