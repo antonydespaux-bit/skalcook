@@ -187,11 +187,21 @@ export default function AchatsDetailPage() {
   const addEditLigne = () => {
     setEditLignes((prev) => [
       ...prev,
-      { _id: makeLigneId(), designation: '', quantite: 1, unite: '', prix_unitaire_ht: 0, remise: 0, taux_tva: null, ingredient_id: null, ingredient_nom: null },
+      { _id: makeLigneId(), designation: '', quantite: 1, unite: '', prix_unitaire_ht: '', remise: 0, taux_tva: null, ingredient_id: null, ingredient_nom: null },
     ])
   }
   const linkIngredientToEdit = (lid, ing) => {
-    setEditLignes((prev) => prev.map((l) => (l._id === lid ? { ...l, ingredient_id: ing.id, ingredient_nom: ing.nom } : l)))
+    setEditLignes((prev) => prev.map((l) => (
+      l._id === lid
+        ? {
+            ...l,
+            ingredient_id: ing.id,
+            ingredient_nom: ing.nom,
+            // Reprend l'unité de l'ingrédient si l'utilisateur n'en a pas saisi une.
+            unite: (l.unite && String(l.unite).trim()) ? l.unite : (ing.unite || ''),
+          }
+        : l
+    )))
     setLinkingIngFor(null)
     setLinkSearch('')
   }
@@ -553,9 +563,9 @@ export default function AchatsDetailPage() {
                                   <td style={{ ...td, textAlign: 'right' }}>
                                     <input
                                       style={{ ...inputS, fontSize: 13, padding: '6px 8px', textAlign: 'right', width: 80 }}
-                                      type="number" min="0" step="0.01"
-                                      value={l.prix_unitaire_ht}
-                                      onChange={e => updateEditLigne(l._id, 'prix_unitaire_ht', e.target.value)}
+                                      type="text" inputMode="decimal"
+                                      value={l.prix_unitaire_ht ?? ''}
+                                      onChange={e => updateEditLigne(l._id, 'prix_unitaire_ht', e.target.value.replace(',', '.'))}
                                     />
                                   </td>
                                   <td style={{ ...td, textAlign: 'right' }}>
