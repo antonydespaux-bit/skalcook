@@ -200,8 +200,8 @@ export default function AchatsImportPage() {
       _id: makeLigneId(),
       designation: '',
       quantite: 1,
-      unite: 'kg',
-      prix_unitaire_ht: 0,
+      unite: '',
+      prix_unitaire_ht: '',
       remise: 0,
     })])
   }, [isManuelMode, authReady, enrichLigneLocal])
@@ -429,8 +429,8 @@ export default function AchatsImportPage() {
       _id: makeLigneId(),
       designation: '',
       quantite: 1,
-      unite: 'kg',
-      prix_unitaire_ht: 0,
+      unite: '',
+      prix_unitaire_ht: '',
       remise: 0,
     })])
   }, [enrichLigneLocal])
@@ -516,7 +516,7 @@ export default function AchatsImportPage() {
     const prixActuel = ing.prix_kg ? Number(ing.prix_kg) : null
     const prixLigneFinal = userHadOwnPrice
       ? Number(ligne.prix_unitaire_ht)
-      : (prixActuel && Number.isFinite(prixActuel) ? prixActuel : 0)
+      : (prixActuel && Number.isFinite(prixActuel) ? prixActuel : '')
     const remiseFactor = 1 - (Number(ligne.remise) || 0) / 100
     const prixEff = prixLigneFinal * remiseFactor
     const deltaPrix = prixActuel && prixEff && userHadOwnPrice
@@ -533,6 +533,8 @@ export default function AchatsImportPage() {
         // Préserve l'override de désignation envoyé par le caller (ex: autocomplete
         // qui force le nom canonique de l'ingrédient sélectionné).
         designation:      ligne.designation ?? l.designation,
+        // Reprend l'unité de l'ingrédient si l'utilisateur n'en a pas saisi une.
+        unite:            (l.unite && String(l.unite).trim()) ? l.unite : (ing.unite || ''),
         prix_unitaire_ht: prixLigneFinal,
         prix_auto:        !userHadOwnPrice,
         taux_tva:         tauxTvaFinal,
@@ -1258,9 +1260,9 @@ export default function AchatsImportPage() {
                               <td style={{ ...td, textAlign: 'right' }}>
                                 <input
                                   style={{ ...inputS, textAlign: 'right', width: 80 }}
-                                  type="number" min="0" step="0.01"
-                                  value={l.prix_unitaire_ht}
-                                  onChange={e => updateLigne(l._id, 'prix_unitaire_ht', e.target.value)}
+                                  type="text" inputMode="decimal"
+                                  value={l.prix_unitaire_ht ?? ''}
+                                  onChange={e => updateLigne(l._id, 'prix_unitaire_ht', e.target.value.replace(',', '.'))}
                                 />
                               </td>
                               <td style={{ ...td, textAlign: 'right' }}>
@@ -1483,8 +1485,8 @@ export default function AchatsImportPage() {
                             </label>
                             <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }}>
                               Prix HT/u
-                              <input style={inputS} type="number" min="0" step="0.01" value={l.prix_unitaire_ht}
-                                onChange={e => updateLigne(l._id, 'prix_unitaire_ht', e.target.value)} />
+                              <input style={inputS} type="text" inputMode="decimal" value={l.prix_unitaire_ht ?? ''}
+                                onChange={e => updateLigne(l._id, 'prix_unitaire_ht', e.target.value.replace(',', '.'))} />
                             </label>
                             <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }}>
                               TVA %
