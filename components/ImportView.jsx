@@ -14,6 +14,7 @@ const CONFIG = {
   cuisine: {
     table: 'ingredients',
     categoriesTable: 'categories_ingredients',
+    categorySection: 'cuisine',
     defaultUnit: 'kg',
     unitExamples: 'kg, L, u\u2026',
     recalculRpc: 'recalculer_cout_portions',
@@ -49,7 +50,8 @@ const CONFIG = {
   },
   bar: {
     table: 'ingredients_bar',
-    categoriesTable: null,
+    categoriesTable: 'categories_ingredients',
+    categorySection: 'bar',
     defaultUnit: 'cl',
     unitExamples: 'cl, ml, L...',
     recalculRpc: 'recalculer_cout_portions_bar',
@@ -66,13 +68,13 @@ const CONFIG = {
     recalculButtonPost: '\ud83d\udd04 Recalculer toutes les fiches bar',
     importLabel: 'Import Excel des ingr\u00e9dients bar',
     hasTemplate: false,
-    hasCategories: false,
-    showCategoryInPreview: false,
+    hasCategories: true,
+    showCategoryInPreview: true,
     afterImportRoute: '/bar/fiches',
     afterImportLabel: 'Voir les fiches bar',
     logEntite: 'ingredients_bar',
     logSection: 'bar',
-    logDetails: (total, ignores) => `${total} ingr\u00e9dients bar trait\u00e9s, ${ignores} ignor\u00e9s`,
+    logDetails: (total, ignores, categoriesAssignees) => `${total} ingr\u00e9dients bar trait\u00e9s, ${ignores} ignor\u00e9s, ${categoriesAssignees} cat\u00e9gories assign\u00e9es`,
     templateFileName: null,
     templateSheetName: null,
     templateRows: null,
@@ -131,7 +133,7 @@ export default function ImportView({ section = 'cuisine' }) {
     setCategoriesFichier([])
     setCategoriesSelectionnees([])
 
-    // Load category map for cuisine section
+    // Charge la map des catégories du même section (cuisine / bar).
     let categoriesMap = {}
     if (cfg.hasCategories) {
       const clientId = await getClientId()
@@ -139,6 +141,7 @@ export default function ImportView({ section = 'cuisine' }) {
         .from(cfg.categoriesTable)
         .select('id, nom')
         .eq('client_id', clientId)
+        .eq('section', cfg.categorySection)
       ;(cats || []).forEach(cat => {
         categoriesMap[cat.nom.toLowerCase().trim()] = cat.id
       })
@@ -224,6 +227,7 @@ export default function ImportView({ section = 'cuisine' }) {
         .from(cfg.categoriesTable)
         .select('id, nom, ordre')
         .eq('client_id', clientId)
+        .eq('section', cfg.categorySection)
       ;(existingCats || []).forEach(cat => {
         catMap[cat.nom.toLowerCase().trim()] = cat.id
       })
@@ -240,6 +244,7 @@ export default function ImportView({ section = 'cuisine' }) {
           nom,
           emoji: '📦',
           client_id: clientId,
+          section: cfg.categorySection,
           ordre: maxOrdre + idx + 1,
         }))
         const { data: created, error: errCat } = await supabase
