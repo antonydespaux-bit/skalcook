@@ -12,6 +12,7 @@ import ChefLoader from '../../../components/ChefLoader'
 
 export default function BarIngredientsPage() {
   const [ingredients, setIngredients] = useState([])
+  const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [recherche, setRecherche] = useState('')
   const [filtreCategorie, setFiltreCategorie] = useState('toutes')
@@ -48,14 +49,23 @@ export default function BarIngredientsPage() {
     const clientId = await getClientId()
     if (!clientId) { router.push('/'); return }
 
-    const { data } = await supabase
-      .from('ingredients_bar')
-      .select('*, fiche_bar_ingredients(id)')
-      .eq('client_id', clientId)
-      .eq('est_sous_fiche', false)
-      .order('nom')
-      .limit(5000)
-    setIngredients(data || [])
+    const [{ data: ings }, { data: cats }] = await Promise.all([
+      supabase
+        .from('ingredients_bar')
+        .select('*, fiche_bar_ingredients(id)')
+        .eq('client_id', clientId)
+        .eq('est_sous_fiche', false)
+        .order('nom')
+        .limit(5000),
+      supabase
+        .from('categories_ingredients')
+        .select('id, nom, emoji, ordre')
+        .eq('client_id', clientId)
+        .eq('section', 'bar')
+        .order('ordre')
+    ])
+    setIngredients(ings || [])
+    setCategories(cats || [])
     setSelection([])
     setLoading(false)
   }
@@ -189,6 +199,9 @@ export default function BarIngredientsPage() {
           >
             <option value="toutes">Toutes catégories</option>
             <option value="sans_categorie">📦 Sans catégorie</option>
+            {categories.map(cat => (
+              <option key={cat.id} value={cat.id}>{cat.emoji || '📦'} {cat.nom}</option>
+            ))}
           </select>
           <span style={{ fontSize: '12px', color: c.texteMuted, whiteSpace: 'nowrap' }}>
             {ingredientsFiltres.length}{selection.length > 0 && ` — ${selection.length} sél.`}
