@@ -687,6 +687,10 @@ export async function importInventaire(
   if (invErr) throw new Error(`Création inventaire : ${invErr.message}`)
 
   // 5. Insère les lignes d'inventaire avec les quantités importées.
+  // Note : `ecart` et `valeur_stock` sont des colonnes générées par Postgres
+  // (cf. migration 20260402000000), donc on ne les insère pas. `unite` est
+  // NOT NULL côté table — fallback sur l'unité par défaut de la section si
+  // l'ingrédient existant n'a pas d'unité renseignée.
   const ligneRows = lignesUniq.map((l) => {
     const ing = ingByNom.get(l.nom.toLowerCase())!
     const coutUnit = Number(ing.prix_kg) || 0
@@ -697,12 +701,10 @@ export async function importInventaire(
       ingredient_id: ing.id,
       section,
       nom_ingredient: ing.nom,
-      unite: ing.unite,
+      unite: ing.unite || defaultUnit,
       quantite_theorique: null,
       quantite_reelle: round3(qReelle),
-      ecart: null,
       cout_unitaire: coutUnit,
-      valeur_stock: round3(qReelle * coutUnit),
       est_critique: false,
     }
   })
