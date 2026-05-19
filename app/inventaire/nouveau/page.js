@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { supabase, getClientId } from '../../../lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
 import { useIsMobile } from '../../../lib/useIsMobile'
@@ -16,11 +16,21 @@ export default function NouvelInventairePage() {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { c } = useTheme()
   const { role } = useRole()
   const isMobile = useIsMobile()
 
-  const canChooseSection = role === 'admin' || role === 'directeur'
+  // ?section=bar/cuisine passé depuis la navbar bar : pré-sélectionne la
+  // section et force la navbar dans le bon contexte.
+  const sectionParam = searchParams.get('section')
+  const sectionForced = sectionParam === 'bar' || sectionParam === 'cuisine' ? sectionParam : null
+  const navbarSection = sectionForced || (role === 'bar' ? 'bar' : 'cuisine')
+  const queryString = sectionForced ? `?section=${sectionForced}` : ''
+
+  // Si une section est imposée par l'URL, on n'autorise plus le choix manuel
+  // (l'utilisateur reste dans le contexte d'où il vient).
+  const canChooseSection = !sectionForced && (role === 'admin' || role === 'directeur')
 
   const handleCreate = async (chosenSection, chosenType, chosenCategorieIds) => {
     setCreating(true)
@@ -55,7 +65,7 @@ export default function NouvelInventairePage() {
         return
       }
 
-      router.push(`/inventaire/${data.inventaire.id}/saisie`)
+      router.push(`/inventaire/${data.inventaire.id}/saisie${queryString}`)
     } catch (err) {
       setError('Erreur réseau.')
       setCreating(false)
@@ -89,7 +99,9 @@ export default function NouvelInventairePage() {
   const selectType = (t) => {
     setType(t)
     if (!canChooseSection) {
-      const sec = role === 'bar' ? 'bar' : 'cuisine'
+      // Si la section est imposée par l'URL, on l'utilise directement.
+      // Sinon, fallback au rôle (bar → bar, autre → cuisine).
+      const sec = sectionForced || (role === 'bar' ? 'bar' : 'cuisine')
       goToCategoryStep(sec, t)
     } else {
       setStep(2)
@@ -126,7 +138,7 @@ export default function NouvelInventairePage() {
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar section={role === 'bar' ? 'bar' : 'cuisine'} />
+      <Navbar section={navbarSection} />
 
       <div style={{ padding: isMobile ? '16px' : '24px', maxWidth: '600px', margin: '0 auto' }}>
 
