@@ -27,6 +27,12 @@ function formatDate(iso) {
   return `${d}/${m}/${y}`
 }
 
+const MOIS_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+function formatMonth(ym) {
+  const [y, m] = ym.split('-')
+  return `${MOIS_FR[Number(m) - 1]} ${y}`
+}
+
 function todayIso() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -101,6 +107,12 @@ export default function FoodCostPage() {
   // Archives
   const [archives, setArchives] = useState([])
   const [archivesLoading, setArchivesLoading] = useState(false)
+
+  // Accordéon "Tous les ajustements"
+  const [allAjustements, setAllAjustements] = useState([])
+  const [allAjLoading, setAllAjLoading] = useState(false)
+  const [allAjOpen, setAllAjOpen] = useState(false)
+  const [expandedMonths, setExpandedMonths] = useState(() => new Set())
 
   // ── Auth ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -202,11 +214,37 @@ export default function FoodCostPage() {
     }
   }, [clientId, authHeaders])
 
-  // Premier chargement : preview de la période par défaut + archives
+  // ── Charge tous les ajustements du client (accordéon "Tous les ajustements")
+  const loadAllAjustements = useCallback(async () => {
+    if (!clientId) return
+    setAllAjLoading(true)
+    try {
+      const headers = await authHeaders()
+      const url = new URL('/api/food-cost/ajustements', window.location.origin)
+      url.searchParams.set('clientId', clientId)
+      const res = await fetch(url.toString(), { headers })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
+      const list = json.ajustements ?? []
+      setAllAjustements(list)
+      // Ouvre par défaut le mois le plus récent
+      if (list.length > 0 && expandedMonths.size === 0) {
+        setExpandedMonths(new Set([list[0].date_ajustement.slice(0, 7)]))
+      }
+    } catch (e) {
+      console.warn('Erreur chargement ajustements :', e?.message || e)
+    } finally {
+      setAllAjLoading(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, authHeaders])
+
+  // Premier chargement : preview de la période par défaut + archives + tous les ajustements
   useEffect(() => {
     if (!authReady || !clientId) return
     loadPreview(periodeDebut, periodeFin)
     loadArchives()
+    loadAllAjustements()
     // intentionnellement pas de [periodeDebut, periodeFin] ici — voir hook ci-dessous
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady, clientId])
@@ -370,10 +408,14 @@ export default function FoodCostPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
 
-      // Inclure l'ajustement dans la liste uniquement s'il tombe dans la période courante.
+      // Inclure l'ajustement dans la liste de la période uniquement s'il tombe dedans.
       if (json.date_ajustement >= periodeDebut && json.date_ajustement <= periodeFin) {
         setAjustements(prev => [...prev, json].sort((a, b) => a.date_ajustement.localeCompare(b.date_ajustement)))
       }
+      // Toujours mettre à jour la liste globale (ordre chrono décroissant)
+      setAllAjustements(prev => [json, ...prev].sort((a, b) =>
+        b.date_ajustement.localeCompare(a.date_ajustement) || b.created_at.localeCompare(a.created_at)
+      ))
       setNewLibelle(''); setNewMontant(''); setNewCommentaire(''); setNewDate(todayIso())
     } catch (e) {
       setError(`Ajout impossible : ${e.message}`)
@@ -430,6 +472,13 @@ export default function FoodCostPage() {
         }
         return filtered
       })
+      // Toujours synchroniser la liste globale
+      setAllAjustements(prev => {
+        const filtered = prev.filter(a => a.id !== editingId)
+        return [...filtered, json].sort((a, b) =>
+          b.date_ajustement.localeCompare(a.date_ajustement) || b.created_at.localeCompare(a.created_at)
+        )
+      })
       cancelEditAjustement()
     } catch (e) {
       setError(`Modification impossible : ${e.message}`)
@@ -447,6 +496,7 @@ export default function FoodCostPage() {
         headers,
       })
       setAjustements(prev => prev.filter(a => a.id !== id))
+      setAllAjustements(prev => prev.filter(a => a.id !== id))
     } catch (e) {
       setError(`Suppression impossible : ${e.message}`)
     }
@@ -471,6 +521,29 @@ export default function FoodCostPage() {
   }, [inventaireDebut, inventaireFin, ajustements, achatsHt, caFoodHt])
 
   const hasInventaires = inventaireDebut !== '' && inventaireFin !== ''
+
+  // Groupement par mois pour l'accordéon "Tous les ajustements"
+  const ajustementsParMois = useMemo(() => {
+    const groups = new Map() // "YYYY-MM" → { lignes: [], total: 0 }
+    for (const a of allAjustements) {
+      const ym = a.date_ajustement.slice(0, 7)
+      if (!groups.has(ym)) groups.set(ym, { lignes: [], total: 0 })
+      const g = groups.get(ym)
+      g.lignes.push(a)
+      g.total += Number(a.montant) || 0
+    }
+    // Map → array trié par mois décroissant (déjà dans le bon ordre car allAjustements est trié desc)
+    return Array.from(groups.entries()).sort((a, b) => b[0].localeCompare(a[0]))
+  }, [allAjustements])
+
+  const toggleMonth = (ym) => {
+    setExpandedMonths(prev => {
+      const next = new Set(prev)
+      if (next.has(ym)) next.delete(ym)
+      else next.add(ym)
+      return next
+    })
+  }
 
   // ── Styles ─────────────────────────────────────────────────────────────
   if (!authReady) {
@@ -725,6 +798,118 @@ export default function FoodCostPage() {
                 rows={3}
                 style={{ ...input, fontFamily: 'inherit', resize: 'vertical' }}
               />
+            </div>
+
+            {/* Accordéon : Tous les ajustements (toutes périodes confondues) */}
+            <div style={card}>
+              <button
+                onClick={() => setAllAjOpen(o => !o)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: c.texte,
+                }}
+              >
+                <span style={{ fontSize: 15, fontWeight: 600 }}>
+                  {allAjOpen ? '▾' : '▸'}  Tous les ajustements
+                  <span style={{ marginLeft: 8, fontSize: 12, color: c.texteMuted, fontWeight: 400 }}>
+                    ({allAjustements.length})
+                  </span>
+                </span>
+                <span style={{ fontSize: 12, color: c.texteMuted }}>
+                  {allAjOpen ? 'Replier' : 'Déplier'}
+                </span>
+              </button>
+
+              {allAjOpen && (
+                <div style={{ marginTop: 14 }}>
+                  {allAjLoading ? (
+                    <div style={{ fontSize: 12, color: c.texteMuted }}>Chargement…</div>
+                  ) : ajustementsParMois.length === 0 ? (
+                    <div style={{ fontSize: 12, color: c.texteMuted, fontStyle: 'italic' }}>
+                      Aucun ajustement enregistré pour ce client.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {ajustementsParMois.map(([ym, group]) => {
+                        const isOpen = expandedMonths.has(ym)
+                        return (
+                          <div key={ym} style={{ border: `1px solid ${c.bordure}`, borderRadius: 8, overflow: 'hidden' }}>
+                            <button
+                              onClick={() => toggleMonth(ym)}
+                              style={{
+                                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                background: c.fond, border: 'none', padding: '10px 14px', cursor: 'pointer', color: c.texte,
+                              }}
+                            >
+                              <span style={{ fontSize: 13, fontWeight: 600 }}>
+                                {isOpen ? '▾' : '▸'}  {formatMonth(ym)}
+                                <span style={{ marginLeft: 8, fontSize: 11, color: c.texteMuted, fontWeight: 400 }}>
+                                  · {group.lignes.length} ligne{group.lignes.length > 1 ? 's' : ''}
+                                </span>
+                              </span>
+                              <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', color: group.total < 0 ? '#15803D' : group.total > 0 ? '#B91C1C' : c.texteMuted }}>
+                                {group.total > 0 ? '+' : ''}{formatEuro(group.total)}
+                              </span>
+                            </button>
+                            {isOpen && (
+                              <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                  <thead>
+                                    <tr>
+                                      <th style={{ ...th(c), width: 110 }}>Date</th>
+                                      <th style={th(c)}>Libellé</th>
+                                      <th style={{ ...th(c), textAlign: 'right', width: 120 }}>Montant</th>
+                                      <th style={th(c)}>Commentaire</th>
+                                      <th style={{ ...th(c), width: 130 }}></th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {group.lignes.map((a) => editingId === a.id ? (
+                                      <tr key={a.id} style={{ background: c.fond }}>
+                                        <td style={td(c)}>
+                                          <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} style={{ ...input, padding: '4px 8px', fontSize: 12 }} />
+                                        </td>
+                                        <td style={td(c)}>
+                                          <input value={editLibelle} onChange={(e) => setEditLibelle(e.target.value)} style={{ ...input, padding: '4px 8px', fontSize: 12 }} />
+                                        </td>
+                                        <td style={td(c)}>
+                                          <input type="number" step="0.01" value={editMontant} onChange={(e) => setEditMontant(e.target.value)} style={{ ...input, padding: '4px 8px', fontSize: 12, textAlign: 'right' }} />
+                                        </td>
+                                        <td style={td(c)}>
+                                          <input value={editCommentaire} onChange={(e) => setEditCommentaire(e.target.value)} style={{ ...input, padding: '4px 8px', fontSize: 12 }} />
+                                        </td>
+                                        <td style={td(c)}>
+                                          <button onClick={saveEditAjustement} disabled={savingEdit} style={{ background: 'none', border: 'none', color: '#15803D', cursor: 'pointer', fontSize: 12, marginRight: 6 }}>
+                                            {savingEdit ? '…' : 'OK'}
+                                          </button>
+                                          <button onClick={cancelEditAjustement} style={{ background: 'none', border: 'none', color: c.texteMuted, cursor: 'pointer', fontSize: 12 }}>Annuler</button>
+                                        </td>
+                                      </tr>
+                                    ) : (
+                                      <tr key={a.id}>
+                                        <td style={{ ...td(c), fontSize: 12, color: c.texteMuted }}>{formatDate(a.date_ajustement)}</td>
+                                        <td style={td(c)}>{a.libelle}</td>
+                                        <td style={{ ...td(c), textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: Number(a.montant) < 0 ? '#15803D' : '#B91C1C' }}>
+                                          {Number(a.montant) > 0 ? '+' : ''}{formatEuro(a.montant)}
+                                        </td>
+                                        <td style={{ ...td(c), color: c.texteMuted, fontSize: 12 }}>{a.commentaire || '—'}</td>
+                                        <td style={td(c)}>
+                                          <button onClick={() => startEditAjustement(a)} style={{ background: 'none', border: 'none', color: c.texte, cursor: 'pointer', fontSize: 12, marginRight: 8 }}>Modifier</button>
+                                          <button onClick={() => deleteAjustement(a.id)} style={{ background: 'none', border: 'none', color: '#B91C1C', cursor: 'pointer', fontSize: 12 }}>Suppr.</button>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
