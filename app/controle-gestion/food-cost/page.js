@@ -8,6 +8,12 @@ import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
 import Navbar from '../../../components/Navbar'
 import { getPeriodDates } from '../../../lib/caAnalyses'
+import {
+  buildFoodCostWorkbook,
+  downloadFoodCostXlsx,
+  buildFoodCostPrintHtml,
+  openPrintWindow,
+} from '../../../lib/foodCostExport'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -502,6 +508,72 @@ export default function FoodCostPage() {
     }
   }
 
+  // ── Exports Excel / PDF ────────────────────────────────────────────────
+  const [exporting, setExporting] = useState(false)
+
+  const fetchExportData = useCallback(async () => {
+    const headers = await authHeaders()
+    const url = new URL('/api/food-cost/export-data', window.location.origin)
+    url.searchParams.set('clientId', clientId)
+    url.searchParams.set('periodeDebut', periodeDebut)
+    url.searchParams.set('periodeFin', periodeFin)
+    const res = await fetch(url.toString(), { headers })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
+    return json
+  }, [authHeaders, clientId, periodeDebut, periodeFin])
+
+  const handleExportExcel = async () => {
+    if (!clientId) return
+    setExporting(true)
+    setError(''); setOkMsg('')
+    try {
+      const data = await fetchExportData()
+      const wb = buildFoodCostWorkbook({
+        periodeDebut,
+        periodeFin,
+        caFoodHt: data.totaux.ca_food_ht,
+        achatsHt: data.totaux.achats_ht,
+        inventaireDebut,
+        inventaireFin,
+        notes,
+        factures: data.factures,
+        ajustements: data.ajustements,
+      })
+      downloadFoodCostXlsx(wb, `food-cost_${periodeDebut}_${periodeFin}.xlsx`)
+      setOkMsg('Export Excel téléchargé.')
+    } catch (e) {
+      setError(`Export Excel impossible : ${e.message}`)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handlePrintPdf = async () => {
+    if (!clientId) return
+    setExporting(true)
+    setError(''); setOkMsg('')
+    try {
+      const data = await fetchExportData()
+      const html = buildFoodCostPrintHtml({
+        periodeDebut,
+        periodeFin,
+        caFoodHt: data.totaux.ca_food_ht,
+        achatsHt: data.totaux.achats_ht,
+        inventaireDebut,
+        inventaireFin,
+        notes,
+        factures: data.factures,
+        ajustements: data.ajustements,
+      })
+      openPrintWindow(html)
+    } catch (e) {
+      setError(`Impression impossible : ${e.message}`)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // ── Presets de période ─────────────────────────────────────────────────
   const applyPreset = (k) => {
     const p = getPeriodDates(k)
@@ -601,6 +673,12 @@ export default function FoodCostPage() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={handleExportExcel} disabled={exporting} style={{ ...btnSecondary, opacity: exporting ? 0.6 : 1 }}>
+              {exporting ? '…' : '⬇ Excel'}
+            </button>
+            <button onClick={handlePrintPdf} disabled={exporting} style={{ ...btnSecondary, opacity: exporting ? 0.6 : 1 }}>
+              {exporting ? '…' : '🖨 Imprimer / PDF'}
+            </button>
             {mode === 'edit' && (
               <button onClick={handleNouveau} style={btnSecondary}>Nouveau</button>
             )}
