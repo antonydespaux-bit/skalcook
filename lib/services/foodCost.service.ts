@@ -165,6 +165,19 @@ export async function listRapports(db: SupabaseClient, input: ListRapportsInput)
   return { rapports: data ?? [] }
 }
 
+export async function listAllAjustements(db: SupabaseClient, input: ListRapportsInput) {
+  const { clientId } = input
+  const { data, error } = await db
+    .from('food_cost_ajustements')
+    .select('id, date_ajustement, libelle, montant, commentaire, rapport_id, created_at')
+    .eq('client_id', clientId)
+    .order('date_ajustement', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(1000)
+  if (error) throw new Error(error.message)
+  return { ajustements: data ?? [] }
+}
+
 export async function previewPeriode(db: SupabaseClient, input: PreviewPeriodeInput) {
   const { clientId, periodeDebut, periodeFin } = input
   const [ajustements, caFoodHt, achatsHt] = await Promise.all([
