@@ -178,6 +178,40 @@ export async function listAllAjustements(db: SupabaseClient, input: ListRapports
   return { ajustements: data ?? [] }
 }
 
+async function fetchFacturesForPeriode(
+  db: SupabaseClient,
+  clientId: string,
+  debut: string,
+  fin: string,
+) {
+  const { data, error } = await db
+    .from('achats_factures')
+    .select('id, date_facture, fournisseur, numero_facture, total_ht')
+    .eq('client_id', clientId)
+    .gte('date_facture', debut)
+    .lte('date_facture', fin)
+    .is('deleted_at', null)
+    .order('date_facture', { ascending: true })
+    .order('fournisseur', { ascending: true })
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
+export async function getExportData(db: SupabaseClient, input: PreviewPeriodeInput) {
+  const { clientId, periodeDebut, periodeFin } = input
+  const [factures, ajustements, caFoodHt, achatsHt] = await Promise.all([
+    fetchFacturesForPeriode(db, clientId, periodeDebut, periodeFin),
+    fetchAjustementsForPeriode(db, clientId, periodeDebut, periodeFin),
+    computeCaFoodHt(db, clientId, periodeDebut, periodeFin),
+    computeAchatsHt(db, clientId, periodeDebut, periodeFin),
+  ])
+  return {
+    factures,
+    ajustements,
+    totaux: { ca_food_ht: caFoodHt, achats_ht: achatsHt },
+  }
+}
+
 export async function previewPeriode(db: SupabaseClient, input: PreviewPeriodeInput) {
   const { clientId, periodeDebut, periodeFin } = input
   const [ajustements, caFoodHt, achatsHt] = await Promise.all([
