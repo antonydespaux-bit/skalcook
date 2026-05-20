@@ -3,18 +3,25 @@
  *
  * Un rapport = (client, periode_debut, periode_fin) avec :
  *   - inventaires début/fin (saisis, HT, optionnels)
- *   - liste d'ajustements libres (libellé + montant signé + commentaire)
+ *   - notes libres
  *
- * Le CA Food HT et la somme des achats sur la période sont *calculés à la
- * volée* depuis ca_journalier et achats_factures. On ne les persiste pas.
+ * Les ajustements sont indépendants des rapports : chacun a sa propre
+ * date_ajustement. Le rapport courant inclut tous les ajustements du client
+ * dont date_ajustement ∈ [periode_debut, periode_fin]. Idem pour la preview
+ * d'une période non sauvegardée.
+ *
+ * Le CA Food HT et la somme des achats sur la période sont calculés à la
+ * volée depuis ca_journalier et achats_factures (non persistés).
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
-  UpsertRapportInput,
+  CreateRapportInput,
   PatchRapportInput,
   DeleteRapportInput,
   GetRapportInput,
+  ListRapportsInput,
+  PreviewPeriodeInput,
   CreateAjustementInput,
   PatchAjustementInput,
   DeleteAjustementInput,
@@ -59,16 +66,34 @@ export async function computeAchatsHt(
   return (data ?? []).reduce((s, r) => s + (Number((r as { total_ht: number | null }).total_ht) || 0), 0)
 }
 
+async function fetchAjustementsForPeriode(
+  db: SupabaseClient,
+  clientId: string,
+  debut: string,
+  fin: string,
+) {
+  const { data, error } = await db
+    .from('food_cost_ajustements')
+    .select('id, date_ajustement, libelle, montant, commentaire, rapport_id, created_at')
+    .eq('client_id', clientId)
+    .gte('date_ajustement', debut)
+    .lte('date_ajustement', fin)
+    .order('date_ajustement', { ascending: true })
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
 // ── Rapport CRUD ───────────────────────────────────────────────────────────
 
-export async function upsertRapport(
+export async function createRapport(
   db: SupabaseClient,
-  input: UpsertRapportInput,
+  input: CreateRapportInput,
   userId: string,
 ) {
-  const { clientId, periodeDebut, periodeFin } = input
+  const { clientId, periodeDebut, periodeFin, inventaireDebutHt, inventaireFinHt, notes } = input
 
-  // 1. Rapport existant pour cette période ?
+  // Refus si un rapport actif existe déjà pour cette période exacte.
   const { data: existing } = await db
     .from('food_cost_rapports')
     .select('id')
@@ -77,22 +102,25 @@ export async function upsertRapport(
     .eq('periode_fin', periodeFin)
     .is('deleted_at', null)
     .maybeSingle()
+  if (existing) {
+    return { rapport_id: existing.id, created: false, duplicate: true }
+  }
 
-  if (existing) return { rapport_id: existing.id, created: false }
-
-  // 2. Création
   const { data: created, error } = await db
     .from('food_cost_rapports')
     .insert({
       client_id: clientId,
       periode_debut: periodeDebut,
       periode_fin: periodeFin,
+      inventaire_debut_ht: inventaireDebutHt ?? null,
+      inventaire_fin_ht: inventaireFinHt ?? null,
+      notes: notes ?? '',
       created_by: userId,
     })
     .select('id')
     .single()
   if (error) throw new Error(error.message)
-  return { rapport_id: created.id, created: true }
+  return { rapport_id: created.id, created: true, duplicate: false }
 }
 
 export async function getRapport(db: SupabaseClient, input: GetRapportInput) {
@@ -108,22 +136,15 @@ export async function getRapport(db: SupabaseClient, input: GetRapportInput) {
   if (error) throw new Error(error.message)
   if (!rapport) return null
 
-  const { data: ajustements } = await db
-    .from('food_cost_ajustements')
-    .select('id, libelle, montant, commentaire, created_at')
-    .eq('rapport_id', rapportId)
-    .eq('client_id', clientId)
-    .order('created_at', { ascending: true })
-
-  // Calculs live
-  const [caFoodHt, achatsHt] = await Promise.all([
+  const [ajustements, caFoodHt, achatsHt] = await Promise.all([
+    fetchAjustementsForPeriode(db, clientId, rapport.periode_debut, rapport.periode_fin),
     computeCaFoodHt(db, clientId, rapport.periode_debut, rapport.periode_fin),
     computeAchatsHt(db, clientId, rapport.periode_debut, rapport.periode_fin),
   ])
 
   return {
     rapport,
-    ajustements: ajustements ?? [],
+    ajustements,
     totaux: {
       ca_food_ht: caFoodHt,
       achats_ht: achatsHt,
@@ -131,10 +152,38 @@ export async function getRapport(db: SupabaseClient, input: GetRapportInput) {
   }
 }
 
+export async function listRapports(db: SupabaseClient, input: ListRapportsInput) {
+  const { clientId } = input
+  const { data, error } = await db
+    .from('food_cost_rapports')
+    .select('id, periode_debut, periode_fin, inventaire_debut_ht, inventaire_fin_ht, notes, created_at, updated_at')
+    .eq('client_id', clientId)
+    .is('deleted_at', null)
+    .order('periode_debut', { ascending: false })
+    .limit(100)
+  if (error) throw new Error(error.message)
+  return { rapports: data ?? [] }
+}
+
+export async function previewPeriode(db: SupabaseClient, input: PreviewPeriodeInput) {
+  const { clientId, periodeDebut, periodeFin } = input
+  const [ajustements, caFoodHt, achatsHt] = await Promise.all([
+    fetchAjustementsForPeriode(db, clientId, periodeDebut, periodeFin),
+    computeCaFoodHt(db, clientId, periodeDebut, periodeFin),
+    computeAchatsHt(db, clientId, periodeDebut, periodeFin),
+  ])
+  return {
+    ajustements,
+    totaux: { ca_food_ht: caFoodHt, achats_ht: achatsHt },
+  }
+}
+
 export async function patchRapport(db: SupabaseClient, input: PatchRapportInput) {
-  const { rapportId, clientId, inventaireDebutHt, inventaireFinHt, notes } = input
+  const { rapportId, clientId, periodeDebut, periodeFin, inventaireDebutHt, inventaireFinHt, notes } = input
 
   const updates: Record<string, unknown> = {}
+  if (periodeDebut !== undefined) updates.periode_debut = periodeDebut
+  if (periodeFin !== undefined) updates.periode_fin = periodeFin
   if (inventaireDebutHt !== undefined) updates.inventaire_debut_ht = inventaireDebutHt
   if (inventaireFinHt !== undefined) updates.inventaire_fin_ht = inventaireFinHt
   if (notes !== undefined) updates.notes = notes
@@ -170,38 +219,42 @@ export async function createAjustement(
   input: CreateAjustementInput,
   userId: string,
 ) {
-  const { clientId, rapportId, libelle, montant, commentaire } = input
+  const { clientId, rapportId, dateAjustement, libelle, montant, commentaire } = input
   const { data, error } = await db
     .from('food_cost_ajustements')
     .insert({
       client_id: clientId,
-      rapport_id: rapportId,
+      rapport_id: rapportId ?? null,
+      date_ajustement: dateAjustement,
       libelle,
       montant,
       commentaire: commentaire ?? '',
       created_by: userId,
     })
-    .select('id, libelle, montant, commentaire, created_at')
+    .select('id, date_ajustement, libelle, montant, commentaire, rapport_id, created_at')
     .single()
   if (error) throw new Error(error.message)
   return data
 }
 
 export async function patchAjustement(db: SupabaseClient, input: PatchAjustementInput) {
-  const { clientId, ajustementId, libelle, montant, commentaire } = input
+  const { clientId, ajustementId, dateAjustement, libelle, montant, commentaire } = input
   const updates: Record<string, unknown> = {}
+  if (dateAjustement !== undefined) updates.date_ajustement = dateAjustement
   if (libelle !== undefined) updates.libelle = libelle
   if (montant !== undefined) updates.montant = montant
   if (commentaire !== undefined) updates.commentaire = commentaire
   if (Object.keys(updates).length === 0) return { updated: false }
 
-  const { error } = await db
+  const { data, error } = await db
     .from('food_cost_ajustements')
     .update(updates)
     .eq('id', ajustementId)
     .eq('client_id', clientId)
+    .select('id, date_ajustement, libelle, montant, commentaire, rapport_id, created_at')
+    .single()
   if (error) throw new Error(error.message)
-  return { updated: true }
+  return data
 }
 
 export async function deleteAjustement(db: SupabaseClient, input: DeleteAjustementInput) {

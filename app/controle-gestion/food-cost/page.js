@@ -1,13 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, getClientId } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
 import Navbar from '../../../components/Navbar'
-import { getPeriodDates, toIsoDate } from '../../../lib/caAnalyses'
+import { getPeriodDates } from '../../../lib/caAnalyses'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -21,19 +21,30 @@ function formatPct(n) {
   return `${n.toFixed(1)} %`
 }
 
+function formatDate(iso) {
+  if (!iso) return '—'
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y}`
+}
+
+function todayIso() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function defaultPeriod() {
-  // Par défaut : mois précédent (couverture complète du dernier mois clos)
   return getPeriodDates('mois-precedent')
 }
 
-// Debounce simple pour les autosaves
+// Debounce utilitaire — ref-based pour ne pas réinitialiser le timer à chaque render.
 function useDebouncedCallback(fn, delay) {
-  const [timer, setTimer] = useState(null)
+  const timerRef = useRef(null)
+  const fnRef = useRef(fn)
+  useEffect(() => { fnRef.current = fn }, [fn])
   return useCallback((...args) => {
-    if (timer) clearTimeout(timer)
-    const t = setTimeout(() => fn(...args), delay)
-    setTimer(t)
-  }, [fn, delay, timer])
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => fnRef.current(...args), delay)
+  }, [delay])
 }
 
 // ─── Composant ──────────────────────────────────────────────────────────────
@@ -47,17 +58,21 @@ export default function FoodCostPage() {
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
   const [error, setError] = useState('')
+  const [okMsg, setOkMsg] = useState('')
 
-  // Période
+  // Mode : 'new' = brouillon non sauvegardé / 'edit' = rapport chargé depuis archive
+  const [mode, setMode] = useState('new')
+  const [currentRapportId, setCurrentRapportId] = useState(null)
+
+  // Période + saisies
   const initial = useMemo(() => defaultPeriod(), [])
   const [periodeDebut, setPeriodeDebut] = useState(initial.debut)
   const [periodeFin, setPeriodeFin] = useState(initial.fin)
-
-  // Rapport courant
-  const [rapportId, setRapportId] = useState(null)
   const [inventaireDebut, setInventaireDebut] = useState('')
   const [inventaireFin, setInventaireFin] = useState('')
   const [notes, setNotes] = useState('')
+
+  // Ajustements de la période courante (chargés par date)
   const [ajustements, setAjustements] = useState([])
 
   // Totaux calculés serveur
@@ -65,13 +80,27 @@ export default function FoodCostPage() {
   const [achatsHt, setAchatsHt] = useState(0)
 
   const [loading, setLoading] = useState(false)
-  const [savingInv, setSavingInv] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [autosaving, setAutosaving] = useState(false)
 
   // Saisie nouvelle ligne d'ajustement
+  const [newDate, setNewDate] = useState(todayIso())
   const [newLibelle, setNewLibelle] = useState('')
   const [newMontant, setNewMontant] = useState('')
   const [newCommentaire, setNewCommentaire] = useState('')
   const [addingAjustement, setAddingAjustement] = useState(false)
+
+  // Édition inline d'un ajustement
+  const [editingId, setEditingId] = useState(null)
+  const [editDate, setEditDate] = useState('')
+  const [editLibelle, setEditLibelle] = useState('')
+  const [editMontant, setEditMontant] = useState('')
+  const [editCommentaire, setEditCommentaire] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  // Archives
+  const [archives, setArchives] = useState([])
+  const [archivesLoading, setArchivesLoading] = useState(false)
 
   // ── Auth ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -93,103 +122,259 @@ export default function FoodCostPage() {
     if (role !== 'admin' && role !== 'directeur') router.replace('/dashboard')
   }, [role, roleLoading, router])
 
-  // ── Charge / crée le rapport pour la période courante ──────────────────
-  const loadRapport = useCallback(async () => {
+  // Helper : headers authentifiés
+  const authHeaders = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    return { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }
+  }, [])
+
+  // ── Charge la preview (ajustements + totaux) pour la période en mode 'new'
+  const loadPreview = useCallback(async (debut, fin) => {
     if (!clientId) return
     setLoading(true)
     setError('')
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }
-
-      // 1. Upsert (idempotent) → récupère le rapport_id
-      const upsertRes = await fetch('/api/food-cost/rapport', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ clientId, periodeDebut, periodeFin }),
-      })
-      const upsertJson = await upsertRes.json()
-      if (!upsertRes.ok) throw new Error(upsertJson.error || `HTTP ${upsertRes.status}`)
-      const rid = upsertJson.rapport_id
-
-      // 2. GET full data (rapport + ajustements + totaux)
-      const url = new URL('/api/food-cost/rapport', window.location.origin)
-      url.searchParams.set('rapportId', rid)
+      const headers = await authHeaders()
+      const url = new URL('/api/food-cost/preview', window.location.origin)
       url.searchParams.set('clientId', clientId)
-      const getRes = await fetch(url.toString(), { headers })
-      const getJson = await getRes.json()
-      if (!getRes.ok) throw new Error(getJson.error || `HTTP ${getRes.status}`)
-
-      setRapportId(rid)
-      setInventaireDebut(getJson.rapport.inventaire_debut_ht ?? '')
-      setInventaireFin(getJson.rapport.inventaire_fin_ht ?? '')
-      setNotes(getJson.rapport.notes ?? '')
-      setAjustements(getJson.ajustements ?? [])
-      setCaFoodHt(getJson.totaux.ca_food_ht)
-      setAchatsHt(getJson.totaux.achats_ht)
+      url.searchParams.set('periodeDebut', debut)
+      url.searchParams.set('periodeFin', fin)
+      const res = await fetch(url.toString(), { headers })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
+      setAjustements(json.ajustements ?? [])
+      setCaFoodHt(json.totaux.ca_food_ht)
+      setAchatsHt(json.totaux.achats_ht)
     } catch (e) {
       setError(`Chargement impossible : ${e.message}`)
     } finally {
       setLoading(false)
     }
-  }, [clientId, periodeDebut, periodeFin])
+  }, [clientId, authHeaders])
 
+  // ── Charge un rapport existant (mode 'edit')
+  const loadRapport = useCallback(async (rapportId) => {
+    if (!clientId || !rapportId) return
+    setLoading(true)
+    setError('')
+    setOkMsg('')
+    try {
+      const headers = await authHeaders()
+      const url = new URL('/api/food-cost/rapport', window.location.origin)
+      url.searchParams.set('rapportId', rapportId)
+      url.searchParams.set('clientId', clientId)
+      const res = await fetch(url.toString(), { headers })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
+      setMode('edit')
+      setCurrentRapportId(rapportId)
+      setPeriodeDebut(json.rapport.periode_debut)
+      setPeriodeFin(json.rapport.periode_fin)
+      setInventaireDebut(json.rapport.inventaire_debut_ht ?? '')
+      setInventaireFin(json.rapport.inventaire_fin_ht ?? '')
+      setNotes(json.rapport.notes ?? '')
+      setAjustements(json.ajustements ?? [])
+      setCaFoodHt(json.totaux.ca_food_ht)
+      setAchatsHt(json.totaux.achats_ht)
+    } catch (e) {
+      setError(`Chargement impossible : ${e.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }, [clientId, authHeaders])
+
+  // ── Charge la liste des archives
+  const loadArchives = useCallback(async () => {
+    if (!clientId) return
+    setArchivesLoading(true)
+    try {
+      const headers = await authHeaders()
+      const url = new URL('/api/food-cost/rapports', window.location.origin)
+      url.searchParams.set('clientId', clientId)
+      const res = await fetch(url.toString(), { headers })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
+      setArchives(json.rapports ?? [])
+    } catch (e) {
+      console.warn('Erreur chargement archives :', e?.message || e)
+    } finally {
+      setArchivesLoading(false)
+    }
+  }, [clientId, authHeaders])
+
+  // Premier chargement : preview de la période par défaut + archives
   useEffect(() => {
     if (!authReady || !clientId) return
-    loadRapport()
-  }, [authReady, clientId, loadRapport])
+    loadPreview(periodeDebut, periodeFin)
+    loadArchives()
+    // intentionnellement pas de [periodeDebut, periodeFin] ici — voir hook ci-dessous
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authReady, clientId])
 
-  // ── Save inventaires + notes (debounced) ───────────────────────────────
+  // Refetch quand la période change
+  useEffect(() => {
+    if (!authReady || !clientId) return
+    if (mode === 'new') loadPreview(periodeDebut, periodeFin)
+    // en mode 'edit' : le patch de période recharge les ajustements lui-même
+  }, [periodeDebut, periodeFin, mode, authReady, clientId, loadPreview])
+
+  // ── Auto-save (mode 'edit') des inventaires + notes + période ──────────
   const patchRapport = useCallback(async (updates) => {
-    if (!rapportId || !clientId) return
-    setSavingInv(true)
+    if (!currentRapportId || !clientId) return
+    setAutosaving(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      await fetch('/api/food-cost/rapport', {
+      const headers = await authHeaders()
+      const res = await fetch('/api/food-cost/rapport', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ rapportId, clientId, ...updates }),
+        headers,
+        body: JSON.stringify({ rapportId: currentRapportId, clientId, ...updates }),
       })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || `HTTP ${res.status}`)
+      }
+      // Si la période a changé en mode 'edit', il faut recharger les ajustements
+      // pour la nouvelle fenêtre.
+      if (updates.periodeDebut || updates.periodeFin) {
+        await loadPreview(updates.periodeDebut || periodeDebut, updates.periodeFin || periodeFin)
+      }
+    } catch (e) {
+      setError(`Enregistrement impossible : ${e.message}`)
     } finally {
-      setSavingInv(false)
+      setAutosaving(false)
     }
-  }, [rapportId, clientId])
+  }, [currentRapportId, clientId, authHeaders, loadPreview, periodeDebut, periodeFin])
 
   const debouncedPatch = useDebouncedCallback(patchRapport, 500)
 
   const onInventaireDebutChange = (v) => {
     setInventaireDebut(v)
-    debouncedPatch({ inventaireDebutHt: v === '' ? null : Number(v) })
+    if (mode === 'edit') debouncedPatch({ inventaireDebutHt: v === '' ? null : Number(v) })
   }
   const onInventaireFinChange = (v) => {
     setInventaireFin(v)
-    debouncedPatch({ inventaireFinHt: v === '' ? null : Number(v) })
+    if (mode === 'edit') debouncedPatch({ inventaireFinHt: v === '' ? null : Number(v) })
   }
   const onNotesChange = (v) => {
     setNotes(v)
-    debouncedPatch({ notes: v })
+    if (mode === 'edit') debouncedPatch({ notes: v })
+  }
+  const onPeriodeDebutChange = (v) => {
+    setPeriodeDebut(v)
+    if (mode === 'edit') debouncedPatch({ periodeDebut: v })
+  }
+  const onPeriodeFinChange = (v) => {
+    setPeriodeFin(v)
+    if (mode === 'edit') debouncedPatch({ periodeFin: v })
+  }
+
+  // ── Boutons Nouveau / Sauvegarder / Supprimer rapport ──────────────────
+  const handleNouveau = () => {
+    setMode('new')
+    setCurrentRapportId(null)
+    const p = defaultPeriod()
+    setPeriodeDebut(p.debut)
+    setPeriodeFin(p.fin)
+    setInventaireDebut('')
+    setInventaireFin('')
+    setNotes('')
+    setError('')
+    setOkMsg('')
+  }
+
+  const handleSauvegarder = async () => {
+    if (!clientId) return
+    setSaving(true)
+    setError('')
+    setOkMsg('')
+    try {
+      const headers = await authHeaders()
+      const res = await fetch('/api/food-cost/rapport', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          clientId,
+          periodeDebut,
+          periodeFin,
+          inventaireDebutHt: inventaireDebut === '' ? null : Number(inventaireDebut),
+          inventaireFinHt: inventaireFin === '' ? null : Number(inventaireFin),
+          notes,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
+
+      if (json.duplicate) {
+        // Un rapport existe déjà → on le charge en mode 'edit'.
+        await loadRapport(json.rapport_id)
+        setOkMsg('Un rapport existait déjà pour cette période — chargé en édition.')
+      } else {
+        setMode('edit')
+        setCurrentRapportId(json.rapport_id)
+        setOkMsg('Rapport sauvegardé.')
+      }
+      await loadArchives()
+    } catch (e) {
+      setError(`Sauvegarde impossible : ${e.message}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSupprimerRapport = async () => {
+    if (!currentRapportId || !clientId) return
+    if (!window.confirm('Supprimer ce rapport food cost ? Les ajustements datés restent conservés.')) return
+    try {
+      const headers = await authHeaders()
+      const res = await fetch('/api/food-cost/rapport', {
+        method: 'DELETE',
+        headers,
+        body: JSON.stringify({ rapportId: currentRapportId, clientId }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || `HTTP ${res.status}`)
+      }
+      setOkMsg('Rapport supprimé.')
+      handleNouveau()
+      await loadArchives()
+    } catch (e) {
+      setError(`Suppression impossible : ${e.message}`)
+    }
   }
 
   // ── Ajustements CRUD ───────────────────────────────────────────────────
   const addAjustement = async () => {
-    if (!rapportId || !clientId) return
+    if (!clientId) return
     const libelle = newLibelle.trim()
     const montant = Number(newMontant)
     if (!libelle) { setError('Libellé requis pour l\'ajustement.'); return }
     if (!Number.isFinite(montant)) { setError('Montant numérique requis.'); return }
+    if (!newDate) { setError('Date requise pour l\'ajustement.'); return }
     setAddingAjustement(true)
     setError('')
     try {
-      const { data: { session } } = await supabase.auth.getSession()
+      const headers = await authHeaders()
       const res = await fetch('/api/food-cost/ajustement', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ clientId, rapportId, libelle, montant, commentaire: newCommentaire.trim() }),
+        headers,
+        body: JSON.stringify({
+          clientId,
+          rapportId: currentRapportId,
+          dateAjustement: newDate,
+          libelle,
+          montant,
+          commentaire: newCommentaire.trim(),
+        }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
-      setAjustements(prev => [...prev, json])
-      setNewLibelle(''); setNewMontant(''); setNewCommentaire('')
+
+      // Inclure l'ajustement dans la liste uniquement s'il tombe dans la période courante.
+      if (json.date_ajustement >= periodeDebut && json.date_ajustement <= periodeFin) {
+        setAjustements(prev => [...prev, json].sort((a, b) => a.date_ajustement.localeCompare(b.date_ajustement)))
+      }
+      setNewLibelle(''); setNewMontant(''); setNewCommentaire(''); setNewDate(todayIso())
     } catch (e) {
       setError(`Ajout impossible : ${e.message}`)
     } finally {
@@ -197,13 +382,69 @@ export default function FoodCostPage() {
     }
   }
 
+  const startEditAjustement = (a) => {
+    setEditingId(a.id)
+    setEditDate(a.date_ajustement)
+    setEditLibelle(a.libelle)
+    setEditMontant(String(a.montant))
+    setEditCommentaire(a.commentaire || '')
+  }
+
+  const cancelEditAjustement = () => {
+    setEditingId(null)
+    setEditDate(''); setEditLibelle(''); setEditMontant(''); setEditCommentaire('')
+  }
+
+  const saveEditAjustement = async () => {
+    if (!editingId || !clientId) return
+    const libelle = editLibelle.trim()
+    const montant = Number(editMontant)
+    if (!libelle) { setError('Libellé requis.'); return }
+    if (!Number.isFinite(montant)) { setError('Montant numérique requis.'); return }
+    if (!editDate) { setError('Date requise.'); return }
+    setSavingEdit(true)
+    setError('')
+    try {
+      const headers = await authHeaders()
+      const res = await fetch('/api/food-cost/ajustement', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          clientId,
+          ajustementId: editingId,
+          dateAjustement: editDate,
+          libelle,
+          montant,
+          commentaire: editCommentaire.trim(),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
+
+      // L'ajustement reste-t-il dans la période courante ?
+      const stillInPeriode = json.date_ajustement >= periodeDebut && json.date_ajustement <= periodeFin
+      setAjustements(prev => {
+        const filtered = prev.filter(a => a.id !== editingId)
+        if (stillInPeriode) {
+          return [...filtered, json].sort((a, b) => a.date_ajustement.localeCompare(b.date_ajustement))
+        }
+        return filtered
+      })
+      cancelEditAjustement()
+    } catch (e) {
+      setError(`Modification impossible : ${e.message}`)
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
   const deleteAjustement = async (id) => {
     if (!window.confirm('Supprimer cet ajustement ?')) return
     try {
-      const { data: { session } } = await supabase.auth.getSession()
+      const headers = await authHeaders()
       await fetch(`/api/food-cost/ajustement?ajustementId=${id}&clientId=${clientId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers,
       })
       setAjustements(prev => prev.filter(a => a.id !== id))
     } catch (e) {
@@ -215,8 +456,8 @@ export default function FoodCostPage() {
   const applyPreset = (k) => {
     const p = getPeriodDates(k)
     if (!p) return
-    setPeriodeDebut(p.debut)
-    setPeriodeFin(p.fin)
+    onPeriodeDebutChange(p.debut)
+    onPeriodeFinChange(p.fin)
   }
 
   // ── Calculs dérivés (live) ─────────────────────────────────────────────
@@ -257,6 +498,10 @@ export default function FoodCostPage() {
     padding: '6px 12px', borderRadius: 8, fontSize: 12,
     border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
   }
+  const btnDanger = {
+    padding: '8px 14px', borderRadius: 8, fontSize: 13, border: `1px solid #FECACA`,
+    background: '#FEF2F2', color: '#B91C1C', cursor: 'pointer', fontWeight: 500,
+  }
 
   // Couleur du ratio : <30 vert, <35 orange clair, <40 orange, ≥40 rouge
   const ratioColor = totaux.ratio == null
@@ -269,162 +514,245 @@ export default function FoodCostPage() {
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
       <Navbar section="cuisine" />
-      <div style={{ padding: isMobile ? 16 : 24, maxWidth: 1100, margin: '0 auto' }}>
-        <h1 style={{ margin: '0 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 600, color: c.texte }}>
-          Ratio Food Cost
-        </h1>
-        <p style={{ margin: '0 0 20px', fontSize: 14, color: c.texteMuted }}>
-          Coût matière sur CA Food. Inventaires début/fin + ajustements libres.
-        </p>
+      <div style={{ padding: isMobile ? 16 : 24, maxWidth: 1300, margin: '0 auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+          <div>
+            <h1 style={{ margin: '0 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 600, color: c.texte }}>
+              Ratio Food Cost
+            </h1>
+            <p style={{ margin: 0, fontSize: 14, color: c.texteMuted }}>
+              {mode === 'edit'
+                ? `Rapport sauvegardé · ${formatDate(periodeDebut)} → ${formatDate(periodeFin)}`
+                : 'Nouveau rapport (brouillon non sauvegardé)'}
+              {autosaving && <span style={{ marginLeft: 8, fontStyle: 'italic' }}>· enregistrement…</span>}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {mode === 'edit' && (
+              <button onClick={handleNouveau} style={btnSecondary}>Nouveau</button>
+            )}
+            {mode === 'new' ? (
+              <button onClick={handleSauvegarder} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
+                {saving ? '…' : '💾 Sauvegarder'}
+              </button>
+            ) : (
+              <button onClick={handleSupprimerRapport} style={btnDanger}>Supprimer</button>
+            )}
+          </div>
+        </div>
 
         {error && (
           <div style={{ background: '#FEE2E2', color: '#991B1B', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 16 }}>
             {error}
           </div>
         )}
-
-        {/* ── Période ───────────────────────────────────────────────────── */}
-        <div style={card}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: c.texteMuted }}>
-              Du
-              <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)}
-                style={{ ...input, width: 'auto', padding: '6px 10px' }} />
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: c.texteMuted }}>
-              au
-              <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)}
-                style={{ ...input, width: 'auto', padding: '6px 10px' }} />
-            </label>
-            {[
-              { k: 'mois-en-cours',  label: 'Ce mois' },
-              { k: 'mois-precedent', label: 'Mois préc.' },
-              { k: '30j',            label: '30 j' },
-              { k: 'trimestre',      label: 'Trimestre' },
-              { k: 'annee',          label: 'Année' },
-            ].map(p => (
-              <button key={p.k} onClick={() => applyPreset(p.k)} style={btnSecondary}>{p.label}</button>
-            ))}
+        {okMsg && (
+          <div style={{ background: '#DCFCE7', color: '#166534', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 16 }}>
+            {okMsg}
           </div>
-          {loading && <div style={{ fontSize: 12, color: c.texteMuted }}>Chargement des données…</div>}
-        </div>
+        )}
 
-        {/* ── KPI ───────────────────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
-          <KpiCard label="CA Food HT" value={formatEuro(caFoodHt)} c={c} />
-          <KpiCard label="Achats HT cumulés" value={formatEuro(achatsHt)} c={c} />
-          <KpiCard label="Coût matière" value={formatEuro(totaux.coutMatiere)} c={c} sub={
-            <span style={{ fontSize: 11, color: c.texteMuted }}>
-              inv. début + achats − inv. fin + Σ ajust.
-            </span>
-          } />
-          <KpiCard
-            label="Ratio food cost"
-            value={formatPct(totaux.ratio)}
-            valueColor={ratioColor}
-            c={c}
-            sub={!hasInventaires ? (
-              <span style={{ fontSize: 11, color: '#B45309' }}>⚠ inventaires manquants — ratio approximatif</span>
-            ) : null}
-          />
-        </div>
-
-        {/* ── Inventaires ──────────────────────────────────────────────── */}
-        <div style={card}>
-          <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600, color: c.texte }}>
-            Variation de stock
-          </h3>
-          <p style={{ margin: '0 0 14px', fontSize: 12, color: c.texteMuted }}>
-            Valeurs HT. Laisse vide si tu n&apos;as pas fait d&apos;inventaire physique.
-            {savingInv && <span style={{ marginLeft: 8, fontStyle: 'italic' }}>· enregistrement…</span>}
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 12, color: c.texteMuted, fontWeight: 500 }}>Inventaire début (HT €)</span>
-              <input type="number" step="0.01" value={inventaireDebut} onChange={(e) => onInventaireDebutChange(e.target.value)} placeholder="ex. 12000.00" style={input} />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 12, color: c.texteMuted, fontWeight: 500 }}>Inventaire fin (HT €)</span>
-              <input type="number" step="0.01" value={inventaireFin} onChange={(e) => onInventaireFinChange(e.target.value)} placeholder="ex. 11500.00" style={input} />
-            </label>
-          </div>
-        </div>
-
-        {/* ── Ajustements ──────────────────────────────────────────────── */}
-        <div style={card}>
-          <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600, color: c.texte }}>
-            Ajustements
-          </h3>
-          <p style={{ margin: '0 0 14px', fontSize: 12, color: c.texteMuted }}>
-            Montant signé : <strong>positif</strong> = ajout au coût (ex. transferts entrants), <strong>négatif</strong> = déduction (ex. repas staff, casse, cadeaux clients).
-          </p>
-
-          {ajustements.length > 0 && (
-            <div style={{ overflowX: 'auto', marginBottom: 14, border: `1px solid ${c.bordure}`, borderRadius: 8 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: c.fond }}>
-                    <th style={th(c)}>Libellé</th>
-                    <th style={{ ...th(c), textAlign: 'right' }}>Montant</th>
-                    <th style={th(c)}>Commentaire</th>
-                    <th style={{ ...th(c), width: 60 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ajustements.map((a) => (
-                    <tr key={a.id}>
-                      <td style={td(c)}>{a.libelle}</td>
-                      <td style={{ ...td(c), textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: Number(a.montant) < 0 ? '#15803D' : '#B91C1C' }}>
-                        {Number(a.montant) > 0 ? '+' : ''}{formatEuro(a.montant)}
-                      </td>
-                      <td style={{ ...td(c), color: c.texteMuted, fontSize: 12 }}>{a.commentaire || '—'}</td>
-                      <td style={td(c)}>
-                        <button onClick={() => deleteAjustement(a.id)} style={{ background: 'none', border: 'none', color: '#B91C1C', cursor: 'pointer', fontSize: 12 }}>Suppr.</button>
-                      </td>
-                    </tr>
-                  ))}
-                  <tr style={{ background: c.fond, fontWeight: 600 }}>
-                    <td style={td(c)}>Total ajustements</td>
-                    <td style={{ ...td(c), textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                      {totaux.sumAjust > 0 ? '+' : ''}{formatEuro(totaux.sumAjust)}
-                    </td>
-                    <td style={td(c)} colSpan={2} />
-                  </tr>
-                </tbody>
-              </table>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 280px', gap: 16, alignItems: 'flex-start' }}>
+          {/* ── Colonne principale ─────────────────────────────────────── */}
+          <div>
+            {/* Période */}
+            <div style={card}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: c.texteMuted }}>
+                  Du
+                  <input type="date" value={periodeDebut} onChange={(e) => onPeriodeDebutChange(e.target.value)}
+                    style={{ ...input, width: 'auto', padding: '6px 10px' }} />
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: c.texteMuted }}>
+                  au
+                  <input type="date" value={periodeFin} onChange={(e) => onPeriodeFinChange(e.target.value)}
+                    style={{ ...input, width: 'auto', padding: '6px 10px' }} />
+                </label>
+                {[
+                  { k: 'mois-en-cours',  label: 'Ce mois' },
+                  { k: 'mois-precedent', label: 'Mois préc.' },
+                  { k: '30j',            label: '30 j' },
+                  { k: 'trimestre',      label: 'Trimestre' },
+                  { k: 'annee',          label: 'Année' },
+                ].map(p => (
+                  <button key={p.k} onClick={() => applyPreset(p.k)} style={btnSecondary}>{p.label}</button>
+                ))}
+              </div>
+              {loading && <div style={{ fontSize: 12, color: c.texteMuted }}>Chargement des données…</div>}
             </div>
-          )}
 
-          {/* Form d'ajout */}
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr 3fr auto', gap: 8, alignItems: 'end' }}>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: 11, color: c.texteMuted, fontWeight: 500 }}>Libellé</span>
-              <input value={newLibelle} onChange={(e) => setNewLibelle(e.target.value)} placeholder="ex. Repas staff" style={input} />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: 11, color: c.texteMuted, fontWeight: 500 }}>Montant (signé)</span>
-              <input type="number" step="0.01" value={newMontant} onChange={(e) => setNewMontant(e.target.value)} placeholder="-350.00" style={input} />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: 11, color: c.texteMuted, fontWeight: 500 }}>Commentaire (optionnel)</span>
-              <input value={newCommentaire} onChange={(e) => setNewCommentaire(e.target.value)} placeholder="précision" style={input} />
-            </label>
-            <button onClick={addAjustement} disabled={addingAjustement || !newLibelle.trim() || !newMontant} style={{ ...btnPrimary, opacity: (addingAjustement || !newLibelle.trim() || !newMontant) ? 0.6 : 1 }}>
-              {addingAjustement ? '…' : '+ Ajouter'}
-            </button>
+            {/* KPI */}
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
+              <KpiCard label="CA Food HT" value={formatEuro(caFoodHt)} c={c} />
+              <KpiCard label="Achats HT cumulés" value={formatEuro(achatsHt)} c={c} />
+              <KpiCard label="Coût matière" value={formatEuro(totaux.coutMatiere)} c={c} sub={
+                <span style={{ fontSize: 11, color: c.texteMuted }}>
+                  inv. début + achats − inv. fin + Σ ajust.
+                </span>
+              } />
+              <KpiCard
+                label="Ratio food cost"
+                value={formatPct(totaux.ratio)}
+                valueColor={ratioColor}
+                c={c}
+                sub={!hasInventaires ? (
+                  <span style={{ fontSize: 11, color: '#B45309' }}>⚠ inventaires manquants — ratio approximatif</span>
+                ) : null}
+              />
+            </div>
+
+            {/* Inventaires */}
+            <div style={card}>
+              <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600, color: c.texte }}>
+                Variation de stock
+              </h3>
+              <p style={{ margin: '0 0 14px', fontSize: 12, color: c.texteMuted }}>
+                Valeurs HT. Laisse vide si tu n&apos;as pas fait d&apos;inventaire physique.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 12, color: c.texteMuted, fontWeight: 500 }}>Inventaire début (HT €)</span>
+                  <input type="number" step="0.01" value={inventaireDebut} onChange={(e) => onInventaireDebutChange(e.target.value)} placeholder="ex. 12000.00" style={input} />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 12, color: c.texteMuted, fontWeight: 500 }}>Inventaire fin (HT €)</span>
+                  <input type="number" step="0.01" value={inventaireFin} onChange={(e) => onInventaireFinChange(e.target.value)} placeholder="ex. 11500.00" style={input} />
+                </label>
+              </div>
+            </div>
+
+            {/* Ajustements */}
+            <div style={card}>
+              <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600, color: c.texte }}>
+                Ajustements
+              </h3>
+              <p style={{ margin: '0 0 14px', fontSize: 12, color: c.texteMuted }}>
+                Chaque ajustement est daté et persistant. Il est inclus dans tout rapport dont la période couvre sa date.
+                Montant signé : <strong>positif</strong> = ajout au coût (transferts entrants), <strong>négatif</strong> = déduction (repas staff, casse, cadeaux).
+              </p>
+
+              {ajustements.length > 0 && (
+                <div style={{ overflowX: 'auto', marginBottom: 14, border: `1px solid ${c.bordure}`, borderRadius: 8 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: c.fond }}>
+                        <th style={{ ...th(c), width: 110 }}>Date</th>
+                        <th style={th(c)}>Libellé</th>
+                        <th style={{ ...th(c), textAlign: 'right', width: 120 }}>Montant</th>
+                        <th style={th(c)}>Commentaire</th>
+                        <th style={{ ...th(c), width: 130 }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ajustements.map((a) => editingId === a.id ? (
+                        <tr key={a.id} style={{ background: c.fond }}>
+                          <td style={td(c)}>
+                            <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} style={{ ...input, padding: '4px 8px', fontSize: 12 }} />
+                          </td>
+                          <td style={td(c)}>
+                            <input value={editLibelle} onChange={(e) => setEditLibelle(e.target.value)} style={{ ...input, padding: '4px 8px', fontSize: 12 }} />
+                          </td>
+                          <td style={td(c)}>
+                            <input type="number" step="0.01" value={editMontant} onChange={(e) => setEditMontant(e.target.value)} style={{ ...input, padding: '4px 8px', fontSize: 12, textAlign: 'right' }} />
+                          </td>
+                          <td style={td(c)}>
+                            <input value={editCommentaire} onChange={(e) => setEditCommentaire(e.target.value)} style={{ ...input, padding: '4px 8px', fontSize: 12 }} />
+                          </td>
+                          <td style={td(c)}>
+                            <button onClick={saveEditAjustement} disabled={savingEdit} style={{ background: 'none', border: 'none', color: '#15803D', cursor: 'pointer', fontSize: 12, marginRight: 6 }}>
+                              {savingEdit ? '…' : 'OK'}
+                            </button>
+                            <button onClick={cancelEditAjustement} style={{ background: 'none', border: 'none', color: c.texteMuted, cursor: 'pointer', fontSize: 12 }}>Annuler</button>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={a.id}>
+                          <td style={{ ...td(c), fontSize: 12, color: c.texteMuted }}>{formatDate(a.date_ajustement)}</td>
+                          <td style={td(c)}>{a.libelle}</td>
+                          <td style={{ ...td(c), textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: Number(a.montant) < 0 ? '#15803D' : '#B91C1C' }}>
+                            {Number(a.montant) > 0 ? '+' : ''}{formatEuro(a.montant)}
+                          </td>
+                          <td style={{ ...td(c), color: c.texteMuted, fontSize: 12 }}>{a.commentaire || '—'}</td>
+                          <td style={td(c)}>
+                            <button onClick={() => startEditAjustement(a)} style={{ background: 'none', border: 'none', color: c.texte, cursor: 'pointer', fontSize: 12, marginRight: 8 }}>Modifier</button>
+                            <button onClick={() => deleteAjustement(a.id)} style={{ background: 'none', border: 'none', color: '#B91C1C', cursor: 'pointer', fontSize: 12 }}>Suppr.</button>
+                          </td>
+                        </tr>
+                      ))}
+                      <tr style={{ background: c.fond, fontWeight: 600 }}>
+                        <td style={td(c)} colSpan={2}>Total ajustements</td>
+                        <td style={{ ...td(c), textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                          {totaux.sumAjust > 0 ? '+' : ''}{formatEuro(totaux.sumAjust)}
+                        </td>
+                        <td style={td(c)} colSpan={2} />
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Form d'ajout */}
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '110px 2fr 1fr 3fr auto', gap: 8, alignItems: 'end' }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 11, color: c.texteMuted, fontWeight: 500 }}>Date</span>
+                  <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} style={input} />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 11, color: c.texteMuted, fontWeight: 500 }}>Libellé</span>
+                  <input value={newLibelle} onChange={(e) => setNewLibelle(e.target.value)} placeholder="ex. Repas staff" style={input} />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 11, color: c.texteMuted, fontWeight: 500 }}>Montant (signé)</span>
+                  <input type="number" step="0.01" value={newMontant} onChange={(e) => setNewMontant(e.target.value)} placeholder="-350.00" style={input} />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 11, color: c.texteMuted, fontWeight: 500 }}>Commentaire (optionnel)</span>
+                  <input value={newCommentaire} onChange={(e) => setNewCommentaire(e.target.value)} placeholder="précision" style={input} />
+                </label>
+                <button onClick={addAjustement} disabled={addingAjustement || !newLibelle.trim() || !newMontant || !newDate} style={{ ...btnPrimary, opacity: (addingAjustement || !newLibelle.trim() || !newMontant || !newDate) ? 0.6 : 1 }}>
+                  {addingAjustement ? '…' : '+ Ajouter'}
+                </button>
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div style={card}>
+              <h3 style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 600, color: c.texte }}>Notes</h3>
+              <textarea
+                value={notes}
+                onChange={(e) => onNotesChange(e.target.value)}
+                placeholder="Commentaire libre sur ce rapport food cost"
+                rows={3}
+                style={{ ...input, fontFamily: 'inherit', resize: 'vertical' }}
+              />
+            </div>
           </div>
-        </div>
 
-        {/* ── Notes libres ─────────────────────────────────────────────── */}
-        <div style={card}>
-          <h3 style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 600, color: c.texte }}>Notes</h3>
-          <textarea
-            value={notes}
-            onChange={(e) => onNotesChange(e.target.value)}
-            placeholder="Commentaire libre sur ce rapport food cost"
-            rows={3}
-            style={{ ...input, fontFamily: 'inherit', resize: 'vertical' }}
-          />
+          {/* ── Sidebar Archives ───────────────────────────────────────── */}
+          <div style={{ ...card, position: isMobile ? 'static' : 'sticky', top: 16, marginBottom: 0 }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: c.texte, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              Historique
+            </h3>
+            {archivesLoading ? (
+              <div style={{ fontSize: 12, color: c.texteMuted }}>Chargement…</div>
+            ) : archives.length === 0 ? (
+              <div style={{ fontSize: 12, color: c.texteMuted, fontStyle: 'italic' }}>
+                Aucun rapport sauvegardé. Saisis une période et clique sur « Sauvegarder » pour démarrer ton historique.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: isMobile ? 'none' : 'calc(100vh - 220px)', overflowY: 'auto' }}>
+                {archives.map((r) => (
+                  <ArchiveRow
+                    key={r.id}
+                    c={c}
+                    rapport={r}
+                    active={r.id === currentRapportId}
+                    onLoad={() => loadRapport(r.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -441,6 +769,45 @@ function KpiCard({ label, value, valueColor, sub, c }) {
       {sub && <div style={{ marginTop: 4 }}>{sub}</div>}
     </div>
   )
+}
+
+function ArchiveRow({ c, rapport, active, onLoad }) {
+  const [d, m, y] = formatDateParts(rapport.periode_debut)
+  const [d2, m2, y2] = formatDateParts(rapport.periode_fin)
+  const sameYear = y === y2
+  const label = sameYear
+    ? `${d}/${m} → ${d2}/${m2}/${y2}`
+    : `${d}/${m}/${y} → ${d2}/${m2}/${y2}`
+  const hasInv = rapport.inventaire_debut_ht != null && rapport.inventaire_fin_ht != null
+  return (
+    <button
+      onClick={onLoad}
+      style={{
+        textAlign: 'left',
+        padding: '8px 10px',
+        borderRadius: 8,
+        border: active ? `1px solid ${c.accent}` : `1px solid ${c.bordure}`,
+        background: active ? c.fond : c.blanc,
+        color: c.texte,
+        cursor: 'pointer',
+        fontSize: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+      }}
+    >
+      <span style={{ fontWeight: 600 }}>{label}</span>
+      <span style={{ fontSize: 11, color: c.texteMuted }}>
+        {hasInv ? 'Inventaires complets' : 'Inventaires partiels'}
+        {rapport.notes ? ' · note' : ''}
+      </span>
+    </button>
+  )
+}
+
+function formatDateParts(iso) {
+  if (!iso) return ['—', '—', '—']
+  return iso.split('-').reverse()
 }
 
 const th = (c) => ({
