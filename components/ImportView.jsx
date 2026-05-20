@@ -67,7 +67,7 @@ const CONFIG = {
     recalculDoneMsgShort: '\u2713 Toutes les fiches bar ont \u00e9t\u00e9 recalcul\u00e9es !',
     recalculButtonPost: '\ud83d\udd04 Recalculer toutes les fiches bar',
     importLabel: 'Import Excel des ingr\u00e9dients bar',
-    hasTemplate: false,
+    hasTemplate: true,
     hasCategories: true,
     showCategoryInPreview: true,
     afterImportRoute: '/bar/fiches',
@@ -75,10 +75,57 @@ const CONFIG = {
     logEntite: 'ingredients_bar',
     logSection: 'bar',
     logDetails: (total, ignores, categoriesAssignees) => `${total} ingr\u00e9dients bar trait\u00e9s, ${ignores} ignor\u00e9s, ${categoriesAssignees} cat\u00e9gories assign\u00e9es`,
-    templateFileName: null,
-    templateSheetName: null,
-    templateRows: null,
+    templateFileName: 'modele_import_ingredients_bar.xlsx',
+    templateSheetName: 'Ingr\u00e9dients bar',
+    templateRows: [
+      ['Nom', 'Prix HT (\u20ac)', 'Unit\u00e9', 'Cat\u00e9gorie'],
+      ['Rhum - Diplomatico - Reserva Exclusiva', '38.00', 'cl', 'Rhum'],
+      ['Vodka - Belvedere', '32.00', 'cl', 'Vodka'],
+      ['Vin rouge - Ch\u00e2teau Margaux 2018', '180.00', 'cl', 'Vins'],
+      ['Bi\u00e8re - Bob\'s Beer Blonde', '4.50', 'cl', 'Bi\u00e8res'],
+      ['Coca-Cola', '2.50', 'cl', 'Softs'],
+    ],
   },
+}
+
+// ─── Détection automatique des colonnes ─────────────────────────────────────
+// Tolère n'importe quel ordre de colonnes et n'importe quelle casse/accent
+// dans l'en-tête. Mots-clés français + anglais.
+function normalizeHeader(s) {
+  return (s ?? '')
+    .toString()
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim()
+}
+
+function detectColumns(headerRow) {
+  const cols = { nom: -1, prix: -1, unite: -1, categorie: -1 }
+  if (!Array.isArray(headerRow)) return { cols, detected: false }
+
+  headerRow.forEach((cell, idx) => {
+    const n = normalizeHeader(cell)
+    if (!n) return
+    if (cols.nom < 0 && (n === 'nom' || n === 'ingredient' || n === 'libelle' || n === 'name' || n.startsWith('nomdu') || n === 'designation')) {
+      cols.nom = idx
+    } else if (cols.prix < 0 && (n.startsWith('prix') || n === 'pu' || n === 'cout' || n === 'tarif' || n === 'price')) {
+      cols.prix = idx
+    } else if (cols.unite < 0 && (n === 'unite' || n === 'unit' || n === 'u' || n === 'mesure')) {
+      cols.unite = idx
+    } else if (cols.categorie < 0 && (n.startsWith('categ') || n === 'famille' || n === 'type' || n === 'groupe' || n === 'rayon')) {
+      cols.categorie = idx
+    }
+  })
+  return { cols, detected: cols.nom >= 0 }
+}
+
+function rowLooksLikeData(row) {
+  if (!Array.isArray(row) || row.length < 2) return false
+  const v = row[1]
+  if (v == null || v === '') return false
+  const num = parseFloat(String(v).replace(',', '.').replace(/[^0-9.]/g, ''))
+  return !Number.isNaN(num) && num > 0
 }
 
 export default function ImportView({ section = 'cuisine' }) {
@@ -154,17 +201,40 @@ export default function ImportView({ section = 'cuisine' }) {
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 })
 
+      // Auto-détection des colonnes par les mots-clés du header.
+      // Si pas de header reconnu mais que la 1ʳᵉ ligne ressemble à des
+      // données (prix numérique en col B), on commence à i=0 avec l'ordre
+      // par défaut [Nom, Prix, Unité, Catégorie].
+      const detection = detectColumns(rows[0])
+      let cols, startRow
+      if (detection.detected) {
+        cols = detection.cols
+        startRow = 1
+      } else if (rowLooksLikeData(rows[0])) {
+        cols = { nom: 0, prix: 1, unite: 2, categorie: 3 }
+        startRow = 0
+      } else {
+        // 1ʳᵉ ligne ni header reconnu ni données plausibles : on l'ignore
+        // et on suppose l'ordre par défaut.
+        cols = { nom: 0, prix: 1, unite: 2, categorie: 3 }
+        startRow = 1
+      }
+
       const ingredients = []
       const inconnues = new Set()
 
-      for (let i = 1; i < rows.length; i++) {
+      for (let i = startRow; i < rows.length; i++) {
         const row = rows[i]
-        if (!row[0]) continue
+        const nom = cols.nom >= 0 ? row[cols.nom]?.toString().trim() : ''
+        if (!nom) continue
 
-        const nomCategorie = row[3]?.toString().trim() || ''
+        const prixRaw     = cols.prix      >= 0 ? row[cols.prix]      : null
+        const uniteRaw    = cols.unite     >= 0 ? row[cols.unite]     : null
+        const categorieRaw = cols.categorie >= 0 ? row[cols.categorie] : null
+        const nomCategorie = categorieRaw?.toString().trim() || ''
+
         let categorie_id = null
         let categorieNonTrouvee = false
-
         if (cfg.hasCategories && nomCategorie) {
           const match = categoriesMap[nomCategorie.toLowerCase()]
           if (match) {
@@ -176,9 +246,9 @@ export default function ImportView({ section = 'cuisine' }) {
         }
 
         ingredients.push({
-          nom: row[0]?.toString().trim(),
-          prix_kg: normaliserPrix(row[1]),
-          unite: row[2]?.toString().trim() || cfg.defaultUnit,
+          nom,
+          prix_kg: normaliserPrix(prixRaw),
+          unite: uniteRaw?.toString().trim() || cfg.defaultUnit,
           categorie_id,
           categorieNom: nomCategorie,
           categorieNonTrouvee
