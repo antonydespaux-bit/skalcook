@@ -1,24 +1,24 @@
 import { apiHandler } from '../../../../lib/apiHandler'
 import {
-  upsertRapportSchema,
+  createRapportSchema,
   getRapportSchema,
   patchRapportSchema,
   deleteRapportSchema,
 } from '../../../../lib/validators/foodCost.schema'
 import {
-  upsertRapport,
+  createRapport,
   getRapport,
   patchRapport,
   deleteRapport,
 } from '../../../../lib/services/foodCost.service'
 
-// POST  : upsert d'un rapport pour une période (idempotent)
+// POST  : crée explicitement un rapport sauvegardé pour une période
 export const POST = apiHandler({
-  schema: upsertRapportSchema,
+  schema: createRapportSchema,
   guard: 'memberOfClient',
   clientIdFrom: 'body.clientId',
   handler: async ({ data, user, db }) => {
-    const result = await upsertRapport(db, data, user!.id)
+    const result = await createRapport(db, data, user!.id)
     return Response.json(result)
   },
 })
@@ -35,7 +35,7 @@ export const GET = apiHandler({
   },
 })
 
-// PATCH : maj inventaires + notes
+// PATCH : maj inventaires + notes + période
 export const PATCH = apiHandler({
   schema: patchRapportSchema,
   guard: 'memberOfClient',

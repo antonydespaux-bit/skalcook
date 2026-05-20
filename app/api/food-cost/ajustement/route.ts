@@ -10,7 +10,10 @@ import {
   deleteAjustement,
 } from '../../../../lib/services/foodCost.service'
 
-// POST  : crée une ligne d'ajustement rattachée à un rapport
+// POST  : crée une ligne d'ajustement (date_ajustement obligatoire,
+//         rapport_id optionnel — l'ajustement vit indépendamment d'un rapport
+//         sauvegardé, il est inclus dans tout rapport dont la période couvre
+//         sa date).
 export const POST = apiHandler({
   schema: createAjustementSchema,
   guard: 'memberOfClient',
@@ -21,7 +24,7 @@ export const POST = apiHandler({
   },
 })
 
-// PATCH : met à jour libellé / montant / commentaire
+// PATCH : met à jour date / libellé / montant / commentaire
 export const PATCH = apiHandler({
   schema: patchAjustementSchema,
   guard: 'memberOfClient',
