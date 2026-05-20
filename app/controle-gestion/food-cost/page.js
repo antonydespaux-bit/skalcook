@@ -529,7 +529,7 @@ export default function FoodCostPage() {
     setError(''); setOkMsg('')
     try {
       const data = await fetchExportData()
-      const wb = buildFoodCostWorkbook({
+      const wb = await buildFoodCostWorkbook({
         periodeDebut,
         periodeFin,
         caFoodHt: data.totaux.ca_food_ht,
@@ -540,7 +540,7 @@ export default function FoodCostPage() {
         factures: data.factures,
         ajustements: data.ajustements,
       })
-      downloadFoodCostXlsx(wb, `food-cost_${periodeDebut}_${periodeFin}.xlsx`)
+      await downloadFoodCostXlsx(wb, `food-cost_${periodeDebut}_${periodeFin}.xlsx`)
       setOkMsg('Export Excel téléchargé.')
     } catch (e) {
       setError(`Export Excel impossible : ${e.message}`)
