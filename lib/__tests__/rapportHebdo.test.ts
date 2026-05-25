@@ -92,12 +92,43 @@ describe('tmFoodBevParService', () => {
 })
 
 describe('mixFoodBev', () => {
-  it('pourcentages Food/Bev du TM total', () => {
+  it('pourcentages Food/Bev du TM par service', () => {
     const tm = tmFoodBevParService(caRows, budgetRows, '2026-05-05', '2026-05-05')
     const mix = mixFoodBev(tm)
     // Midi : food 160 / (160+80) = 66.67 %
     expect(mix.midi.food_pct).toBeCloseTo(66.67, 1)
     expect(mix.midi.bev_pct).toBeCloseTo(33.33, 1)
+    // Soir : food 200 / (200+100) = 66.67 % (mêmes proportions par hasard)
+    expect(mix.soir.food_pct).toBeCloseTo(66.67, 1)
+  })
+
+  it('total = moyenne ARITHMÉTIQUE des % midi et soir (pas pondérée)', () => {
+    // Cas inspiré du rapport hebdo Joia 18-24 mai où l'utilisateur calculait
+    // (83 + 65) / 2 = 74 mais le code affichait 70 (moyenne pondérée tirée
+    // par le soir qui a plus de volume). On bascule sur la moyenne arithmétique
+    // pour matcher l'attente naturelle de l'utilisateur.
+    const tm = {
+      midi: { real_tm_food: 83, real_tm_bev: 17 }, // 83/100 = 83 %
+      soir: { real_tm_food: 65, real_tm_bev: 35 }, // 65/100 = 65 %
+      // total pondéré classique : si midi=10cv et soir=100cv,
+      // food_total_tm = (830 + 6500) / 110 = 66.6 → ~ 66 % (proche soir)
+      // Avec moyenne arithmétique : (83 + 65) / 2 = 74 % (indépendant des volumes)
+      total: { real_tm_food: 66.6, real_tm_bev: 33.4 },
+    }
+    const mix = mixFoodBev(tm)
+    expect(mix.total.food_pct).toBe(74)
+    expect(mix.total.bev_pct).toBe(26)
+  })
+
+  it('si un seul service a des couverts → total = ce service seul', () => {
+    const tm = {
+      midi: { real_tm_food: 80, real_tm_bev: 20 },
+      soir: { real_tm_food: 0, real_tm_bev: 0 }, // pas de couverts le soir
+      total: { real_tm_food: 80, real_tm_bev: 20 },
+    }
+    const mix = mixFoodBev(tm)
+    expect(mix.total.food_pct).toBe(80)
+    expect(mix.total.bev_pct).toBe(20)
   })
 })
 
