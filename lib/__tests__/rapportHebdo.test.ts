@@ -303,6 +303,60 @@ describe('overrides nb_jours par lieu (cas Privat 1 mardi/mois)', () => {
     expect(privat?.budget_ca).toBe(5000)
   })
 
+  // Cas Joia mai 2026 : override global vendredi = 4 sur mois à 5 vendredis.
+  // Avant fix : Rapport hebdo comptait 5 vendredis × budget (ignorait l'override).
+  // Après fix : compte 5 × budget × (4/5) = 4 × budget équivalent (aligné Analyses).
+  // L'écart de 8 580 € constaté en prod chez Joia vient de là : budget vendredi
+  // Resto Joia = 10 725 €/vendredi, ratio 4/5 → 2 145 € de différence par vendredi
+  // × 4 vendredis sur 1-24 mai = 8 580 €.
+  describe('overrides global (cas Joia vendredi 4/5)', () => {
+    // Mai 2026 a 5 vendredis : 1, 8, 15, 22, 29
+    const budgetVen = [
+      { annee: 2026, mois: 5, jour_semaine: 5, lieu_service_id: 'L1', service: 'dinner',
+        couverts_cible: 50, ca_food_cible: 7000, ca_bev_20_cible: 700, ca_bev_10_cible: 0, ca_autre_cible: 0 }, // total 7 700
+      { annee: 2026, mois: 5, jour_semaine: 5, lieu_service_id: 'L1', service: 'lunch',
+        couverts_cible: 30, ca_food_cible: 2500, ca_bev_20_cible: 525, ca_bev_10_cible: 0, ca_autre_cible: 0 }, // total 3 025
+    ]
+    // Override global "vendredi=4" appliqué à dinner ET lunch
+    const overridesVen = [
+      { annee: 2026, mois: 5, jour_semaine: 5, service: 'dinner', lieu_service_id: null, nb_jours: 4 },
+      { annee: 2026, mois: 5, jour_semaine: 5, service: 'lunch',  lieu_service_id: null, nb_jours: 4 },
+    ]
+
+    it('sans override : 5 vendredis × 10 725 = 53 625 (comportement avant fix)', () => {
+      const res = caTtcVsBudget([], budgetVen, '2026-05-01', '2026-05-31')
+      expect(res.budget).toBe(53625)
+    })
+
+    it('avec override global vendredi=4 : 5 × 10 725 × (4/5) = 42 900 (mois complet)', () => {
+      const res = caTtcVsBudget([], budgetVen, '2026-05-01', '2026-05-31', null, overridesVen)
+      expect(res.budget).toBe(42900)
+    })
+
+    it('avec override sur 1-24 mai (4 vendredis dans la plage) : 4 × 10 725 × 0.8 = 34 320', () => {
+      // C'est exactement le bug constaté chez Joia : sans fix, Rapport hebdo
+      // donnerait 4 × 10 725 = 42 900. Avec fix, 34 320 = aligné avec Analyses.
+      const res = caTtcVsBudget([], budgetVen, '2026-05-01', '2026-05-24', null, overridesVen)
+      expect(res.budget).toBe(34320)
+    })
+
+    it('override global lieu null prioritaire sur priorité (lieu, svc) si pas trouvé', () => {
+      // Si l'override (lieu spécifique) n'existe pas, retombe sur (NULL, svc)
+      // puis (NULL, NULL). C'est la convention de ratioOverrideForCell.
+      const budgetSimple = [
+        { annee: 2026, mois: 5, jour_semaine: 5, lieu_service_id: 'L1', service: 'dinner',
+          couverts_cible: 0, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      ]
+      const overrideGlobalAll = [
+        // Pas de service ni lieu : override global "tous les vendredis = 4"
+        { annee: 2026, mois: 5, jour_semaine: 5, service: null, lieu_service_id: null, nb_jours: 4 },
+      ]
+      // Mai entier : 5 vendredis × 100 × (4/5) = 400
+      const res = caTtcVsBudget([], budgetSimple, '2026-05-01', '2026-05-31', null, overrideGlobalAll)
+      expect(res.budget).toBe(400)
+    })
+  })
+
   it('respecte lieu_service_id_source (cas remappage parent du rapport hebdo)', () => {
     // Cas réel : la page rapport-hebdo remap lieu_service_id vers le parent
     // pour les agrégations. La cellule budget remappée perd son ID enfant
