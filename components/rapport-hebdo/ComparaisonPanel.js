@@ -30,7 +30,7 @@ export default function ComparaisonPanel({ c, isMobile, clientId, currentPeriode
     const [y1] = debut.split('-').map(Number)
     const [y2] = fin.split('-').map(Number)
     const annees = Array.from(new Set([y1, y2]))
-    const [lieuxRes, caRes, budgetRes, jfRes, jfhRes] = await Promise.all([
+    const [lieuxRes, caRes, budgetRes, overrideRes, jfRes, jfhRes] = await Promise.all([
       supabase.from('lieux_service').select('id, nom, parent_lieu_service_id, couverts_indicatifs').eq('client_id', clientId).eq('actif', true),
       supabase.from('ca_journalier')
         .select('jour, service, lieu_service_id, couverts, ca_food, ca_bev_20, ca_bev_10, ca_autre')
@@ -38,12 +38,16 @@ export default function ComparaisonPanel({ c, isMobile, clientId, currentPeriode
       supabase.from('ca_budgets')
         .select('annee, mois, jour_semaine, lieu_service_id, service, couverts_cible, ca_food_cible, ca_bev_20_cible, ca_bev_10_cible, ca_autre_cible')
         .eq('client_id', clientId).in('annee', annees),
+      supabase.from('ca_budget_jours_override')
+        .select('annee, mois, jour_semaine, service, lieu_service_id, nb_jours')
+        .eq('client_id', clientId).in('annee', annees),
       supabase.from('ca_jours_fermes').select('date, motif').eq('client_id', clientId).gte('date', debut).lte('date', fin),
       supabase.from('ca_jours_fermes_hebdo').select('jour_semaine, motif').eq('client_id', clientId),
     ])
     if (lieuxRes.error) throw lieuxRes.error
     if (caRes.error) throw caRes.error
     if (budgetRes.error) throw budgetRes.error
+    if (overrideRes.error) throw overrideRes.error
     if (jfRes.error) throw jfRes.error
     if (jfhRes.error) throw jfhRes.error
     // lieuxMap : remappe les enfants vers le label du parent (Table du chef
@@ -64,6 +68,9 @@ export default function ComparaisonPanel({ c, isMobile, clientId, currentPeriode
     })
     const remapBudget = (r) => ({
       ...r,
+      // ID enfant d'origine conservé pour matcher les overrides nb_jours
+      // (stockés avec le lieu enfant) — voir isCellElectedForDate.
+      lieu_service_id_source: r.lieu_service_id,
       lieu_service_id: lieuToParent.get(r.lieu_service_id) || r.lieu_service_id,
       couverts_cible: lieuxIndicatifs.has(r.lieu_service_id) ? 0 : r.couverts_cible,
     })
@@ -71,6 +78,7 @@ export default function ComparaisonPanel({ c, isMobile, clientId, currentPeriode
       caRows: (caRes.data || []).map(remapCa),
       budgetRows: (budgetRes.data || []).map(remapBudget),
       lieuxMap,
+      joursOverrideRows: overrideRes.data || [],
       joursFermesRows: jfRes.data || [],
       joursFermesHebdoRows: jfhRes.data || [],
     }
@@ -135,6 +143,7 @@ export default function ComparaisonPanel({ c, isMobile, clientId, currentPeriode
         lieuxMap: ds.lieuxMap,
         debut: p.debut, fin: p.fin,
         joursFermesIso,
+        joursOverrideRows: ds.joursOverrideRows,
       })
       return { periode: p, data }
     })

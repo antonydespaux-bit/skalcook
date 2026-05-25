@@ -42,6 +42,7 @@ export default function RapportHebdoPage() {
   const [lieux, setLieux] = useState([])
   const [caRows, setCaRows] = useState([])
   const [budgetRows, setBudgetRows] = useState([])
+  const [joursOverrideRows, setJoursOverrideRows] = useState([])
   const [joursFermesRows, setJoursFermesRows] = useState([])
   const [joursFermesHebdoRows, setJoursFermesHebdoRows] = useState([])
   const [loading, setLoading] = useState(false)
@@ -114,7 +115,7 @@ export default function RapportHebdoPage() {
       const firstOfMonth = `${y2}-${String(m2).padStart(2, '0')}-01`
       const debutPourCumul = firstOfMonth < debut ? firstOfMonth : debut
 
-      const [lieuxRes, caRes, budgetRes, jfRes, jfhRes] = await Promise.all([
+      const [lieuxRes, caRes, budgetRes, overrideRes, jfRes, jfhRes] = await Promise.all([
         supabase
           .from('lieux_service')
           .select('id, nom, ordre, actif, parent_lieu_service_id, couverts_indicatifs')
@@ -132,6 +133,13 @@ export default function RapportHebdoPage() {
           .select('annee, mois, jour_semaine, lieu_service_id, service, couverts_cible, ca_food_cible, ca_bev_20_cible, ca_bev_10_cible, ca_autre_cible')
           .eq('client_id', clientId)
           .in('annee', annees),
+        // Overrides nb_jours : indispensable pour respecter "Privat = 1 mardi/mois"
+        // côté budget. Le service ne traite que les rows avec lieu_service_id défini.
+        supabase
+          .from('ca_budget_jours_override')
+          .select('annee, mois, jour_semaine, service, lieu_service_id, nb_jours')
+          .eq('client_id', clientId)
+          .in('annee', annees),
         supabase
           .from('ca_jours_fermes')
           .select('date, motif')
@@ -146,11 +154,13 @@ export default function RapportHebdoPage() {
       if (lieuxRes.error) throw lieuxRes.error
       if (caRes.error) throw caRes.error
       if (budgetRes.error) throw budgetRes.error
+      if (overrideRes.error) throw overrideRes.error
       if (jfRes.error) throw jfRes.error
       if (jfhRes.error) throw jfhRes.error
       setLieux(lieuxRes.data || [])
       setCaRows(caRes.data || [])
       setBudgetRows(budgetRes.data || [])
+      setJoursOverrideRows(overrideRes.data || [])
       setJoursFermesRows(jfRes.data || [])
       setJoursFermesHebdoRows(jfhRes.data || [])
       // (CA cumul mois inclus dans la query principale via debutPourCumul)
@@ -246,6 +256,9 @@ export default function RapportHebdoPage() {
   const budgetRowsRemap = useMemo(
     () => budgetRows.map((r) => ({
       ...r,
+      // On conserve l'ID enfant d'origine pour matcher les overrides nb_jours
+      // (stockés en DB avec le lieu enfant) — voir isCellElectedForDate.
+      lieu_service_id_source: r.lieu_service_id,
       lieu_service_id: lieuToParent.get(r.lieu_service_id) || r.lieu_service_id,
       couverts_cible: lieuxIndicatifs.has(r.lieu_service_id) ? 0 : r.couverts_cible,
     })),
@@ -265,8 +278,8 @@ export default function RapportHebdoPage() {
   }, [joursFermesRows, joursFermesHebdoRows, debut, fin])
 
   const data = useMemo(() => buildRapportData({
-    caRows: caRowsRemap, budgetRows: budgetRowsRemap, lieuxMap, debut, fin, joursFermesIso,
-  }), [caRowsRemap, budgetRowsRemap, lieuxMap, debut, fin, joursFermesIso])
+    caRows: caRowsRemap, budgetRows: budgetRowsRemap, lieuxMap, debut, fin, joursFermesIso, joursOverrideRows,
+  }), [caRowsRemap, budgetRowsRemap, lieuxMap, debut, fin, joursFermesIso, joursOverrideRows])
 
   // ── Actions ─────────────────────────────────────────────────────────────
   const handleSemainePrec = () => {
