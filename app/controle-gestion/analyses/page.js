@@ -26,6 +26,7 @@ import {
   perfByWeekdayMultiSeries,
   fromIsoDate,
 } from '../../../lib/caAnalyses'
+import { buildElectedDatesMap } from '../../../lib/caJoursHelpers'
 import {
   WIDGET_BY_ID,
   DEFAULT_LAYOUT,
@@ -106,6 +107,9 @@ export default function AnalysesPage() {
   // Overrides nb_jours (fermetures exceptionnelles) configurés sur /budgets.
   // Stockés en Map<`${annee}_${mois}_${jds}`, nb_jours> pour lookup O(1).
   const [overridesNbJours, setOverridesNbJours] = useState(new Map())
+  // Index des dates "élues" pour les overrides PAR LIEU (ex : Privat 1 mardi/mois
+  // = uniquement le dernier mardi). Construit depuis les rows brutes ci-dessous.
+  const [electedDatesMap, setElectedDatesMap] = useState(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -259,12 +263,17 @@ export default function AnalysesPage() {
           Number(o.nb_jours)
         )
       }
+      // Index des dates élues pour les overrides PAR LIEU (lieu_service_id défini).
+      // Ex: « Privat 1 mardi/mois » → Set des dates du dernier mardi du mois.
+      // Le reste (overrides global/service) reste géré via ratio classique.
+      const elected = buildElectedDatesMap(overridesRes.data || [])
 
       setRawCa(caRes.data || [])
       setRawCaCompare(compareCaRes.data || [])
       setBudgetByYear(groupByYear(budgetRes.data || []))
       setBudgetByYearCompare(groupByYear(compareBudgetRes.data || []))
       setOverridesNbJours(overridesMap)
+      setElectedDatesMap(elected)
     } catch (e) {
       setError(e.message || 'Erreur de chargement')
     } finally {
@@ -428,8 +437,8 @@ export default function AnalysesPage() {
   }, [filteredRows, dateDebut, dateFin, filterJoursActive, joursSet])
 
   const periodBudget = useMemo(
-    () => periodBudgetTotal(filteredBudgetByYear, dateDebut, dateFin, filterJoursActive ? joursSet : null, overridesNbJours),
-    [filteredBudgetByYear, dateDebut, dateFin, filterJoursActive, joursSet, overridesNbJours]
+    () => periodBudgetTotal(filteredBudgetByYear, dateDebut, dateFin, filterJoursActive ? joursSet : null, overridesNbJours, electedDatesMap),
+    [filteredBudgetByYear, dateDebut, dateFin, filterJoursActive, joursSet, overridesNbJours, electedDatesMap]
   )
 
   const compareBudgetRange = useMemo(
@@ -439,8 +448,8 @@ export default function AnalysesPage() {
 
   const periodBudgetCompare = useMemo(() => {
     if (!compareBudgetRange) return 0
-    return periodBudgetTotal(filteredCompareBudgetByYear, compareBudgetRange.debut, compareBudgetRange.fin, filterJoursActive ? joursSet : null, overridesNbJours)
-  }, [filteredCompareBudgetByYear, compareBudgetRange, filterJoursActive, joursSet, overridesNbJours])
+    return periodBudgetTotal(filteredCompareBudgetByYear, compareBudgetRange.debut, compareBudgetRange.fin, filterJoursActive ? joursSet : null, overridesNbJours, electedDatesMap)
+  }, [filteredCompareBudgetByYear, compareBudgetRange, filterJoursActive, joursSet, overridesNbJours, electedDatesMap])
 
   // ── Comparison props injectés dans les KPIs ──────────────────────────────
   // - 'aucune' → pas de comparaison
@@ -466,10 +475,10 @@ export default function AnalysesPage() {
   // passer joursSet ici : on est déjà filtré au niveau de `days`.
   const daysWithBudget = useMemo(() => {
     return days.map((d) => {
-      const budget = periodBudgetTotal(filteredBudgetByYear, d.iso, d.iso, null, overridesNbJours)
+      const budget = periodBudgetTotal(filteredBudgetByYear, d.iso, d.iso, null, overridesNbJours, electedDatesMap)
       return { ...d, budget }
     })
-  }, [days, filteredBudgetByYear, overridesNbJours])
+  }, [days, filteredBudgetByYear, overridesNbJours, electedDatesMap])
 
   const tableauTotals = useMemo(() => {
     let lunchCouverts = 0, dinnerCouverts = 0, budget = 0
@@ -648,7 +657,7 @@ export default function AnalysesPage() {
       case 'section-top-bottom-jours':
         return <SectionTopBottomJours c={c} isMobile={isMobile} topBottom={topBottom} />
       case 'section-tableau-jour-jour':
-        return <SectionTableauJourJour c={c} isMobile={isMobile} days={daysWithBudget} totals={tableauTotals} isSplit={isSplit} splitByLieu={splitByLieu} splitByService={splitByService} filteredRows={filteredRows} lieuxLabels={lieuxLabels} filteredBudgetByYear={filteredBudgetByYear} overridesNbJours={overridesNbJours} />
+        return <SectionTableauJourJour c={c} isMobile={isMobile} days={daysWithBudget} totals={tableauTotals} isSplit={isSplit} splitByLieu={splitByLieu} splitByService={splitByService} filteredRows={filteredRows} lieuxLabels={lieuxLabels} filteredBudgetByYear={filteredBudgetByYear} overridesNbJours={overridesNbJours} electedDatesMap={electedDatesMap} />
       case 'kpi-food-cost-moyen':
         return (
           <KpiFoodCostMoyen

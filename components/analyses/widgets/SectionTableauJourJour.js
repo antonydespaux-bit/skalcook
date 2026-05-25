@@ -16,7 +16,7 @@ const JOURS_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi',
 export default function SectionTableauJourJour({
   c, isMobile, days, totals,
   isSplit, splitByLieu, splitByService, filteredRows, lieuxLabels,
-  filteredBudgetByYear, overridesNbJours,
+  filteredBudgetByYear, overridesNbJours, electedDatesMap,
 }) {
   if (isSplit) {
     return (
@@ -26,6 +26,7 @@ export default function SectionTableauJourJour({
         splitByLieu={splitByLieu} splitByService={splitByService}
         filteredBudgetByYear={filteredBudgetByYear}
         overridesNbJours={overridesNbJours}
+        electedDatesMap={electedDatesMap}
       />
     )
   }
@@ -127,7 +128,7 @@ function CumulatedTable({ c, isMobile, days, totals }) {
 
 function SplitTable({
   c, isMobile, filteredRows, lieuxLabels, splitByLieu, splitByService,
-  filteredBudgetByYear, overridesNbJours,
+  filteredBudgetByYear, overridesNbJours, electedDatesMap,
 }) {
   const splitDims = []
   if (splitByLieu) splitDims.push('lieu')
@@ -171,12 +172,12 @@ function SplitTable({
         const date = new Date(`${v.iso}T00:00:00`)
         // Budget cible pour cette cellule (jour × [lieu] × [service])
         const budget = filteredBudgetByYear
-          ? dailyBudgetForCell(filteredBudgetByYear, v.iso, v.lieu_service_id, v.service_key, overridesNbJours)
+          ? dailyBudgetForCell(filteredBudgetByYear, v.iso, v.lieu_service_id, v.service_key, overridesNbJours, electedDatesMap)
           : 0
         return { ...v, caTot, tm, budget, jsWeekday: date.getDay() }
       })
       .sort((a, b) => a.iso !== b.iso ? a.iso.localeCompare(b.iso) : a.serie.localeCompare(b.serie, 'fr'))
-  }, [filteredRows, lieuxLabels, splitByLieu, splitByService, filteredBudgetByYear, overridesNbJours])
+  }, [filteredRows, lieuxLabels, splitByLieu, splitByService, filteredBudgetByYear, overridesNbJours, electedDatesMap])
 
   const totals = useMemo(() => {
     const t = { couverts: 0, food: 0, bev_20: 0, bev_10: 0, autre: 0, budget: 0 }
