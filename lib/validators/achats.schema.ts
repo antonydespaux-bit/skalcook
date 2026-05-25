@@ -115,6 +115,15 @@ export const bulkImportHeadersSchema = z.object({
 
 export type BulkImportHeadersInput = z.infer<typeof bulkImportHeadersSchema>
 
+// ── Mercuriale query ───────────────────────────────────────────────────────
+const dateIsoSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format YYYY-MM-DD attendu')
+
+export const mercurialeQuerySchema = z.object({
+  client_id:  clientIdSchema,
+  date_debut: dateIsoSchema.optional(),
+  date_fin:   dateIsoSchema.optional(),
+})
+
 // ── Reconciliation query ───────────────────────────────────────────────────
 export const reconciliationQuerySchema = z.object({
   client_id: clientIdSchema,

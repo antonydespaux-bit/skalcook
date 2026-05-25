@@ -454,6 +454,16 @@ export default function AchatsListPage() {
               🏢 Fournisseurs
             </button>
             <button
+              onClick={() => router.push('/controle-gestion/mercuriale')}
+              title="Comparer les prix d'achat d'un même article chez plusieurs fournisseurs"
+              style={{
+                padding: '8px 14px', borderRadius: 8, fontSize: 13,
+                border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
+              }}
+            >
+              📊 Comparaison prix
+            </button>
+            <button
               onClick={handleExport}
               disabled={exporting || facturesFiltrees.length === 0}
               title={facturesFiltrees.length === 0 ? 'Aucune facture à exporter' : 'Exporter les factures filtrées en Excel'}
