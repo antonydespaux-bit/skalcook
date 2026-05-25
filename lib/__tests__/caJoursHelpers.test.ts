@@ -58,14 +58,21 @@ describe('buildElectedDatesMap', () => {
     expect(set?.has('2026-05-26')).toBe(true)
     expect(set?.has('2026-05-19')).toBe(false)
   })
-  it('ignore les overrides sans lieu_service_id (global / service)', () => {
+  it('inclut TOUS les overrides : par lieu, par service, et global', () => {
+    // Depuis le passage au modèle dates élues unifié, on traite global/service
+    // de la même manière que par lieu (avec __all__ comme placeholder).
     const rows = [
       { annee: 2026, mois: 5, jour_semaine: 2, service: 'dinner', lieu_service_id: null, nb_jours: 1 },
       { annee: 2026, mois: 5, jour_semaine: 3, service: 'lunch', lieu_service_id: 'LPRIVAT', nb_jours: 2 },
+      { annee: 2026, mois: 5, jour_semaine: 5, service: null, lieu_service_id: null, nb_jours: 4 },
     ]
     const map = buildElectedDatesMap(rows)
-    expect(map.size).toBe(1) // seul le 2e a été indexé
+    expect(map.size).toBe(3)
     expect(map.has('2026_5_3_lunch_LPRIVAT')).toBe(true)
+    // Override service-only (lieu null) → indexé avec __all__ en lieuKey
+    expect(map.has('2026_5_2_dinner___all__')).toBe(true)
+    // Override global → __all__ partout
+    expect(map.has('2026_5_5___all_____all__')).toBe(true)
   })
   it('tolère rows vides ou null', () => {
     expect(buildElectedDatesMap(null).size).toBe(0)
