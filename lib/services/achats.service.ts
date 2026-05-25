@@ -734,6 +734,146 @@ export async function createIngredient(
   return findOrCreateIngredient(db, clientId, nom, unite, prix_kg)
 }
 
+export async function getMercuriale(
+  db: SupabaseClient,
+  clientId: string,
+  dateDebut?: string,
+  dateFin?: string,
+) {
+  // Tous les ingrédients du client (pour la recherche hors mercuriale)
+  const { data: allIngs } = await db
+    .from('ingredients')
+    .select('id, nom, unite')
+    .eq('client_id', clientId)
+    .order('nom')
+  const allIngredients = (allIngs ?? []).map((i: { id: string; nom: string; unite: string | null }) => ({
+    id: i.id,
+    nom: i.nom,
+    unite: i.unite ?? '',
+  }))
+
+  // Toutes les factures + BL du client (filtrées par période si demandée)
+  let facturesQuery = db
+    .from('achats_factures')
+    .select('id, fournisseur, fournisseur_id, date_facture')
+    .eq('client_id', clientId)
+  if (dateDebut) facturesQuery = facturesQuery.gte('date_facture', dateDebut)
+  if (dateFin)   facturesQuery = facturesQuery.lte('date_facture', dateFin)
+  const { data: factures } = await facturesQuery.order('date_facture', { ascending: false })
+
+  if (!factures?.length) {
+    return { rows: [], fournisseurs: [], allIngredients }
+  }
+
+  const factureIds = factures.map((f) => f.id)
+  const factureMap = new Map(factures.map((f) => [f.id, f]))
+
+  // Toutes les lignes ayant un ingrédient lié
+  const { data: lignes } = await db
+    .from('achats_lignes')
+    .select('ingredient_id, designation, unite, prix_unitaire_ht, remise, facture_id')
+    .in('facture_id', factureIds)
+    .not('ingredient_id', 'is', null)
+
+  // Index ingrédients pour le nom canonique
+  const ingredientIds = [...new Set((lignes ?? []).map((l) => l.ingredient_id).filter(Boolean) as string[])]
+  let ingredientsById: Record<string, { id: string; nom: string; unite: string | null }> = {}
+  if (ingredientIds.length) {
+    const { data: ings } = await db
+      .from('ingredients')
+      .select('id, nom, unite')
+      .in('id', ingredientIds)
+    if (ings) {
+      ingredientsById = Object.fromEntries(
+        (ings as { id: string; nom: string; unite: string | null }[]).map((i) => [i.id, i])
+      )
+    }
+  }
+
+  // Agrège par (ingredient_id, fournisseur)
+  type Achat = { prix: number; date: string; unite: string | null }
+  type ByFourn = Record<string, { fournisseur_id: string | null; achats: Achat[] }>
+  const agg: Record<string, ByFourn> = {}
+  for (const l of lignes ?? []) {
+    if (!l.ingredient_id) continue
+    const f = factureMap.get(l.facture_id)
+    if (!f) continue
+    const prix = Number(l.prix_unitaire_ht) * (1 - (Number(l.remise) || 0) / 100)
+    const fourn = f.fournisseur
+    const fournId = (f as { fournisseur_id?: string | null }).fournisseur_id ?? null
+
+    if (!agg[l.ingredient_id]) agg[l.ingredient_id] = {}
+    if (!agg[l.ingredient_id][fourn]) {
+      agg[l.ingredient_id][fourn] = { fournisseur_id: fournId, achats: [] }
+    }
+    agg[l.ingredient_id][fourn].achats.push({ prix, date: f.date_facture, unite: l.unite })
+  }
+
+  // Liste des fournisseurs triés
+  const fournisseursSet = new Set<string>()
+  for (const ingData of Object.values(agg)) {
+    for (const fourn of Object.keys(ingData)) fournisseursSet.add(fourn)
+  }
+  const fournisseurs = [...fournisseursSet].sort()
+
+  // Lignes de la mercuriale
+  type Col = {
+    fournisseur_id: string | null
+    prix_last: number
+    prix_moy: number
+    date_last: string
+    nb_achats: number
+    unite: string | null
+    all_units?: string[]
+    is_best?: boolean
+  }
+  const normUnit = (u: string | null) => (u ?? '').trim().toLowerCase()
+  const rows = Object.entries(agg)
+    .map(([ingredientId, byFourn]) => {
+      const ing = ingredientsById[ingredientId]
+      const cols: Record<string, Col> = {}
+      let bestPrix: number | null = null
+      const allUnitsRow = new Set<string>()
+
+      for (const [fourn, data] of Object.entries(byFourn)) {
+        const sorted = data.achats.sort((a, b) => b.date.localeCompare(a.date))
+        const prixLast = sorted[0].prix
+        const prixMoy = sorted.reduce((s, a) => s + a.prix, 0) / sorted.length
+        const uniqueUnits = [...new Set(sorted.map((a) => a.unite ?? '').filter(Boolean))]
+        for (const u of uniqueUnits) allUnitsRow.add(normUnit(u))
+        cols[fourn] = {
+          fournisseur_id: data.fournisseur_id,
+          prix_last: Math.round(prixLast * 10000) / 10000,
+          prix_moy: Math.round(prixMoy * 10000) / 10000,
+          date_last: sorted[0].date,
+          nb_achats: sorted.length,
+          unite: sorted[0].unite,
+          all_units: uniqueUnits.length > 1 ? uniqueUnits : undefined,
+        }
+        if (bestPrix === null || prixLast < bestPrix) bestPrix = prixLast
+      }
+
+      for (const fourn of Object.keys(cols)) {
+        cols[fourn].is_best = bestPrix !== null && Math.abs(cols[fourn].prix_last - bestPrix) < 0.001
+      }
+
+      // Unités hétérogènes au niveau ligne (plusieurs fournisseurs avec unités différentes)
+      const unitsMixed = [...allUnitsRow].filter(Boolean).length > 1
+
+      return {
+        ingredient_id: ingredientId,
+        ingredient_nom: ing?.nom ?? '—',
+        unite: Object.values(byFourn)[0]?.achats[0]?.unite ?? ing?.unite ?? '—',
+        units_mixed: unitsMixed,
+        all_units: [...allUnitsRow].filter(Boolean),
+        cols,
+      }
+    })
+    .sort((a, b) => a.ingredient_nom.localeCompare(b.ingredient_nom))
+
+  return { rows, fournisseurs, allIngredients }
+}
+
 export async function getReconciliationData(db: SupabaseClient, clientId: string) {
   const [mappingRes, ingredientsRes, lignesRes] = await Promise.all([
     db
