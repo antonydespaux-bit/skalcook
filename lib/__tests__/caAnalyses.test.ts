@@ -332,6 +332,24 @@ describe('periodBudgetTotal', () => {
       expect(total).toBe(33195)
     })
 
+    it('cellule remappée avec lieu_parent_id ≠ lieu_service_id (cas page Analyses)', () => {
+      // Reproduction du bug constaté en prod : sur Analyses, filterBudgets
+      // ajoute `lieu_parent_id` aux rows budget (parent du lieu) MAIS garde
+      // `lieu_service_id` à sa valeur enfant. L'override est stocké en DB
+      // avec lieu_service_id = enfant. Le helper doit matcher sur l'enfant,
+      // pas le parent — sinon les overrides sur lieux enfants ratent.
+      const budgetAvecParent = [
+        { jour_semaine: 2, lieu_service_id: 'L1', lieu_parent_id: 'L1', service: 'dinner', mois: null,
+          ca_food_cible: 7000, ca_bev_20_cible: 1500, ca_bev_10_cible: 500, ca_autre_cible: 0 },
+        // Privat enfant de Joia : lieu_service_id = LPRIVAT, lieu_parent_id = JOIA
+        { jour_semaine: 2, lieu_service_id: 'LPRIVAT', lieu_parent_id: 'JOIA', service: 'dinner', mois: 5,
+          ca_food_cible: 6260, ca_bev_20_cible: 1500, ca_bev_10_cible: 500, ca_autre_cible: 0 },
+      ]
+      // Sur MTD 1-25 mai : 3 mardis × 9000 (Salle) + 0 (Privat car le 26 hors plage) = 27000
+      const total = periodBudgetTotal({ 2026: budgetAvecParent }, '2026-05-01', '2026-05-25', null, overridesMap, electedMap)
+      expect(total).toBe(27000)
+    })
+
     it('overrides global (lieu null) inchangés : ratio classique conservé', () => {
       // Override global (pas de lieu) ne doit PAS être affecté par electedMap.
       // Mai 2026 = 5 dimanches. Override "3 dim sur mois" → ratio 3/5.
