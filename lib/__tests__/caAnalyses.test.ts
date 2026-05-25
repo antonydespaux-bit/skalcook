@@ -284,6 +284,69 @@ describe('periodBudgetTotal', () => {
     expect(avecMapVide).toBe(400)
   })
 
+  // Cas Privat 1 mardi/mois : budget affecté uniquement au dernier mardi
+  // (aligné sur rapportHebdo.js). Avant le fix, le ratio 1/4 répartissait
+  // le budget sur tous les mardis, ce qui surestimait le cumul MTD avant
+  // le dernier mardi du mois.
+  describe('overrides par lieu (cas Privat — dates élues)', () => {
+    // Mai 2026 a 4 mardis : 5, 12, 19, 26. Le 26 est le dernier.
+    const budgetPrivat = [
+      // Joia Salle (L1) ouvert tous les mardis soir : 9000 €/mardi
+      { jour_semaine: 2, lieu_service_id: 'L1', service: 'dinner', mois: null,
+        ca_food_cible: 7000, ca_bev_20_cible: 1500, ca_bev_10_cible: 500, ca_autre_cible: 0 },
+      // Privat (LPRIVAT) : budget mensuel = 8260 € avec override 1 mardi/mois
+      { jour_semaine: 2, lieu_service_id: 'LPRIVAT', service: 'dinner', mois: 5,
+        ca_food_cible: 6260, ca_bev_20_cible: 1500, ca_bev_10_cible: 500, ca_autre_cible: 0 },
+    ]
+    const overridesMap = new Map([
+      // Override par lieu : 1 mardi/mois pour Privat dinner
+      ['2026_5_2_dinner_LPRIVAT', 1],
+    ])
+    // electedDatesMap construit depuis les rows brutes : Privat élu uniquement le 26 mai
+    const electedMap = new Map([
+      ['2026_5_2_dinner_LPRIVAT', new Set(['2026-05-26'])],
+    ])
+
+    it('sur mois complet (1-31 mai) : Salle 4×9000 + Privat 1×8260 = 44260', () => {
+      const total = periodBudgetTotal({ 2026: budgetPrivat }, '2026-05-01', '2026-05-31', null, overridesMap, electedMap)
+      expect(total).toBe(44260)
+    })
+
+    it('sur MTD (1-25 mai, dernier mardi 26 EXCLU) : Salle 3×9000 + Privat 0 = 27000', () => {
+      // C'est le bug que le user a signalé : avant fix, Privat était compté
+      // 3 × 2065 = 6195 sur cette période. Maintenant Privat = 0 car le 26
+      // n'est pas dans la période.
+      const total = periodBudgetTotal({ 2026: budgetPrivat }, '2026-05-01', '2026-05-25', null, overridesMap, electedMap)
+      expect(total).toBe(27000)
+    })
+
+    it('semaine du 25-31 mai (contient le 26) : Salle 1×9000 + Privat 1×8260 = 17260', () => {
+      const total = periodBudgetTotal({ 2026: budgetPrivat }, '2026-05-25', '2026-05-31', null, overridesMap, electedMap)
+      expect(total).toBe(17260)
+    })
+
+    it('sans electedDatesMap : régression vers ratio (preuve du bug avant fix)', () => {
+      // Sur 1-25 mai sans electedDatesMap : Privat avec ratio 1/4
+      // = 3 mardis × 2065 = 6195. Salle = 3 × 9000 = 27000. Total = 33195.
+      const total = periodBudgetTotal({ 2026: budgetPrivat }, '2026-05-01', '2026-05-25', null, overridesMap)
+      expect(total).toBe(33195)
+    })
+
+    it('overrides global (lieu null) inchangés : ratio classique conservé', () => {
+      // Override global (pas de lieu) ne doit PAS être affecté par electedMap.
+      // Mai 2026 = 5 dimanches. Override "3 dim sur mois" → ratio 3/5.
+      const rowsDim = [
+        { jour_semaine: 7, lieu_service_id: 'L1', service: 'lunch', mois: null,
+          ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+      ]
+      const overrideGlobal = new Map([['2026_5_7___all_____all__', 3]])
+      // electedMap vide → pas d'élection, comportement = ratio
+      const total = periodBudgetTotal({ 2026: rowsDim }, '2026-05-01', '2026-05-31', null, overrideGlobal, new Map())
+      // 5 dim × 100 × (3/5) = 300
+      expect(total).toBe(300)
+    })
+  })
+
   it('cas Marsan : deux lieux enfants d\'un même parent ADDITIONNENT leurs budgets (ne s\'écrasent pas)', () => {
     // Marsan a "Table du chef" enfant de "Salle à manger", et "La cave" enfant
     // de "Table de partage". Avant le fix, le remap parent côté filterBudgets
