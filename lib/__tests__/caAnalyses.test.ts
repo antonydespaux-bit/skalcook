@@ -20,6 +20,7 @@ import {
   TVA_FOOD,
   TVA_BEV_20,
 } from '../caAnalyses'
+import { buildElectedDatesMap } from '../caJoursHelpers'
 
 const TODAY = new Date(2026, 4, 9) // 2026-05-09 (jeudi)
 
@@ -230,44 +231,48 @@ describe('periodBudgetTotal', () => {
     expect(total).toBe(100)
   })
 
-  it('applique le ratio override nb_jours sur le mois entier', () => {
-    // Mai 2026 contient 4 lundis (4, 11, 18, 25). Override dit "3 lundis"
-    // (ex : un lundi férié). Budget lundi = 100. Sans override : 4 × 100 = 400.
-    // Avec override : 3 × 100 = 300 (ratio 3/4 appliqué aux 4 lundis comptés).
+  it('override global lundi = 3 sur mois entier : 3 derniers lundis × 100 = 300', () => {
+    // Mai 2026 contient 4 lundis (4, 11, 18, 25). Override "3 lundis" : un
+    // lundi férié. Modèle dates élues = 3 derniers lundis (11, 18, 25) élus,
+    // 1er fermé (4 mai).
     const rows = [
       { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
     ]
-    // Clé override "global" (service=null, lieu=null) → s'applique à toutes les cellules
-    const overrides = new Map([['2026_5_1___all_____all__', 3]])
-    const total = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31', null, overrides)
+    const electedMap = buildElectedDatesMap([
+      { annee: 2026, mois: 5, jour_semaine: 1, service: null, lieu_service_id: null, nb_jours: 3 },
+    ])
+    const total = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31', null, null, electedMap)
     expect(total).toBe(300)
   })
 
-  it('ratio override scale proportionnellement quand la plage ne couvre qu\'une partie du mois', () => {
-    // Plage 2026-05-01 → 2026-05-15 : couvre 2 lundis (4, 11) sur 4 du mois.
-    // Override dit "3 lundis sur le mois" → ratio 3/4 = 0.75.
-    // Résultat attendu : 2 × 100 × 0.75 = 150.
+  it('plage partielle : seules les dates élues dans la plage sont comptées', () => {
+    // Plage 2026-05-01 → 2026-05-15 : couvre 2 lundis (4, 11).
+    // Override "3 lundis sur mois" → derniers élus = 11, 18, 25. Dans la
+    // plage : seul le 11 est inclus. Résultat : 1 × 100 = 100.
     const rows = [
       { jour_semaine: 1, lieu_service_id: 'L1', service: 'lunch', mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
     ]
-    const overrides = new Map([['2026_5_1___all_____all__', 3]])
-    const total = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-15', null, overrides)
-    expect(total).toBe(150)
+    const electedMap = buildElectedDatesMap([
+      { annee: 2026, mois: 5, jour_semaine: 1, service: null, lieu_service_id: null, nb_jours: 3 },
+    ])
+    const total = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-15', null, null, electedMap)
+    expect(total).toBe(100)
   })
 
   it('cas Joia : un override service=dinner ne zéroter pas le service=lunch du même jds', () => {
-    // Joia : pas de service dimanche soir → override dim/dinner = 0.
-    // Le dim midi (lunch) doit garder son budget normal (4 lundis × 100 = 400).
+    // Override dim/dinner = 0 → Set vide → dinner toujours filtré.
+    // Lunch sans override → toujours élu → compté normalement.
     const rows = [
       { jour_semaine: 7, lieu_service_id: 'L1', service: 'lunch',  mois: null, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
       { jour_semaine: 7, lieu_service_id: 'L1', service: 'dinner', mois: null, ca_food_cible: 50,  ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
     ]
-    // 4 dimanches en mai 2026 (3, 10, 17, 24, 31 = 5 dim en réalité). Vérif :
-    // Mai 2026 commence par ven → 3, 10, 17, 24, 31 = 5 dimanches.
-    // Override dim/dinner = 0 → ratio dinner = 0/5 = 0 → dinner total = 0
-    // Lunch : pas d'override → ratio = 1 → 5 dim × 100 = 500.
-    const overrides = new Map([['2026_5_7_dinner___all__', 0]])
-    const total = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31', null, overrides)
+    // Mai 2026 : 5 dimanches (3, 10, 17, 24, 31).
+    // Override dim/dinner = 0 → toutes cellules dim dinner filtrées
+    // Lunch sans override → 5 × 100 = 500
+    const electedMap = buildElectedDatesMap([
+      { annee: 2026, mois: 5, jour_semaine: 7, service: 'dinner', lieu_service_id: null, nb_jours: 0 },
+    ])
+    const total = periodBudgetTotal({ 2026: rows }, '2026-05-01', '2026-05-31', null, null, electedMap)
     expect(total).toBe(500)
   })
 
@@ -325,11 +330,12 @@ describe('periodBudgetTotal', () => {
       expect(total).toBe(17260)
     })
 
-    it('sans electedDatesMap : régression vers ratio (preuve du bug avant fix)', () => {
-      // Sur 1-25 mai sans electedDatesMap : Privat avec ratio 1/4
-      // = 3 mardis × 2065 = 6195. Salle = 3 × 9000 = 27000. Total = 33195.
-      const total = periodBudgetTotal({ 2026: budgetPrivat }, '2026-05-01', '2026-05-25', null, overridesMap)
-      expect(total).toBe(33195)
+    it('sans electedDatesMap : aucun override appliqué, Privat compté tous les mardis', () => {
+      // Comportement par défaut sans electedDatesMap : isCellElectedForDate
+      // retourne true partout → toutes les cellules sont comptées normalement.
+      // Sur 1-25 mai : Salle = 3 × 9000 + Privat = 3 × 8260 = 27000 + 24780 = 51780
+      const total = periodBudgetTotal({ 2026: budgetPrivat }, '2026-05-01', '2026-05-25')
+      expect(total).toBe(51780)
     })
 
     it('cellule remappée avec lieu_parent_id ≠ lieu_service_id (cas page Analyses)', () => {
@@ -350,17 +356,18 @@ describe('periodBudgetTotal', () => {
       expect(total).toBe(27000)
     })
 
-    it('overrides global (lieu null) inchangés : ratio classique conservé', () => {
-      // Override global (pas de lieu) ne doit PAS être affecté par electedMap.
-      // Mai 2026 = 5 dimanches. Override "3 dim sur mois" → ratio 3/5.
+    it('overrides global traités via dates élues (3 derniers dimanches sur 5)', () => {
+      // Mai 2026 = 5 dimanches (3, 10, 17, 24, 31). Override "3 dim/mois" :
+      // 3 derniers élus (17, 24, 31), 2 premiers fermés (3, 10).
+      // Total mois entier : 3 × 100 = 300 (identique au calcul ratio).
       const rowsDim = [
         { jour_semaine: 7, lieu_service_id: 'L1', service: 'lunch', mois: null,
           ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
       ]
-      const overrideGlobal = new Map([['2026_5_7___all_____all__', 3]])
-      // electedMap vide → pas d'élection, comportement = ratio
-      const total = periodBudgetTotal({ 2026: rowsDim }, '2026-05-01', '2026-05-31', null, overrideGlobal, new Map())
-      // 5 dim × 100 × (3/5) = 300
+      const electedGlobal = buildElectedDatesMap([
+        { annee: 2026, mois: 5, jour_semaine: 7, service: null, lieu_service_id: null, nb_jours: 3 },
+      ])
+      const total = periodBudgetTotal({ 2026: rowsDim }, '2026-05-01', '2026-05-31', null, null, electedGlobal)
       expect(total).toBe(300)
     })
   })

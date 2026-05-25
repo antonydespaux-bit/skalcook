@@ -354,35 +354,44 @@ describe('overrides nb_jours par lieu (cas Privat 1 mardi/mois)', () => {
       { annee: 2026, mois: 5, jour_semaine: 5, service: 'lunch',  lieu_service_id: null, nb_jours: 4 },
     ]
 
-    it('sans override : 5 vendredis × 10 725 = 53 625 (comportement avant fix)', () => {
+    it('sans override : 5 vendredis × 10 725 = 53 625 (comportement de base)', () => {
       const res = caTtcVsBudget([], budgetVen, '2026-05-01', '2026-05-31')
       expect(res.budget).toBe(53625)
     })
 
-    it('avec override global vendredi=4 : 5 × 10 725 × (4/5) = 42 900 (mois complet)', () => {
+    it('avec override global vendredi=4 : 4 derniers vendredis comptés × 10 725 = 42 900 (mois complet)', () => {
+      // Modèle dates élues : 4 derniers vendredis (8, 15, 22, 29) comptés
+      // complet. 1er mai considéré fermé (1ère occurrence).
       const res = caTtcVsBudget([], budgetVen, '2026-05-01', '2026-05-31', null, overridesVen)
       expect(res.budget).toBe(42900)
     })
 
-    it('avec override sur 1-24 mai (4 vendredis dans la plage) : 4 × 10 725 × 0.8 = 34 320', () => {
-      // C'est exactement le bug constaté chez Joia : sans fix, Rapport hebdo
-      // donnerait 4 × 10 725 = 42 900. Avec fix, 34 320 = aligné avec Analyses.
+    it('sur 1-24 mai : 3 vendredis élus dans la plage (8, 15, 22) × 10 725 = 32 175', () => {
+      // Le 29 mai est hors plage (Rapport hebdo s'arrête au 24).
+      // Le 1er mai est fermé (non élu).
+      // → seulement 3 vendredis comptent (8, 15, 22) à 10 725 € chacun.
+      // C'est ce qui aligne Rapport hebdo avec Analyses sur cette plage.
       const res = caTtcVsBudget([], budgetVen, '2026-05-01', '2026-05-24', null, overridesVen)
-      expect(res.budget).toBe(34320)
+      expect(res.budget).toBe(32175)
     })
 
-    it('override global lieu null prioritaire sur priorité (lieu, svc) si pas trouvé', () => {
-      // Si l'override (lieu spécifique) n'existe pas, retombe sur (NULL, svc)
-      // puis (NULL, NULL). C'est la convention de ratioOverrideForCell.
+    it('sur la semaine du 18-24 mai (contient vendredi 22) : 1 × 10 725 = 10 725', () => {
+      // Le 22 mai est dans les 4 derniers vendredis du mois → compté complet.
+      // C'est le cas concret de la semaine 18-24 mai : la cellule vendredi
+      // affiche son budget complet (pas multiplié par 0.8 comme avant).
+      const res = caTtcVsBudget([], budgetVen, '2026-05-18', '2026-05-24', null, overridesVen)
+      expect(res.budget).toBe(10725)
+    })
+
+    it('override global lieu null appliqué via priorité de lookup hiérarchique', () => {
       const budgetSimple = [
         { annee: 2026, mois: 5, jour_semaine: 5, lieu_service_id: 'L1', service: 'dinner',
           couverts_cible: 0, ca_food_cible: 100, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
       ]
       const overrideGlobalAll = [
-        // Pas de service ni lieu : override global "tous les vendredis = 4"
         { annee: 2026, mois: 5, jour_semaine: 5, service: null, lieu_service_id: null, nb_jours: 4 },
       ]
-      // Mai entier : 5 vendredis × 100 × (4/5) = 400
+      // Mai entier : 4 derniers vendredis élus × 100 = 400
       const res = caTtcVsBudget([], budgetSimple, '2026-05-01', '2026-05-31', null, overrideGlobalAll)
       expect(res.budget).toBe(400)
     })
