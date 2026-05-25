@@ -7,6 +7,7 @@ import { supabase, getClientId } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import Navbar from '../../../components/Navbar'
+import { buildElectedDatesMap, isCellElectedForDate } from '../../../lib/caJoursHelpers'
 
 const DEBUG_FALLBACK_CLIENT_ID = 'fa725e66-2cad-4ea4-892a-7eb3e90496a7'
 
@@ -138,7 +139,7 @@ export default function VentesMensuelPage() {
           .or(`mois.is.null,mois.eq.${m}`),
         supabase
           .from('ca_budget_jours_override')
-          .select('mois, jour_semaine, service, lieu_service_id, nb_jours')
+          .select('annee, mois, jour_semaine, service, lieu_service_id, nb_jours')
           .eq('client_id', clientId)
           .eq('annee', y)
           .eq('mois', m),
@@ -207,11 +208,18 @@ export default function VentesMensuelPage() {
     return result
   }, [rawRows, mois])
 
-  // Budget journalier total par jour ISO (1 = lundi … 7 = dimanche)
-  // pour le mois affiché. Override mensuel (mois = m) prioritaire sur le
-  // défaut (mois = NULL) au niveau de la cellule (jds, lieu, service).
-  const budgetByIsoJds = useMemo(() => {
-    const monthNum = Number(mois.split('-')[1])
+  // Budget journalier par date ISO du mois affiché.
+  // Override mensuel (mois = m) prioritaire sur le défaut (mois = NULL) au
+  // niveau de la cellule (jds, lieu, service).
+  // Pour les overrides par lieu (ex : « Privat = 1 mardi/mois »), seules
+  // les N dernières occurrences du jour-de-semaine reçoivent le budget de
+  // la cellule (cf. caJoursHelpers.isCellElectedForDate). Les autres mardis
+  // affichent 0 pour cette cellule → le cumul mensuel reste cohérent avec
+  // `monthlyBudgetAligned` et la coloration jour-par-jour reste juste.
+  const budgetByDateIso = useMemo(() => {
+    const [yStr, mStr] = mois.split('-')
+    const annee = Number(yStr)
+    const monthNum = Number(mStr)
     const cellMap = new Map() // key = `${jds}_${lieu}_${svc}`
     for (const b of budgetRows) {
       const key = `${b.jour_semaine}_${b.lieu_service_id}_${b.service}`
@@ -221,25 +229,28 @@ export default function VentesMensuelPage() {
         cellMap.set(key, b)
       }
     }
-    const out = new Map()
-    for (const cell of cellMap.values()) {
-      const total =
-        Number(cell.ca_food_cible || 0) +
-        Number(cell.ca_bev_20_cible || 0) +
-        Number(cell.ca_bev_10_cible || 0) +
-        Number(cell.ca_autre_cible || 0)
-      out.set(cell.jour_semaine, (out.get(cell.jour_semaine) || 0) + total)
+    const electedMap = buildElectedDatesMap(joursOverrideRows)
+    const out = new Map() // key = iso date → total budget
+    for (const d of days) {
+      const isoJds = jsWeekdayToIso(d.weekday)
+      let total = 0
+      for (const cell of cellMap.values()) {
+        if (cell.jour_semaine !== isoJds) continue
+        if (!isCellElectedForDate(cell, d.iso, annee, monthNum, electedMap)) continue
+        total +=
+          Number(cell.ca_food_cible || 0) +
+          Number(cell.ca_bev_20_cible || 0) +
+          Number(cell.ca_bev_10_cible || 0) +
+          Number(cell.ca_autre_cible || 0)
+      }
+      out.set(d.iso, total)
     }
     return out
-  }, [budgetRows, mois])
+  }, [budgetRows, joursOverrideRows, mois, days])
 
   const daysWithBudget = useMemo(() => {
-    return days.map((d) => {
-      const isoJds = jsWeekdayToIso(d.weekday)
-      const budget = budgetByIsoJds.get(isoJds) || 0
-      return { ...d, budget }
-    })
-  }, [days, budgetByIsoJds])
+    return days.map((d) => ({ ...d, budget: budgetByDateIso.get(d.iso) || 0 }))
+  }, [days, budgetByDateIso])
 
   // Budget MENSUEL aligné sur le Récapitulatif annuel de la page Budgets :
   // - Ne prend que les cellules ca_budgets avec mois = monthNum (ignore les

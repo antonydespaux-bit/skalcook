@@ -227,3 +227,93 @@ describe('formatters', () => {
     expect(formatPeriode('2026-05-05', '2026-05-05')).toBe('du 05 mai')
   })
 })
+
+// ── Cas Privat (1 mardi/mois) — overrides par lieu ────────────────────────
+//
+// Référence du bug : avant fix, periodBudget agrégeait un budget par jds×lieu
+// puis le multipliait par le nb calendaire d'occurrences du jds dans la
+// période. Pour un lieu "Privat" facturé 1 mardi/mois mais avec un budget
+// mensuel saisi en /budgets, le budget cumulé se voyait multiplié par 4 ou 5.
+//
+// Comportement attendu après fix : la cellule budgétée n'est comptée que pour
+// les N dernières occurrences du jour-de-semaine dans le mois (par défaut
+// "dernier mardi" pour Privat = 1).
+describe('overrides nb_jours par lieu (cas Privat 1 mardi/mois)', () => {
+  // Mai 2026 a 4 mardis : 05, 12, 19, 26
+  const budgetRowsPrivat = [
+    // Joia salle (L1) ouvert tous les mardis soir : budget 9 000 €
+    { annee: 2026, mois: 5, jour_semaine: 2, lieu_service_id: 'L1', service: 'dinner',
+      couverts_cible: 45, ca_food_cible: 7000, ca_bev_20_cible: 1500, ca_bev_10_cible: 500, ca_autre_cible: 0 },
+    // Joia Privat (LPRIVAT) ouvert 1 mardi soir/mois : budget 5 000 €
+    { annee: 2026, mois: 5, jour_semaine: 2, lieu_service_id: 'LPRIVAT', service: 'dinner',
+      couverts_cible: 30, ca_food_cible: 3500, ca_bev_20_cible: 1500, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+  ]
+  const overridesPrivat = [
+    { annee: 2026, mois: 5, jour_semaine: 2, service: 'dinner', lieu_service_id: 'LPRIVAT', nb_jours: 1 },
+  ]
+
+  it('periodBudget : sans override → toutes les cellules sont comptées chaque mardi (régression)', () => {
+    // Sans passer joursOverrideRows, le comportement historique : tous les
+    // mardis du mois reçoivent budget Salle + Privat → 4 × (9000 + 5000) = 56000.
+    const res = caTtcVsBudget([], budgetRowsPrivat, '2026-05-01', '2026-05-31')
+    expect(res.budget).toBe(56000)
+  })
+
+  it('periodBudget : avec override → Privat n\'est compté que le dernier mardi (26)', () => {
+    const res = caTtcVsBudget([], budgetRowsPrivat, '2026-05-01', '2026-05-31', null, overridesPrivat)
+    // Salle (L1) tous les mardis : 4 × 9000 = 36000
+    // Privat (LPRIVAT) seulement le 26 : 1 × 5000 = 5000
+    // Total = 41000
+    expect(res.budget).toBe(41000)
+  })
+
+  it('periodBudget : semaine SANS le dernier mardi → Privat à 0', () => {
+    // 5-11 mai (mardi 5) : pas le dernier mardi du mois.
+    const res = caTtcVsBudget([], budgetRowsPrivat, '2026-05-05', '2026-05-11', null, overridesPrivat)
+    // Seulement Salle ce mardi : 9000
+    expect(res.budget).toBe(9000)
+  })
+
+  it('periodBudget : semaine AVEC le dernier mardi (26 mai) → Privat compté', () => {
+    // 25-31 mai (mardi 26) : c'est le dernier mardi.
+    const res = caTtcVsBudget([], budgetRowsPrivat, '2026-05-25', '2026-05-31', null, overridesPrivat)
+    expect(res.budget).toBe(14000) // 9000 + 5000
+  })
+
+  it('couvertsJourParJour : Privat (30 cv) n\'est ajouté que le 26 mai', () => {
+    const jours = couvertsJourParJour([], budgetRowsPrivat, '2026-05-01', '2026-05-31', null, overridesPrivat)
+    const mardi05 = jours.find((j) => j.iso === '2026-05-05')
+    const mardi12 = jours.find((j) => j.iso === '2026-05-12')
+    const mardi19 = jours.find((j) => j.iso === '2026-05-19')
+    const mardi26 = jours.find((j) => j.iso === '2026-05-26')
+    // Mardis sans privat : seulement Salle (45 couv dinner)
+    expect(mardi05?.soir.budget).toBe(45)
+    expect(mardi12?.soir.budget).toBe(45)
+    expect(mardi19?.soir.budget).toBe(45)
+    // Mardi 26 : Salle 45 + Privat 30 = 75
+    expect(mardi26?.soir.budget).toBe(75)
+  })
+
+  it('tmParLieuService : Privat agrège uniquement le mardi élu', () => {
+    const lieuxMapPrivat = new Map([['L1', 'Salle'], ['LPRIVAT', 'Privat']])
+    const lignes = tmParLieuService([], budgetRowsPrivat, lieuxMapPrivat, '2026-05-01', '2026-05-31', null, overridesPrivat)
+    const privat = lignes.find((l) => l.lieu_id === 'LPRIVAT' && l.service === 'dinner')
+    // Privat compté 1 fois : 30 couverts × 1 mardi, ca 5000 × 1
+    expect(privat?.budget_couverts).toBe(30)
+    expect(privat?.budget_ca).toBe(5000)
+  })
+
+  it('respecte lieu_service_id_source (cas remappage parent du rapport hebdo)', () => {
+    // Cas réel : la page rapport-hebdo remap lieu_service_id vers le parent
+    // pour les agrégations. La cellule budget remappée perd son ID enfant
+    // mais conserve lieu_service_id_source pour matcher l'override.
+    const budgetRemap = budgetRowsPrivat.map((r) => ({
+      ...r,
+      lieu_service_id_source: r.lieu_service_id, // ID enfant conservé
+      lieu_service_id: r.lieu_service_id === 'LPRIVAT' ? 'JOIA' : r.lieu_service_id, // remap vers parent
+    }))
+    const res = caTtcVsBudget([], budgetRemap, '2026-05-01', '2026-05-31', null, overridesPrivat)
+    // Même résultat que sans remap : 41000
+    expect(res.budget).toBe(41000)
+  })
+})
