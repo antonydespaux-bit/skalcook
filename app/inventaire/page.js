@@ -15,6 +15,7 @@ import {
 export default function InventairePage() {
   const [inventaires, setInventaires] = useState([])
   const [dernierLignes, setDernierLignes] = useState([])
+  const [valeurParInv, setValeurParInv] = useState({})
   const [loading, setLoading] = useState(true)
   const [filtre, setFiltre] = useState('tous')
   const [deleting, setDeleting] = useState(null)
@@ -61,6 +62,26 @@ export default function InventairePage() {
       setDernierLignes(lignes || [])
     } else {
       setDernierLignes([])
+    }
+
+    // Total par inventaire pour l'affichage en liste (somme valeur_stock).
+    // Une seule requête filtrée par client_id puis agrégation client-side —
+    // bien plus simple qu'un view SQL et largement OK pour ce volume.
+    const invIds = (data || []).map(i => i.id)
+    if (invIds.length > 0) {
+      const { data: allLignes } = await supabase
+        .from('inventaire_lignes')
+        .select('inventaire_id, valeur_stock')
+        .eq('client_id', clientId)
+        .in('inventaire_id', invIds)
+      const totals = {}
+      for (const l of allLignes || []) {
+        const v = Number(l.valeur_stock) || 0
+        totals[l.inventaire_id] = (totals[l.inventaire_id] || 0) + v
+      }
+      setValeurParInv(totals)
+    } else {
+      setValeurParInv({})
     }
 
     setLoading(false)
@@ -321,6 +342,14 @@ export default function InventairePage() {
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {valeurParInv[inv.id] != null && (
+                    <div style={{ textAlign: 'right', minWidth: '70px' }}>
+                      <div style={{ fontSize: '14px', fontWeight: '600', color: c.texte, whiteSpace: 'nowrap' }}>
+                        {formatEur(valeurParInv[inv.id])}
+                      </div>
+                      <div style={{ fontSize: '10px', color: c.texteMuted, marginTop: '2px' }}>Valeur</div>
+                    </div>
+                  )}
                   {(role === 'admin' || role === 'cuisine' || role === 'bar') && inv.statut === 'brouillon' && (
                     <button
                       onClick={(e) => { e.stopPropagation(); router.push(`/inventaire/${inv.id}/saisie${queryString}`) }}
