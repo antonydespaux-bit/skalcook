@@ -43,18 +43,37 @@ export default function ImportInventairePage() {
     reader.onload = (evt) => {
       try {
         const wb = XLSX.read(evt.target.result, { type: 'binary' })
-        const sheet = wb.Sheets[wb.SheetNames[0]]
-        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 })
-        const parsed = []
-        for (let i = 1; i < rows.length; i++) {
-          const row = rows[i]
-          if (!row || row.length === 0) continue
-          const nom = String(row[0] || '').trim()
-          const qStr = String(row[1] || '').replace(',', '.').replace(/[^0-9.\-]/g, '')
-          const quantite = parseFloat(qStr)
-          if (!nom || isNaN(quantite)) continue
-          parsed.push({ nom, quantite })
+
+        const parseSheet = (sheet) => {
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 })
+          const out = []
+          for (let i = 1; i < rows.length; i++) {
+            const row = rows[i]
+            if (!row || row.length === 0) continue
+            const nom = String(row[0] || '').trim()
+            const qStr = String(row[1] || '').replace(',', '.').replace(/[^0-9.\-]/g, '')
+            const quantite = parseFloat(qStr)
+            if (!nom || isNaN(quantite)) continue
+            out.push({ nom, quantite })
+          }
+          return out
         }
+
+        // Excel peut masquer des feuilles vides en première position : on scanne
+        // d'abord les feuilles visibles, puis les masquées en fallback, et on prend
+        // la première qui contient au moins une ligne valide.
+        const sheetMeta = wb.Workbook?.Sheets || []
+        const isHidden = (i) => (sheetMeta[i]?.Hidden ?? 0) !== 0
+        const visible = wb.SheetNames.filter((_, i) => !isHidden(i))
+        const hidden = wb.SheetNames.filter((_, i) => isHidden(i))
+        const ordered = [...visible, ...hidden]
+
+        let parsed = []
+        for (const name of ordered) {
+          parsed = parseSheet(wb.Sheets[name])
+          if (parsed.length > 0) break
+        }
+
         if (parsed.length === 0) {
           setError('Aucune ligne valide trouvée. Vérifie le format : colonne A = Nom, colonne B = Quantité.')
           setLignes([])
