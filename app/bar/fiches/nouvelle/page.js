@@ -24,6 +24,7 @@ export default function NouvelleBarFiche() {
   const [prixTTC, setPrixTTC] = useState('')
   const [perte, setPerte] = useState(0)
   const [description, setDescription] = useState('')
+  const [instructions, setInstructions] = useState('')
   const [saison, setSaison] = useState('')
   const [annee, setAnnee] = useState(new Date().getFullYear())
   const [allergenes, setAllergenes] = useState([])
@@ -58,7 +59,7 @@ export default function NouvelleBarFiche() {
     }))
   ]
 
-  const autosaveData = { nom, categoriePlat, lieuId, nbPortions, prixTTC, perte, description, saison, annee, allergenes, ingredients }
+  const autosaveData = { nom, categoriePlat, lieuId, nbPortions, prixTTC, perte, description, instructions, saison, annee, allergenes, ingredients }
   const annees = getYearsRange()
   const { hasDraft, lastSaved, getDraft, clearDraft } = useAutosave('nouvelle-fiche-bar-draft', autosaveData, 60000)
 
@@ -119,6 +120,7 @@ export default function NouvelleBarFiche() {
     setPrixTTC(draft.prixTTC || '')
     setPerte(draft.perte || 0)
     setDescription(draft.description || '')
+    setInstructions(draft.instructions || '')
     setSaison(draft.saison || '')
     setAnnee(draft.annee || new Date().getFullYear())
     setAllergenes(draft.allergenes || [])
@@ -217,7 +219,8 @@ export default function NouvelleBarFiche() {
         lieu_id: lieuId || null,
         nb_portions: parseInt(nbPortions),
         prix_ttc: isSousFiche ? null : (prixTTC ? parseFloat(prixTTC) : null),
-        description, saison: saison || null, annee: annee || null, allergenes,
+        description, instructions: instructions || null,
+        saison: saison || null, annee: annee || null, allergenes,
         cout_portion: coutPortion ? parseFloat(coutPortion) : null,
         unite_production: uniteProduction,
         perte: perte ? parseFloat(perte) : 0,
@@ -434,6 +437,21 @@ export default function NouvelleBarFiche() {
               />
             </div>
           </div>
+        </Card>
+
+        {/* Instructions de préparation */}
+        <Card c={c} style={{ marginBottom: '12px' }}>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '6px' }}>📋 Instructions de préparation</div>
+          <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '12px' }}>Les sauts de ligne seront respectés à l'écran et à l'impression.</div>
+          <textarea value={instructions} onChange={e => setInstructions(e.target.value)} rows={8}
+            placeholder={`1. Givrer le verre au sucre...\n2. Frapper au shaker...\n\nDressage :\n- Zeste de citron...`}
+            style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', color: c.texte, background: c.blanc, lineHeight: '1.7', minHeight: '180px' }}
+          />
+          {instructions && (
+            <div style={{ marginTop: '8px', fontSize: '12px', color: c.texteMuted }}>
+              {instructions.split('\n').length} ligne{instructions.split('\n').length > 1 ? 's' : ''} — {instructions.length} caractères
+            </div>
+          )}
         </Card>
 
         {/* Ingrédients */}

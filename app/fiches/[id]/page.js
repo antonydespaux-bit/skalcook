@@ -40,7 +40,7 @@ export default function FicheDetail() {
         .print-only { display: block !important; }
         .print-instructions { page-break-before: always; margin-top: 0 !important; }
         body { background: white !important; margin: 0; padding: 0; }
-        @page { margin: 15mm 15mm 15mm 15mm; }
+        @page { size: A4 portrait; margin: 15mm 15mm 15mm 15mm; }
       }
       @media screen {
         .print-only { display: none !important; }
