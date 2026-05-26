@@ -26,6 +26,7 @@ export default function NouvelleFiche() {
   const [prixTTC, setPrixTTC] = useState('')
   const [perte, setPerte] = useState(0)
   const [description, setDescription] = useState('')
+  const [instructions, setInstructions] = useState('')
   const [saison, setSaison] = useState('')
   const [annee, setAnnee] = useState(new Date().getFullYear())
   const [allergenes, setAllergenes] = useState([])
@@ -50,7 +51,7 @@ export default function NouvelleFiche() {
   const catSelectionnee = categoriesDyn.find(cat => cat.id === categoriePlat)
   const isSousFiche = catSelectionnee?.nom === 'Sous-fiches' || catSelectionnee?.nom === 'Sous-fiche'
 
-  const autosaveData = { nom, categoriePlat, lieuId, nbPortions, unitePortions, prixTTC, perte, description, saison, annee, allergenes, ingredients }
+  const autosaveData = { nom, categoriePlat, lieuId, nbPortions, unitePortions, prixTTC, perte, description, instructions, saison, annee, allergenes, ingredients }
   const { hasDraft, lastSaved, getDraft, clearDraft } = useAutosave('nouvelle-fiche-draft', autosaveData, 60000)
 
   useEffect(() => {
@@ -100,6 +101,7 @@ export default function NouvelleFiche() {
     setPrixTTC(draft.prixTTC || '')
     setPerte(draft.perte || 0)
     setDescription(draft.description || '')
+    setInstructions(draft.instructions || '')
     setSaison(draft.saison || '')
     setAnnee(draft.annee || new Date().getFullYear())
     setAllergenes(draft.allergenes || [])
@@ -191,7 +193,8 @@ export default function NouvelleFiche() {
       is_sub_fiche: !!isSousFiche,
       nb_portions: parseInt(nbPortions),
       prix_ttc: isSousFiche ? null : (prixTTC ? parseFloat(prixTTC) : null),
-      description, saison: saison || null, annee: annee || null, allergenes,
+      description, instructions: instructions || null,
+      saison: saison || null, annee: annee || null, allergenes,
       cout_portion: coutPortion ? parseFloat(coutPortion) : null,
       perte: perte ? parseFloat(perte) : 0,
       client_id: clientId
@@ -440,6 +443,21 @@ export default function NouvelleFiche() {
             </div>
           </div>
         </div>
+
+        {/* Instructions de préparation */}
+        <Card c={c} style={{ marginBottom: '12px' }}>
+          <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '6px' }}>📋 Instructions de préparation</div>
+          <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '12px' }}>Les sauts de ligne seront respectés à l'écran et à l'impression.</div>
+          <textarea value={instructions} onChange={e => setInstructions(e.target.value)} rows={8}
+            placeholder={`1. Préparer la marinade...\n2. Saisir la viande à feu vif...\n\nDressage :\n- Disposer les légumes...`}
+            style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', color: c.texte, background: c.blanc, lineHeight: '1.7', minHeight: '180px' }}
+          />
+          {instructions && (
+            <div style={{ marginTop: '8px', fontSize: '12px', color: c.texteMuted }}>
+              {instructions.split('\n').length} ligne{instructions.split('\n').length > 1 ? 's' : ''} — {instructions.length} caractères
+            </div>
+          )}
+        </Card>
 
         {/* Ingrédients */}
         <Card c={c} style={{ marginBottom: '12px' }}>
