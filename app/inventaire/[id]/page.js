@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import * as XLSX from 'xlsx'
 import { supabase, getClientId } from '../../../lib/supabase'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '../../../lib/useTheme'
@@ -78,6 +79,40 @@ export default function DetailInventairePage() {
 
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'
 
+  const exportXlsx = () => {
+    if (!inventaire || lignes.length === 0) return
+    const header = [
+      'Ingrédient', 'Unité', 'Prix unitaire (€)',
+      'Qté théorique', 'Qté réelle', 'Écart',
+      'Écart valorisé (€)', 'Valeur stock (€)',
+    ]
+    const rows = lignes.map(l => {
+      const ecart = l.ecart != null ? Number(l.ecart) : null
+      const cout = l.cout_unitaire != null ? Number(l.cout_unitaire) : null
+      return [
+        l.nom_ingredient || '',
+        l.unite || '',
+        cout,
+        l.quantite_theorique != null ? Number(l.quantite_theorique) : null,
+        l.quantite_reelle != null ? Number(l.quantite_reelle) : null,
+        ecart,
+        ecart != null && cout != null ? +(ecart * cout).toFixed(2) : null,
+        l.valeur_stock != null ? Number(l.valeur_stock) : null,
+      ]
+    })
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows])
+    ws['!cols'] = [
+      { wch: 32 }, { wch: 10 }, { wch: 14 },
+      { wch: 14 }, { wch: 14 }, { wch: 10 },
+      { wch: 16 }, { wch: 14 },
+    ]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Inventaire')
+    const safeDate = (inventaire.date_inventaire || '').slice(0, 10) || 'sans-date'
+    const safeSection = (inventaire.section || 'inventaire').replace(/[^a-z0-9-]/gi, '-').toLowerCase()
+    XLSX.writeFile(wb, `inventaire_${safeSection}_${safeDate}.xlsx`)
+  }
+
   if (loading) return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
       <Navbar section={sectionParam === 'bar' ? 'bar' : 'cuisine'} />
@@ -132,14 +167,29 @@ export default function DetailInventairePage() {
                 {inventaire.date_validation && ` — validé le ${formatDate(inventaire.date_validation)}`}
               </div>
             </div>
-            <span style={{
-              fontSize: '12px', padding: '4px 12px', borderRadius: '20px',
-              background: isBrouillon ? '#FEF3C7' : '#DCFCE7',
-              color: isBrouillon ? '#92400E' : '#16A34A',
-              fontWeight: '500',
-            }}>
-              {isBrouillon ? 'Brouillon' : 'Validé'}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {lignes.length > 0 && (
+                <button
+                  onClick={exportXlsx}
+                  style={{
+                    padding: '6px 12px', background: c.blanc,
+                    border: `0.5px solid ${c.bordure}`, color: c.texte,
+                    borderRadius: '20px', fontSize: '12px', fontWeight: '500',
+                    cursor: 'pointer',
+                  }}
+                >
+                  📤 Export Excel
+                </button>
+              )}
+              <span style={{
+                fontSize: '12px', padding: '4px 12px', borderRadius: '20px',
+                background: isBrouillon ? '#FEF3C7' : '#DCFCE7',
+                color: isBrouillon ? '#92400E' : '#16A34A',
+                fontWeight: '500',
+              }}>
+                {isBrouillon ? 'Brouillon' : 'Validé'}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -175,49 +225,55 @@ export default function DetailInventairePage() {
 
         {/* Tableau des lignes */}
         <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${c.bordure}` }}>
-                <th style={{ padding: '12px 16px', textAlign: 'left', color: c.texteMuted, fontWeight: '500', fontSize: '12px' }}>Ingrédient</th>
-                <th style={{ padding: '12px 8px', textAlign: 'right', color: c.texteMuted, fontWeight: '500', fontSize: '12px' }}>Théo.</th>
-                <th style={{ padding: '12px 8px', textAlign: 'right', color: c.texteMuted, fontWeight: '500', fontSize: '12px' }}>Réel</th>
-                <th style={{ padding: '12px 8px', textAlign: 'right', color: c.texteMuted, fontWeight: '500', fontSize: '12px' }}>Écart</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right', color: c.texteMuted, fontWeight: '500', fontSize: '12px' }}>Valeur</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lignes.map(l => {
-                const ecart = l.ecart != null ? Number(l.ecart) : null
-                const ecartPct = ecart != null && l.quantite_theorique
-                  ? Math.abs(ecart / Number(l.quantite_theorique)) * 100 : null
-                const couleur = ecartPct == null ? c.texte
-                  : ecartPct < 5 ? '#16A34A'
-                  : ecartPct < 15 ? '#D97706'
-                  : '#DC2626'
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${c.bordure}` }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', color: c.texteMuted, fontWeight: '500', fontSize: '12px' }}>Ingrédient</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'right', color: c.texteMuted, fontWeight: '500', fontSize: '12px', whiteSpace: 'nowrap' }}>Prix U.</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'right', color: c.texteMuted, fontWeight: '500', fontSize: '12px' }}>Théo.</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'right', color: c.texteMuted, fontWeight: '500', fontSize: '12px' }}>Réel</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'right', color: c.texteMuted, fontWeight: '500', fontSize: '12px' }}>Écart</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right', color: c.texteMuted, fontWeight: '500', fontSize: '12px' }}>Valeur</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lignes.map(l => {
+                  const ecart = l.ecart != null ? Number(l.ecart) : null
+                  const ecartPct = ecart != null && l.quantite_theorique
+                    ? Math.abs(ecart / Number(l.quantite_theorique)) * 100 : null
+                  const couleur = ecartPct == null ? c.texte
+                    : ecartPct < 5 ? '#16A34A'
+                    : ecartPct < 15 ? '#D97706'
+                    : '#DC2626'
 
-                return (
-                  <tr key={l.id} style={{ borderBottom: `0.5px solid ${c.bordure}` }}>
-                    <td style={{ padding: '10px 16px', color: c.texte }}>
-                      {l.nom_ingredient}
-                      {l.est_critique && <span style={{ fontSize: '9px', background: '#FEF3C7', color: '#92400E', padding: '1px 5px', borderRadius: '8px', marginLeft: '6px' }}>P</span>}
-                    </td>
-                    <td style={{ padding: '10px 8px', textAlign: 'right', color: c.texteMuted }}>
-                      {l.quantite_theorique != null ? Number(l.quantite_theorique).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) : '—'} {l.unite}
-                    </td>
-                    <td style={{ padding: '10px 8px', textAlign: 'right', color: c.texte, fontWeight: '500' }}>
-                      {l.quantite_reelle != null ? Number(l.quantite_reelle).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) : '—'} {l.quantite_reelle != null ? l.unite : ''}
-                    </td>
-                    <td style={{ padding: '10px 8px', textAlign: 'right', color: couleur, fontWeight: '500' }}>
-                      {ecart != null ? `${ecart > 0 ? '+' : ''}${ecart.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}` : '—'}
-                    </td>
-                    <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texte }}>
-                      {l.valeur_stock != null ? `${Number(l.valeur_stock).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} €` : '—'}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                  return (
+                    <tr key={l.id} style={{ borderBottom: `0.5px solid ${c.bordure}` }}>
+                      <td style={{ padding: '10px 16px', color: c.texte }}>
+                        {l.nom_ingredient}
+                        {l.est_critique && <span style={{ fontSize: '9px', background: '#FEF3C7', color: '#92400E', padding: '1px 5px', borderRadius: '8px', marginLeft: '6px' }}>P</span>}
+                      </td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', color: c.texteMuted, whiteSpace: 'nowrap' }}>
+                        {l.cout_unitaire != null ? `${Number(l.cout_unitaire).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} €${l.unite ? `/${l.unite}` : ''}` : '—'}
+                      </td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', color: c.texteMuted }}>
+                        {l.quantite_theorique != null ? Number(l.quantite_theorique).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) : '—'} {l.unite}
+                      </td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', color: c.texte, fontWeight: '500' }}>
+                        {l.quantite_reelle != null ? Number(l.quantite_reelle).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) : '—'} {l.quantite_reelle != null ? l.unite : ''}
+                      </td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', color: couleur, fontWeight: '500' }}>
+                        {ecart != null ? `${ecart > 0 ? '+' : ''}${ecart.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}` : '—'}
+                      </td>
+                      <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texte }}>
+                        {l.valeur_stock != null ? `${Number(l.valeur_stock).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} €` : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Actions */}
