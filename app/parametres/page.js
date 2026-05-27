@@ -77,6 +77,7 @@ export default function SettingsPage() {
           seuil_vert_boissons: clientData.seuil_vert_boissons || 22,
           seuil_orange_boissons: clientData.seuil_orange_boissons || 28,
           tva_restauration: clientData.tva_restauration || 10,
+          fiche_format_defaut: clientData.fiche_format_defaut || 'brasserie',
           inventaire_tournant_actif: clientData.inventaire_tournant_actif ?? true,
           inventaire_tournant_frequence: clientData.inventaire_tournant_frequence || 'weekly',
           inventaire_tournant_jour_semaine: clientData.inventaire_tournant_jour_semaine ?? 1,
@@ -215,6 +216,7 @@ export default function SettingsPage() {
         seuil_vert_boissons: parseFloat(params.seuil_vert_boissons),
         seuil_orange_boissons: parseFloat(params.seuil_orange_boissons),
         tva_restauration: parseFloat(params.tva_restauration),
+        fiche_format_defaut: params.fiche_format_defaut === 'etoile' ? 'etoile' : 'brasserie',
         inventaire_tournant_actif: !!params.inventaire_tournant_actif,
         inventaire_tournant_frequence: params.inventaire_tournant_frequence,
         inventaire_tournant_jour_semaine: parseInt(params.inventaire_tournant_jour_semaine),
@@ -509,6 +511,37 @@ export default function SettingsPage() {
                     style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '0.5px solid #FDE68A', fontSize: '14px', outline: 'none', color: c.texte, background: '#FFFBEB' }}
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* Format de fiche technique */}
+            <div style={{ background: c.blanc, borderRadius: '12px', padding: '20px', border: `0.5px solid ${c.bordure}` }}>
+              <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>📖 Format de fiche technique par défaut</div>
+              <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '14px' }}>
+                Format proposé à la création d'une fiche. Chaque fiche peut surcharger ce choix individuellement.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '10px' }}>
+                {[
+                  { value: 'brasserie', titre: '🥖 Brasserie', desc: 'Vue à plat : liste d\'ingrédients + méthode globale + sous-fiches. Format actuel.' },
+                  { value: 'etoile', titre: '⭐ Étoilé', desc: 'Préparations regroupées dans la fiche, chacune avec son descriptif inline (style livret professionnel).' },
+                ].map(opt => {
+                  const actif = (params.fiche_format_defaut || 'brasserie') === opt.value
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => setParams({ ...params, fiche_format_defaut: opt.value })}
+                      style={{
+                        textAlign: 'left', padding: '14px 16px', borderRadius: '10px', cursor: 'pointer',
+                        background: actif ? c.accentClair : c.fond,
+                        border: `0.5px solid ${actif ? c.accent : c.bordure}`,
+                        color: c.texte,
+                      }}
+                    >
+                      <div style={{ fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: actif ? c.accent : c.texte }}>{opt.titre}</div>
+                      <div style={{ fontSize: '11px', color: c.texteMuted, lineHeight: '1.5' }}>{opt.desc}</div>
+                    </button>
+                  )
+                })}
               </div>
             </div>
 

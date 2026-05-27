@@ -146,6 +146,7 @@ export const updateClientSchema = z.object({
   url_rib:           z.preprocess(blankToUndef, z.string().max(500).optional().nullable()),
   email_contact:     z.preprocess(blankToUndef, z.string().email().optional().nullable()),
   telephone_contact: z.preprocess(blankToUndef, z.string().max(20).optional().nullable()),
+  fiche_format_defaut: z.enum(['brasserie', 'etoile']).optional(),
 })
 
 export type UpdateClientInput = z.infer<typeof updateClientSchema>
