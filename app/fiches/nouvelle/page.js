@@ -11,6 +11,7 @@ import { ALLERGENES } from '../../../lib/allergenes'
 import { SAISONS, getYearsRange } from '../../../lib/saison'
 import IngredientSearch from '../../../components/IngredientSearch'
 import BackButton from '../../../components/BackButton'
+import SectionsEditor from '../../../components/SectionsEditor'
 import { uploadFichePhoto } from '../../../lib/uploadPhoto'
 
 import { isIngredientPossible } from '../../../lib/foodCost'
@@ -44,6 +45,7 @@ export default function NouvelleFiche() {
   const [draftRestored, setDraftRestored] = useState(false)
   const [formatAffichage, setFormatAffichage] = useState('brasserie')
   const [clientFormatDefaut, setClientFormatDefaut] = useState('brasserie')
+  const [sections, setSections] = useState([])
   const router = useRouter()
   const { c, logoUrl, nomEtablissement } = useTheme()
   const annees = getYearsRange()
@@ -190,6 +192,20 @@ export default function NouvelleFiche() {
 
     const coutPortion = calculerCoutPortion()
 
+    // En mode étoilé, on alimente aussi `instructions` (concat des descriptifs)
+    // pour qu'une bascule en vue brasserie reste lisible.
+    let instructionsFinales = instructions
+    if (formatAffichage === 'etoile') {
+      instructionsFinales = sections
+        .filter(s => (s.nom || '').trim() || (s.descriptif || '').trim())
+        .map(s => {
+          const titre = (s.nom || '').trim()
+          const desc = (s.descriptif || '').trim()
+          return titre ? `${titre} :\n${desc}` : desc
+        })
+        .join('\n\n')
+    }
+
     const newFiche = {
       nom,
       categorie: catSelectionnee?.nom || '',
@@ -199,7 +215,7 @@ export default function NouvelleFiche() {
       is_sub_fiche: !!isSousFiche,
       nb_portions: parseInt(nbPortions),
       prix_ttc: isSousFiche ? null : (prixTTC ? parseFloat(prixTTC) : null),
-      description, instructions: instructions || null,
+      description, instructions: instructionsFinales || null,
       saison: saison || null, annee: annee || null, allergenes,
       cout_portion: coutPortion ? parseFloat(coutPortion) : null,
       perte: perte ? parseFloat(perte) : 0,
@@ -223,6 +239,37 @@ export default function NouvelleFiche() {
       }
     }
 
+    // En mode étoilé, on insère les sections une à une pour récupérer leur id
+    // réel et le mapper depuis le tempId UI.
+    const tempIdToDbId = new Map()
+    if (formatAffichage === 'etoile' && !isSousFiche) {
+      const sectionsAInserer = sections.filter(s =>
+        (s.nom || '').trim() ||
+        (s.descriptif || '').trim() ||
+        ingredients.some(i => i.section_temp_id === s.tempId)
+      )
+      for (let i = 0; i < sectionsAInserer.length; i++) {
+        const s = sectionsAInserer[i]
+        const { data: inserted, error: errSection } = await supabase
+          .from('fiche_sections')
+          .insert({
+            client_id: clientId,
+            fiche_id: fiche.id,
+            ordre: i,
+            nom: (s.nom || '').trim() || `Préparation ${i + 1}`,
+            descriptif: s.descriptif || null
+          })
+          .select('id')
+          .single()
+        if (errSection || !inserted) {
+          setError('Erreur sauvegarde section : ' + (errSection?.message || 'inconnue'))
+          setLoading(false)
+          return
+        }
+        tempIdToDbId.set(s.tempId, inserted.id)
+      }
+    }
+
     const ingredientsAInserer = ingredients
       .filter(i => i.ingredient_id && i.quantite)
       .map(i => ({
@@ -230,7 +277,8 @@ export default function NouvelleFiche() {
         ingredient_id: i.ingredient_id,
         quantite: parseFloat(i.quantite),
         unite: i.unite,
-        client_id: clientId
+        client_id: clientId,
+        section_id: formatAffichage === 'etoile' ? (tempIdToDbId.get(i.section_temp_id) || null) : null
       }))
 
     if (ingredientsAInserer.length > 0) {
@@ -258,14 +306,7 @@ export default function NouvelleFiche() {
     })
 
     clearDraft()
-    // En mode étoilé, on redirige vers l'éditeur pour que le chef compose ses
-    // préparations (sections + descriptifs) — l'UI sections n'existe que sur
-    // la page modifier, pas sur la page de création.
-    if (formatAffichage === 'etoile' && !isSousFiche) {
-      router.push(`/fiches/${fiche.id}/modifier`)
-    } else {
-      router.push(isSousFiche ? '/sous-fiches' : '/fiches')
-    }
+    router.push(isSousFiche ? '/sous-fiches' : '/fiches')
   }
 
   const fc = foodCost()
@@ -341,7 +382,19 @@ export default function NouvelleFiche() {
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setFormatAffichage(opt.value)}
+                  onClick={() => {
+                    if (opt.value === 'etoile' && sections.length === 0) {
+                      // Bascule brasserie → étoilé : on rattache les ingrédients
+                      // déjà saisis (s'il y en a) à une section englobante.
+                      const hasIngs = ingredients.some(i => i.ingredient_id)
+                      if (hasIngs) {
+                        const tempId = `tmp_${Date.now()}`
+                        setSections([{ tempId, nom: 'Préparation', descriptif: instructions || '' }])
+                        setIngredients(ingredients.map(i => ({ ...i, section_temp_id: i.section_temp_id || tempId })))
+                      }
+                    }
+                    setFormatAffichage(opt.value)
+                  }}
                   style={{
                     padding: '6px 14px', borderRadius: '7px', fontSize: '12px', border: 'none', cursor: 'pointer',
                     fontWeight: formatAffichage === opt.value ? '500' : '400',
@@ -351,12 +404,6 @@ export default function NouvelleFiche() {
                 >{opt.label}</button>
               ))}
             </div>
-          </div>
-        )}
-
-        {formatAffichage === 'etoile' && !isSousFiche && (
-          <div style={{ background: c.accentClair, color: c.accent, borderRadius: '10px', padding: '10px 14px', fontSize: '12px', marginBottom: '12px', border: `0.5px solid ${c.accent}40` }}>
-            ⭐ Format étoilé : remplissez d'abord les infos générales. Les préparations (sections + ingrédients + descriptifs) seront ajoutées dans l'éditeur juste après.
           </div>
         )}
 
@@ -572,6 +619,19 @@ export default function NouvelleFiche() {
             + Ajouter un ingrédient
           </button>
         </Card>
+        )}
+
+        {/* MODE ÉTOILÉ : Sections de préparation */}
+        {formatAffichage === 'etoile' && !isSousFiche && (
+          <SectionsEditor
+            sections={sections}
+            setSections={setSections}
+            ingredients={ingredients}
+            setIngredients={setIngredients}
+            listeIngredients={listeIngredients}
+            c={c}
+            isMobile={isMobile}
+          />
         )}
 
         {/* Allergènes */}
