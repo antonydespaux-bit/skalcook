@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import * as XLSX from 'xlsx'
 import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
@@ -71,6 +71,9 @@ function detectColumn(headers, patterns) {
 
 export default function ImportExcelPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const section = searchParams.get('section') === 'bar' ? 'bar' : 'cuisine'
+  const isBarMode = section === 'bar'
   const isMobile = useIsMobile()
   const { c } = useTheme()
 
@@ -299,7 +302,7 @@ export default function ImportExcelPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ clientId, rows: rowsToImport }),
+        body: JSON.stringify({ clientId, rows: rowsToImport, section }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
@@ -345,12 +348,17 @@ export default function ImportExcelPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar section="cuisine" />
+      <Navbar section={section} />
       <div style={{ padding: isMobile ? 16 : 24, maxWidth: 1100, margin: '0 auto' }}>
-        <BackButton onClick={() => router.push('/controle-gestion/achats')} label="Retour aux achats" />
+        <BackButton onClick={() => router.push(isBarMode ? '/bar/achats' : '/controle-gestion/achats')} label="Retour aux achats" />
 
-        <h1 style={{ margin: '12px 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 600, color: c.texte }}>
+        <h1 style={{ margin: '12px 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 600, color: c.texte, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           Importer un Excel de factures
+          {isBarMode && (
+            <span style={{ display: 'inline-block', background: '#F5F3FF', color: '#5B21B6', fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, letterSpacing: 0.3 }}>
+              BAR
+            </span>
+          )}
         </h1>
         <p style={{ margin: '0 0 20px', fontSize: 14, color: c.texteMuted }}>
           Import en masse des pieds de factures (fournisseur, date, total HT). Une ligne fictive « Facture (import Excel) » sera créée par facture.

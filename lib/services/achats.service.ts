@@ -108,9 +108,10 @@ export async function saveFacture(
   input: SaveFactureInput,
   userId: string
 ) {
-  const { clientId, fournisseur, numeroFacture, dateFacture, statut, lignes: lignesInput, fileBase64, fileMime, forceInsert, tauxTva, montantTva, autoCreateMissing } = input
+  const { clientId, fournisseur, numeroFacture, dateFacture, statut, section, lignes: lignesInput, fileBase64, fileMime, forceInsert, tauxTva, montantTva, autoCreateMissing } = input
   const nomFournisseur = fournisseur.trim()
   const signe: 1 | -1 = statut === 'avoir' ? -1 : 1
+  const ingredientTable = section === 'bar' ? 'ingredients_bar' : 'ingredients'
 
   // 1. Check duplicate
   if (numeroFacture?.trim() && !forceInsert) {
@@ -143,7 +144,7 @@ export async function saveFacture(
       const norms = [...new Set(missing.map((l) => normDesignation(l.designation)))].filter(Boolean)
       // Recherche des ingrédients déjà existants pour ces normes (par nom exact normalisé)
       const { data: existingIngs } = await db
-        .from('ingredients')
+        .from(ingredientTable)
         .select('id, nom, unite, prix_kg')
         .eq('client_id', clientId)
       const ingByNorm: Record<string, { id: string }> = {}
@@ -167,6 +168,7 @@ export async function saveFacture(
           src.designation,
           src.unite,
           Number(src.prix_unitaire_ht) || 0,
+          section,
         )
         idByNorm[norm] = ing.id
         autoCreatedCount++
@@ -201,6 +203,7 @@ export async function saveFacture(
       // Pour un avoir, le montant TVA suit naturellement le signe (négatif).
       montant_tva: montantTva != null ? montantTva * signe : null,
       statut,
+      section,
       fichier_url: fichierUrl,
     })
     .select()
@@ -250,7 +253,7 @@ export async function saveFacture(
     ...toUpdate.map((l) => {
       const { prixEffectif } = computeLigneEffective(l)
       return db
-        .from('ingredients')
+        .from(ingredientTable)
         .update({ prix_kg: prixEffectif })
         .eq('id', l.ingredient_id!)
         .eq('client_id', clientId)
@@ -312,7 +315,7 @@ export async function bulkImportHeaders(
   input: BulkImportHeadersInput,
   userId: string,
 ) {
-  const { clientId, rows } = input
+  const { clientId, rows, section } = input
 
   // 1. Upsert tous les fournisseurs uniques (case-insensitive)
   const uniqueNoms = [...new Set(rows.map(r => r.fournisseur.trim()).filter(Boolean))]
@@ -332,6 +335,7 @@ export async function bulkImportHeaders(
       date_facture: r.dateFacture,
       total_ht: r.totalHt,
       statut: 'facture' as const,
+      section,
     }
   })
 
@@ -389,6 +393,7 @@ export async function updateFacture(
     numeroFacture: 'numero_facture',
     dateFacture: 'date_facture',
     statut: 'statut',
+    section: 'section',
     tauxTva: 'taux_tva',
     montantTva: 'montant_tva',
   }
@@ -554,12 +559,12 @@ export async function fusionnerBls(
   input: FusionnerBlsInput,
   userId: string,
 ) {
-  const { clientId, blIds, numeroFacture, dateFacture, totalHt, montantTva, tauxTva } = input
+  const { clientId, blIds, numeroFacture, dateFacture, totalHt, montantTva, tauxTva, section } = input
 
   // 1. Charge et vérifie les BL
   const { data: bls, error: blErr } = await db
     .from('achats_factures')
-    .select('id, fournisseur, fournisseur_id, statut, deleted_at, facture_consolidee_id')
+    .select('id, fournisseur, fournisseur_id, statut, deleted_at, facture_consolidee_id, section')
     .in('id', blIds)
     .eq('client_id', clientId)
 
@@ -576,8 +581,14 @@ export async function fusionnerBls(
   if (fournisseurs.size > 1) {
     throw new ValidationError('Tous les BL doivent provenir du même fournisseur.')
   }
+  const sections = new Set(bls.map((b) => (b as { section?: string }).section || 'cuisine'))
+  if (sections.size > 1) {
+    throw new ValidationError('Tous les BL doivent être de la même section (cuisine ou bar).')
+  }
   const fournisseurNom = bls[0].fournisseur || ''
   const fournisseurId = bls[0].fournisseur_id || null
+  // Si l'appelant n'a pas spécifié de section, on récupère celle des BL.
+  const sectionEffective = section ?? ((bls[0] as { section?: string }).section || 'cuisine') as 'cuisine' | 'bar'
 
   // 2. Crée la facture consolidée
   const { data: facture, error: fErr } = await db
@@ -592,6 +603,7 @@ export async function fusionnerBls(
       montant_tva: montantTva ?? null,
       taux_tva: tauxTva ?? null,
       statut: 'facture',
+      section: sectionEffective,
     })
     .select('id')
     .single()
@@ -680,6 +692,9 @@ export async function deleteFacture(
  * sinon le crée. Depuis la migration 2026-05-15, la contrainte unique est
  * scopée par client (`UNIQUE (client_id, nom)`), donc le seul cas de conflit
  * possible est une race condition au sein du même client.
+ *
+ * Selon la section (cuisine / bar), agit sur la table `ingredients` ou
+ * `ingredients_bar`. Le défaut est cuisine pour la rétro-compatibilité.
  */
 export async function findOrCreateIngredient(
   db: SupabaseClient,
@@ -687,14 +702,18 @@ export async function findOrCreateIngredient(
   nom: string,
   unite?: string | null,
   prix_kg?: number | null,
+  section: 'cuisine' | 'bar' = 'cuisine',
 ) {
   // Convention skalcook : tous les noms d'ingrédients en MAJUSCULES.
   const nomTrim = nom.trim().toUpperCase()
   if (!nomTrim) throw new ValidationError('Nom d\'ingrédient requis.')
 
+  const table = section === 'bar' ? 'ingredients_bar' : 'ingredients'
+  const defaultUnite = section === 'bar' ? 'cl' : 'kg'
+
   // 1. Existe pour ce client ?
   const { data: existing } = await db
-    .from('ingredients')
+    .from(table)
     .select('id, nom, unite, prix_kg')
     .eq('client_id', clientId)
     .ilike('nom', nomTrim)
@@ -703,11 +722,11 @@ export async function findOrCreateIngredient(
 
   // 2. Création
   const { data: created, error } = await db
-    .from('ingredients')
+    .from(table)
     .insert({
       client_id: clientId,
       nom: nomTrim,
-      unite: unite || 'kg',
+      unite: unite || defaultUnite,
       prix_kg: prix_kg ?? 0,
       est_sous_fiche: false,
     })
@@ -730,8 +749,8 @@ export async function createIngredient(
   db: SupabaseClient,
   input: CreateIngredientInput
 ) {
-  const { clientId, nom, unite, prix_kg } = input
-  return findOrCreateIngredient(db, clientId, nom, unite, prix_kg)
+  const { clientId, nom, unite, prix_kg, section } = input
+  return findOrCreateIngredient(db, clientId, nom, unite, prix_kg, section)
 }
 
 export async function getMercuriale(
@@ -739,10 +758,13 @@ export async function getMercuriale(
   clientId: string,
   dateDebut?: string,
   dateFin?: string,
+  section: 'cuisine' | 'bar' = 'cuisine',
 ) {
+  const ingredientTable = section === 'bar' ? 'ingredients_bar' : 'ingredients'
+
   // Tous les ingrédients du client (pour la recherche hors mercuriale)
   const { data: allIngs } = await db
-    .from('ingredients')
+    .from(ingredientTable)
     .select('id, nom, unite')
     .eq('client_id', clientId)
     .order('nom')
@@ -757,6 +779,7 @@ export async function getMercuriale(
     .from('achats_factures')
     .select('id, fournisseur, fournisseur_id, date_facture')
     .eq('client_id', clientId)
+    .eq('section', section)
   if (dateDebut) facturesQuery = facturesQuery.gte('date_facture', dateDebut)
   if (dateFin)   facturesQuery = facturesQuery.lte('date_facture', dateFin)
   const { data: factures } = await facturesQuery.order('date_facture', { ascending: false })
@@ -780,7 +803,7 @@ export async function getMercuriale(
   let ingredientsById: Record<string, { id: string; nom: string; unite: string | null }> = {}
   if (ingredientIds.length) {
     const { data: ings } = await db
-      .from('ingredients')
+      .from(ingredientTable)
       .select('id, nom, unite')
       .in('id', ingredientIds)
     if (ings) {
@@ -874,14 +897,19 @@ export async function getMercuriale(
   return { rows, fournisseurs, allIngredients }
 }
 
-export async function getReconciliationData(db: SupabaseClient, clientId: string) {
+export async function getReconciliationData(
+  db: SupabaseClient,
+  clientId: string,
+  section: 'cuisine' | 'bar' = 'cuisine',
+) {
+  const ingredientTable = section === 'bar' ? 'ingredients_bar' : 'ingredients'
   const [mappingRes, ingredientsRes, lignesRes] = await Promise.all([
     db
       .from('fournisseur_mapping')
       .select('*')
       .eq('client_id', clientId),
     db
-      .from('ingredients')
+      .from(ingredientTable)
       .select('id, nom, unite, prix_kg')
       .eq('client_id', clientId)
       .eq('est_sous_fiche', false)

@@ -153,9 +153,10 @@ export default function Navbar({ section = 'cuisine' }) {
         },
         ...(hasModule('gestion') ? [{
           label: 'Gestion',
-          paths: ['/inventaire'],
+          paths: ['/inventaire', '/bar/achats'],
           items: [
             { label: 'Inventaire', path: '/inventaire?section=bar' },
+            { label: 'Achats',     path: '/bar/achats' },
           ]
         }] : []),
       ].filter(g => g.items.length > 0)

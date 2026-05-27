@@ -55,10 +55,14 @@ export async function computeAchatsHt(
   debut: string,
   fin: string,
 ): Promise<number> {
+  // Le food cost ne concerne que la cuisine : on exclut les achats bar.
+  // `eq('section', 'cuisine')` couvre aussi les vieilles lignes qui n'ont pas
+  // de section explicite, grâce au DEFAULT 'cuisine' posé par la migration.
   const { data, error } = await db
     .from('achats_factures')
     .select('total_ht')
     .eq('client_id', clientId)
+    .eq('section', 'cuisine')
     .gte('date_facture', debut)
     .lte('date_facture', fin)
     .is('deleted_at', null)

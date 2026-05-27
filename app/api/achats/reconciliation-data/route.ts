@@ -7,7 +7,7 @@ export const GET = apiHandler({
   guard: 'memberOfClient',
   clientIdFrom: 'body.client_id',
   handler: async ({ data, db }) => {
-    const result = await getReconciliationData(db, data.client_id)
+    const result = await getReconciliationData(db, data.client_id, data.section)
     return Response.json(result)
   },
 })

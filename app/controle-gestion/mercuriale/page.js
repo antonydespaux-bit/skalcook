@@ -37,6 +37,9 @@ export default function MercurialePage() {
   const [dateDebut, setDateDebut] = useState('')
   const [dateFin, setDateFin] = useState('')
   const [multiFournOnly, setMultiFournOnly] = useState(false)
+  // Section ciblée par la mercuriale : cuisine ou bar. Ingrédients et achats
+  // sont distincts entre les deux — il faut donc choisir.
+  const [section, setSection] = useState('cuisine')
 
   // ─── Auth ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -64,7 +67,7 @@ export default function MercurialePage() {
     setError('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const params = new URLSearchParams({ client_id: clientId })
+      const params = new URLSearchParams({ client_id: clientId, section })
       if (dateDebut) params.set('date_debut', dateDebut)
       if (dateFin)   params.set('date_fin',   dateFin)
       const res = await fetch(`/api/achats/mercuriale?${params.toString()}`, {
@@ -79,7 +82,7 @@ export default function MercurialePage() {
     } finally {
       setLoading(false)
     }
-  }, [clientId, dateDebut, dateFin])
+  }, [clientId, dateDebut, dateFin, section])
 
   useEffect(() => { if (authReady && clientId) load() }, [authReady, clientId, load])
 
@@ -244,6 +247,31 @@ export default function MercurialePage() {
             {error}
           </div>
         )}
+
+        {/* ── Sélecteur Section ── */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <span style={{ fontSize: 12, color: c.texteMuted }}>Section</span>
+          {[
+            { k: 'cuisine', label: 'Cuisine' },
+            { k: 'bar',     label: 'Bar' },
+          ].map((p) => {
+            const actif = section === p.k
+            return (
+              <button
+                key={p.k}
+                onClick={() => setSection(p.k)}
+                style={{
+                  padding: '6px 12px', borderRadius: 8, fontSize: 12,
+                  border: `1px solid ${actif ? c.accent : c.bordure}`,
+                  background: actif ? c.accentClair : c.blanc,
+                  color: c.texte, cursor: 'pointer',
+                }}
+              >
+                {p.label}
+              </button>
+            )
+          })}
+        </div>
 
         {/* ── Filtres ── */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>

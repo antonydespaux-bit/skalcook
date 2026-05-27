@@ -19,6 +19,10 @@ export default function AchatsImportPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const isManuelMode = searchParams.get('mode') === 'manuel'
+  // Section "cuisine" (défaut) ou "bar". En mode bar, on rapproche les
+  // désignations contre la table ingredients_bar et on tag la facture.
+  const section = searchParams.get('section') === 'bar' ? 'bar' : 'cuisine'
+  const isBarMode = section === 'bar'
   const { c } = useTheme()
   const isMobile = useIsMobile()
   const { role, loading: roleLoading } = useRole()
@@ -164,7 +168,7 @@ export default function AchatsImportPage() {
     if (!clientId) return
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch(`/api/achats/reconciliation-data?client_id=${clientId}`, {
+      const res = await fetch(`/api/achats/reconciliation-data?client_id=${clientId}&section=${section}`, {
         headers: { 'Authorization': `Bearer ${session.access_token}` },
       })
       if (!res.ok) return
@@ -179,7 +183,7 @@ export default function AchatsImportPage() {
     } catch (err) {
       console.warn('loadReconciliation error:', err)
     }
-  }, [clientId])
+  }, [clientId, section])
 
   useEffect(() => {
     if (authReady && clientId) loadReconciliation()
@@ -482,6 +486,7 @@ export default function AchatsImportPage() {
           nom:     newIngNom.trim(),
           unite:   ligne.unite || null,
           prix_kg: ligne.prix_unitaire_ht || null,
+          section,
         }),
       })
       const result = await res.json()
@@ -507,7 +512,7 @@ export default function AchatsImportPage() {
     } catch (err) {
       setError(err.message)
     }
-  }, [clientId, newIngNom])
+  }, [clientId, newIngNom, section])
 
   const handleLinkIngredient = useCallback((ligne, ing) => {
     // L'utilisateur avait-il déjà saisi son propre prix / TVA avant le link ?
@@ -606,7 +611,7 @@ export default function AchatsImportPage() {
           'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          clientId, fournisseur, numeroFacture, dateFacture, statut,
+          clientId, fournisseur, numeroFacture, dateFacture, statut, section,
           lignes: lignesValides, forceInsert, fileBase64, fileMime,
           tauxTva: Number(tauxTva) || 0,
           montantTva: montantTvaSaisi != null && montantTvaSaisi !== '' ? Number(montantTvaSaisi) : null,
@@ -673,7 +678,7 @@ export default function AchatsImportPage() {
       setError(err.message || 'Erreur lors de l\'enregistrement.')
       setStep('review')
     }
-  }, [clientId, fournisseur, numeroFacture, dateFacture, statut, lignes, fileBase64, fileMime, autoCreateMissing, router, tauxTva, montantTvaSaisi, extractedFactures, currentFactureIdx, savedFactureIdxs, loadFactureIntoState, checkDuplicate, duplicateWarning])
+  }, [clientId, fournisseur, numeroFacture, dateFacture, statut, section, lignes, fileBase64, fileMime, autoCreateMissing, router, tauxTva, montantTvaSaisi, extractedFactures, currentFactureIdx, savedFactureIdxs, loadFactureIntoState, checkDuplicate, duplicateWarning])
 
   // ─── Styles partagés ─────────────────────────────────────────────────────
 
@@ -727,13 +732,13 @@ export default function AchatsImportPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar section="cuisine" />
+      <Navbar section={section} />
       <div style={{ padding: pad, maxWidth: 1200, margin: '0 auto' }}>
 
         {/* Bouton retour */}
         <div style={{ marginBottom: 12 }}>
           <BackButton
-            fallback="/controle-gestion/achats"
+            fallback={isBarMode ? '/bar/achats' : '/controle-gestion/achats'}
             label="← Retour aux achats"
             style={{ background: 'transparent', border: 'none', color: c.texteMuted, fontSize: 13, padding: 0, cursor: 'pointer' }}
           />
@@ -742,25 +747,40 @@ export default function AchatsImportPage() {
         {/* En-tête */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 28 }}>
           <div>
-            <h1 style={{ margin: '0 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 700, color: c.texte }}>
+            <h1 style={{ margin: '0 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 700, color: c.texte, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               {isManuelMode ? 'Saisie manuelle d\'une facture' : 'Importation de factures'}
+              {isBarMode && (
+                <span style={{ display: 'inline-block', background: '#F5F3FF', color: '#5B21B6', fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, letterSpacing: 0.3 }}>
+                  BAR
+                </span>
+              )}
             </h1>
             <p style={{ margin: 0, fontSize: 14, color: c.texteMuted }}>
               {isManuelMode
                 ? 'Saisissez les lignes une à une — créez les ingrédients manquants à la volée.'
                 : 'Photographiez ou déposez une facture fournisseur — les lignes sont extraites automatiquement.'}
+              {isBarMode && ' Les ingrédients sont rapprochés sur la liste bar et la facture sera exclue du food cost.'}
             </p>
           </div>
           {!isManuelMode ? (
             <button
-              onClick={() => router.push('/controle-gestion/achats/import?mode=manuel')}
+              onClick={() => {
+                const qs = new URLSearchParams({ mode: 'manuel' })
+                if (isBarMode) qs.set('section', 'bar')
+                router.push(`/controle-gestion/achats/import?${qs.toString()}`)
+              }}
               style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}
             >
               ✏️ Saisir manuellement
             </button>
           ) : (
             <button
-              onClick={() => router.push('/controle-gestion/achats/import')}
+              onClick={() => {
+                const qs = new URLSearchParams()
+                if (isBarMode) qs.set('section', 'bar')
+                const q = qs.toString()
+                router.push(`/controle-gestion/achats/import${q ? `?${q}` : ''}`)
+              }}
               style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}
             >
               📷 Importer une photo / PDF

@@ -7,7 +7,7 @@ export const GET = apiHandler({
   guard: 'memberOfClient',
   clientIdFrom: 'body.client_id',
   handler: async ({ data, db }) => {
-    const result = await getMercuriale(db, data.client_id, data.date_debut, data.date_fin)
+    const result = await getMercuriale(db, data.client_id, data.date_debut, data.date_fin, data.section)
     return Response.json(result)
   },
 })

@@ -7,7 +7,7 @@ import { supabase, getClientId } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
-import { badgeStyleFor, statutLabel } from '../../../lib/achatsHelpers'
+import { badgeStyleFor, statutLabel, SECTION_BAR_BADGE_STYLE } from '../../../lib/achatsHelpers'
 import Navbar from '../../../components/Navbar'
 
 function formatEuro(n) {
@@ -50,7 +50,14 @@ function SortHeader({ col, label, baseStyle, sortBy, sortDir, onSort, c, right =
 // param d'URL `statuts` (cas neutre).
 const STATUTS_DEFAUT = ['bl', 'facture', 'avoir']
 
-export default function AchatsListPage() {
+// Sections affichables. "tout" = vue mixte cuisine + bar (avec badge bar).
+const SECTION_OPTIONS = [
+  { k: 'tout',    label: 'Tout' },
+  { k: 'cuisine', label: 'Cuisine' },
+  { k: 'bar',     label: 'Bar' },
+]
+
+export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const isMobile = useIsMobile()
@@ -78,6 +85,13 @@ export default function AchatsListPage() {
     const parsed = s.split(',').filter(v => STATUTS_DEFAUT.includes(v))
     return parsed.length > 0 ? parsed : STATUTS_DEFAUT
   })
+  // Filtre section : "tout" / "cuisine" / "bar". L'URL `?section=bar` permet
+  // d'entrer directement dans la vue bar (utilisé par /bar/achats).
+  const [sectionFiltre, setSectionFiltre] = useState(() => {
+    const s = searchParams.get('section')
+    if (s === 'cuisine' || s === 'bar' || s === 'tout') return s
+    return defaultSection
+  })
   const [deleting, setDeleting] = useState(null)
   const [exporting, setExporting] = useState(false)
   // Sélection multi-BL pour fusion en une facture consolidée.
@@ -102,6 +116,7 @@ export default function AchatsListPage() {
       statutsActifs.length === STATUTS_DEFAUT.length
       && STATUTS_DEFAUT.every(s => statutsActifs.includes(s))
     if (!allStatuts) params.set('statuts', statutsActifs.join(','))
+    if (sectionFiltre !== defaultSection) params.set('section', sectionFiltre)
     if (sortBy !== 'date_facture') params.set('tri', sortBy)
     if (sortDir !== 'desc') params.set('sens', sortDir)
 
@@ -110,7 +125,7 @@ export default function AchatsListPage() {
     if (newUrl !== window.location.pathname + window.location.search) {
       window.history.replaceState(null, '', newUrl)
     }
-  }, [recherche, dateDebut, dateFin, statutsActifs, sortBy, sortDir])
+  }, [recherche, dateDebut, dateFin, statutsActifs, sectionFiltre, defaultSection, sortBy, sortDir])
 
   useEffect(() => {
     let cancelled = false
@@ -139,7 +154,7 @@ export default function AchatsListPage() {
 
     const { data: rows, error: fErr } = await supabase
       .from('achats_factures')
-      .select('id, fournisseur, numero_facture, date_facture, total_ht, taux_tva, montant_tva, statut, facture_consolidee_id, created_at')
+      .select('id, fournisseur, numero_facture, date_facture, total_ht, taux_tva, montant_tva, statut, section, facture_consolidee_id, created_at')
       .eq('client_id', cid)
       .is('deleted_at', null)
       .order('date_facture', { ascending: false })
@@ -351,6 +366,12 @@ export default function AchatsListPage() {
     // Filtre statut
     const s = f.statut || 'facture'
     if (!statutsActifs.includes(s)) return false
+    // Filtre section : "tout" laisse tout passer, sinon match strict (les
+    // factures avec section null sont traitées comme cuisine — c'est le défaut SQL).
+    if (sectionFiltre !== 'tout') {
+      const sectionFacture = f.section || 'cuisine'
+      if (sectionFacture !== sectionFiltre) return false
+    }
     return true
   })
 
@@ -430,7 +451,7 @@ export default function AchatsListPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar section="cuisine" />
+      <Navbar section={defaultSection === 'bar' ? 'bar' : 'cuisine'} />
       <div style={{ padding: isMobile ? '16px' : '24px', maxWidth: '1200px', margin: '0 auto' }}>
 
         {/* En-tête */}
@@ -476,38 +497,48 @@ export default function AchatsListPage() {
             >
               {exporting ? 'Export…' : '⬇ Exporter Excel'}
             </button>
-            {role === 'admin' && (
-              <>
-                <button
-                  onClick={() => router.push('/controle-gestion/achats/import?mode=manuel')}
-                  style={{
-                    padding: '8px 14px', borderRadius: 8, fontSize: 13,
-                    border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
-                  }}
-                >
-                  ✏️ Saisir manuellement
-                </button>
-                <button
-                  onClick={() => router.push('/controle-gestion/achats/import-excel')}
-                  title="Import en masse depuis un Excel (pied de facture)"
-                  style={{
-                    padding: '8px 14px', borderRadius: 8, fontSize: 13,
-                    border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
-                  }}
-                >
-                  📊 Importer Excel
-                </button>
-                <button
-                  onClick={() => router.push('/controle-gestion/achats/import')}
-                  style={{
-                    padding: '8px 14px', borderRadius: 8, fontSize: 13,
-                    border: 'none', background: c.accent, color: c.texte, cursor: 'pointer', fontWeight: 500,
-                  }}
-                >
-                  + Importer (OCR)
-                </button>
-              </>
-            )}
+            {role === 'admin' && (() => {
+              // Le filtre section sert aussi d'indicateur pour les boutons d'import :
+              // - "bar"     → on cible la section bar (badge "Bar" sur les boutons + ?section=bar)
+              // - "cuisine" → cible la section cuisine
+              // - "tout"    → défaut cuisine (l'utilisateur peut basculer le filtre puis cliquer)
+              const targetSection = sectionFiltre === 'bar' ? 'bar' : 'cuisine'
+              const sectionParam = targetSection === 'bar' ? '&section=bar' : ''
+              const sectionParamFirst = targetSection === 'bar' ? '?section=bar' : ''
+              const barLabel = targetSection === 'bar' ? ' (bar)' : ''
+              return (
+                <>
+                  <button
+                    onClick={() => router.push(`/controle-gestion/achats/import?mode=manuel${sectionParam}`)}
+                    style={{
+                      padding: '8px 14px', borderRadius: 8, fontSize: 13,
+                      border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
+                    }}
+                  >
+                    ✏️ Saisir manuellement{barLabel}
+                  </button>
+                  <button
+                    onClick={() => router.push(`/controle-gestion/achats/import-excel${sectionParamFirst}`)}
+                    title="Import en masse depuis un Excel (pied de facture)"
+                    style={{
+                      padding: '8px 14px', borderRadius: 8, fontSize: 13,
+                      border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
+                    }}
+                  >
+                    📊 Importer Excel{barLabel}
+                  </button>
+                  <button
+                    onClick={() => router.push(`/controle-gestion/achats/import${sectionParamFirst}`)}
+                    style={{
+                      padding: '8px 14px', borderRadius: 8, fontSize: 13,
+                      border: 'none', background: c.accent, color: c.texte, cursor: 'pointer', fontWeight: 500,
+                    }}
+                  >
+                    + Importer{barLabel} (OCR)
+                  </button>
+                </>
+              )
+            })()}
           </div>
         </div>
 
@@ -596,6 +627,28 @@ export default function AchatsListPage() {
           })}
         </div>
 
+        {/* Filtre par section (cuisine / bar / tout) */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <span style={{ fontSize: 12, color: c.texteMuted }}>Section</span>
+          {SECTION_OPTIONS.map((p) => {
+            const actif = sectionFiltre === p.k
+            return (
+              <button
+                key={p.k}
+                onClick={() => setSectionFiltre(p.k)}
+                style={{
+                  padding: '6px 10px', borderRadius: 8, fontSize: 12,
+                  border: `1px solid ${actif ? c.accent : c.bordure}`,
+                  background: actif ? c.accentClair : c.blanc,
+                  color: c.texte, cursor: 'pointer',
+                }}
+              >
+                {p.label}
+              </button>
+            )
+          })}
+        </div>
+
         {error && <p style={{ color: '#B91C1C', fontSize: 14, marginBottom: 16 }}>{error}</p>}
 
         {loading && <p style={{ color: c.texteMuted, fontSize: 14 }}>Chargement…</p>}
@@ -669,7 +722,12 @@ export default function AchatsListPage() {
                             {f.fournisseur || <span style={{ color: c.texteMuted, fontWeight: 400 }}>—</span>}
                           </span>
                         </div>
-                        <span style={badgeStyle}>{statutLabel(f.statut)}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                          {f.section === 'bar' && (
+                            <span style={SECTION_BAR_BADGE_STYLE}>Bar</span>
+                          )}
+                          <span style={badgeStyle}>{statutLabel(f.statut)}</span>
+                        </div>
                       </div>
                       {/* Ligne 2 : n° facture · date */}
                       <div style={{ fontSize: 13, color: c.texteMuted, marginBottom: 8 }}>
@@ -764,7 +822,12 @@ export default function AchatsListPage() {
                             <td style={tdM}>{f.numero_facture || '—'}</td>
                             <td style={tdM}>{formatDate(f.date_facture)}</td>
                             <td style={td}>
-                              <span style={badgeStyleFor(f.statut)}>{statutLabel(f.statut)}</span>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <span style={badgeStyleFor(f.statut)}>{statutLabel(f.statut)}</span>
+                                {f.section === 'bar' && (
+                                  <span style={SECTION_BAR_BADGE_STYLE}>Bar</span>
+                                )}
+                              </span>
                             </td>
                             <td style={tdM}>{nb}</td>
                             <td style={tdR}>{formatEuro(ht)}</td>

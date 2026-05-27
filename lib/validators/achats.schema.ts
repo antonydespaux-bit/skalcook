@@ -3,6 +3,7 @@ import { z } from 'zod'
 // ── Shared primitives ──────────────────────────────────────────────────────
 export const uuidSchema = z.string().uuid('UUID invalide')
 export const clientIdSchema = uuidSchema
+export const sectionSchema = z.enum(['cuisine', 'bar']).default('cuisine')
 
 // ── Ligne de facture ───────────────────────────────────────────────────────
 const ligneFactureSchema = z.object({
@@ -27,6 +28,7 @@ export const saveFactureSchema = z.object({
   numeroFacture:  z.string().max(100).optional().nullable(),
   dateFacture:    z.string().min(1, 'Date requise'),
   statut:         z.enum(['bl', 'facture', 'avoir']).default('facture'),
+  section:        sectionSchema,
   lignes:         z.array(ligneFactureSchema).min(1, 'Au moins une ligne requise'),
   // En mode manuel, le client envoie null (pas undefined) → on accepte les deux.
   fileBase64:     z.string().nullable().optional(),
@@ -49,6 +51,7 @@ export const updateFactureSchema = z.object({
   numeroFacture:  z.string().max(100).optional().nullable(),
   dateFacture:    z.string().optional(),
   statut:         z.enum(['bl', 'facture', 'avoir']).optional(),
+  section:        z.enum(['cuisine', 'bar']).optional(),
   tauxTva:        z.coerce.number().min(0).max(100).optional(),
   montantTva:     z.coerce.number().min(0).nullable().optional(),
   lignes:         z.array(ligneFactureSchema).optional(),
@@ -71,6 +74,7 @@ export const fusionnerBlsSchema = z.object({
   totalHt:       z.coerce.number(),
   montantTva:    z.coerce.number().nullable().optional(),
   tauxTva:       z.coerce.number().min(0).max(100).nullable().optional(),
+  section:       sectionSchema,
 })
 
 export type FusionnerBlsInput = z.infer<typeof fusionnerBlsSchema>
@@ -87,6 +91,7 @@ export const createIngredientSchema = z.object({
   nom:      z.string().min(1, 'Nom requis').max(255),
   unite:    z.string().min(1).max(20),
   prix_kg:  z.coerce.number().min(0).optional().default(0),
+  section:  sectionSchema,
 })
 
 export type CreateIngredientInput = z.infer<typeof createIngredientSchema>
@@ -105,6 +110,7 @@ export const parseFactureSchema = z.object({
 // portant le total HT, pour rester compatible avec le schéma qui exige ≥1 ligne.
 export const bulkImportHeadersSchema = z.object({
   clientId: clientIdSchema,
+  section: sectionSchema,
   rows: z.array(z.object({
     fournisseur:   z.string().min(1, 'Fournisseur requis').max(255),
     dateFacture:   z.string().min(1, 'Date requise'),
@@ -122,9 +128,11 @@ export const mercurialeQuerySchema = z.object({
   client_id:  clientIdSchema,
   date_debut: dateIsoSchema.optional(),
   date_fin:   dateIsoSchema.optional(),
+  section:    sectionSchema,
 })
 
 // ── Reconciliation query ───────────────────────────────────────────────────
 export const reconciliationQuerySchema = z.object({
   client_id: clientIdSchema,
+  section:   sectionSchema,
 })
