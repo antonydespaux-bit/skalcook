@@ -42,6 +42,8 @@ export default function NouvelleFiche() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [draftRestored, setDraftRestored] = useState(false)
+  const [formatAffichage, setFormatAffichage] = useState('brasserie')
+  const [clientFormatDefaut, setClientFormatDefaut] = useState('brasserie')
   const router = useRouter()
   const { c, logoUrl, nomEtablissement } = useTheme()
   const annees = getYearsRange()
@@ -81,13 +83,17 @@ export default function NouvelleFiche() {
   const loadDynamique = async () => {
     const clientId = await getClientId()
     if (!clientId) return
-    const [{ data: lieuxData }, { data: catsData }] = await Promise.all([
+    const [{ data: lieuxData }, { data: catsData }, { data: clientData }] = await Promise.all([
       supabase.from('lieux').select('*').eq('client_id', clientId).eq('section', 'cuisine').order('ordre'),
-      supabase.from('categories_plats').select('*').eq('client_id', clientId).eq('section', 'cuisine').order('ordre')
+      supabase.from('categories_plats').select('*').eq('client_id', clientId).eq('section', 'cuisine').order('ordre'),
+      supabase.from('clients').select('fiche_format_defaut').eq('id', clientId).single(),
     ])
     setLieux(lieuxData || [])
     setCategoriesDyn(catsData || [])
     if (catsData?.length > 0) setCategoriePlat(catsData[0].id)
+    const formatDefaut = clientData?.fiche_format_defaut === 'etoile' ? 'etoile' : 'brasserie'
+    setClientFormatDefaut(formatDefaut)
+    setFormatAffichage(formatDefaut)
   }
 
   const restaurerBrouillon = () => {
@@ -197,6 +203,7 @@ export default function NouvelleFiche() {
       saison: saison || null, annee: annee || null, allergenes,
       cout_portion: coutPortion ? parseFloat(coutPortion) : null,
       perte: perte ? parseFloat(perte) : 0,
+      format_affichage: formatAffichage,
       client_id: clientId
     }
 
@@ -251,7 +258,14 @@ export default function NouvelleFiche() {
     })
 
     clearDraft()
-    router.push(isSousFiche ? '/sous-fiches' : '/fiches')
+    // En mode étoilé, on redirige vers l'éditeur pour que le chef compose ses
+    // préparations (sections + descriptifs) — l'UI sections n'existe que sur
+    // la page modifier, pas sur la page de création.
+    if (formatAffichage === 'etoile' && !isSousFiche) {
+      router.push(`/fiches/${fiche.id}/modifier`)
+    } else {
+      router.push(isSousFiche ? '/sous-fiches' : '/fiches')
+    }
   }
 
   const fc = foodCost()
@@ -309,6 +323,42 @@ export default function NouvelleFiche() {
         )}
 
         {error && <Alert variant="error" style={{ marginBottom: '16px' }}>{error}</Alert>}
+
+        {/* Toggle format d'affichage (masqué pour les sous-fiches) */}
+        {!isSousFiche && (
+          <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, padding: '12px 14px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Format de la fiche</div>
+              <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '2px' }}>
+                Défaut établissement : <strong>{clientFormatDefaut === 'etoile' ? 'Étoilé' : 'Brasserie'}</strong>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '4px', background: c.fond, padding: '4px', borderRadius: '10px' }}>
+              {[
+                { value: 'brasserie', label: '🥖 Brasserie' },
+                { value: 'etoile', label: '⭐ Étoilé' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setFormatAffichage(opt.value)}
+                  style={{
+                    padding: '6px 14px', borderRadius: '7px', fontSize: '12px', border: 'none', cursor: 'pointer',
+                    fontWeight: formatAffichage === opt.value ? '500' : '400',
+                    background: formatAffichage === opt.value ? c.accent : 'transparent',
+                    color: formatAffichage === opt.value ? 'white' : c.texteMuted,
+                  }}
+                >{opt.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {formatAffichage === 'etoile' && !isSousFiche && (
+          <div style={{ background: c.accentClair, color: c.accent, borderRadius: '10px', padding: '10px 14px', fontSize: '12px', marginBottom: '12px', border: `0.5px solid ${c.accent}40` }}>
+            ⭐ Format étoilé : remplissez d'abord les infos générales. Les préparations (sections + ingrédients + descriptifs) seront ajoutées dans l'éditeur juste après.
+          </div>
+        )}
 
         {isSousFiche && (
           <div style={{ background: c.violetClair, color: '#3C3489', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', border: '0.5px solid #AFA9EC' }}>
@@ -444,7 +494,9 @@ export default function NouvelleFiche() {
           </div>
         </div>
 
-        {/* Instructions de préparation */}
+        {/* Instructions de préparation (masquée en mode étoilé — les méthodes
+            seront saisies par section dans l'éditeur) */}
+        {formatAffichage === 'brasserie' && (
         <Card c={c} style={{ marginBottom: '12px' }}>
           <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '6px' }}>📋 Instructions de préparation</div>
           <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '12px' }}>Les sauts de ligne seront respectés à l'écran et à l'impression.</div>
@@ -458,8 +510,10 @@ export default function NouvelleFiche() {
             </div>
           )}
         </Card>
+        )}
 
-        {/* Ingrédients */}
+        {/* Ingrédients (masqués en mode étoilé — saisis par section dans l'éditeur) */}
+        {formatAffichage === 'brasserie' && (
         <Card c={c} style={{ marginBottom: '12px' }}>
           <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Ingrédients</div>
           {isMobile ? (
@@ -518,6 +572,7 @@ export default function NouvelleFiche() {
             + Ajouter un ingrédient
           </button>
         </Card>
+        )}
 
         {/* Allergènes */}
         <Card c={c} style={{ marginBottom: '12px' }}>
