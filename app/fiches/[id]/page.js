@@ -24,6 +24,9 @@ export default function FicheDetail() {
   const [photoPath, setPhotoPath] = useState(null)
   const [signedUrl, setSignedUrl] = useState(null)
   const [allergenesCascade, setAllergenesCascade] = useState([])
+  const [sections, setSections] = useState([])
+  const [formatAffichage, setFormatAffichage] = useState('brasserie')
+  const [clientFormatDefaut, setClientFormatDefaut] = useState('brasserie')
   const router = useRouter()
   const params_route = useParams()
   const isMobile = useIsMobile()
@@ -31,6 +34,7 @@ export default function FicheDetail() {
   const { role } = useRole()
 
   const peutModifier = role === 'admin' || role === 'cuisine'
+  const peutVoirCosts = role === 'admin' || role === 'directeur' || role === 'consultant'
 
   useEffect(() => {
     const style = document.createElement('style')
@@ -73,21 +77,24 @@ export default function FicheDetail() {
       if (!cId) { router.push('/'); return }
       setClientId(cId)
 
-      const { data: ficheData, error } = await supabase
-        .from('fiches')
-        .select('*')
-        .eq('id', params_route.id)
-        .eq('client_id', cId)
-        .single()
+      const [{ data: ficheData, error }, { data: clientData }, { data: sectionsData }] = await Promise.all([
+        supabase.from('fiches').select('*').eq('id', params_route.id).eq('client_id', cId).single(),
+        supabase.from('clients').select('fiche_format_defaut').eq('id', cId).single(),
+        supabase.from('fiche_sections').select('*').eq('fiche_id', params_route.id).eq('client_id', cId).order('ordre'),
+      ])
 
       if (error || !ficheData) { router.push('/fiches'); return }
 
       setFiche(ficheData)
       setPhotoPath(ficheData.photo_url || null)
+      const formatDefaut = clientData?.fiche_format_defaut === 'etoile' ? 'etoile' : 'brasserie'
+      setClientFormatDefaut(formatDefaut)
+      setFormatAffichage(ficheData.format_affichage || formatDefaut)
+      setSections(sectionsData || [])
 
       const { data: ingsData, error: errIngs } = await supabase
         .from('fiche_ingredients')
-        .select(`quantite, unite, ingredients (id, nom, prix_kg, unite, est_sous_fiche, fiche_id)`)
+        .select(`quantite, unite, section_id, ingredients (id, nom, prix_kg, unite, est_sous_fiche, fiche_id)`)
         .eq('fiche_id', params_route.id)
         .eq('client_id', cId)
 
@@ -114,14 +121,22 @@ export default function FicheDetail() {
     }
   }
 
-  const calculerCout = () => {
-    return ingredients.reduce((total, ing) => {
-      if (ing.ingredients?.prix_kg && ing.quantite) {
-        const coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
-        return total + (ing.ingredients.prix_kg * ing.quantite * coef)
-      }
-      return total
-    }, 0)
+  const coutIngredient = (ing) => {
+    if (!ing.ingredients?.prix_kg || !ing.quantite) return 0
+    const coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
+    return ing.ingredients.prix_kg * ing.quantite * coef
+  }
+
+  const calculerCout = () => ingredients.reduce((total, ing) => total + coutIngredient(ing), 0)
+
+  // Coût ventilé par section (clé = section_id ; '_libre' = ingrédients non rattachés)
+  const coutParSection = () => {
+    const map = new Map()
+    ingredients.forEach(ing => {
+      const key = ing.section_id || '_libre'
+      map.set(key, (map.get(key) || 0) + coutIngredient(ing))
+    })
+    return map
   }
 
   const foodCost = () => {
@@ -196,10 +211,10 @@ export default function FicheDetail() {
           {!isMobile && <span style={{ fontSize: '15px', fontWeight: '500', color: 'white' }}>{fiche.nom}</span>}
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
-          <button onClick={() => window.print()} style={{
+          <button onClick={() => window.print()} title="Imprimer ou Enregistrer en PDF (Cmd+P)" style={{
             background: c.accent, color: 'white', border: 'none',
             borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '600', cursor: 'pointer'
-          }}>{isMobile ? '🖨️' : '🖨️ Imprimer'}</button>
+          }}>{isMobile ? '📄' : '📄 Imprimer / PDF'}</button>
           {peutModifier && (
             <button onClick={() => router.push(`/fiches/${params_route.id}/modifier`)} style={{
               background: 'transparent', color: 'rgba(255,255,255,0.7)',
@@ -267,7 +282,90 @@ export default function FicheDetail() {
           )}
         </Card>
 
-        {/* Ingrédients */}
+        {/* Toggle vue (apparaît si des sections existent OU si le défaut est étoilé) */}
+        {(sections.length > 0 || clientFormatDefaut === 'etoile') && (
+          <div className="no-print" style={{ display: 'flex', gap: '4px', background: c.blanc, padding: '4px', borderRadius: '10px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', width: 'fit-content' }}>
+            {[
+              { value: 'brasserie', label: '🥖 Brasserie' },
+              { value: 'etoile', label: '⭐ Étoilé' },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setFormatAffichage(opt.value)}
+                style={{
+                  padding: '6px 14px', borderRadius: '7px', fontSize: '12px', border: 'none', cursor: 'pointer',
+                  fontWeight: formatAffichage === opt.value ? '500' : '400',
+                  background: formatAffichage === opt.value ? c.accent : 'transparent',
+                  color: formatAffichage === opt.value ? 'white' : c.texteMuted,
+                }}
+              >{opt.label}</button>
+            ))}
+          </div>
+        )}
+
+        {/* ── MODE ÉTOILÉ : Préparations ── */}
+        {formatAffichage === 'etoile' && sections.length > 0 && (
+          <div className="fiche-ingredients-after-header" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '12px' }}>
+            {sections.map(section => {
+              const ingsSection = ingredients.filter(i => i.section_id === section.id)
+              const coutSection = ingsSection.reduce((tot, ing) => tot + coutIngredient(ing), 0)
+              return (
+                <div key={section.id} style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
+                  <div style={{ padding: '12px 18px', borderBottom: `0.5px solid ${c.bordure}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', background: c.fond }}>
+                    <div style={{ fontSize: '15px', fontWeight: '500', color: c.texte, textDecoration: 'underline', textUnderlineOffset: '3px' }}>{section.nom}</div>
+                    {peutVoirCosts && coutSection > 0 && (
+                      <div style={{ fontSize: '12px', color: c.texteMuted }}>Coût : <strong style={{ color: c.texte }}>{coutSection.toFixed(2)} €</strong></div>
+                    )}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '0' }}>
+                    {/* Colonne gauche : ingrédients */}
+                    <div style={{ padding: '14px 18px', borderRight: isMobile ? 'none' : `0.5px solid ${c.bordure}`, borderBottom: isMobile ? `0.5px solid ${c.bordure}` : 'none' }}>
+                      {ingsSection.length === 0 ? (
+                        <div style={{ fontSize: '13px', color: c.texteMuted, fontStyle: 'italic' }}>—</div>
+                      ) : (
+                        <ul style={{ listStyleType: 'disc', paddingLeft: '20px', margin: 0 }}>
+                          {ingsSection.map((ing, i) => (
+                            <li key={i} style={{ fontSize: '13px', color: c.texte, lineHeight: '1.8', display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                              <span>{ing.quantite} {ing.unite} {ing.ingredients?.nom || '—'}</span>
+                              {peutVoirCosts && coutIngredient(ing) > 0 && (
+                                <span style={{ color: c.texteMuted, fontSize: '11px', whiteSpace: 'nowrap' }}>{coutIngredient(ing).toFixed(2)} €</span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    {/* Colonne droite : descriptif */}
+                    <div style={{ padding: '14px 18px' }}>
+                      {section.descriptif ? (
+                        <div style={{ fontSize: '13px', color: c.texte, lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>{section.descriptif}</div>
+                      ) : (
+                        <div style={{ fontSize: '13px', color: c.texteMuted, fontStyle: 'italic' }}>(pas de descriptif)</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {/* Ingrédients libres (sans section) */}
+            {ingredients.some(i => !i.section_id) && (
+              <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px dashed ${c.bordure}`, padding: '14px 18px' }}>
+                <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '8px', fontStyle: 'italic' }}>Ingrédients non rattachés à une préparation</div>
+                <ul style={{ listStyleType: 'disc', paddingLeft: '20px', margin: 0 }}>
+                  {ingredients.filter(i => !i.section_id).map((ing, i) => (
+                    <li key={i} style={{ fontSize: '13px', color: c.texte, lineHeight: '1.8' }}>
+                      {ing.quantite} {ing.unite} {ing.ingredients?.nom || '—'}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── MODE BRASSERIE : Ingrédients (vue à plat classique) ── */}
+        {formatAffichage === 'brasserie' && (
         <div className="fiche-ingredients-after-header" style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', overflow: 'hidden' }}>
           <div className="sk-panel-header sk-label-muted" style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, color: c.texteMuted }}>Ingrédients</div>
           {isMobile ? (
@@ -315,6 +413,7 @@ export default function FicheDetail() {
             </table>
           )}
         </div>
+        )}
 
         {/* Récap financier */}
         <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '20px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
@@ -349,8 +448,9 @@ export default function FicheDetail() {
           )}
         </div>
 
-        {/* Instructions écran — après récap */}
-        {fiche.instructions && (
+        {/* Instructions écran — après récap (uniquement en vue brasserie ;
+            en vue étoilée la méthode est déjà inline dans chaque section) */}
+        {formatAffichage === 'brasserie' && fiche.instructions && (
           <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', overflow: 'hidden' }}>
             <div className="sk-panel-header sk-label-muted" style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, color: c.texteMuted }}>
               📋 Instructions de préparation
@@ -411,7 +511,38 @@ export default function FicheDetail() {
           </FicheHeaderInfo>
         )}
 
-        {/* Ingrédients */}
+        {/* ── PRINT ÉTOILÉ : Sections empilées 2 colonnes (rendu PDF type ADMO) ── */}
+        {formatAffichage === 'etoile' && sections.length > 0 && (
+          <div className="fiche-ingredients-after-header" style={{ marginBottom: '20px', fontFamily: 'sans-serif' }}>
+            {sections.map((section, sIdx) => {
+              const ingsSection = ingredients.filter(i => i.section_id === section.id)
+              return (
+                <div key={section.id} style={{ marginBottom: '14px', borderBottom: sIdx < sections.length - 1 ? '0.5px solid #e8e4dc' : 'none', paddingBottom: '10px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#2C1810', marginBottom: '6px', textDecoration: 'underline', textUnderlineOffset: '2px' }}>{section.nom} :</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'flex-start' }}>
+                    <div>
+                      {ingsSection.length > 0 ? (
+                        <ul style={{ listStyleType: 'disc', paddingLeft: '20px', margin: 0 }}>
+                          {ingsSection.map((ing, i) => (
+                            <li key={i} style={{ fontSize: '11px', color: '#2C1810', lineHeight: '1.7' }}>
+                              {ing.quantite} {ing.unite} {ing.ingredients?.nom || '—'}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#2C1810', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
+                      {section.descriptif || ''}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Ingrédients (mode brasserie uniquement) */}
+        {formatAffichage === 'brasserie' && (
         <div className="fiche-ingredients-after-header" style={{ marginBottom: '20px' }}>
           <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#8B7355', marginBottom: '10px', fontFamily: 'sans-serif', fontWeight: '600' }}>Ingrédients</div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: 'sans-serif' }}>
@@ -443,8 +574,10 @@ export default function FicheDetail() {
             </tbody>
           </table>
         </div>
+        )}
 
-        {/* ── RÉCAP FINANCIER — avant instructions ── */}
+        {/* ── RÉCAP FINANCIER — avant instructions (brasserie uniquement) ── */}
+        {formatAffichage === 'brasserie' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
           {[
             { label: `Coût / ${uniteLabel.slice(0, -1)}`, value: cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—' },
@@ -462,6 +595,7 @@ export default function FicheDetail() {
             </div>
           ))}
         </div>
+        )}
 
         {/* Allergènes — sur la même page que le récap */}
         {((fiche.allergenes && fiche.allergenes.length > 0) || allergenesCascade.length > 0) && (
@@ -483,8 +617,9 @@ export default function FicheDetail() {
           </div>
         )}
 
-        {/* ── INSTRUCTIONS — page séparée ── */}
-        {fiche.instructions && (
+        {/* ── INSTRUCTIONS — page séparée (brasserie uniquement ;
+            en étoilé, la méthode est déjà inline dans chaque section) ── */}
+        {formatAffichage === 'brasserie' && fiche.instructions && (
           <div className="print-instructions" style={{ marginBottom: '20px', pageBreakBefore: 'always', marginTop: '0' }}>
             <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#8B7355', marginBottom: '10px', fontFamily: 'sans-serif', fontWeight: '600' }}>Instructions de préparation</div>
             <div style={{

@@ -13,6 +13,7 @@ import IngredientSearch from '../../../../components/IngredientSearch'
 import FichePhoto from '../../../../components/FichePhoto'
 import ChefLoader from '../../../../components/ChefLoader'
 import BackButton from '../../../../components/BackButton'
+import SectionsEditor from '../../../../components/SectionsEditor'
 import { Card, Alert } from '../../../../components/ui'
 
 import { isIngredientPossible } from '../../../../lib/foodCost'
@@ -42,6 +43,12 @@ export default function ModifierFiche() {
   const [draftRestored, setDraftRestored] = useState(false)
   const [clientId, setClientId] = useState(null)
   const [photoPath, setPhotoPath] = useState(null)
+  const [formatAffichage, setFormatAffichage] = useState('brasserie')
+  const [clientFormatDefaut, setClientFormatDefaut] = useState('brasserie')
+  // Mode étoilé : sections = [{tempId, nom, descriptif}]. Chaque ingrédient a
+  // un `section_temp_id` (string) qui pointe vers une section ; NULL = ligne
+  // libre (brasserie).
+  const [sections, setSections] = useState([])
   const router = useRouter()
   const params_route = useParams()
   const { c, logoUrl, nomEtablissement } = useTheme()
@@ -80,13 +87,17 @@ export default function ModifierFiche() {
       { data: lieuxData },
       { data: catsData },
       { data: liste },
-      { data: sousFiches }
+      { data: sousFiches },
+      { data: clientData },
+      { data: sectionsData }
     ] = await Promise.all([
       supabase.from('fiches').select('*').eq('id', params_route.id).eq('client_id', clientId).single(),
       supabase.from('lieux').select('*').eq('client_id', clientId).eq('section', 'cuisine').order('ordre'),
       supabase.from('categories_plats').select('*').eq('client_id', clientId).eq('section', 'cuisine').order('ordre'),
       supabase.from('ingredients').select('*').eq('client_id', clientId).order('nom').limit(5000),
-      supabase.from('fiches').select('id, nom, cout_portion').eq('client_id', clientId).eq('is_sub_fiche', true).eq('archive', false).order('nom')
+      supabase.from('fiches').select('id, nom, cout_portion').eq('client_id', clientId).eq('is_sub_fiche', true).eq('archive', false).order('nom'),
+      supabase.from('clients').select('fiche_format_defaut').eq('id', clientId).single(),
+      supabase.from('fiche_sections').select('*').eq('fiche_id', params_route.id).eq('client_id', clientId).order('ordre')
     ])
 
     if (!ficheData) { router.push('/fiches'); return }
@@ -131,9 +142,23 @@ export default function ModifierFiche() {
     }
     setAllergenes(ficheData.allergenes || [])
 
+    const formatDefaut = clientData?.fiche_format_defaut === 'etoile' ? 'etoile' : 'brasserie'
+    setClientFormatDefaut(formatDefaut)
+    const formatActif = ficheData.format_affichage || formatDefaut
+    setFormatAffichage(formatActif)
+
+    // Sections : convertir DB rows en state local avec tempId stable.
+    const sectionsLocales = (sectionsData || []).map(s => ({
+      tempId: s.id,
+      dbId: s.id,
+      nom: s.nom || '',
+      descriptif: s.descriptif || ''
+    }))
+    setSections(sectionsLocales)
+
     const { data: ingsData } = await supabase
       .from('fiche_ingredients')
-      .select(`quantite, unite, ingredients (id, nom, prix_kg, unite)`)
+      .select(`quantite, unite, section_id, ingredients (id, nom, prix_kg, unite)`)
       .eq('fiche_id', params_route.id)
       .eq('client_id', clientId)
 
@@ -141,7 +166,8 @@ export default function ModifierFiche() {
       ingredient_id: i.ingredients?.id || '',
       nom: i.ingredients?.nom || '',
       quantite: i.quantite,
-      unite: i.unite
+      unite: i.unite,
+      section_temp_id: i.section_id || null
     })))
 
     setLoading(false)
@@ -227,6 +253,21 @@ export default function ModifierFiche() {
 
     const cout = calculerCoutAvecPerte()
     const coutPortion = nbPortions ? (cout / parseFloat(nbPortions)) : null
+
+    // En mode étoilé, on alimente aussi `instructions` (concat des descriptifs)
+    // pour qu'une bascule en vue brasserie reste lisible.
+    let instructionsFinales = instructions
+    if (formatAffichage === 'etoile') {
+      instructionsFinales = sections
+        .filter(s => (s.nom || '').trim() || (s.descriptif || '').trim())
+        .map(s => {
+          const titre = (s.nom || '').trim()
+          const desc = (s.descriptif || '').trim()
+          return titre ? `${titre} :\n${desc}` : desc
+        })
+        .join('\n\n')
+    }
+
     const { error: updateError } = await supabase.from('fiches').update({
       nom,
       categorie: catSelectionnee?.nom || '',
@@ -238,14 +279,49 @@ export default function ModifierFiche() {
       is_sub_fiche: isSousFiche,
       prix_ttc: isSousFiche ? null : (prixTTC ? parseFloat(prixTTC) : null),
       description,
-      instructions: instructions || null,
+      instructions: instructionsFinales || null,
+      format_affichage: formatAffichage,
       saison: saison || null, annee: annee || null, allergenes,
       cout_portion: coutPortion,
       perte: perte ? parseFloat(perte) : 0,
       updated_at: new Date().toISOString()
     }).eq('id', params_route.id).eq('client_id', clientId)
     if (updateError) { setError('Erreur sauvegarde : ' + updateError.message); setSaving(false); return }
+
+    // Wipe + reinsert : ingredients d'abord (FK section_id ON DELETE SET NULL),
+    // puis sections, puis on regénère le mapping.
     await supabase.from('fiche_ingredients').delete().eq('fiche_id', params_route.id).eq('client_id', clientId)
+    await supabase.from('fiche_sections').delete().eq('fiche_id', params_route.id).eq('client_id', clientId)
+
+    const tempIdToDbId = new Map()
+    if (formatAffichage === 'etoile') {
+      const sectionsAInserer = sections.filter(s =>
+        (s.nom || '').trim() ||
+        (s.descriptif || '').trim() ||
+        ingredients.some(i => i.section_temp_id === s.tempId)
+      )
+      // Insert un par un pour récupérer l'id réel en gardant l'ordre.
+      for (let i = 0; i < sectionsAInserer.length; i++) {
+        const s = sectionsAInserer[i]
+        const { data: inserted, error: errSection } = await supabase
+          .from('fiche_sections')
+          .insert({
+            client_id: clientId,
+            fiche_id: params_route.id,
+            ordre: i,
+            nom: (s.nom || '').trim() || `Préparation ${i + 1}`,
+            descriptif: s.descriptif || null
+          })
+          .select('id')
+          .single()
+        if (errSection || !inserted) {
+          setError('Erreur sauvegarde section : ' + (errSection?.message || 'inconnue'))
+          setSaving(false)
+          return
+        }
+        tempIdToDbId.set(s.tempId, inserted.id)
+      }
+    }
 
     const ingredientsAInserer = ingredients
       .filter(i => i.ingredient_id && i.quantite)
@@ -254,7 +330,8 @@ export default function ModifierFiche() {
         ingredient_id: i.ingredient_id,
         quantite: parseFloat(i.quantite),
         unite: i.unite,
-        client_id: clientId
+        client_id: clientId,
+        section_id: formatAffichage === 'etoile' ? (tempIdToDbId.get(i.section_temp_id) || null) : null
       }))
 
     if (ingredientsAInserer.length > 0) {
@@ -337,6 +414,43 @@ export default function ModifierFiche() {
         )}
 
         {error && <Alert variant="error" style={{ marginBottom: '16px' }}>{error}</Alert>}
+
+        {/* Toggle format d'affichage */}
+        <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, padding: '12px 14px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Format de la fiche</div>
+            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '2px' }}>
+              Défaut établissement : <strong>{clientFormatDefaut === 'etoile' ? 'Étoilé' : 'Brasserie'}</strong>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '4px', background: c.fond, padding: '4px', borderRadius: '10px' }}>
+            {[
+              { value: 'brasserie', label: '🥖 Brasserie' },
+              { value: 'etoile', label: '⭐ Étoilé' },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  if (opt.value === 'etoile' && sections.length === 0) {
+                    // Premier passage en étoilé : créer une section englobante
+                    // avec les ingrédients existants + instructions actuelles.
+                    const tempId = `tmp_${Date.now()}`
+                    setSections([{ tempId, nom: 'Préparation', descriptif: instructions || '' }])
+                    setIngredients(ingredients.map(i => ({ ...i, section_temp_id: i.section_temp_id || tempId })))
+                  }
+                  setFormatAffichage(opt.value)
+                }}
+                style={{
+                  padding: '6px 14px', borderRadius: '7px', fontSize: '12px', border: 'none', cursor: 'pointer',
+                  fontWeight: formatAffichage === opt.value ? '500' : '400',
+                  background: formatAffichage === opt.value ? c.accent : 'transparent',
+                  color: formatAffichage === opt.value ? 'white' : c.texteMuted,
+                }}
+              >{opt.label}</button>
+            ))}
+          </div>
+        </div>
 
         {/* Informations générales */}
         <Card c={c} style={{ marginBottom: '12px' }}>
@@ -455,7 +569,21 @@ export default function ModifierFiche() {
           </div>
         )}
 
-        {/* Ingrédients */}
+        {/* ── MODE ÉTOILÉ : Sections de préparation ── */}
+        {formatAffichage === 'etoile' && (
+          <SectionsEditor
+            sections={sections}
+            setSections={setSections}
+            ingredients={ingredients}
+            setIngredients={setIngredients}
+            listeIngredients={listeIngredients}
+            c={c}
+            isMobile={isMobile}
+          />
+        )}
+
+        {/* Ingrédients + Instructions (mode brasserie) */}
+        {formatAffichage === 'brasserie' && (<>
         <Card c={c} style={{ marginBottom: '12px' }}>
           <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Ingrédients</div>
           {isMobile ? (
@@ -529,6 +657,7 @@ export default function ModifierFiche() {
             </div>
           )}
         </Card>
+        </>)}
 
         {/* Allergènes */}
         <Card c={c} style={{ marginBottom: '12px' }}>

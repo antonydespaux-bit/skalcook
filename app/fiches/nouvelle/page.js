@@ -11,6 +11,7 @@ import { ALLERGENES } from '../../../lib/allergenes'
 import { SAISONS, getYearsRange } from '../../../lib/saison'
 import IngredientSearch from '../../../components/IngredientSearch'
 import BackButton from '../../../components/BackButton'
+import SectionsEditor from '../../../components/SectionsEditor'
 import { uploadFichePhoto } from '../../../lib/uploadPhoto'
 
 import { isIngredientPossible } from '../../../lib/foodCost'
@@ -42,6 +43,9 @@ export default function NouvelleFiche() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [draftRestored, setDraftRestored] = useState(false)
+  const [formatAffichage, setFormatAffichage] = useState('brasserie')
+  const [clientFormatDefaut, setClientFormatDefaut] = useState('brasserie')
+  const [sections, setSections] = useState([])
   const router = useRouter()
   const { c, logoUrl, nomEtablissement } = useTheme()
   const annees = getYearsRange()
@@ -81,13 +85,17 @@ export default function NouvelleFiche() {
   const loadDynamique = async () => {
     const clientId = await getClientId()
     if (!clientId) return
-    const [{ data: lieuxData }, { data: catsData }] = await Promise.all([
+    const [{ data: lieuxData }, { data: catsData }, { data: clientData }] = await Promise.all([
       supabase.from('lieux').select('*').eq('client_id', clientId).eq('section', 'cuisine').order('ordre'),
-      supabase.from('categories_plats').select('*').eq('client_id', clientId).eq('section', 'cuisine').order('ordre')
+      supabase.from('categories_plats').select('*').eq('client_id', clientId).eq('section', 'cuisine').order('ordre'),
+      supabase.from('clients').select('fiche_format_defaut').eq('id', clientId).single(),
     ])
     setLieux(lieuxData || [])
     setCategoriesDyn(catsData || [])
     if (catsData?.length > 0) setCategoriePlat(catsData[0].id)
+    const formatDefaut = clientData?.fiche_format_defaut === 'etoile' ? 'etoile' : 'brasserie'
+    setClientFormatDefaut(formatDefaut)
+    setFormatAffichage(formatDefaut)
   }
 
   const restaurerBrouillon = () => {
@@ -184,6 +192,20 @@ export default function NouvelleFiche() {
 
     const coutPortion = calculerCoutPortion()
 
+    // En mode étoilé, on alimente aussi `instructions` (concat des descriptifs)
+    // pour qu'une bascule en vue brasserie reste lisible.
+    let instructionsFinales = instructions
+    if (formatAffichage === 'etoile') {
+      instructionsFinales = sections
+        .filter(s => (s.nom || '').trim() || (s.descriptif || '').trim())
+        .map(s => {
+          const titre = (s.nom || '').trim()
+          const desc = (s.descriptif || '').trim()
+          return titre ? `${titre} :\n${desc}` : desc
+        })
+        .join('\n\n')
+    }
+
     const newFiche = {
       nom,
       categorie: catSelectionnee?.nom || '',
@@ -193,10 +215,11 @@ export default function NouvelleFiche() {
       is_sub_fiche: !!isSousFiche,
       nb_portions: parseInt(nbPortions),
       prix_ttc: isSousFiche ? null : (prixTTC ? parseFloat(prixTTC) : null),
-      description, instructions: instructions || null,
+      description, instructions: instructionsFinales || null,
       saison: saison || null, annee: annee || null, allergenes,
       cout_portion: coutPortion ? parseFloat(coutPortion) : null,
       perte: perte ? parseFloat(perte) : 0,
+      format_affichage: formatAffichage,
       client_id: clientId
     }
 
@@ -216,6 +239,37 @@ export default function NouvelleFiche() {
       }
     }
 
+    // En mode étoilé, on insère les sections une à une pour récupérer leur id
+    // réel et le mapper depuis le tempId UI.
+    const tempIdToDbId = new Map()
+    if (formatAffichage === 'etoile' && !isSousFiche) {
+      const sectionsAInserer = sections.filter(s =>
+        (s.nom || '').trim() ||
+        (s.descriptif || '').trim() ||
+        ingredients.some(i => i.section_temp_id === s.tempId)
+      )
+      for (let i = 0; i < sectionsAInserer.length; i++) {
+        const s = sectionsAInserer[i]
+        const { data: inserted, error: errSection } = await supabase
+          .from('fiche_sections')
+          .insert({
+            client_id: clientId,
+            fiche_id: fiche.id,
+            ordre: i,
+            nom: (s.nom || '').trim() || `Préparation ${i + 1}`,
+            descriptif: s.descriptif || null
+          })
+          .select('id')
+          .single()
+        if (errSection || !inserted) {
+          setError('Erreur sauvegarde section : ' + (errSection?.message || 'inconnue'))
+          setLoading(false)
+          return
+        }
+        tempIdToDbId.set(s.tempId, inserted.id)
+      }
+    }
+
     const ingredientsAInserer = ingredients
       .filter(i => i.ingredient_id && i.quantite)
       .map(i => ({
@@ -223,7 +277,8 @@ export default function NouvelleFiche() {
         ingredient_id: i.ingredient_id,
         quantite: parseFloat(i.quantite),
         unite: i.unite,
-        client_id: clientId
+        client_id: clientId,
+        section_id: formatAffichage === 'etoile' ? (tempIdToDbId.get(i.section_temp_id) || null) : null
       }))
 
     if (ingredientsAInserer.length > 0) {
@@ -309,6 +364,48 @@ export default function NouvelleFiche() {
         )}
 
         {error && <Alert variant="error" style={{ marginBottom: '16px' }}>{error}</Alert>}
+
+        {/* Toggle format d'affichage (masqué pour les sous-fiches) */}
+        {!isSousFiche && (
+          <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, padding: '12px 14px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Format de la fiche</div>
+              <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '2px' }}>
+                Défaut établissement : <strong>{clientFormatDefaut === 'etoile' ? 'Étoilé' : 'Brasserie'}</strong>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '4px', background: c.fond, padding: '4px', borderRadius: '10px' }}>
+              {[
+                { value: 'brasserie', label: '🥖 Brasserie' },
+                { value: 'etoile', label: '⭐ Étoilé' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    if (opt.value === 'etoile' && sections.length === 0) {
+                      // Bascule brasserie → étoilé : on rattache les ingrédients
+                      // déjà saisis (s'il y en a) à une section englobante.
+                      const hasIngs = ingredients.some(i => i.ingredient_id)
+                      if (hasIngs) {
+                        const tempId = `tmp_${Date.now()}`
+                        setSections([{ tempId, nom: 'Préparation', descriptif: instructions || '' }])
+                        setIngredients(ingredients.map(i => ({ ...i, section_temp_id: i.section_temp_id || tempId })))
+                      }
+                    }
+                    setFormatAffichage(opt.value)
+                  }}
+                  style={{
+                    padding: '6px 14px', borderRadius: '7px', fontSize: '12px', border: 'none', cursor: 'pointer',
+                    fontWeight: formatAffichage === opt.value ? '500' : '400',
+                    background: formatAffichage === opt.value ? c.accent : 'transparent',
+                    color: formatAffichage === opt.value ? 'white' : c.texteMuted,
+                  }}
+                >{opt.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {isSousFiche && (
           <div style={{ background: c.violetClair, color: '#3C3489', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', border: '0.5px solid #AFA9EC' }}>
@@ -444,7 +541,9 @@ export default function NouvelleFiche() {
           </div>
         </div>
 
-        {/* Instructions de préparation */}
+        {/* Instructions de préparation (masquée en mode étoilé — les méthodes
+            seront saisies par section dans l'éditeur) */}
+        {formatAffichage === 'brasserie' && (
         <Card c={c} style={{ marginBottom: '12px' }}>
           <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '6px' }}>📋 Instructions de préparation</div>
           <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '12px' }}>Les sauts de ligne seront respectés à l'écran et à l'impression.</div>
@@ -458,8 +557,10 @@ export default function NouvelleFiche() {
             </div>
           )}
         </Card>
+        )}
 
-        {/* Ingrédients */}
+        {/* Ingrédients (masqués en mode étoilé — saisis par section dans l'éditeur) */}
+        {formatAffichage === 'brasserie' && (
         <Card c={c} style={{ marginBottom: '12px' }}>
           <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '14px' }}>Ingrédients</div>
           {isMobile ? (
@@ -518,6 +619,20 @@ export default function NouvelleFiche() {
             + Ajouter un ingrédient
           </button>
         </Card>
+        )}
+
+        {/* MODE ÉTOILÉ : Sections de préparation */}
+        {formatAffichage === 'etoile' && !isSousFiche && (
+          <SectionsEditor
+            sections={sections}
+            setSections={setSections}
+            ingredients={ingredients}
+            setIngredients={setIngredients}
+            listeIngredients={listeIngredients}
+            c={c}
+            isMobile={isMobile}
+          />
+        )}
 
         {/* Allergènes */}
         <Card c={c} style={{ marginBottom: '12px' }}>
