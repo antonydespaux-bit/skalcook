@@ -91,7 +91,7 @@ export default function AchatsDetailPage() {
 
     const { data: fac, error: fErr } = await supabase
       .from('achats_factures')
-      .select('id, fournisseur, numero_facture, date_facture, total_ht, statut, taux_tva, montant_tva, fichier_url, facture_consolidee_id, created_at')
+      .select('id, fournisseur, numero_facture, date_facture, total_ht, statut, taux_tva, montant_tva, fichier_url, facture_consolidee_id, created_at, section')
       .eq('id', id)
       .eq('client_id', clientId)
       .maybeSingle()
@@ -115,7 +115,7 @@ export default function AchatsDetailPage() {
 
     const { data: rows, error: lErr } = await supabase
       .from('achats_lignes')
-      .select('id, designation, ingredient_id, quantite, unite, prix_unitaire_ht, remise, montant_ht, taux_tva, ingredients(nom)')
+      .select('id, designation, ingredient_id, quantite, unite, prix_unitaire_ht, remise, montant_ht, taux_tva')
       .eq('facture_id', id)
       .eq('client_id', clientId)
       .order('designation')
@@ -137,10 +137,11 @@ export default function AchatsDetailPage() {
 
   // Charge le catalogue d'ingrédients (pour la liaison en mode édition)
   const loadIngredients = useCallback(async () => {
-    if (!clientId) return
+    if (!clientId || !facture) return
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch(`/api/achats/reconciliation-data?client_id=${clientId}`, {
+      const section = facture.section || 'cuisine'
+      const res = await fetch(`/api/achats/reconciliation-data?client_id=${clientId}&section=${section}`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
       if (!res.ok) return
@@ -149,9 +150,9 @@ export default function AchatsDetailPage() {
     } catch (err) {
       console.warn('loadIngredients:', err)
     }
-  }, [clientId])
+  }, [clientId, facture])
 
-  useEffect(() => { if (authReady && clientId) loadIngredients() }, [authReady, clientId, loadIngredients])
+  useEffect(() => { if (authReady && clientId && facture) loadIngredients() }, [authReady, clientId, facture, loadIngredients])
 
   const openEdit = () => {
     setEditFournisseur(facture.fournisseur || '')
@@ -170,7 +171,7 @@ export default function AchatsDetailPage() {
         remise: Number(l.remise) || 0,
         taux_tva: l.taux_tva != null ? Number(l.taux_tva) : null,
         ingredient_id: l.ingredient_id || null,
-        ingredient_nom: l.ingredients?.nom || null,
+        ingredient_nom: (l.ingredient_id && ingredientsById[l.ingredient_id]?.nom) || null,
       }))
     )
     setLinkingIngFor(null)
@@ -325,7 +326,7 @@ export default function AchatsDetailPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar section="cuisine" />
+      <Navbar section={facture?.section || 'cuisine'} />
       <div style={{ padding: isMobile ? '16px' : '24px 32px', maxWidth: hasFichier ? 1400 : 1100, margin: '0 auto' }}>
 
         {/* ── Barre actions ── */}
@@ -678,8 +679,8 @@ export default function AchatsDetailPage() {
                               <td style={tdM}>{l.taux_tva != null ? `${Number(l.taux_tva).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} %` : '—'}</td>
                               <td style={tdR}>{formatEuro(l.montant_ht)}</td>
                               <td style={td}>
-                                {l.ingredients?.nom
-                                  ? <span style={{ fontSize: 12, background: c.accentClair, color: c.accent, borderRadius: 4, padding: '2px 7px' }}>{l.ingredients.nom}</span>
+                                {l.ingredient_id && ingredientsById[l.ingredient_id]?.nom
+                                  ? <span style={{ fontSize: 12, background: c.accentClair, color: c.accent, borderRadius: 4, padding: '2px 7px' }}>{ingredientsById[l.ingredient_id].nom}</span>
                                   : <span style={{ color: c.bordure }}>—</span>}
                               </td>
                             </tr>
