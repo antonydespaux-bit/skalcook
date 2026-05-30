@@ -20,10 +20,10 @@
  */
 
 import { type ZodType } from 'zod'
-import { requireSuperAdmin, requireAdminOrSuperadmin, requireMemberOfClient, getServiceClient } from './apiGuards'
+import { requireAuthenticated, requireSuperAdmin, requireAdminOrSuperadmin, requireMemberOfClient, getServiceClient } from './apiGuards'
 import { ApiError, ValidationError, AuthError, ForbiddenError } from './errors'
 
-type GuardType = 'superadmin' | 'adminOrSuperadmin' | 'memberOfClient' | 'none'
+type GuardType = 'authenticated' | 'superadmin' | 'adminOrSuperadmin' | 'memberOfClient' | 'none'
 
 interface HandlerContext<T = unknown> {
   data: T
@@ -120,7 +120,11 @@ export function apiHandler<T>(options: ApiHandlerOptions<T>) {
 
       // ── 2. Authentication & authorization ─────────────────────────────
       if (options.guard && options.guard !== 'none') {
-        if (options.guard === 'superadmin') {
+        if (options.guard === 'authenticated') {
+          const result = await requireAuthenticated(request) as { user?: { id: string; email?: string }; response?: Response }
+          if (result.response) return result.response
+          user = result.user ?? null
+        } else if (options.guard === 'superadmin') {
           const result = await requireSuperAdmin(request) as { user?: { id: string; email?: string }; response?: Response }
           if (result.response) return result.response
           user = result.user ?? null

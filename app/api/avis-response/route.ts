@@ -7,12 +7,12 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const schema = z.object({
   reviewText: z.string().min(1, 'Texte de l\'avis requis'),
   stars: z.coerce.number().min(1).max(5),
-  section: z.enum(['bar', 'restaurant']).default('restaurant'),
+  section: z.enum(['bar', 'restaurant', 'cuisine']).default('restaurant'),
 })
 
 export const POST = apiHandler({
   schema,
-  guard: 'none',
+  guard: 'authenticated',
   handler: async ({ data }) => {
     const { reviewText, stars, section } = data
     const nomEtablissement = section === 'bar' ? 'notre bar' : 'notre restaurant'

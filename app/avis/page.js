@@ -47,9 +47,13 @@ export default function AvisPage() {
   const genererReponse = async (unAvis) => {
     setGeneratingId(unAvis.id)
     try {
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/avis-response', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           reviewText: unAvis.review_text,
           stars: unAvis.stars,
