@@ -50,6 +50,7 @@ export default function SuperadminEtablissementDetailPage() {
   const [codeNaf, setCodeNaf] = useState('')
   const [urlKbis, setUrlKbis] = useState('')
   const [urlRib, setUrlRib] = useState('')
+  const [ficheFormatDefaut, setFicheFormatDefaut] = useState('brasserie')
   const [isNavigating, setIsNavigating] = useState(false)
 
   useEffect(() => {
@@ -101,6 +102,7 @@ export default function SuperadminEtablissementDetailPage() {
       setCodeNaf(client.code_naf || '')
       setUrlKbis(client.url_kbis || '')
       setUrlRib(client.url_rib || '')
+      setFicheFormatDefaut(client.fiche_format_defaut === 'etoile' ? 'etoile' : 'brasserie')
     } finally {
       setLoading(false)
     }
@@ -119,8 +121,29 @@ export default function SuperadminEtablissementDetailPage() {
       })
     if (errUpload) throw new Error(errUpload.message || 'Upload impossible')
 
-    const { data: urlData } = supabase.storage.from('documents_legaux').getPublicUrl(path)
-    return urlData?.publicUrl || null
+    // Bucket privé : on stocke le chemin, pas une URL publique.
+    return path
+  }
+
+  // Compat : les anciens enregistrements contiennent une URL publique complète.
+  const toStoragePath = (value) => {
+    if (!value) return null
+    const marker = '/documents_legaux/'
+    const i = value.indexOf(marker)
+    return i === -1 ? value : value.slice(i + marker.length)
+  }
+
+  const openLegalDoc = async (value) => {
+    const path = toStoragePath(value)
+    if (!path) return
+    const { data, error: errSign } = await supabase.storage
+      .from('documents_legaux')
+      .createSignedUrl(path, 60)
+    if (errSign || !data?.signedUrl) {
+      setError('Impossible d’ouvrir le document.')
+      return
+    }
+    window.open(data.signedUrl, '_blank', 'noreferrer')
   }
 
   const handleUploadKbis = async (e) => {
@@ -190,7 +213,8 @@ export default function SuperadminEtablissementDetailPage() {
           adresse_siege: adresseSiege,
           code_naf: codeNaf,
           url_kbis: urlKbis,
-          url_rib: urlRib
+          url_rib: urlRib,
+          fiche_format_defaut: ficheFormatDefaut,
         })
       })
       const data = await res.json().catch(() => ({}))
@@ -345,6 +369,36 @@ export default function SuperadminEtablissementDetailPage() {
 
           <div style={{ height: '1px', background: '#E2E8F0', margin: '16px 0' }} />
 
+          {/* Format de fiche par défaut */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={labelStyle}>Format de fiche technique par défaut</label>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '10px' }}>
+              {[
+                { value: 'brasserie', titre: '🥖 Brasserie', desc: 'Vue à plat : ingrédients + méthode globale + sous-fiches.' },
+                { value: 'etoile', titre: '⭐ Étoilé', desc: 'Préparations regroupées dans la fiche, descriptif inline (livret pro).' },
+              ].map(opt => {
+                const actif = ficheFormatDefaut === opt.value
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setFicheFormatDefaut(opt.value)}
+                    style={{
+                      textAlign: 'left', padding: '12px 14px', borderRadius: '10px', cursor: 'pointer',
+                      background: actif ? '#EEF2FF' : 'white',
+                      border: `0.5px solid ${actif ? c.accent : '#E2E8F0'}`,
+                    }}
+                  >
+                    <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '4px', color: actif ? c.accent : c.texte }}>{opt.titre}</div>
+                    <div style={{ fontSize: '11px', color: c.texteMuted, lineHeight: '1.5' }}>{opt.desc}</div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div style={{ height: '1px', background: '#E2E8F0', margin: '16px 0' }} />
+
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
             <div style={{ border: '0.5px solid #E2E8F0', borderRadius: '10px', padding: '12px' }}>
               <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '8px', color: c.texte }}>KBIS</div>
@@ -363,14 +417,13 @@ export default function SuperadminEtablissementDetailPage() {
                 <input type="file" hidden onChange={handleUploadKbis} disabled={uploadingKbis} />
               </label>
               {urlKbis && (
-                <a
-                  href={urlKbis}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ marginLeft: '10px', fontSize: '13px', color: c.accent, textDecoration: 'underline' }}
+                <button
+                  type="button"
+                  onClick={() => openLegalDoc(urlKbis)}
+                  style={{ marginLeft: '10px', fontSize: '13px', color: c.accent, textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                 >
                   Voir le document
-                </a>
+                </button>
               )}
             </div>
 
@@ -391,14 +444,13 @@ export default function SuperadminEtablissementDetailPage() {
                 <input type="file" hidden onChange={handleUploadRib} disabled={uploadingRib} />
               </label>
               {urlRib && (
-                <a
-                  href={urlRib}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ marginLeft: '10px', fontSize: '13px', color: c.accent, textDecoration: 'underline' }}
+                <button
+                  type="button"
+                  onClick={() => openLegalDoc(urlRib)}
+                  style={{ marginLeft: '10px', fontSize: '13px', color: c.accent, textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                 >
                   Voir le document
-                </a>
+                </button>
               )}
             </div>
           </div>
