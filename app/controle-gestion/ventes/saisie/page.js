@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { useTranslation } from 'react-i18next'
 import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import { useTheme } from '../../../../lib/useTheme'
@@ -10,26 +11,26 @@ import Navbar from '../../../../components/Navbar'
 
 const DEBUG_FALLBACK_CLIENT_ID = 'fa725e66-2cad-4ea4-892a-7eb3e90496a7'
 
-const SUGGESTED_LIEUX = [
-  'Salle à manger',
-  'Table du chef',
-  'La cave',
-  'Le salon',
-  'Privat',
-  'Table de partage',
+const SUGGESTED_LIEUX_KEYS = [
+  'salleAManger',
+  'tableDuChef',
+  'laCave',
+  'leSalon',
+  'privat',
+  'tableDePartage',
 ]
 
 const SERVICES = [
-  { code: 'lunch', label: 'Déjeuner' },
-  { code: 'dinner', label: 'Dîner' },
+  { code: 'lunch', labelKey: 'cgVentes.common.lunch' },
+  { code: 'dinner', labelKey: 'cgVentes.common.dinner' },
 ]
 
 const FIELDS = [
-  { key: 'couverts', label: 'Couverts', step: '1', suffix: null },
-  { key: 'ca_food', label: 'CA Food', step: '0.01', suffix: '€' },
-  { key: 'ca_bev_20', label: 'CA Alcool 20%', step: '0.01', suffix: '€' },
-  { key: 'ca_bev_10', label: 'CA Soft 10%', step: '0.01', suffix: '€' },
-  { key: 'ca_autre', label: 'Autres CA', step: '0.01', suffix: '€' },
+  { key: 'couverts', labelKey: 'cgVentes.common.covers', step: '1', suffix: null },
+  { key: 'ca_food', labelKey: 'cgVentes.common.caFood', step: '0.01', suffix: '€' },
+  { key: 'ca_bev_20', labelKey: 'cgVentes.saisie.caAlcool20', step: '0.01', suffix: '€' },
+  { key: 'ca_bev_10', labelKey: 'cgVentes.saisie.caSoft10', step: '0.01', suffix: '€' },
+  { key: 'ca_autre', labelKey: 'cgVentes.saisie.caOther', step: '0.01', suffix: '€' },
 ]
 
 function toIsoDate(d) {
@@ -55,9 +56,9 @@ function cellTM(cell) {
   return cellTotal(cell) / cv
 }
 
-function formatEur(n) {
+function formatEur(n, locale = 'fr') {
   if (n == null || isNaN(n)) return '—'
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n)
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format(n)
 }
 
 function hasAnyValue(cell) {
@@ -80,6 +81,8 @@ function SaisieVentesContent() {
   const searchParams = useSearchParams()
   const { c } = useTheme()
   const isMobile = useIsMobile()
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language || 'fr'
 
   const dateParam = searchParams.get('date')
 
@@ -153,11 +156,11 @@ function SaisieVentesContent() {
       })
       setSaisies(next)
     } catch (e) {
-      setError(e.message || 'Erreur de chargement')
+      setError(e.message || t('cgVentes.common.loadError'))
     } finally {
       setLoading(false)
     }
-  }, [clientId, jour])
+  }, [clientId, jour, t])
 
   useEffect(() => {
     if (authChecked) loadData()
@@ -175,10 +178,10 @@ function SaisieVentesContent() {
         if (insErr) throw insErr
         await loadData()
       } catch (e) {
-        setError(e.message || "Impossible d'ajouter le lieu")
+        setError(e.message || t('cgVentes.saisie.addLieuError'))
       }
     },
-    [clientId, lieux.length, loadData]
+    [clientId, lieux.length, loadData, t]
   )
 
   const updateCell = useCallback((lieuId, service, field, value) => {
@@ -214,21 +217,21 @@ function SaisieVentesContent() {
         }
       }
       if (rows.length === 0) {
-        setOkMsg('Rien à enregistrer.')
+        setOkMsg(t('cgVentes.saisie.nothingToSave'))
         return
       }
       const { error: upErr } = await supabase
         .from('ca_journalier')
         .upsert(rows, { onConflict: 'client_id,jour,lieu_service_id,service' })
       if (upErr) throw upErr
-      setOkMsg(`Enregistré (${rows.length} ligne${rows.length > 1 ? 's' : ''}).`)
+      setOkMsg(t('cgVentes.saisie.saved', { count: rows.length }))
       await loadData()
     } catch (e) {
-      setError(e.message || "Erreur d'enregistrement")
+      setError(e.message || t('cgVentes.saisie.saveError'))
     } finally {
       setSaving(false)
     }
-  }, [clientId, jour, lieux, saisies, loadData])
+  }, [clientId, jour, lieux, saisies, loadData, t])
 
   const dayTotals = useMemo(() => {
     let lunchC = 0
@@ -280,13 +283,13 @@ function SaisieVentesContent() {
               display: 'inline-block',
             }}
           >
-            ← Vue mensuelle
+            {t('cgVentes.saisie.backToMonthly')}
           </Link>
           <h1 style={{ margin: '0 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 600, color: c.texte }}>
-            Saisie CA journalier
+            {t('cgVentes.saisie.title')}
           </h1>
           <p style={{ margin: 0, fontSize: 14, color: c.texteMuted }}>
-            Saisie quotidienne du CA et des couverts par lieu de service.
+            {t('cgVentes.saisie.subtitle')}
           </p>
         </div>
 
@@ -299,7 +302,7 @@ function SaisieVentesContent() {
             marginBottom: 16,
           }}
         >
-          <label style={{ fontSize: 13, color: c.texte }}>Date :</label>
+          <label style={{ fontSize: 13, color: c.texte }}>{t('cgVentes.saisie.dateLabel')}</label>
           <input
             type="date"
             value={jour}
@@ -322,21 +325,23 @@ function SaisieVentesContent() {
           <p style={{ color: '#15803D', fontSize: 14, marginBottom: 16 }}>{okMsg}</p>
         )}
 
-        {loading && <p style={{ color: c.texteMuted, fontSize: 14 }}>Chargement…</p>}
+        {loading && <p style={{ color: c.texteMuted, fontSize: 14 }}>{t('cgVentes.common.loading')}</p>}
 
-        {!loading && lieux.length === 0 && <EmptyLieux addLieu={addLieu} c={c} />}
+        {!loading && lieux.length === 0 && <EmptyLieux addLieu={addLieu} c={c} t={t} />}
 
         {!loading && lieux.length > 0 && (
           <>
-            <LieuxBar lieux={lieux} addLieu={addLieu} c={c} isMobile={isMobile} />
+            <LieuxBar lieux={lieux} addLieu={addLieu} c={c} isMobile={isMobile} t={t} />
             <SaisieGrid
               lieux={lieux}
               saisies={saisies}
               updateCell={updateCell}
               isMobile={isMobile}
               c={c}
+              t={t}
+              locale={locale}
             />
-            <DayTotals totals={dayTotals} isMobile={isMobile} c={c} />
+            <DayTotals totals={dayTotals} isMobile={isMobile} c={c} t={t} locale={locale} />
           </>
         )}
       </div>
@@ -374,7 +379,7 @@ function SaisieVentesContent() {
               minWidth: isMobile ? 'auto' : 320,
             }}
           >
-            {saving ? 'Enregistrement…' : 'Enregistrer la journée'}
+            {saving ? t('cgVentes.saisie.saving') : t('cgVentes.saisie.saveDay')}
           </button>
         </div>
       )}
@@ -382,7 +387,7 @@ function SaisieVentesContent() {
   )
 }
 
-function LieuxBar({ lieux, addLieu, c, isMobile }) {
+function LieuxBar({ lieux, addLieu, c, isMobile, t }) {
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
   const handleSubmit = async () => {
@@ -391,7 +396,8 @@ function LieuxBar({ lieux, addLieu, c, isMobile }) {
     setNewName('')
     setAdding(false)
   }
-  const remaining = SUGGESTED_LIEUX.filter((s) => !lieux.some((l) => l.nom === s))
+  const suggested = SUGGESTED_LIEUX_KEYS.map((k) => t(`cgVentes.saisie.suggestedLieux.${k}`))
+  const remaining = suggested.filter((s) => !lieux.some((l) => l.nom === s))
   return (
     <div
       style={{
@@ -407,7 +413,7 @@ function LieuxBar({ lieux, addLieu, c, isMobile }) {
       }}
     >
       <span style={{ fontSize: 13, color: c.texteMuted }}>
-        {lieux.length} lieu{lieux.length > 1 ? 'x' : ''} configuré{lieux.length > 1 ? 's' : ''} :
+        {t('cgVentes.saisie.lieuxConfigured', { count: lieux.length })}
       </span>
       {lieux.map((l) => (
         <span
@@ -438,7 +444,7 @@ function LieuxBar({ lieux, addLieu, c, isMobile }) {
             marginLeft: 'auto',
           }}
         >
-          + Ajouter un lieu
+          {t('cgVentes.saisie.addLieu')}
         </button>
       ) : (
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginLeft: isMobile ? 0 : 'auto' }}>
@@ -461,7 +467,7 @@ function LieuxBar({ lieux, addLieu, c, isMobile }) {
               }}
             >
               <option value="" disabled>
-                Suggestions…
+                {t('cgVentes.saisie.suggestionsPlaceholder')}
               </option>
               {remaining.map((s) => (
                 <option key={s} value={s}>
@@ -472,7 +478,7 @@ function LieuxBar({ lieux, addLieu, c, isMobile }) {
           )}
           <input
             type="text"
-            placeholder="Autre nom…"
+            placeholder={t('cgVentes.saisie.otherNamePlaceholder')}
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => {
@@ -507,7 +513,7 @@ function LieuxBar({ lieux, addLieu, c, isMobile }) {
               opacity: newName.trim() ? 1 : 0.5,
             }}
           >
-            OK
+            {t('cgVentes.common.ok')}
           </button>
           <button
             onClick={() => {
@@ -532,8 +538,9 @@ function LieuxBar({ lieux, addLieu, c, isMobile }) {
   )
 }
 
-function EmptyLieux({ addLieu, c }) {
+function EmptyLieux({ addLieu, c, t }) {
   const [custom, setCustom] = useState('')
+  const suggested = SUGGESTED_LIEUX_KEYS.map((k) => t(`cgVentes.saisie.suggestedLieux.${k}`))
   return (
     <div
       style={{
@@ -545,10 +552,10 @@ function EmptyLieux({ addLieu, c }) {
       }}
     >
       <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 600, color: c.texte }}>
-        Configurez vos lieux de service
+        {t('cgVentes.saisie.emptyTitle')}
       </h2>
       <p style={{ margin: '0 0 16px', fontSize: 13, color: c.texteMuted }}>
-        Pour démarrer, ajoutez les lieux où vous servez. Vous pourrez en rajouter d&apos;autres plus tard.
+        {t('cgVentes.saisie.emptyHint')}
       </p>
       <div
         style={{
@@ -559,7 +566,7 @@ function EmptyLieux({ addLieu, c }) {
           marginBottom: 16,
         }}
       >
-        {SUGGESTED_LIEUX.map((nom) => (
+        {suggested.map((nom) => (
           <button
             key={nom}
             onClick={() => addLieu(nom)}
@@ -588,7 +595,7 @@ function EmptyLieux({ addLieu, c }) {
       >
         <input
           type="text"
-          placeholder="Ou un autre nom…"
+          placeholder={t('cgVentes.saisie.orOtherNamePlaceholder')}
           value={custom}
           onChange={(e) => setCustom(e.target.value)}
           style={{
@@ -620,14 +627,14 @@ function EmptyLieux({ addLieu, c }) {
             opacity: custom.trim() ? 1 : 0.5,
           }}
         >
-          Ajouter
+          {t('cgVentes.saisie.add')}
         </button>
       </div>
     </div>
   )
 }
 
-function SaisieGrid({ lieux, saisies, updateCell, isMobile, c }) {
+function SaisieGrid({ lieux, saisies, updateCell, isMobile, c, t, locale }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {lieux.map((lieu) => (
@@ -638,13 +645,15 @@ function SaisieGrid({ lieux, saisies, updateCell, isMobile, c }) {
           updateCell={updateCell}
           isMobile={isMobile}
           c={c}
+          t={t}
+          locale={locale}
         />
       ))}
     </div>
   )
 }
 
-function LieuCard({ lieu, saisies, updateCell, isMobile, c }) {
+function LieuCard({ lieu, saisies, updateCell, isMobile, c, t, locale }) {
   return (
     <div
       style={{
@@ -694,12 +703,12 @@ function LieuCard({ lieu, saisies, updateCell, isMobile, c }) {
                   letterSpacing: 0.4,
                 }}
               >
-                {svc.label}
+                {t(svc.labelKey)}
               </div>
               {FIELDS.map((f) => (
                 <Field
                   key={f.key}
-                  label={f.label}
+                  label={t(f.labelKey)}
                   value={cell[f.key]}
                   onChange={(v) => updateCell(lieu.id, svc.code, f.key, v)}
                   step={f.step}
@@ -717,8 +726,8 @@ function LieuCard({ lieu, saisies, updateCell, isMobile, c }) {
                   fontSize: 13,
                 }}
               >
-                <span style={{ color: c.texteMuted }}>Total CA</span>
-                <span style={{ fontWeight: 600, color: c.texte }}>{formatEur(total)}</span>
+                <span style={{ color: c.texteMuted }}>{t('cgVentes.saisie.totalCa')}</span>
+                <span style={{ fontWeight: 600, color: c.texte }}>{formatEur(total, locale)}</span>
               </div>
               <div
                 style={{
@@ -728,8 +737,8 @@ function LieuCard({ lieu, saisies, updateCell, isMobile, c }) {
                   marginTop: 4,
                 }}
               >
-                <span style={{ color: c.texteMuted }}>Ticket moyen</span>
-                <span style={{ fontWeight: 600, color: c.texte }}>{formatEur(tm)}</span>
+                <span style={{ color: c.texteMuted }}>{t('cgVentes.common.averageTicket')}</span>
+                <span style={{ fontWeight: 600, color: c.texte }}>{formatEur(tm, locale)}</span>
               </div>
             </div>
           )
@@ -778,7 +787,7 @@ function Field({ label, value, onChange, step, suffix, c }) {
   )
 }
 
-function DayTotals({ totals, isMobile, c }) {
+function DayTotals({ totals, isMobile, c, t, locale }) {
   return (
     <div
       style={{
@@ -790,7 +799,7 @@ function DayTotals({ totals, isMobile, c }) {
       }}
     >
       <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 600, color: c.texte }}>
-        Total journée
+        {t('cgVentes.saisie.dayTotal')}
       </h3>
       <div
         style={{
@@ -799,10 +808,10 @@ function DayTotals({ totals, isMobile, c }) {
           gap: 12,
         }}
       >
-        <KPI label="Couverts midi" value={totals.lunchCouverts} c={c} />
-        <KPI label="Couverts soir" value={totals.dinnerCouverts} c={c} />
-        <KPI label="CA midi" value={formatEur(totals.lunchCA)} c={c} />
-        <KPI label="CA soir" value={formatEur(totals.dinnerCA)} c={c} />
+        <KPI label={t('cgVentes.saisie.kpiCoversLunch')} value={totals.lunchCouverts} c={c} />
+        <KPI label={t('cgVentes.saisie.kpiCoversDinner')} value={totals.dinnerCouverts} c={c} />
+        <KPI label={t('cgVentes.saisie.kpiCaLunch')} value={formatEur(totals.lunchCA, locale)} c={c} />
+        <KPI label={t('cgVentes.saisie.kpiCaDinner')} value={formatEur(totals.dinnerCA, locale)} c={c} />
       </div>
       <div
         style={{
@@ -814,9 +823,9 @@ function DayTotals({ totals, isMobile, c }) {
           borderTop: `1px solid ${c.bordure}`,
         }}
       >
-        <KPI label="Couverts journée" value={totals.couvertsTot} c={c} highlight />
-        <KPI label="CA total journée" value={formatEur(totals.caTot)} c={c} highlight />
-        <KPI label="Ticket moyen journée" value={formatEur(totals.tmJour)} c={c} highlight />
+        <KPI label={t('cgVentes.saisie.kpiCoversDay')} value={totals.couvertsTot} c={c} highlight />
+        <KPI label={t('cgVentes.saisie.kpiCaDay')} value={formatEur(totals.caTot, locale)} c={c} highlight />
+        <KPI label={t('cgVentes.saisie.kpiTmDay')} value={formatEur(totals.tmJour, locale)} c={c} highlight />
       </div>
     </div>
   )

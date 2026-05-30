@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslation, Trans } from 'react-i18next'
 import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import { useTheme } from '../../../../lib/useTheme'
@@ -26,6 +27,7 @@ export default function RapportHebdoPage() {
   const { c } = useTheme()
   const isMobile = useIsMobile()
   const { role, loading: roleLoading } = useRole()
+  const { t } = useTranslation()
 
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
@@ -166,11 +168,11 @@ export default function RapportHebdoPage() {
       // (CA cumul mois inclus dans la query principale via debutPourCumul)
       void y1; void m1
     } catch (e) {
-      setError(e.message || 'Erreur de chargement')
+      setError(e.message || t('cgVentes.common.loadError'))
     } finally {
       setLoading(false)
     }
-  }, [clientId, debut, fin])
+  }, [clientId, debut, fin, t])
 
   useEffect(() => {
     if (authReady && clientId) loadData()
@@ -190,11 +192,11 @@ export default function RapportHebdoPage() {
       if (e) throw e
       setArchives(data || [])
     } catch (e) {
-      setError(e.message || 'Erreur de chargement archives')
+      setError(e.message || t('cgVentes.rapportHebdo.loadArchivesError'))
     } finally {
       setArchivesLoading(false)
     }
-  }, [clientId])
+  }, [clientId, t])
 
   useEffect(() => { if (authReady && clientId) loadArchives() }, [authReady, clientId, loadArchives])
 
@@ -310,7 +312,7 @@ export default function RapportHebdoPage() {
           .update(payload)
           .eq('id', currentRapportId)
         if (e) throw e
-        setOkMsg('Rapport mis à jour.')
+        setOkMsg(t('cgVentes.rapportHebdo.reportUpdated'))
       } else {
         const { data: ins, error: e } = await supabase
           .from('ca_rapports_hebdo')
@@ -319,11 +321,11 @@ export default function RapportHebdoPage() {
           .single()
         if (e) throw e
         setCurrentRapportId(ins.id)
-        setOkMsg('Rapport sauvegardé.')
+        setOkMsg(t('cgVentes.rapportHebdo.reportSaved'))
       }
       await loadArchives()
     } catch (e) {
-      setError(e.message || 'Erreur de sauvegarde')
+      setError(e.message || t('cgVentes.rapportHebdo.saveError'))
     } finally {
       setSaving(false)
     }
@@ -341,14 +343,14 @@ export default function RapportHebdoPage() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Supprimer ce rapport ?')) return
+    if (!confirm(t('cgVentes.rapportHebdo.confirmDelete'))) return
     try {
       const { error: e } = await supabase.from('ca_rapports_hebdo').delete().eq('id', id)
       if (e) throw e
       if (id === currentRapportId) setCurrentRapportId(null)
       await loadArchives()
     } catch (e) {
-      setError(e.message || 'Erreur de suppression')
+      setError(e.message || t('cgVentes.rapportHebdo.deleteError'))
     }
   }
 
@@ -373,9 +375,9 @@ export default function RapportHebdoPage() {
         articles, articlesVentes,
       })
       await copyHtmlToClipboard(html)
-      setOkMsg('Rapport copié dans le presse-papier — colle dans Gmail / Outlook.')
+      setOkMsg(t('cgVentes.rapportHebdo.copiedToClipboard'))
     } catch (e) {
-      setError(e.message || 'Erreur lors de la copie')
+      setError(e.message || t('cgVentes.rapportHebdo.copyError'))
     }
   }
 
@@ -388,14 +390,14 @@ export default function RapportHebdoPage() {
       })
       downloadHtmlFile(html, `rapport-ca_${debut}_${fin}.html`)
     } catch (e) {
-      setError(e.message || 'Erreur lors du téléchargement')
+      setError(e.message || t('cgVentes.rapportHebdo.downloadError'))
     }
   }
 
   if (!authReady) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
-        Chargement…
+        {t('cgVentes.common.loading')}
       </div>
     )
   }
@@ -408,26 +410,26 @@ export default function RapportHebdoPage() {
         <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
           <div>
             <h1 style={{ margin: '0 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 600, color: c.texte }}>
-              Rapport hebdomadaire
+              {t('cgVentes.rapportHebdo.title')}
             </h1>
             <p style={{ margin: 0, fontSize: 14, color: c.texteMuted }}>
               {formatPeriode(debut, fin)}
-              {currentRapportId && <span style={{ marginLeft: 8, color: c.accent, fontWeight: 500 }}>• rapport archivé</span>}
+              {currentRapportId && <span style={{ marginLeft: 8, color: c.accent, fontWeight: 500 }}>{t('cgVentes.rapportHebdo.archivedBadge')}</span>}
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={handleSemainePrec} style={btnSecondary(c)}>Semaine précédente</button>
-            <button onClick={handleSemaineCour} style={btnSecondary(c)}>Semaine en cours</button>
-            <button onClick={handleNouveau} style={btnSecondary(c)} title="Nouveau rapport vide">+ Nouveau</button>
+            <button onClick={handleSemainePrec} style={btnSecondary(c)}>{t('cgVentes.rapportHebdo.prevWeek')}</button>
+            <button onClick={handleSemaineCour} style={btnSecondary(c)}>{t('cgVentes.rapportHebdo.currentWeek')}</button>
+            <button onClick={handleNouveau} style={btnSecondary(c)} title={t('cgVentes.rapportHebdo.newReportTitle')}>{t('cgVentes.rapportHebdo.new')}</button>
             <button onClick={() => setArticlesModalOpen(true)} style={btnSecondary(c)}
-              title="Configurer les menus et suppléments suivis">
-              📋 Articles
+              title={t('cgVentes.rapportHebdo.articlesTitle')}>
+              {t('cgVentes.rapportHebdo.articles')}
             </button>
             <button
               onClick={() => setCompareMode((m) => !m)}
               style={{ ...btnSecondary(c), background: compareMode ? c.accent : c.blanc, color: compareMode ? c.texte : c.texte, fontWeight: compareMode ? 600 : 400 }}
-              title="Activer le mode comparaison de plusieurs périodes">
-              ⇄ Comparer
+              title={t('cgVentes.rapportHebdo.compareTitle')}>
+              {t('cgVentes.rapportHebdo.compare')}
             </button>
           </div>
         </div>
@@ -439,17 +441,17 @@ export default function RapportHebdoPage() {
           display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center',
         }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: c.texteMuted }}>
-            Du
+            {t('cgVentes.rapportHebdo.from')}
             <input type="date" value={debut} onChange={(e) => setDebut(e.target.value)}
               style={dateInputStyle(c)} />
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: c.texteMuted }}>
-            au
+            {t('cgVentes.rapportHebdo.to')}
             <input type="date" value={fin} onChange={(e) => setFin(e.target.value)}
               style={dateInputStyle(c)} />
           </label>
           <input type="text" value={titre} onChange={(e) => setTitre(e.target.value)}
-            placeholder="Titre optionnel (ex: Rapport semaine 19)"
+            placeholder={t('cgVentes.rapportHebdo.titlePlaceholder')}
             style={{ ...dateInputStyle(c), flex: 1, minWidth: 200 }} />
         </div>
 
@@ -463,15 +465,18 @@ export default function RapportHebdoPage() {
             padding: isMobile ? 16 : 24,
           }}>
             <p style={{ margin: '0 0 14px', fontSize: 14, color: c.texte }}>
-              Bonjour à tous,
+              {t('cgVentes.rapportHebdo.greeting')}
             </p>
             <p style={{ margin: '0 0 14px', fontSize: 14, color: c.texte }}>
-              Ci-dessous le rapport du CA pour la <strong>période {formatPeriode(debut, fin)}</strong> ainsi
-              que le cumul depuis le début du mois :
+              <Trans
+                i18nKey="cgVentes.rapportHebdo.intro"
+                values={{ periode: formatPeriode(debut, fin) }}
+                components={{ strong: <strong /> }}
+              />
             </p>
 
             {loading ? (
-              <p style={{ color: c.texteMuted, fontSize: 14 }}>Chargement des données…</p>
+              <p style={{ color: c.texteMuted, fontSize: 14 }}>{t('cgVentes.rapportHebdo.loadingData')}</p>
             ) : (
               <RapportSections
                 c={c} data={data} debut={debut} fin={fin}
@@ -488,12 +493,12 @@ export default function RapportHebdoPage() {
                 fontSize: 14, fontWeight: 600, color: c.accent,
                 margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: 0.4,
               }}>
-                Commentaires
+                {t('cgVentes.rapportHebdo.comments')}
               </h3>
               <textarea
                 value={commentaire}
                 onChange={(e) => setCommentaire(e.target.value)}
-                placeholder="Précisions / analyses qualitatives à inclure dans l'email…"
+                placeholder={t('cgVentes.rapportHebdo.commentsPlaceholder')}
                 rows={6}
                 style={{
                   width: '100%',
@@ -507,13 +512,13 @@ export default function RapportHebdoPage() {
             {/* Actions */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
               <button onClick={handleSave} disabled={saving} style={btnPrimary(c, saving)}>
-                {saving ? 'Sauvegarde…' : currentRapportId ? '💾 Mettre à jour' : '💾 Sauvegarder'}
+                {saving ? t('cgVentes.rapportHebdo.savingShort') : currentRapportId ? t('cgVentes.rapportHebdo.update') : t('cgVentes.rapportHebdo.save')}
               </button>
               <button onClick={handleCopyEmail} style={btnSecondary(c)}>
-                📋 Copier pour email
+                {t('cgVentes.rapportHebdo.copyForEmail')}
               </button>
               <button onClick={handleDownloadHtml} style={btnSecondary(c)}>
-                📥 Télécharger HTML
+                {t('cgVentes.rapportHebdo.downloadHtml')}
               </button>
             </div>
           </div>
@@ -524,13 +529,13 @@ export default function RapportHebdoPage() {
             padding: 12, alignSelf: 'start',
           }}>
             <div style={{ fontSize: 12, color: c.texteMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 10 }}>
-              Archives
+              {t('cgVentes.rapportHebdo.archives')}
             </div>
             {archivesLoading ? (
-              <div style={{ fontSize: 12, color: c.texteMuted }}>Chargement…</div>
+              <div style={{ fontSize: 12, color: c.texteMuted }}>{t('cgVentes.common.loading')}</div>
             ) : archives.length === 0 ? (
               <div style={{ fontSize: 12, color: c.texteMuted, padding: '12px 0' }}>
-                Aucun rapport sauvegardé. Crée-en un depuis cette page.
+                {t('cgVentes.rapportHebdo.noArchives')}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -538,6 +543,7 @@ export default function RapportHebdoPage() {
                   <ArchiveRow
                     key={r.id}
                     c={c}
+                    t={t}
                     rapport={r}
                     active={r.id === currentRapportId}
                     onLoad={() => handleLoad(r)}
@@ -574,7 +580,7 @@ export default function RapportHebdoPage() {
   )
 }
 
-function ArchiveRow({ c, rapport, active, onLoad, onDelete }) {
+function ArchiveRow({ c, t, rapport, active, onLoad, onDelete }) {
   return (
     <div style={{
       padding: '8px 10px', borderRadius: 6,
@@ -599,7 +605,7 @@ function ArchiveRow({ c, rapport, active, onLoad, onDelete }) {
             background: 'transparent', border: 'none', color: c.texteMuted,
             cursor: 'pointer', fontSize: 14, padding: '2px 6px',
           }}
-          title="Supprimer"
+          title={t('cgVentes.common.delete')}
         >
           🗑
         </button>

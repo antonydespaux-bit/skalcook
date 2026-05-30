@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useTranslation } from 'react-i18next'
 import { supabase, getClientId } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
@@ -10,8 +11,6 @@ import Navbar from '../../../components/Navbar'
 import { buildElectedDatesMap, isCellElectedForDate } from '../../../lib/caJoursHelpers'
 
 const DEBUG_FALLBACK_CLIENT_ID = 'fa725e66-2cad-4ea4-892a-7eb3e90496a7'
-
-const JOURS_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
 
 function currentMonthIso() {
   const d = new Date()
@@ -37,18 +36,18 @@ function* eachDay(monthIso) {
   }
 }
 
-function formatEur(n) {
+function formatEur(n, locale = 'fr') {
   if (n == null || isNaN(n) || n === 0) return '—'
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n)
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n)
 }
 
-function formatEur2(n) {
+function formatEur2(n, locale = 'fr') {
   if (n == null || isNaN(n) || n === 0) return '—'
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n)
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format(n)
 }
 
-function formatDeltaEur(n) {
-  return new Intl.NumberFormat('fr-FR', {
+function formatDeltaEur(n, locale = 'fr') {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: 'EUR',
     maximumFractionDigits: 0,
@@ -79,6 +78,7 @@ export default function VentesMensuelPage() {
   const router = useRouter()
   const { c } = useTheme()
   const isMobile = useIsMobile()
+  const { t, i18n } = useTranslation()
 
   const [clientId, setClientId] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
@@ -151,11 +151,11 @@ export default function VentesMensuelPage() {
       setBudgetRows(budgetRes.data || [])
       setJoursOverrideRows(overrideRes.data || [])
     } catch (e) {
-      setError(e.message || 'Erreur de chargement')
+      setError(e.message || t('cgVentes.common.loadError'))
     } finally {
       setLoading(false)
     }
-  }, [clientId, mois])
+  }, [clientId, mois, t])
 
   useEffect(() => {
     if (authChecked) loadData()
@@ -342,10 +342,10 @@ export default function VentesMensuelPage() {
       <div style={{ padding: isMobile ? 16 : 24, maxWidth: 1200, margin: '0 auto' }}>
         <div style={{ marginBottom: 16 }}>
           <h1 style={{ margin: '0 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 600, color: c.texte }}>
-            CA mensuel
+            {t('cgVentes.dashboard.title')}
           </h1>
           <p style={{ margin: 0, fontSize: 14, color: c.texteMuted }}>
-            Vue d&apos;ensemble par jour pour le mois sélectionné.
+            {t('cgVentes.dashboard.subtitle')}
           </p>
         </div>
 
@@ -358,7 +358,7 @@ export default function VentesMensuelPage() {
             marginBottom: 16,
           }}
         >
-          <label style={{ fontSize: 13, color: c.texte }}>Mois :</label>
+          <label style={{ fontSize: 13, color: c.texte }}>{t('cgVentes.dashboard.monthLabel')}</label>
           <input
             type="month"
             value={mois}
@@ -386,7 +386,7 @@ export default function VentesMensuelPage() {
               fontWeight: 500,
             }}
           >
-            Budgets
+            {t('cgVentes.dashboard.budgetsLink')}
           </Link>
           <Link
             href="/controle-gestion/ventes/saisie"
@@ -401,13 +401,13 @@ export default function VentesMensuelPage() {
               fontWeight: 500,
             }}
           >
-            + Saisir une journée
+            {t('cgVentes.dashboard.addDayLink')}
           </Link>
         </div>
 
         {error && <p style={{ color: '#B91C1C', fontSize: 14, marginBottom: 16 }}>{error}</p>}
 
-        {loading && <p style={{ color: c.texteMuted, fontSize: 14 }}>Chargement…</p>}
+        {loading && <p style={{ color: c.texteMuted, fontSize: 14 }}>{t('cgVentes.common.loading')}</p>}
 
         {!loading && (
           <MonthTable
@@ -416,6 +416,8 @@ export default function VentesMensuelPage() {
             mois={mois}
             isMobile={isMobile}
             c={c}
+            t={t}
+            locale={i18n.language || 'fr'}
           />
         )}
       </div>
@@ -423,7 +425,7 @@ export default function VentesMensuelPage() {
   )
 }
 
-function MonthTable({ days, totals, mois, isMobile, c }) {
+function MonthTable({ days, totals, mois, isMobile, c, t, locale }) {
   const cellPad = isMobile ? '8px 6px' : '10px 12px'
   const headPad = isMobile ? '10px 6px' : '12px 12px'
   const baseFont = isMobile ? 12 : 13
@@ -468,18 +470,18 @@ function MonthTable({ days, totals, mois, isMobile, c }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
           <thead>
             <tr>
-              <th style={{ ...head, textAlign: 'left' }}>Date</th>
-              <th style={{ ...head, textAlign: 'left' }}>Jour</th>
-              <th style={head}>Couv. midi</th>
-              <th style={head}>Couv. soir</th>
-              <th style={head}>CA Food</th>
-              <th style={head}>CA Alcool</th>
-              <th style={head}>CA Soft</th>
-              <th style={head}>Autres</th>
-              <th style={head}>CA Total</th>
-              <th style={head} title="Cellule jour : écart réel - budget du jour. Total : cumul réel - cumul budget sur les jours déjà saisis.">Month to date</th>
-              <th style={head} title="Réel cumulé - budget projeté du mois entier (overrides nb_jours respectés)">Δ Mois total</th>
-              <th style={head}>TM</th>
+              <th style={{ ...head, textAlign: 'left' }}>{t('cgVentes.dashboard.colDate')}</th>
+              <th style={{ ...head, textAlign: 'left' }}>{t('cgVentes.dashboard.colDay')}</th>
+              <th style={head}>{t('cgVentes.dashboard.colCoversLunch')}</th>
+              <th style={head}>{t('cgVentes.dashboard.colCoversDinner')}</th>
+              <th style={head}>{t('cgVentes.common.caFood')}</th>
+              <th style={head}>{t('cgVentes.dashboard.colCaAlcool')}</th>
+              <th style={head}>{t('cgVentes.dashboard.colCaSoft')}</th>
+              <th style={head}>{t('cgVentes.dashboard.colOther')}</th>
+              <th style={head}>{t('cgVentes.dashboard.colCaTotal')}</th>
+              <th style={head} title={t('cgVentes.dashboard.mtdTooltip')}>{t('cgVentes.dashboard.colMtd')}</th>
+              <th style={head} title={t('cgVentes.dashboard.fullMonthTooltip')}>{t('cgVentes.dashboard.colFullMonth')}</th>
+              <th style={head}>{t('cgVentes.common.tm')}</th>
               <th style={head}></th>
             </tr>
           </thead>
@@ -496,20 +498,20 @@ function MonthTable({ days, totals, mois, isMobile, c }) {
                   {String(d.day).padStart(2, '0')}
                 </td>
                 <td style={{ ...cell, textAlign: 'left', color: c.texteMuted }}>
-                  {JOURS_FR[d.weekday].slice(0, 3)}
+                  {d.date.toLocaleDateString(locale, { weekday: 'short' })}
                 </td>
                 <td style={cell}>{d.lunchCouverts || '—'}</td>
                 <td style={cell}>{d.dinnerCouverts || '—'}</td>
-                <td style={cell}>{formatEur(d.food)}</td>
-                <td style={cell}>{formatEur(d.bev_20)}</td>
-                <td style={cell}>{formatEur(d.bev_10)}</td>
-                <td style={cell}>{formatEur(d.autre)}</td>
-                <td style={{ ...cell, fontWeight: 600 }}>{formatEur(d.caTot)}</td>
-                <td style={budgetCellStyle(d, cell, c)} title={budgetCellTitle(d)}>
-                  {budgetCellLabel(d)}
+                <td style={cell}>{formatEur(d.food, locale)}</td>
+                <td style={cell}>{formatEur(d.bev_20, locale)}</td>
+                <td style={cell}>{formatEur(d.bev_10, locale)}</td>
+                <td style={cell}>{formatEur(d.autre, locale)}</td>
+                <td style={{ ...cell, fontWeight: 600 }}>{formatEur(d.caTot, locale)}</td>
+                <td style={budgetCellStyle(d, cell, c)} title={budgetCellTitle(d, t, locale)}>
+                  {budgetCellLabel(d, locale)}
                 </td>
                 <td style={{ ...cell, color: c.texteMuted }}>—</td>
-                <td style={cell}>{formatEur2(d.tm)}</td>
+                <td style={cell}>{formatEur2(d.tm, locale)}</td>
                 <td style={{ ...cell, padding: '4px 8px' }}>
                   <Link
                     href={`/controle-gestion/ventes/saisie?date=${d.iso}`}
@@ -523,7 +525,7 @@ function MonthTable({ days, totals, mois, isMobile, c }) {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {d.hasData ? 'Modifier' : 'Saisir'}
+                    {d.hasData ? t('cgVentes.common.edit') : t('cgVentes.common.enter')}
                   </Link>
                 </td>
               </tr>
@@ -532,22 +534,22 @@ function MonthTable({ days, totals, mois, isMobile, c }) {
           <tfoot>
             <tr style={{ background: c.fond, fontWeight: 600 }}>
               <td style={{ ...cell, textAlign: 'left' }} colSpan={2}>
-                Total {mois}
+                {t('cgVentes.dashboard.totalMonth', { mois })}
               </td>
               <td style={cell}>{totals.lunchCouverts || '—'}</td>
               <td style={cell}>{totals.dinnerCouverts || '—'}</td>
-              <td style={cell}>{formatEur(totals.food)}</td>
-              <td style={cell}>{formatEur(totals.bev_20)}</td>
-              <td style={cell}>{formatEur(totals.bev_10)}</td>
-              <td style={cell}>{formatEur(totals.autre)}</td>
-              <td style={{ ...cell, fontWeight: 700 }}>{formatEur(totals.caTot)}</td>
-              <td style={mtdCellStyle(totals, cell, c)} title={mtdCellTitle(totals)}>
-                {mtdCellLabel(totals)}
+              <td style={cell}>{formatEur(totals.food, locale)}</td>
+              <td style={cell}>{formatEur(totals.bev_20, locale)}</td>
+              <td style={cell}>{formatEur(totals.bev_10, locale)}</td>
+              <td style={cell}>{formatEur(totals.autre, locale)}</td>
+              <td style={{ ...cell, fontWeight: 700 }}>{formatEur(totals.caTot, locale)}</td>
+              <td style={mtdCellStyle(totals, cell, c)} title={mtdCellTitle(totals, t, locale)}>
+                {mtdCellLabel(totals, locale)}
               </td>
-              <td style={fullMonthCellStyle(totals, cell, c)} title={fullMonthCellTitle(totals)}>
-                {fullMonthCellLabel(totals)}
+              <td style={fullMonthCellStyle(totals, cell, c)} title={fullMonthCellTitle(totals, t, locale)}>
+                {fullMonthCellLabel(totals, locale)}
               </td>
-              <td style={cell}>{formatEur2(totals.tm)}</td>
+              <td style={cell}>{formatEur2(totals.tm, locale)}</td>
               <td style={cell}></td>
             </tr>
           </tfoot>
@@ -580,15 +582,19 @@ function budgetCellStyle(d, base, c) {
   return { ...base, color, background: bg, fontWeight: tone === 'none' ? 400 : 600 }
 }
 
-function budgetCellLabel(d) {
+function budgetCellLabel(d, locale = 'fr') {
   if (!d.budget || !d.hasData) return '—'
-  return formatDeltaEur(d.caTot - d.budget)
+  return formatDeltaEur(d.caTot - d.budget, locale)
 }
 
-function budgetCellTitle(d) {
-  if (!d.budget) return 'Pas de budget cible pour ce jour de la semaine'
+function budgetCellTitle(d, t, locale = 'fr') {
+  if (!d.budget) return t('cgVentes.dashboard.budgetCellNoBudget')
   const ratio = d.caTot > 0 ? (d.caTot / d.budget) * 100 : 0
-  return `Réel ${formatEur(d.caTot)} / Budget ${formatEur(d.budget)} (${ratio.toFixed(0)} %)`
+  return t('cgVentes.dashboard.budgetCellTitle', {
+    real: formatEur(d.caTot, locale),
+    budget: formatEur(d.budget, locale),
+    ratio: ratio.toFixed(0),
+  })
 }
 
 // Month to date : compare le réel cumulé sur les jours déjà saisis au
@@ -601,15 +607,19 @@ function mtdCellStyle(totals, base, c) {
   return { ...base, color, background: bg, fontWeight: tone === 'none' ? 600 : 700 }
 }
 
-function mtdCellLabel(totals) {
+function mtdCellLabel(totals, locale = 'fr') {
   if (!totals.mtdBudget || totals.caTot === 0) return '—'
-  return formatDeltaEur(totals.caTot - totals.mtdBudget)
+  return formatDeltaEur(totals.caTot - totals.mtdBudget, locale)
 }
 
-function mtdCellTitle(totals) {
-  if (!totals.mtdBudget) return 'Aucun budget cible sur les jours déjà saisis'
+function mtdCellTitle(totals, t, locale = 'fr') {
+  if (!totals.mtdBudget) return t('cgVentes.dashboard.mtdCellNoBudget')
   const ratio = totals.caTot > 0 ? (totals.caTot / totals.mtdBudget) * 100 : 0
-  return `Réel ${formatEur(totals.caTot)} / Budget jours saisis ${formatEur(totals.mtdBudget)} (${ratio.toFixed(0)} %)`
+  return t('cgVentes.dashboard.mtdCellTitle', {
+    real: formatEur(totals.caTot, locale),
+    budget: formatEur(totals.mtdBudget, locale),
+    ratio: ratio.toFixed(0),
+  })
 }
 
 // Δ Mois total : compare le réel cumulé au budget projeté du mois entier
@@ -620,13 +630,17 @@ function fullMonthCellStyle(totals, base, c) {
   return { ...base, color, background: bg, fontWeight: tone === 'none' ? 600 : 700 }
 }
 
-function fullMonthCellLabel(totals) {
+function fullMonthCellLabel(totals, locale = 'fr') {
   if (!totals.budget || totals.caTot === 0) return '—'
-  return formatDeltaEur(totals.caTot - totals.budget)
+  return formatDeltaEur(totals.caTot - totals.budget, locale)
 }
 
-function fullMonthCellTitle(totals) {
-  if (!totals.budget) return 'Aucun budget cible défini sur le mois'
+function fullMonthCellTitle(totals, t, locale = 'fr') {
+  if (!totals.budget) return t('cgVentes.dashboard.fullMonthCellNoBudget')
   const ratio = totals.caTot > 0 ? (totals.caTot / totals.budget) * 100 : 0
-  return `Réel ${formatEur(totals.caTot)} / Budget mois entier ${formatEur(totals.budget)} (${ratio.toFixed(0)} %)`
+  return t('cgVentes.dashboard.fullMonthCellTitle', {
+    real: formatEur(totals.caTot, locale),
+    budget: formatEur(totals.budget, locale),
+    ratio: ratio.toFixed(0),
+  })
 }
