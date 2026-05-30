@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { supabase, getClientId } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '../../../lib/useTheme'
@@ -10,6 +11,7 @@ import ChefLoader from '../../../components/ChefLoader'
 export const dynamic = 'force-dynamic'
 export default function ArdoisePage() {
   const router = useRouter()
+  const { t } = useTranslation()
   const { c } = useTheme()
 
   const ID_CAFE = '2aed576b-6a43-4d05-9adc-fd7dd047febc'
@@ -74,7 +76,7 @@ export default function ArdoisePage() {
     if (panier.length === 0) return
     const type = modeVente.includes('entree') ? 'entree' : 'plat'
     setReserve({ ...reserve, [type]: { nom: nomPlat, ingredients: [...panier] } })
-    alert(`${type.toUpperCase()} mis en mémoire !`)
+    alert(t('admin.ardoise.memorySaved', { type: type === 'entree' ? t('admin.ardoise.typeEntree') : t('admin.ardoise.typePlat') }))
   }
 
   const importerDepuisReserve = (type) => {
@@ -82,11 +84,11 @@ export default function ArdoisePage() {
     if (!item) return
     const nouveauxIng = item.ingredients.filter(ing => !panier.find(p => p.id === ing.id))
     setPanier([...panier, ...nouveauxIng])
-    if (!nomPlat) setNomPlat('Formule du jour')
+    if (!nomPlat) setNomPlat(t('admin.ardoise.formuleDuJour'))
   }
 
   const validerArdoise = async () => {
-    if (!nomPlat || (panier.length === 0 && coutDessertFixe === 0)) return alert('Contenu manquant')
+    if (!nomPlat || (panier.length === 0 && coutDessertFixe === 0)) return alert(t('admin.ardoise.contentMissing'))
     const { data: { user } } = await supabase.auth.getUser()
     const { error } = await supabase.from('journal_ardoise').insert([{
       site_id: activeSiteId,
@@ -97,7 +99,7 @@ export default function ArdoisePage() {
       created_by: user.id
     }])
     if (!error) {
-      alert('Enregistré !')
+      alert(t('admin.ardoise.saved'))
       setPanier([]); setNomPlat(''); setCoutDessertFixe(0); setCoutBoissonChaude(0)
       fetchHistorique(activeSiteId)
     }
@@ -153,7 +155,7 @@ export default function ArdoisePage() {
                     backgroundColor: modeVente === m ? c.principal : c.fond,
                     color: modeVente === m ? 'white' : '#71717A', fontWeight: 'bold'
                   }}>
-                  {m === 'formule_ep' ? 'FORMULE E+P (21€)' : m === 'formule_pd' ? 'FORMULE P+D (21€)' : m.replace('_', ' ').toUpperCase()}
+                  {m === 'formule_ep' ? t('admin.ardoise.modes.formule_ep_cafe') : m === 'formule_pd' ? t('admin.ardoise.modes.formule_pd_cafe') : t(`admin.ardoise.modes.${m}`)}
                 </button>
               ))
             ) : (
@@ -164,7 +166,7 @@ export default function ArdoisePage() {
                     backgroundColor: modeVente === m ? c.principal : c.fond,
                     color: modeVente === m ? 'white' : '#71717A', fontWeight: 'bold'
                   }}>
-                  {m === 'formule_ep' ? 'E+P + BOISSON (29€)' : 'P+D + BOISSON (29€)'}
+                  {m === 'formule_ep' ? t('admin.ardoise.modes.formule_ep_resto') : t('admin.ardoise.modes.formule_pd_resto')}
                 </button>
               ))
             )}
@@ -176,14 +178,14 @@ export default function ArdoisePage() {
             {/* ZONE DESSERT CAFÉ */}
             {activeSiteId === ID_CAFE && modeVente === 'formule_pd' && (
               <div style={{ background: '#EEF2FF', padding: '15px', borderRadius: '10px', marginBottom: '15px', border: `0.5px solid ${c.accent}40` }}>
-                <span style={{ fontWeight: 'bold', fontSize: '0.9rem', marginRight: '15px' }}>DESSERT :</span>
+                <span style={{ fontWeight: 'bold', fontSize: '0.9rem', marginRight: '15px' }}>{t('admin.ardoise.dessert')}</span>
                 <button onClick={() => setCoutDessertFixe(0.76)}
                   style={{ marginRight: '10px', padding: '8px', borderRadius: '5px', border: `1px solid ${c.accent}`, backgroundColor: coutDessertFixe === 0.76 ? c.accent : 'white', color: coutDessertFixe === 0.76 ? 'white' : c.accent }}>
-                  Churros (0,76€)
+                  {t('admin.ardoise.churros')}
                 </button>
                 <button onClick={() => setCoutDessertFixe(0.78)}
                   style={{ padding: '8px', borderRadius: '5px', border: `1px solid ${c.accent}`, backgroundColor: coutDessertFixe === 0.78 ? c.accent : 'white', color: coutDessertFixe === 0.78 ? 'white' : c.accent }}>
-                  Flan (0,78€)
+                  {t('admin.ardoise.flan')}
                 </button>
               </div>
             )}
@@ -194,25 +196,25 @@ export default function ArdoisePage() {
                 {reserve.entree && modeVente === 'formule_ep' && (
                   <button onClick={() => importerDepuisReserve('entree')}
                     style={{ background: c.accentClair, border: `1px solid ${c.accent}`, padding: '8px', borderRadius: '6px', fontSize: '0.8rem', cursor: 'pointer' }}>
-                    + Entrée ({reserve.entree.nom})
+                    {t('admin.ardoise.addEntree', { nom: reserve.entree.nom })}
                   </button>
                 )}
                 {reserve.plat && (
                   <button onClick={() => importerDepuisReserve('plat')}
                     style={{ background: c.accentClair, border: `1px solid ${c.accent}`, padding: '8px', borderRadius: '6px', fontSize: '0.8rem', cursor: 'pointer' }}>
-                    + Plat ({reserve.plat.nom})
+                    {t('admin.ardoise.addPlat', { nom: reserve.plat.nom })}
                   </button>
                 )}
               </div>
             )}
 
-            <input type="text" placeholder="Nom du plat..." value={nomPlat} onChange={e => setNomPlat(e.target.value)}
+            <input type="text" placeholder={t('admin.ardoise.platNamePlaceholder')} value={nomPlat} onChange={e => setNomPlat(e.target.value)}
               style={{ width: '100%', padding: '15px', borderRadius: '10px', border: `0.5px solid ${c.bordure}`, marginBottom: '15px', outline: 'none', fontSize: '14px' }}
             />
 
             {/* RECHERCHE INGRÉDIENTS */}
             <div style={{ position: 'relative', marginBottom: '20px' }}>
-              <input type="text" placeholder="🔍 Chercher ingrédient..." value={search}
+              <input type="text" placeholder={t('admin.ardoise.searchIngredient')} value={search}
                 onChange={async (e) => {
                   setSearch(e.target.value)
                   if (e.target.value.length > 1) {
@@ -260,7 +262,7 @@ export default function ArdoisePage() {
                     const n = [...panier]; n[idx].quantite = e.target.value; setPanier(n)
                   }}
                     style={{ width: '80px', padding: '8px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, outline: 'none', textAlign: 'center' }}
-                    placeholder="Qté"
+                    placeholder={t('admin.ardoise.qty')}
                   />
                   <span style={{ width: '40px', fontSize: '12px', color: c.texteMuted }}>{ing.unite}</span>
                   <button onClick={() => setPanier(panier.filter(i => i.id !== ing.id))}
@@ -269,7 +271,7 @@ export default function ArdoisePage() {
               ))}
               {panier.length === 0 && (
                 <div style={{ padding: '30px', textAlign: 'center', color: c.texteMuted, fontSize: '13px' }}>
-                  Recherchez des ingrédients ci-dessus
+                  {t('admin.ardoise.emptyCart')}
                 </div>
               )}
             </div>
@@ -277,21 +279,21 @@ export default function ArdoisePage() {
             {!modeVente.includes('formule') && panier.length > 0 && (
               <button onClick={mettreEnReserve}
                 style={{ marginTop: '15px', background: 'none', border: `1px dashed ${c.accent}`, color: c.accent, padding: '10px', borderRadius: '8px', width: '100%', fontWeight: 'bold', cursor: 'pointer' }}>
-                📦 Garder en mémoire
+                {t('admin.ardoise.keepInMemory')}
               </button>
             )}
           </div>
 
           {/* ANALYSE */}
           <div style={{ background: c.blanc, padding: '30px', borderRadius: '20px', border: `0.5px solid ${c.bordure}`, height: 'fit-content' }}>
-            <h3 style={{ marginTop: 0, color: c.principal, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px' }}>Analyse</h3>
+            <h3 style={{ marginTop: 0, color: c.principal, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px' }}>{t('admin.ardoise.analysis')}</h3>
             <div style={{ margin: '15px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
-                <span style={{ color: c.texteMuted }}>PV HT :</span>
+                <span style={{ color: c.texteMuted }}>{t('admin.ardoise.pvHt')}</span>
                 <strong>{prixVenteHT.toFixed(2)} €</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
-                <span style={{ color: c.texteMuted }}>Coût matière :</span>
+                <span style={{ color: c.texteMuted }}>{t('admin.ardoise.materialCost')}</span>
                 <strong>{totalCoutMatiere.toFixed(2)} €</strong>
               </div>
             </div>
@@ -305,19 +307,19 @@ export default function ArdoisePage() {
                 {foodCost.toFixed(1)}%
               </div>
               <div style={{ fontSize: '12px', color: foodCost > 33 ? '#DC2626' : '#16A34A', marginTop: '4px' }}>
-                {foodCost > 33 ? '⚠️ Au-dessus du seuil' : '✓ Dans les objectifs'}
+                {foodCost > 33 ? t('admin.ardoise.aboveThreshold') : t('admin.ardoise.withinTarget')}
               </div>
             </div>
             <button onClick={validerArdoise}
               style={{ width: '100%', padding: '15px', background: c.accent, color: 'white', border: 'none', borderRadius: '10px', fontWeight: '600', cursor: 'pointer', fontSize: '14px' }}>
-              💾 Enregistrer
+              {t('admin.ardoise.save')}
             </button>
           </div>
         </div>
 
         {/* HISTORIQUE */}
         <div style={{ marginTop: '60px', borderTop: `0.5px solid ${c.bordure}`, paddingTop: '30px' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: '600', color: c.principal, marginBottom: '20px' }}>Dernières analyses</h2>
+          <h2 style={{ fontSize: '16px', fontWeight: '600', color: c.principal, marginBottom: '20px' }}>{t('admin.ardoise.lastAnalyses')}</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {historique.map(item => {
               const ratio = ((item.cout_total_matiere / item.prix_vente_ht) * 100).toFixed(1)
@@ -328,7 +330,7 @@ export default function ArdoisePage() {
                     style={{ padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '11px', color: c.texteMuted, marginBottom: '4px' }}>
-                        {new Date(item.created_at).toLocaleDateString('fr-FR')} — {item.nom_plat}
+                        {new Date(item.created_at).toLocaleDateString()} — {item.nom_plat}
                       </div>
                       <div style={{ fontWeight: '600', color: ratio > 33 ? '#DC2626' : '#16A34A' }}>{ratio}%</div>
                     </div>
@@ -336,7 +338,7 @@ export default function ArdoisePage() {
                   </div>
                   {isExpanded && (
                     <div style={{ padding: '15px', background: c.fond, borderTop: `0.5px solid ${c.bordure}` }}>
-                      <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '10px', fontWeight: '600', textTransform: 'uppercase' }}>Composition :</div>
+                      <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '10px', fontWeight: '600', textTransform: 'uppercase' }}>{t('admin.ardoise.composition')}</div>
                       {item.composition?.map((ing, i) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '6px 0', borderBottom: `0.5px solid ${c.bordure}` }}>
                           <span>{ing.nom} ({ing.quantite} {ing.unite})</span>
@@ -344,7 +346,7 @@ export default function ArdoisePage() {
                         </div>
                       ))}
                       <div style={{ marginTop: '10px', textAlign: 'right', fontSize: '13px', fontWeight: '600', color: c.accent }}>
-                        Total : {item.cout_total_matiere.toFixed(2)} €
+                        {t('admin.ardoise.total', { val: item.cout_total_matiere.toFixed(2) })}
                       </div>
                     </div>
                   )}
@@ -353,7 +355,7 @@ export default function ArdoisePage() {
             })}
             {historique.length === 0 && (
               <div style={{ padding: '40px', textAlign: 'center', color: c.texteMuted, fontSize: '13px' }}>
-                Aucune analyse enregistrée pour ce site
+                {t('admin.ardoise.noAnalysis')}
               </div>
             )}
           </div>

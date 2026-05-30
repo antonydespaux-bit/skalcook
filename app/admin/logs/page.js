@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { supabase } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
@@ -18,6 +19,7 @@ export default function LogsPage() {
   const [filtreSection, setFiltreSection] = useState('tous')
   const [recherche, setRecherche] = useState('')
   const router = useRouter()
+  const { t, i18n } = useTranslation()
   const isMobile = useIsMobile()
   const { c } = useTheme()
   const { role, loading: roleLoading } = useRole()
@@ -70,7 +72,7 @@ export default function LogsPage() {
   }
 
   const formatDate = (date) => {
-    return new Date(date).toLocaleString('fr-FR', {
+    return new Date(date).toLocaleString(i18n.language || 'fr', {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit'
     })
@@ -104,7 +106,7 @@ export default function LogsPage() {
         {/* Stats par utilisateur */}
         <div style={{ marginBottom: '24px' }}>
           <div style={{ fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '12px', fontWeight: '500' }}>
-            Activité par utilisateur
+            {t('admin.logs.activityByUser')}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
             {statsParUser().map(user => (
@@ -121,15 +123,15 @@ export default function LogsPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
                   <div style={{ background: '#EAF3DE', borderRadius: '6px', padding: '6px', textAlign: 'center' }}>
                     <div style={{ fontSize: '14px', fontWeight: '500', color: '#3B6D11' }}>{user.creation}</div>
-                    <div style={{ fontSize: '9px', color: '#3B6D11', textTransform: 'uppercase' }}>Créations</div>
+                    <div style={{ fontSize: '9px', color: '#3B6D11', textTransform: 'uppercase' }}>{t('admin.logs.creations')}</div>
                   </div>
                   <div style={{ background: '#FAEEDA', borderRadius: '6px', padding: '6px', textAlign: 'center' }}>
                     <div style={{ fontSize: '14px', fontWeight: '500', color: '#854F0B' }}>{user.modification}</div>
-                    <div style={{ fontSize: '9px', color: '#854F0B', textTransform: 'uppercase' }}>Modifs</div>
+                    <div style={{ fontSize: '9px', color: '#854F0B', textTransform: 'uppercase' }}>{t('admin.logs.modifs')}</div>
                   </div>
                   <div style={{ background: '#FCEBEB', borderRadius: '6px', padding: '6px', textAlign: 'center' }}>
                     <div style={{ fontSize: '14px', fontWeight: '500', color: '#A32D2D' }}>{user.suppression}</div>
-                    <div style={{ fontSize: '9px', color: '#A32D2D', textTransform: 'uppercase' }}>Suppres.</div>
+                    <div style={{ fontSize: '9px', color: '#A32D2D', textTransform: 'uppercase' }}>{t('admin.logs.suppres')}</div>
                   </div>
                 </div>
               </div>
@@ -139,7 +141,7 @@ export default function LogsPage() {
 
         {/* Filtres */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
-          <input type="text" placeholder="Rechercher un utilisateur ou une fiche..."
+          <input type="text" placeholder={t('admin.logs.searchPlaceholder')}
             value={recherche} onChange={e => setRecherche(e.target.value)}
             style={{ flex: 1, minWidth: '200px', padding: '10px 14px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: c.blanc, outline: 'none', color: c.texte }}
           />
@@ -147,37 +149,37 @@ export default function LogsPage() {
             padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
             fontSize: '13px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer'
           }}>
-            <option value="tous">Toutes les actions</option>
-            <option value="CREATION">Créations</option>
-            <option value="MODIFICATION">Modifications</option>
-            <option value="SUPPRESSION">Suppressions</option>
-            <option value="IMPORT">Imports</option>
+            <option value="tous">{t('admin.logs.allActions')}</option>
+            <option value="CREATION">{t('admin.logs.actions.CREATION')}</option>
+            <option value="MODIFICATION">{t('admin.logs.actions.MODIFICATION')}</option>
+            <option value="SUPPRESSION">{t('admin.logs.actions.SUPPRESSION')}</option>
+            <option value="IMPORT">{t('admin.logs.actions.IMPORT')}</option>
           </select>
           <select value={filtreSection} onChange={e => setFiltreSection(e.target.value)} style={{
             padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`,
             fontSize: '13px', background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer'
           }}>
-            <option value="tous">Cuisine + Bar</option>
-            <option value="cuisine">Cuisine</option>
-            <option value="bar">Bar</option>
-            <option value="admin">Admin</option>
+            <option value="tous">{t('admin.logs.kitchenBar')}</option>
+            <option value="cuisine">{t('admin.logs.cuisine')}</option>
+            <option value="bar">{t('admin.logs.bar')}</option>
+            <option value="admin">{t('admin.logs.admin')}</option>
           </select>
           <button onClick={loadLogs} style={{
             padding: '10px 14px', background: c.accentClair, color: c.principal,
             border: `0.5px solid ${c.bordure}`, borderRadius: '8px', fontSize: '13px', cursor: 'pointer'
-          }}>🔄 {!isMobile && 'Actualiser'}</button>
+          }}>🔄 {!isMobile && t('admin.logs.refresh')}</button>
         </div>
 
         <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '12px' }}>
-          {logsFiltres.length} action{logsFiltres.length > 1 ? 's' : ''}
+          {t('admin.logs.actionCount', { count: logsFiltres.length })}
         </div>
 
         {/* Liste des logs */}
         {loading ? (
-          <ChefLoader size={120} message="Chargement des logs..." />
+          <ChefLoader size={120} message={t('admin.logs.loadingLogs')} />
         ) : logsFiltres.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px', background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}` }}>
-            <div style={{ fontSize: '14px', color: c.texteMuted }}>Aucune activité pour le moment</div>
+            <div style={{ fontSize: '14px', color: c.texteMuted }}>{t('admin.logs.noActivity')}</div>
           </div>
         ) : isMobile ? (
           <div>
@@ -197,7 +199,7 @@ export default function LogsPage() {
                     {log.entite_nom || '—'}
                   </div>
                   <div style={{ fontSize: '12px', color: c.texteMuted }}>
-                    Par <strong>{log.user_nom}</strong> — {log.details || '—'}
+                    {t('admin.logs.by')} <strong>{log.user_nom}</strong> — {log.details || '—'}
                   </div>
                 </div>
               )
@@ -208,7 +210,7 @@ export default function LogsPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: c.principal }}>
-                  {['Date', 'Utilisateur', 'Action', 'Section', 'Fiche / Élément', 'Détails'].map((h, i) => (
+                  {[t('admin.logs.cols.date'), t('admin.logs.cols.user'), t('admin.logs.cols.action'), t('admin.logs.cols.section'), t('admin.logs.cols.item'), t('admin.logs.cols.details')].map((h, i) => (
                     <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', color: c.accent, fontWeight: '500', textTransform: 'uppercase' }}>{h}</th>
                   ))}
                 </tr>

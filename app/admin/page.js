@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { supabase, getClientId } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useIsMobile } from '../../lib/useIsMobile'
@@ -27,6 +28,7 @@ export default function AdminPage() {
   const [editNomValue, setEditNomValue] = useState('')
   const [savingNom, setSavingNom] = useState(false)
   const router = useRouter()
+  const { t } = useTranslation()
   const { c } = useTheme()
   const isMobile = useIsMobile()
   const { role, loading: roleLoading } = useRole()
@@ -74,7 +76,7 @@ export default function AdminPage() {
       setProfils(Array.isArray(data?.users) ? data.users : [])
     } catch (err) {
       console.error('Erreur chargement utilisateurs établissement:', err)
-      setError('Impossible de charger les utilisateurs de cet établissement.')
+      setError(t('admin.users.loadError'))
       setProfils([])
     } finally {
       setLoading(false)
@@ -83,7 +85,7 @@ export default function AdminPage() {
 
   const creerUtilisateur = async () => {
     if (!newEmail || !newPassword || !newNom) {
-      setError('Tous les champs sont obligatoires')
+      setError(t('admin.users.allRequired'))
       return
     }
     setCreating(true)
@@ -94,7 +96,7 @@ export default function AdminPage() {
     const clientId = await getClientId()
 
     if (!clientId) {
-      setError('Erreur : client_id introuvable')
+      setError(t('admin.users.clientIdMissing'))
       setCreating(false)
       return
     }
@@ -126,7 +128,7 @@ export default function AdminPage() {
     setNewPassword('')
     setNewNom('')
     setNewRole('cuisine')
-    setSuccess(`Compte créé pour ${newNom} !`)
+    setSuccess(t('admin.users.accountCreated', { name: newNom }))
     await loadProfils()
     setCreating(false)
   }
@@ -166,7 +168,7 @@ export default function AdminPage() {
     setSuccess('')
     try {
       const clientId = await getClientId()
-      if (!clientId) { setError('client_id introuvable — recharge la page.'); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
+      if (!clientId) { setError(t('admin.users.clientIdReload')); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
       const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/admin/update-user-name', {
         method: 'POST',
@@ -178,11 +180,11 @@ export default function AdminPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(formatApiError(data, 'Erreur lors de la mise à jour du nom.'))
+        setError(formatApiError(data, t('admin.users.nameUpdateError')))
         window.scrollTo({ top: 0, behavior: 'smooth' })
         return
       }
-      setSuccess('Nom mis à jour.')
+      setSuccess(t('admin.users.nameUpdated'))
       setEditingNomId(null)
       setEditNomValue('')
       await loadProfils()
@@ -193,7 +195,7 @@ export default function AdminPage() {
 
   const changerRole = async (id, newRole) => {
     const clientId = await getClientId()
-    if (!clientId) { setError('client_id introuvable — recharge la page.'); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
+    if (!clientId) { setError(t('admin.users.clientIdReload')); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
     setError('')
     setSuccess('')
     const { data: { session } } = await supabase.auth.getSession()
@@ -207,26 +209,26 @@ export default function AdminPage() {
     })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      setError(formatApiError(data, 'Erreur lors du changement de rôle.'))
+      setError(formatApiError(data, t('admin.users.roleChangeError')))
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
-    setSuccess('Rôle mis à jour.')
+    setSuccess(t('admin.users.roleUpdated'))
     await loadProfils()
   }
 
   const supprimerUtilisateur = async (id, nom, role) => {
     if (id === currentUserId) {
-      setError('Vous ne pouvez pas retirer votre propre accès.')
+      setError(t('admin.users.cannotRemoveSelf'))
       return
     }
-    const baseMsg = `Retirer l'accès de ${nom || 'cet utilisateur'} à cet établissement ?`
+    const baseMsg = t('admin.users.removeConfirm', { name: nom || t('admin.users.removeConfirmGeneric') })
     const strongMsg = role === 'admin'
-      ? `${baseMsg}\n\n⚠️ Cet utilisateur est administrateur. Son accès admin sera définitivement retiré.`
+      ? `${baseMsg}\n\n${t('admin.users.removeAdminWarning')}`
       : baseMsg
     if (!confirm(strongMsg)) return
     const clientId = await getClientId()
-    if (!clientId) { setError("client_id introuvable — recharge la page."); return }
+    if (!clientId) { setError(t('admin.users.clientIdReload')); return }
     const { data: { session } } = await supabase.auth.getSession()
     const res = await fetch('/api/admin/remove-user-access', {
       method: 'POST',
@@ -238,31 +240,31 @@ export default function AdminPage() {
     })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      setError(formatApiError(data, "Erreur lors du retrait de l'accès."))
+      setError(formatApiError(data, t('admin.users.removeError')))
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
-    setSuccess(`Accès de ${nom || 'utilisateur'} retiré.`)
+    setSuccess(t('admin.users.accessRemoved', { name: nom || t('admin.users.userFallback') }))
     await loadProfils()
   }
 
   const roleLabel = (role) => {
     switch (role) {
-      case 'admin': return { label: 'Administrateur', color: '#2C1810', bg: '#F0E8E0' }
-      case 'cuisine': return { label: 'Cuisine', color: '#3B6D11', bg: '#EAF3DE' }
-      case 'bar': return { label: 'Bar', color: '#3C3489', bg: '#EEEDFE' }
-      case 'directeur': return { label: 'Directeur', color: '#854F0B', bg: '#FAEEDA' }
-      default: return { label: 'Non défini', color: '#8B7355', bg: '#FAF9F6' }
+      case 'admin': return { label: t('admin.users.roles.admin'), color: '#2C1810', bg: '#F0E8E0' }
+      case 'cuisine': return { label: t('admin.users.roles.cuisine'), color: '#3B6D11', bg: '#EAF3DE' }
+      case 'bar': return { label: t('admin.users.roles.bar'), color: '#3C3489', bg: '#EEEDFE' }
+      case 'directeur': return { label: t('admin.users.roles.directeur'), color: '#854F0B', bg: '#FAEEDA' }
+      default: return { label: t('admin.users.roles.undefined'), color: '#8B7355', bg: '#FAF9F6' }
     }
   }
 
   const droitsRole = (role) => {
     switch (role) {
-      case 'admin': return '⚙️ Accès complet — Cuisine, Bar, paramètres et gestion des utilisateurs'
-      case 'cuisine': return '👨‍🍳 Cuisine — peut créer, modifier et supprimer des fiches cuisine'
-      case 'bar': return '🍸 Bar — peut créer, modifier et supprimer des fiches bar'
-      case 'directeur': return '👔 Lecture seule — peut voir et exporter Cuisine + Bar mais pas modifier'
-      default: return '—'
+      case 'admin': return t('admin.users.rights.admin')
+      case 'cuisine': return t('admin.users.rights.cuisine')
+      case 'bar': return t('admin.users.rights.bar')
+      case 'directeur': return t('admin.users.rights.directeur')
+      default: return t('admin.users.rights.none')
     }
   }
 
@@ -285,7 +287,7 @@ export default function AdminPage() {
           border: `0.5px solid ${c.bordure}`, marginBottom: '20px'
         }}>
           <div style={{ fontSize: '13px', fontWeight: '500', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px' }}>
-            Créer un compte utilisateur
+            {t('admin.users.createTitle')}
           </div>
 
           {error && (
@@ -303,41 +305,41 @@ export default function AdminPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
               <div>
-                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom *</label>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{t('admin.users.name')}</label>
                 <input type="text" value={newNom} onChange={e => setNewNom(e.target.value)}
                   autoComplete="off"
-                  placeholder="Ex : Marie Dupont"
+                  placeholder={t('admin.users.namePlaceholder')}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
                 />
               </div>
               <div>
-                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Rôle *</label>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{t('admin.users.role')}</label>
                 <select value={newRole} onChange={e => setNewRole(e.target.value)} style={{
                   width: '100%', padding: '10px 12px', borderRadius: '8px',
                   border: `0.5px solid ${c.bordure}`, fontSize: '14px',
                   background: c.blanc, outline: 'none', color: c.texte
                 }}>
-                  <option value="cuisine">Cuisine</option>
-                  <option value="bar">Bar</option>
-                  <option value="directeur">Directeur de zone</option>
-                  <option value="admin">Administrateur</option>
+                  <option value="cuisine">{t('admin.users.createOptions.cuisine')}</option>
+                  <option value="bar">{t('admin.users.createOptions.bar')}</option>
+                  <option value="directeur">{t('admin.users.createOptions.directeurZone')}</option>
+                  <option value="admin">{t('admin.users.createOptions.admin')}</option>
                 </select>
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
               <div>
-                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Email *</label>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{t('admin.users.email')}</label>
                 <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)}
                   autoComplete="off"
-                  placeholder="marie@lafantaisie.com"
+                  placeholder={t('admin.users.emailPlaceholder')}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
                 />
               </div>
               <div>
-                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Mot de passe *</label>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{t('admin.users.password')}</label>
                 <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
                   autoComplete="new-password"
-                  placeholder="Minimum 6 caractères"
+                  placeholder={t('admin.users.passwordPlaceholder')}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
                 />
               </div>
@@ -352,7 +354,7 @@ export default function AdminPage() {
               color: c.principal, border: 'none', borderRadius: '8px',
               fontSize: '13px', fontWeight: '600', cursor: creating ? 'not-allowed' : 'pointer'
             }}>
-              {creating ? 'Création en cours...' : 'Créer le compte'}
+              {creating ? t('admin.users.creating') : t('admin.users.createBtn')}
             </button>
           </div>
         </div>
@@ -364,12 +366,12 @@ export default function AdminPage() {
         }}>
           <div style={{ padding: '16px 20px', borderBottom: `0.5px solid ${c.bordure}` }}>
             <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>
-              Utilisateurs ({profils.length})
+              {t('admin.users.listTitle', { count: profils.length })}
             </div>
           </div>
 
           {loading ? (
-            <ChefLoader size={120} message="Chargement des utilisateurs..." />
+            <ChefLoader size={120} message={t('admin.users.loadingUsers')} />
           ) : (
             profils.map((profil, i) => {
               const r = roleLabel(profil.role)
@@ -393,7 +395,7 @@ export default function AdminPage() {
                             if (e.key === 'Escape') annulerEditNom()
                           }}
                           disabled={savingNom}
-                          placeholder="Nom complet"
+                          placeholder={t('admin.users.fullNamePlaceholder')}
                           style={{
                             flex: 1, minWidth: '160px', padding: '6px 10px',
                             borderRadius: '6px', border: `0.5px solid ${c.accent}`,
@@ -403,7 +405,7 @@ export default function AdminPage() {
                         <button
                           onClick={enregistrerNom}
                           disabled={savingNom || !editNomValue.trim()}
-                          title="Enregistrer"
+                          title={t('admin.users.saveName')}
                           style={{
                             background: savingNom || !editNomValue.trim() ? c.texteMuted : '#16A34A',
                             color: 'white', border: 'none', borderRadius: '6px',
@@ -414,7 +416,7 @@ export default function AdminPage() {
                         <button
                           onClick={annulerEditNom}
                           disabled={savingNom}
-                          title="Annuler"
+                          title={t('admin.users.cancelName')}
                           style={{
                             background: 'transparent', color: c.texteMuted,
                             border: `0.5px solid ${c.bordure}`, borderRadius: '6px',
@@ -425,11 +427,11 @@ export default function AdminPage() {
                     ) : (
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '2px' }}>
                         <div style={{ fontSize: '14px', fontWeight: '500', color: c.texte }}>
-                          {profil.nom || <span style={{ color: c.texteMuted, fontStyle: 'italic' }}>(sans nom)</span>}
+                          {profil.nom || <span style={{ color: c.texteMuted, fontStyle: 'italic' }}>{t('admin.users.noName')}</span>}
                         </div>
                         <button
                           onClick={() => commencerEditNom(profil)}
-                          title="Modifier le nom"
+                          title={t('admin.users.editName')}
                           style={{
                             background: 'transparent', color: c.texteMuted,
                             border: 'none', padding: '2px 6px', fontSize: '12px',
@@ -458,16 +460,16 @@ export default function AdminPage() {
                         background: c.blanc, outline: 'none', color: c.texte, cursor: 'pointer'
                       }}
                     >
-                      <option value="">-- Rôle --</option>
-                      <option value="cuisine">Cuisine</option>
-                      <option value="bar">Bar</option>
-                      <option value="directeur">Directeur</option>
-                      <option value="admin">Admin</option>
+                      <option value="">{t('admin.users.roleSelectPlaceholder')}</option>
+                      <option value="cuisine">{t('admin.users.roles.cuisine')}</option>
+                      <option value="bar">{t('admin.users.roles.bar')}</option>
+                      <option value="directeur">{t('admin.users.roles.directeur')}</option>
+                      <option value="admin">{t('admin.logs.admin')}</option>
                     </select>
                     {profil.id !== currentUserId && (
                       <button
                         onClick={() => supprimerUtilisateur(profil.id, profil.nom, profil.role)}
-                        title={profil.role === 'admin' ? 'Retirer l\'accès admin de cet utilisateur' : 'Retirer l\'accès'}
+                        title={profil.role === 'admin' ? t('admin.users.removeAdminAccess') : t('admin.users.removeAccess')}
                         style={{
                           background: 'transparent', color: '#F09595',
                           border: `0.5px solid #F09595`, borderRadius: '8px',
