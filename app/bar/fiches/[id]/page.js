@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { supabase, getParametres, getClientId } from '../../../../lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import { Logo } from '../../../../lib/theme.jsx'
@@ -22,6 +23,7 @@ export default function BarFicheDetail() {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const params_route = useParams()
+  const { t, i18n } = useTranslation()
   const isMobile = useIsMobile()
   const { c, logoUrl, nomEtablissement } = useTheme()
   const { role } = useRole()
@@ -164,7 +166,7 @@ const loadFiche = async () => {
   }
 
   const handleDelete = async () => {
-    if (!confirm('Supprimer définitivement cette fiche ?')) return
+    if (!confirm(t('bar.detail.deleteConfirm'))) return
     try {
       const clientId = await getClientId()
       await log({
@@ -192,7 +194,7 @@ const loadFiche = async () => {
   const prixIndic = prixIndicatif()
   const seuilVert = parseFloat(params['seuil_vert_boissons'] || 22)
   const seuilOrange = parseFloat(params['seuil_orange_boissons'] || 28)
-  const today = new Date().toLocaleDateString('fr-FR')
+  const today = new Date().toLocaleDateString(i18n.language || 'fr')
 
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
@@ -206,27 +208,27 @@ const loadFiche = async () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Logo height={28} couleur="white" nom={nomEtablissement} logoUrl={logoUrl} onClick={() => router.push("/bar/dashboard")} />
-          <BackButton fallback="/bar/fiches" label={isMobile ? '←' : '← Retour'} />
+          <BackButton fallback="/bar/fiches" label={isMobile ? '←' : `← ${t('common.back')}`} />
           {!isMobile && <span style={{ fontSize: '15px', fontWeight: '500', color: 'white' }}>{fiche.nom}</span>}
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
           <button onClick={() => window.print()} style={{
             background: '#C4956A', color: '#3C3489', border: 'none',
             borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '600', cursor: 'pointer'
-          }}>{isMobile ? '🖨️' : '🖨️ Imprimer'}</button>
+          }}>{isMobile ? '🖨️' : t('bar.detail.print')}</button>
           {peutModifier && (
             <button onClick={() => router.push(`/bar/fiches/${params_route.id}/modifier`)} style={{
               background: 'transparent', color: 'rgba(255,255,255,0.7)',
               border: '0.5px solid rgba(255,255,255,0.2)',
               borderRadius: '8px', padding: '8px 12px', fontSize: '13px', cursor: 'pointer'
-            }}>{isMobile ? '✏️' : 'Modifier'}</button>
+            }}>{isMobile ? '✏️' : t('bar.common.edit')}</button>
           )}
           {peutModifier && !isMobile && (
             <button onClick={handleDelete} style={{
               background: 'transparent', color: '#F09595',
               border: '0.5px solid rgba(255,255,255,0.2)',
               borderRadius: '8px', padding: '8px 12px', fontSize: '13px', cursor: 'pointer'
-            }}>Supprimer</button>
+            }}>{t('bar.detail.delete')}</button>
           )}
         </div>
       </div>
@@ -245,7 +247,7 @@ const loadFiche = async () => {
               </div>
             </div>
             <div style={{ background: '#3C3489', color: '#C4956A', borderRadius: '10px', padding: '8px 14px', textAlign: 'center', flexShrink: 0, marginLeft: '12px' }}>
-              <div style={{ fontSize: '10px', opacity: 0.7 }}>Portions</div>
+              <div style={{ fontSize: '10px', opacity: 0.7 }}>{t('bar.detail.portions')}</div>
               <div style={{ fontSize: '20px', fontWeight: '500' }}>{fiche.nb_portions || '—'}</div>
             </div>
           </div>
@@ -258,19 +260,19 @@ const loadFiche = async () => {
         {/* Ingrédients */}
         <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', overflow: 'hidden' }}>
           <div className="sk-panel-header sk-label-muted" style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, color: c.texteMuted }}>
-            Ingrédients & Préparations
+            {t('bar.detail.ingredientsAndPreparations')}
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: c.fond }}>
-                {['Désignation', 'Quantité', 'Prix Unit.', 'Coût'].map((h, i) => (
+                {[t('bar.detail.colDesignation'), t('bar.detail.colQuantity'), t('bar.detail.colUnitPrice'), t('bar.detail.colCost')].map((h, i) => (
                   <th key={h} style={{ padding: '10px 16px', textAlign: i === 0 ? 'left' : 'right', fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {ingredients.length === 0 ? (
-                <tr><td colSpan={4} style={{ padding: '20px 16px', textAlign: 'center', color: c.texteMuted, fontSize: '13px' }}>Aucun ingrédient</td></tr>
+                <tr><td colSpan={4} style={{ padding: '20px 16px', textAlign: 'center', color: c.texteMuted, fontSize: '13px' }}>{t('bar.detail.noIngredient')}</td></tr>
               ) : ingredients.map((item, i) => {
                 const isSF = !!item.sous_fiche_id
                 const nom = isSF ? item.fiches_bar?.nom : item.ingredients_bar?.nom
@@ -297,26 +299,26 @@ const loadFiche = async () => {
         {/* Récap financier */}
         <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '16px' : '20px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
           <div style={{ background: c.fond, borderRadius: '8px', padding: '12px' }}>
-            <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Coût total</div>
+            <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>{t('bar.detail.coutTotal')}</div>
             <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{cout ? `${cout.toFixed(2)} €` : '—'}</div>
           </div>
           <div style={{ background: c.fond, borderRadius: '8px', padding: '12px' }}>
-            <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Coût / portion</div>
+            <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>{t('bar.detail.coutPortion')}</div>
             <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—'}</div>
           </div>
           <div style={{ background: c.fond, borderRadius: '8px', padding: '12px' }}>
-            <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Prix TTC</div>
+            <div style={{ fontSize: '10px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>{t('bar.detail.prixTTC')}</div>
             <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{fiche.prix_ttc ? `${Number(fiche.prix_ttc).toFixed(2)} €` : '—'}</div>
           </div>
           {prixIndic && (
             <div style={{ background: '#DCFCE7', borderRadius: '8px', padding: '12px' }}>
-              <div style={{ fontSize: '10px', color: '#16A34A', fontWeight: '500', textTransform: 'uppercase' }}>Prix indicatif</div>
+              <div style={{ fontSize: '10px', color: '#16A34A', fontWeight: '500', textTransform: 'uppercase' }}>{t('bar.detail.prixIndicatif')}</div>
               <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: '#16A34A' }}>{prixIndic} €</div>
             </div>
           )}
           {fc && (
             <div style={{ background: fc < seuilVert ? '#EAF3DE' : fc < seuilOrange ? '#FAEEDA' : '#FCEBEB', borderRadius: '8px', padding: '12px' }}>
-              <div style={{ fontSize: '10px', fontWeight: '500', textTransform: 'uppercase', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>Bev cost</div>
+              <div style={{ fontSize: '10px', fontWeight: '500', textTransform: 'uppercase', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>{t('bar.detail.bevCost')}</div>
               <div style={{ fontSize: '18px', fontWeight: '500', marginTop: '4px', color: fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D' }}>{fc} %</div>
             </div>
           )}
@@ -326,7 +328,7 @@ const loadFiche = async () => {
         {fiche.instructions && (
           <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px', overflow: 'hidden' }}>
             <div className="sk-panel-header sk-label-muted" style={{ padding: '14px 16px', borderBottom: `0.5px solid ${c.bordure}`, color: c.texteMuted }}>
-              📋 Instructions de préparation
+              {t('bar.detail.instructionsScreen')}
             </div>
             <div style={{ padding: '16px 20px' }}>
               {fiche.instructions.split('\n').map((ligne, i) => (
@@ -347,11 +349,11 @@ const loadFiche = async () => {
         {/* En-tête */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #3C3489', paddingBottom: '16px', marginBottom: '20px' }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#7C3AED', marginBottom: '6px', fontFamily: 'sans-serif' }}>Fiche technique Bar — {fiche.categorie || ''}</div>
+            <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#7C3AED', marginBottom: '6px', fontFamily: 'sans-serif' }}>{t('bar.detail.printEyebrow', { categorie: fiche.categorie || '' })}</div>
             <h1 style={{ fontSize: '26px', fontWeight: '400', color: '#3C3489', marginBottom: '8px', letterSpacing: '1px' }}>{fiche.nom}</h1>
             <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: '#7C3AED', fontFamily: 'sans-serif' }}>
-              {(fiche.saison || fiche.annee) && <span>Saison : {formatSaison(fiche.saison, fiche.annee)}</span>}
-              {fiche.nb_portions && <span>Portions : {fiche.nb_portions}</span>}
+              {(fiche.saison || fiche.annee) && <span>{t('bar.detail.printSeason', { saison: formatSaison(fiche.saison, fiche.annee) })}</span>}
+              {fiche.nb_portions && <span>{t('bar.detail.printPortions', { portions: fiche.nb_portions })}</span>}
             </div>
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '20px' }}>
@@ -371,11 +373,11 @@ const loadFiche = async () => {
 
         {/* Ingrédients */}
         <div style={{ marginBottom: '20px' }}>
-          <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#7C3AED', marginBottom: '10px', fontFamily: 'sans-serif', fontWeight: '600' }}>Ingrédients & Préparations</div>
+          <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#7C3AED', marginBottom: '10px', fontFamily: 'sans-serif', fontWeight: '600' }}>{t('bar.detail.ingredientsAndPreparations')}</div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: 'sans-serif' }}>
             <thead>
               <tr style={{ background: '#EEEDFE' }}>
-                {['Désignation', 'Quantité', 'Prix unit.', 'Coût'].map((h, i) => (
+                {[t('bar.detail.colDesignation'), t('bar.detail.colQuantity'), t('bar.detail.printColUnitPrice'), t('bar.detail.colCost')].map((h, i) => (
                   <th key={h} style={{ padding: '8px 12px', textAlign: i === 0 ? 'left' : 'right', fontWeight: '600', color: '#3C3489', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', border: '0.5px solid #DDD6FE' }}>{h}</th>
                 ))}
               </tr>
@@ -401,7 +403,7 @@ const loadFiche = async () => {
                 )
               })}
               <tr style={{ background: '#3C3489' }}>
-                <td colSpan={3} style={{ padding: '8px 12px', color: '#C4956A', fontWeight: '600', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', border: '0.5px solid #3C3489' }}>Coût total</td>
+                <td colSpan={3} style={{ padding: '8px 12px', color: '#C4956A', fontWeight: '600', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', border: '0.5px solid #3C3489' }}>{t('bar.detail.coutTotal')}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'right', color: '#C4956A', fontWeight: '700', fontSize: '14px', border: '0.5px solid #3C3489' }}>{cout.toFixed(2)} €</td>
               </tr>
             </tbody>
@@ -411,11 +413,11 @@ const loadFiche = async () => {
         {/* ── RÉCAP FINANCIER — avant instructions ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
           {[
-            { label: 'Coût / portion', value: cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—' },
-            { label: `TVA ${TVA_BAR()}%`, value: fiche.prix_ttc ? `${(fiche.prix_ttc / (1 + TVA_BAR() / 100)).toFixed(2)} €` : '—' },
-            { label: 'Prix TTC', value: fiche.prix_ttc ? `${Number(fiche.prix_ttc).toFixed(2)} €` : '—' },
+            { label: t('bar.detail.coutPortion'), value: cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—' },
+            { label: t('bar.detail.vatLabel', { tva: TVA_BAR() }), value: fiche.prix_ttc ? `${(fiche.prix_ttc / (1 + TVA_BAR() / 100)).toFixed(2)} €` : '—' },
+            { label: t('bar.detail.prixTTC'), value: fiche.prix_ttc ? `${Number(fiche.prix_ttc).toFixed(2)} €` : '—' },
             {
-              label: 'Bev cost', value: fc ? `${fc} %` : '—',
+              label: t('bar.detail.bevCost'), value: fc ? `${fc} %` : '—',
               highlight: fc ? (fc < seuilVert ? '#EAF3DE' : fc < seuilOrange ? '#FAEEDA' : '#FCEBEB') : null,
               color: fc ? (fc < seuilVert ? '#3B6D11' : fc < seuilOrange ? '#854F0B' : '#A32D2D') : '#3C3489'
             }
@@ -430,7 +432,7 @@ const loadFiche = async () => {
         {/* Allergènes — sur la même page que le récap */}
         {fiche.allergenes && fiche.allergenes.length > 0 && (
           <div style={{ background: '#FCEBEB', borderRadius: '6px', padding: '12px', marginBottom: '16px', border: '0.5px solid #F09595' }}>
-            <div style={{ fontSize: '9px', color: '#A32D2D', textTransform: 'uppercase', letterSpacing: '2px', fontFamily: 'sans-serif', fontWeight: '600', marginBottom: '8px' }}>⚠ Allergènes présents</div>
+            <div style={{ fontSize: '9px', color: '#A32D2D', textTransform: 'uppercase', letterSpacing: '2px', fontFamily: 'sans-serif', fontWeight: '600', marginBottom: '8px' }}>{t('bar.detail.allergenesPresent')}</div>
             <div style={{ fontSize: '11px', color: '#A32D2D', fontFamily: 'sans-serif', fontWeight: '500' }}>
               {fiche.allergenes.map(id => { const a = ALLERGENES.find(a => a.id === id); return a ? `${a.emoji} ${a.label}` : null }).filter(Boolean).join('  •  ')}
             </div>
@@ -440,7 +442,7 @@ const loadFiche = async () => {
         {/* ── INSTRUCTIONS — page séparée ── */}
         {fiche.instructions && (
           <div className="print-instructions" style={{ marginBottom: '20px', pageBreakBefore: 'always', marginTop: '0' }}>
-            <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#7C3AED', marginBottom: '10px', fontFamily: 'sans-serif', fontWeight: '600' }}>Instructions de préparation</div>
+            <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#7C3AED', marginBottom: '10px', fontFamily: 'sans-serif', fontWeight: '600' }}>{t('bar.detail.instructionsPrint')}</div>
             <div style={{
               border: '0.5px solid #DDD6FE', borderRadius: '4px', padding: '14px 16px',
               fontSize: '12px', fontFamily: 'sans-serif', color: '#3C3489',
@@ -453,8 +455,8 @@ const loadFiche = async () => {
 
         {/* Pied de page */}
         <div style={{ borderTop: '1px solid #DDD6FE', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', color: '#7C3AED', fontFamily: 'sans-serif' }}>
-          <span>{nomEtablissement || params['nom_etablissement'] || ''} — Bar</span>
-          <span>{fiche.nom} — {formatSaison(fiche.saison, fiche.annee)} — Imprimé le {today}</span>
+          <span>{t('bar.detail.footerBar', { etablissement: nomEtablissement || params['nom_etablissement'] || '' })}</span>
+          <span>{t('bar.detail.footerPrintedOn', { nom: fiche.nom, saison: formatSaison(fiche.saison, fiche.annee), date: today })}</span>
         </div>
       </div>
     </div>

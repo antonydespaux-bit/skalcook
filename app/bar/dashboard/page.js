@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { supabase, getClientId, getParametres } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useIsMobile } from '../../../lib/useIsMobile'
@@ -17,6 +18,7 @@ export default function BarDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [isPrixExpanded, setIsPrixExpanded] = useState(false)
   const router = useRouter()
+  const { t, i18n } = useTranslation()
   const isMobile = useIsMobile()
   const { c } = useTheme()
   const { role, nom, loading: roleLoading } = useRole()
@@ -89,17 +91,17 @@ export default function BarDashboardPage() {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '20px' }}>
           <div style={{ fontSize: '11px', color: c.texteMuted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '500', flex: '1 1 auto', minWidth: 0 }}>
-            🍸 Dashboard Bar — {params['nom_etablissement'] || 'La Fantaisie'}
+            {t('bar.dashboard.title', { etablissement: params['nom_etablissement'] || 'La Fantaisie' })}
           </div>
           {nom && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               {!isMobile && (
-                <span style={{ fontSize: '12px', color: c.texteMuted }}>Bonjour, <strong style={{ color: c.texte }}>{nom}</strong></span>
+                <span style={{ fontSize: '12px', color: c.texteMuted }}>{t('bar.dashboard.greeting')} <strong style={{ color: c.texte }}>{nom}</strong></span>
               )}
               <Badge bg={'#EEEDFE'} color={'#3C3489'}>
                 {isMobile
-                  ? (role === 'admin' ? 'Admin' : role === 'bar' ? 'Bar' : 'Dir.')
-                  : (role === 'admin' ? 'Administrateur' : role === 'bar' ? 'Bar' : 'Directeur')}
+                  ? (role === 'admin' ? t('bar.dashboard.roleAdminShort') : role === 'bar' ? t('bar.dashboard.roleBar') : t('bar.dashboard.roleDirShort'))
+                  : (role === 'admin' ? t('bar.dashboard.roleAdmin') : role === 'bar' ? t('bar.dashboard.roleBar') : t('bar.dashboard.roleDir'))}
               </Badge>
             </div>
           )}
@@ -111,37 +113,37 @@ export default function BarDashboardPage() {
           gap: isMobile ? '10px' : '16px', marginBottom: '24px'
         }}>
           <div style={{ background: foodCostMoyen ? fichesFCColor(foodCostMoyen).bg : c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
-            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>Bev cost moyen</div>
+            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>{t('bar.dashboard.avgBevCost')}</div>
             <div className="sk-stat-value" style={{ fontSize: isMobile ? '28px' : '36px', color: foodCostMoyen ? fichesFCColor(foodCostMoyen).color : c.texte }}>
               {foodCostMoyen ? `${foodCostMoyen.toFixed(1)}%` : '—'}
             </div>
-            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Sur {fichesAvecFC.length} fiches</div>
+            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>{t('bar.dashboard.onNSheets', { count: fichesAvecFC.length })}</div>
           </div>
           <div style={{ background: c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}`, cursor: 'pointer' }} onClick={() => router.push('/bar/fiches')}>
-            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>Fiches actives</div>
+            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>{t('bar.dashboard.activeSheets')}</div>
             <div className="sk-stat-value" style={{ fontSize: isMobile ? '28px' : '36px', color: c.texte }}>{fiches.length}</div>
-            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Cocktails & boissons</div>
+            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>{t('bar.dashboard.cocktailsDrinks')}</div>
           </div>
           <div style={{ background: fichesAlerte.length > 0 ? '#FCEBEB' : '#EAF3DE', borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
-            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>Fiches en alerte</div>
+            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>{t('bar.dashboard.alertSheets')}</div>
             <div className="sk-stat-value" style={{ fontSize: isMobile ? '28px' : '36px', color: fichesAlerte.length > 0 ? '#A32D2D' : '#3B6D11' }}>{fichesAlerte.length}</div>
-            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Bev cost {'>'} {seuilOrange}%</div>
+            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>{t('bar.dashboard.bevCostAbove', { seuil: seuilOrange })}</div>
           </div>
           <div style={{ background: ingredientsPrixHausse.length > 0 ? '#FAEEDA' : c.blanc, borderRadius: '12px', padding: isMobile ? '14px' : '20px', border: `0.5px solid ${c.bordure}` }}>
-            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>Prix modifiés</div>
+            <div className="sk-label-muted" style={{ color: c.texteMuted, marginBottom: '8px' }}>{t('bar.dashboard.modifiedPrices')}</div>
             <div className="sk-stat-value" style={{ fontSize: isMobile ? '28px' : '36px', color: ingredientsPrixHausse.length > 0 ? '#854F0B' : c.texte }}>{ingredientsPrixHausse.length}</div>
-            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>Ingrédients récents</div>
+            <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>{t('bar.dashboard.recentIngredients')}</div>
           </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? '12px' : '16px', marginBottom: '16px' }}>
           <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: `0.5px solid ${c.bordure}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>🚨 Fiches en alerte</div>
-              <span style={{ fontSize: '11px', color: c.texteMuted }}>Bev cost {'>'} {seuilOrange}%</span>
+              <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>{t('bar.dashboard.alertSheetsHeader')}</div>
+              <span style={{ fontSize: '11px', color: c.texteMuted }}>{t('bar.dashboard.bevCostAbove', { seuil: seuilOrange })}</span>
             </div>
             {fichesAlerte.length === 0 ? (
-              <div style={{ padding: '24px', textAlign: 'center', color: c.texteMuted, fontSize: '13px' }}>✓ Aucune fiche en alerte</div>
+              <div style={{ padding: '24px', textAlign: 'center', color: c.texteMuted, fontSize: '13px' }}>{t('bar.dashboard.noAlertSheet')}</div>
             ) : (
               <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                 {fichesAlerte.slice(0, 10).map((fiche, i) => {
@@ -165,11 +167,11 @@ export default function BarDashboardPage() {
           </div>
           <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: `0.5px solid ${c.bordure}` }}>
-              <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>📊 Fiches par catégorie</div>
+              <div style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>{t('bar.dashboard.sheetsByCategory')}</div>
             </div>
             <div style={{ padding: '16px 20px' }}>
               {fichesByCategorie.length === 0 ? (
-                <div style={{ textAlign: 'center', color: c.texteMuted, fontSize: '13px', padding: '20px 0' }}>Aucune fiche pour le moment</div>
+                <div style={{ textAlign: 'center', color: c.texteMuted, fontSize: '13px', padding: '20px 0' }}>{t('bar.dashboard.noSheetYet')}</div>
               ) : fichesByCategorie.map(({ cat, nb }) => (
                 <div key={cat} style={{ marginBottom: '10px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -197,13 +199,13 @@ export default function BarDashboardPage() {
               transition: 'background 0.2s ease'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ fontSize: '13px', fontWeight: '500', color: '#3C3489' }}>📈 Ingrédients Bar avec prix modifiés</div>
+                <div style={{ fontSize: '13px', fontWeight: '500', color: '#3C3489' }}>{t('bar.dashboard.modifiedPricesHeader')}</div>
                 <Badge bg={'#EEEDFE'} color={'#3C3489'} size="sm">
-                  {ingredientsPrixHausse.length} alertes
+                  {t('bar.dashboard.alertsBadge', { count: ingredientsPrixHausse.length })}
                 </Badge>
               </div>
               <div style={{ fontSize: '14px', color: '#3C3489', fontWeight: '500' }}>
-                {isPrixExpanded ? '− Masquer' : '+ Développer'}
+                {isPrixExpanded ? t('bar.dashboard.hide') : t('bar.dashboard.expand')}
               </div>
             </div>
             {isPrixExpanded && (
@@ -211,7 +213,7 @@ export default function BarDashboardPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ background: c.fond }}>
-                      {['Ingrédient', 'Ancien prix', 'Nouveau prix', 'Variation', 'Date'].map((h, i) => (
+                      {[t('bar.dashboard.colIngredient'), t('bar.dashboard.colOldPrice'), t('bar.dashboard.colNewPrice'), t('bar.dashboard.colVariation'), t('bar.dashboard.colDate')].map((h, i) => (
                         <th key={h} style={{ padding: '10px 16px', textAlign: i === 0 ? 'left' : 'right', fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase', borderBottom: `0.5px solid ${c.bordure}` }}>{h}</th>
                       ))}
                     </tr>
@@ -233,7 +235,7 @@ export default function BarDashboardPage() {
                             )}
                           </td>
                           <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texteMuted, fontSize: '12px' }}>
-                            {ing.prix_updated_at ? new Date(ing.prix_updated_at).toLocaleDateString('fr-FR') : '—'}
+                            {ing.prix_updated_at ? new Date(ing.prix_updated_at).toLocaleDateString(i18n.language || 'fr') : '—'}
                           </td>
                         </tr>
                       )
