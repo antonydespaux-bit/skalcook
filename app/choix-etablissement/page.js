@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { theme, Logo, LogoBand } from '../../lib/theme.jsx'
 import ChefLoader from '../../components/ChefLoader'
+import { useTranslation } from 'react-i18next'
 
 // Hub multi-etablissements (selection explicite du client actif)
 export default function ChoixEtablissementPage() {
   const router = useRouter()
   const c = theme.couleurs
+  const { t } = useTranslation()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [etablissements, setEtablissements] = useState([])
@@ -31,7 +33,7 @@ export default function ChoixEtablissementPage() {
           .eq('user_id', user.id)
 
         if (accesErr) {
-          setError('Impossible de charger vos établissements.')
+          setError(t('choix.etablissement.loadError'))
           setLoading(false)
           return
         }
@@ -57,10 +59,10 @@ export default function ChoixEtablissementPage() {
         }
 
         if (rows.length === 0) {
-          setError('Aucun établissement associé')
+          setError(t('choix.etablissement.none'))
         }
       } catch (e) {
-        setError('Une erreur est survenue.')
+        setError(t('choix.etablissement.genericError'))
       } finally {
         setLoading(false)
       }
@@ -98,7 +100,7 @@ export default function ChoixEtablissementPage() {
       </LogoBand>
 
       <div style={{ fontSize: '12px', color: c.texteMuted, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '28px' }}>
-        Choisissez votre établissement
+        {t('choix.etablissement.title')}
       </div>
 
       {error && (
@@ -126,7 +128,7 @@ export default function ChoixEtablissementPage() {
       }}>
         {etablissements.map((row) => {
           const client = row.clients || {}
-          const nom = client.nom_etablissement || client.nom || `Établissement ${row.client_id?.slice?.(0, 8) || ''}`
+          const nom = client.nom_etablissement || client.nom || t('choix.etablissement.fallbackName', { id: row.client_id?.slice?.(0, 8) || '' })
           return (
             <button
               key={row.client_id}
@@ -141,7 +143,7 @@ export default function ChoixEtablissementPage() {
               }}
             >
               <div style={{ fontSize: '15px', fontWeight: 600, color: c.texte, marginBottom: '6px' }}>{nom}</div>
-              <div style={{ fontSize: '12px', color: c.texteMuted }}>Role: {row.role || 'utilisateur'}</div>
+              <div style={{ fontSize: '12px', color: c.texteMuted }}>{t('choix.etablissement.role', { role: row.role || t('choix.etablissement.roleFallback') })}</div>
             </button>
           )
         })}

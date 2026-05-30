@@ -10,12 +10,14 @@ import { ALLERGENES } from '../../../lib/allergenes'
 import { SAISONS, getYearsRange, formatSaison, parseSaison } from '../../../lib/saison'
 import ChefLoader from '../../../components/ChefLoader'
 import { Alert , Badge } from '../../../components/ui'
+import { useTranslation } from 'react-i18next'
 
 const genId = () => crypto.randomUUID()
 
 export default function CarteDetailPage() {
   const params_route = useParams()
   const router = useRouter()
+  const { t } = useTranslation()
   const { nomEtablissement, logoUrl } = useTheme()
   const isMobile = useIsMobile()
   const c = theme.couleurs
@@ -236,8 +238,8 @@ export default function CarteDetailPage() {
   // ── Save ──
 
   const handleSave = async () => {
-    if (!nom) { setError('Le nom est obligatoire'); return }
-    if (sections.some(s => !s.titre)) { setError('Chaque section doit avoir un titre'); return }
+    if (!nom) { setError(t('cartes.form.nameRequiredShort')); return }
+    if (sections.some(s => !s.titre)) { setError(t('cartes.form.sectionTitleRequired')); return }
     setSaving(true)
     setError('')
     const clientId = await getClientId()
@@ -289,7 +291,7 @@ export default function CarteDetailPage() {
   }
 
   const handleDelete = async () => {
-    if (!confirm('Supprimer cette carte ?')) return
+    if (!confirm(t('cartes.detail.deleteConfirm'))) return
     const clientId = await getClientId()
     if (!clientId) return
     await supabase.from('cartes').delete().eq('id', params_route.id).eq('client_id', clientId)
@@ -347,7 +349,7 @@ export default function CarteDetailPage() {
             background: 'transparent', border: '0.5px solid rgba(255,255,255,0.2)',
             borderRadius: '8px', padding: isMobile ? '6px 10px' : '6px 12px', fontSize: isMobile ? '12px' : '13px',
             cursor: 'pointer', color: 'rgba(255,255,255,0.7)', flexShrink: 0,
-          }}>&larr; Cartes</button>
+          }}>{t('cartes.detail.backCartes')}</button>
           <span style={{
             fontSize: isMobile ? '14px' : '15px', fontWeight: '500', color: 'white',
             minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -364,22 +366,22 @@ export default function CarteDetailPage() {
                 color: vueSupp ? 'white' : 'rgba(255,255,255,0.7)',
                 border: '0.5px solid rgba(255,255,255,0.2)', borderRadius: '8px',
                 padding: '6px 12px', fontSize: '12px', cursor: 'pointer'
-              }}>{vueSupp ? 'Vue + suppl.' : 'Vue base'}</button>
+              }}>{vueSupp ? t('cartes.detail.viewWithSupplement') : t('cartes.detail.viewBase')}</button>
               <button onClick={() => window.print()} style={{
                 background: 'transparent', color: 'rgba(255,255,255,0.7)',
                 border: '0.5px solid rgba(255,255,255,0.2)', borderRadius: '8px',
                 padding: '6px 12px', fontSize: '12px', cursor: 'pointer'
-              }}>Imprimer</button>
+              }}>{t('cartes.detail.print')}</button>
               <button onClick={() => setEditing(true)} style={{
                 background: c.accent, color: 'white', border: 'none',
                 borderRadius: '8px', padding: '6px 16px', fontSize: '13px',
                 cursor: 'pointer', fontWeight: '600'
-              }}>Modifier</button>
+              }}>{t('cartes.detail.edit')}</button>
               <button onClick={handleDelete} style={{
                 background: 'transparent', color: '#EF4444',
                 border: '0.5px solid #EF444440', borderRadius: '8px',
                 padding: '6px 12px', fontSize: '12px', cursor: 'pointer'
-              }}>Supprimer</button>
+              }}>{t('cartes.detail.delete')}</button>
             </>
           )}
           {editing && (
@@ -388,13 +390,13 @@ export default function CarteDetailPage() {
                 background: 'transparent', color: 'rgba(255,255,255,0.7)',
                 border: '0.5px solid rgba(255,255,255,0.2)', borderRadius: '8px',
                 padding: '6px 12px', fontSize: '12px', cursor: 'pointer'
-              }}>Annuler</button>
+              }}>{t('cartes.detail.cancel')}</button>
               <button onClick={handleSave} disabled={saving} style={{
                 background: saving ? c.texteMuted : c.accent,
                 color: 'white', border: 'none', borderRadius: '8px',
                 padding: '6px 16px', fontSize: '13px', fontWeight: '600',
                 cursor: saving ? 'not-allowed' : 'pointer'
-              }}>{saving ? 'Enregistrement...' : 'Enregistrer'}</button>
+              }}>{saving ? t('cartes.form.saving') : t('cartes.detail.save')}</button>
             </>
           )}
         </div>
@@ -420,7 +422,7 @@ export default function CarteDetailPage() {
                   {(carte.saison || carte.annee) && <Badge bg={c.accentClair} color={c.principal} size="sm">{formatSaison(carte.saison, carte.annee)}</Badge>}
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '10px', color: c.texteMuted, textTransform: 'uppercase' }}>{vueSupp ? 'Prix + suppl.' : 'Prix base'}</div>
+                  <div style={{ fontSize: '10px', color: c.texteMuted, textTransform: 'uppercase' }}>{vueSupp ? t('cartes.detail.priceWithSupplement') : t('cartes.detail.priceBase')}</div>
                   <div style={{ fontSize: '24px', fontWeight: '500', color: c.texte }}>
                     {vueSupp
                       ? ((Number(carte.prix_base) || 0) + calc.totalSupp).toFixed(0)
@@ -443,7 +445,7 @@ export default function CarteDetailPage() {
                   return (
                     <div key={item.id}>
                       {isOu && (
-                        <div style={{ fontSize: '11px', color: '#D97706', fontStyle: 'italic', textAlign: 'center', margin: '2px 0' }}>ou</div>
+                        <div style={{ fontSize: '11px', color: '#D97706', fontStyle: 'italic', textAlign: 'center', margin: '2px 0' }}>{t('cartes.detail.or')}</div>
                       )}
                       <div style={{
                         marginBottom: '6px', paddingBottom: '6px',
@@ -453,8 +455,8 @@ export default function CarteDetailPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div style={{ fontSize: '14px', fontWeight: isOu ? '400' : '500', color: c.texte }}>
                             {item.nom}
-                            {isOu && hasSup && <span style={{ color: '#D97706', fontSize: '12px', marginLeft: '8px' }}>(Suppl. {Number(item.supplement).toFixed(0)} €)</span>}
-                            {isOu && !hasSup && <span style={{ color: '#D97706', fontSize: '12px', marginLeft: '8px' }}>(au choix)</span>}
+                            {isOu && hasSup && <span style={{ color: '#D97706', fontSize: '12px', marginLeft: '8px' }}>{t('cartes.detail.supplementInline', { val: Number(item.supplement).toFixed(0) })}</span>}
+                            {isOu && !hasSup && <span style={{ color: '#D97706', fontSize: '12px', marginLeft: '8px' }}>{t('cartes.detail.atChoice')}</span>}
                           </div>
                           <div style={{ fontSize: '12px', color: c.texteMuted, flexShrink: 0 }}>
                             {(item.fiches?.cout_portion || 0).toFixed(2)} €
@@ -475,7 +477,7 @@ export default function CarteDetailPage() {
             {/* Allergènes */}
             {allergenesIds.length > 0 && (
               <div style={{ background: '#FCEBEB', borderRadius: '12px', padding: '14px', marginBottom: '12px', border: '0.5px solid #F09595' }}>
-                <div style={{ fontSize: '10px', color: '#A32D2D', textTransform: 'uppercase', letterSpacing: '2px', fontWeight: '600', marginBottom: '6px' }}>Allergènes présents</div>
+                <div style={{ fontSize: '10px', color: '#A32D2D', textTransform: 'uppercase', letterSpacing: '2px', fontWeight: '600', marginBottom: '6px' }}>{t('cartes.detail.allergensPresent')}</div>
                 <div style={{ fontSize: '12px', color: '#A32D2D', fontWeight: '500' }}>
                   {allergenesIds.map(id => { const a = ALLERGENES.find(a => a.id === id); return a ? `${a.emoji} ${a.label}` : null }).filter(Boolean).join('  •  ')}
                 </div>
@@ -485,12 +487,12 @@ export default function CarteDetailPage() {
             {/* Récap ratio */}
             <div style={{ background: 'white', borderRadius: '12px', padding: '20px', border: `0.5px solid ${c.bordure}`, display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
               <div>
-                <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Co&ucirc;t mati&egrave;re</div>
+                <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>{t('cartes.recap.materialCost')}</div>
                 <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{calc.coutMatiere.toFixed(2)} &euro;</div>
               </div>
               {calc.totalSupp > 0 && (
                 <div>
-                  <div style={{ fontSize: '11px', color: '#D97706', fontWeight: '500', textTransform: 'uppercase' }}>Dont suppl. prix</div>
+                  <div style={{ fontSize: '11px', color: '#D97706', fontWeight: '500', textTransform: 'uppercase' }}>{t('cartes.recap.ofWhichSupplement')}</div>
                   <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: '#D97706' }}>+{calc.totalSupp.toFixed(0)} &euro;</div>
                 </div>
               )}
@@ -498,7 +500,7 @@ export default function CarteDetailPage() {
                 const s = fcColor(calc.ratio)
                 return (
                   <div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}>
-                    <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>Ratio</div>
+                    <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>{t('cartes.recap.ratio')}</div>
                     <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{calc.ratio} %</div>
                   </div>
                 )
@@ -512,32 +514,32 @@ export default function CarteDetailPage() {
           <>
             {/* Informations */}
             <div style={{ background: 'white', borderRadius: '12px', padding: '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '16px' }}>
-              <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '16px' }}>Informations</div>
+              <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '16px' }}>{t('cartes.form.infoTitleShort')}</div>
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom *</label>
+                  <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{t('cartes.form.nameLabelShort')}</label>
                   <input type="text" value={nom} onChange={e => setNom(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, boxSizing: 'border-box' }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Saison</label>
+                  <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{t('cartes.form.season')}</label>
                   <select value={saison} onChange={e => setSaison(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: 'white', outline: 'none', color: c.texte }}>
-                    <option value="">— Aucune —</option>
+                    <option value="">{t('cartes.form.none')}</option>
                     {SAISONS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Année</label>
+                  <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{t('cartes.form.year')}</label>
                   <select value={annee || ''} onChange={e => setAnnee(e.target.value ? parseInt(e.target.value, 10) : null)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: 'white', outline: 'none', color: c.texte }}>
-                    <option value="">— Aucune —</option>
+                    <option value="">{t('cartes.form.none')}</option>
                     {annees.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix base TTC</label>
+                  <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{t('cartes.form.basePriceShort')}</label>
                   <input type="number" value={prixBase} onChange={e => setPrixBase(e.target.value)} step="0.01" style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, boxSizing: 'border-box' }} />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Description</label>
+                  <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{t('cartes.form.description')}</label>
                   <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', color: c.texte, boxSizing: 'border-box' }} />
                 </div>
               </div>
@@ -548,8 +550,8 @@ export default function CarteDetailPage() {
               <div key={section._id} style={{ background: 'white', borderRadius: '12px', padding: '20px', border: `0.5px solid ${c.bordure}`, marginBottom: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
                   <input type="text" value={section.titre} onChange={e => updateSection(sIdx, 'titre', e.target.value)}
-                    placeholder="Titre de la section" style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', fontWeight: '500', outline: 'none', color: c.texte, boxSizing: 'border-box' }} />
-                  <span style={{ fontSize: '11px', color: c.texteMuted }}>Section {sIdx + 1}</span>
+                    placeholder={t('cartes.form.sectionTitlePlaceholderShort')} style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', fontWeight: '500', outline: 'none', color: c.texte, boxSizing: 'border-box' }} />
+                  <span style={{ fontSize: '11px', color: c.texteMuted }}>{t('cartes.form.sectionN', { n: sIdx + 1 })}</span>
                   {sections.length > 1 && (
                     <button onClick={() => removeSection(sIdx)} style={{ background: 'transparent', border: 'none', color: '#A32D2D', fontSize: '18px', cursor: 'pointer' }}>&times;</button>
                   )}
@@ -563,46 +565,46 @@ export default function CarteDetailPage() {
                       {iIdx > 0 && (
                         <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0' }}>
                           <div style={{ display: 'flex', borderRadius: '6px', overflow: 'hidden', border: `1px solid ${c.bordure}` }}>
-                            <button onClick={() => updateItem(sIdx, iIdx, 'relation', 'et')} style={{ padding: '3px 12px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', border: 'none', background: !isOu ? c.accent : 'white', color: !isOu ? 'white' : c.texteMuted }}>ET</button>
-                            <button onClick={() => updateItem(sIdx, iIdx, 'relation', 'ou')} style={{ padding: '3px 12px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', border: 'none', background: isOu ? '#D97706' : 'white', color: isOu ? 'white' : c.texteMuted }}>OU</button>
+                            <button onClick={() => updateItem(sIdx, iIdx, 'relation', 'et')} style={{ padding: '3px 12px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', border: 'none', background: !isOu ? c.accent : 'white', color: !isOu ? 'white' : c.texteMuted }}>{t('cartes.form.relationAnd')}</button>
+                            <button onClick={() => updateItem(sIdx, iIdx, 'relation', 'ou')} style={{ padding: '3px 12px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', border: 'none', background: isOu ? '#D97706' : 'white', color: isOu ? 'white' : c.texteMuted }}>{t('cartes.form.relationOr')}</button>
                           </div>
                         </div>
                       )}
                       <div style={{ background: isOu ? '#FFF7ED' : c.fond, borderRadius: '8px', padding: '12px', marginBottom: '4px', border: `0.5px solid ${isOu ? '#FDBA7440' : c.bordure}` }}>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
                           <select value={item.ficheId} onChange={e => updateItem(sIdx, iIdx, 'ficheId', e.target.value)} style={{ flex: 1, padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: 'white', outline: 'none', color: c.texte }}>
-                            <option value="">-- Choisir une fiche --</option>
+                            <option value="">{t('cartes.form.chooseFiche')}</option>
                             {fiches.map(f => <option key={f.id} value={f.id}>{f.nom} {f.categorie ? `(${f.categorie})` : ''}</option>)}
                           </select>
                           {isOu && (
-                            <input type="number" value={item.supplement} onChange={e => updateItem(sIdx, iIdx, 'supplement', e.target.value)} placeholder="Suppl. €" step="0.01" min="0" style={{ width: '100px', padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${hasSup ? '#FDBA74' : c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, boxSizing: 'border-box' }} />
+                            <input type="number" value={item.supplement} onChange={e => updateItem(sIdx, iIdx, 'supplement', e.target.value)} placeholder={t('cartes.form.supplementPlaceholder')} step="0.01" min="0" style={{ width: '100px', padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${hasSup ? '#FDBA74' : c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, boxSizing: 'border-box' }} />
                           )}
                           {section.items.length > 1 && <button onClick={() => removeItem(sIdx, iIdx)} style={{ background: 'transparent', border: 'none', color: '#A32D2D', fontSize: '16px', cursor: 'pointer' }}>×</button>}
                         </div>
-                        <textarea value={item.description} onChange={e => updateItem(sIdx, iIdx, 'description', e.target.value)} placeholder="Description gastronomique" rows={1} style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', fontStyle: 'italic', color: c.texteMuted, boxSizing: 'border-box' }} />
-                        {fiche && <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>{isOu ? 'Alternative' : 'Inclus'} — coût : <strong>{(fiche.cout_portion || 0).toFixed(2)} €</strong>{isOu && hasSup && <span style={{ color: '#D97706', marginLeft: '8px' }}>Suppl. +{Number(item.supplement).toFixed(0)} €</span>}{isOu && !hasSup && <span style={{ color: '#D97706', marginLeft: '8px' }}>Choix libre</span>}</div>}
+                        <textarea value={item.description} onChange={e => updateItem(sIdx, iIdx, 'description', e.target.value)} placeholder={t('cartes.form.dishDescriptionPlaceholderShort')} rows={1} style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', fontStyle: 'italic', color: c.texteMuted, boxSizing: 'border-box' }} />
+                        {fiche && <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px' }}>{isOu ? t('cartes.form.alternative') : t('cartes.form.included')} {t('cartes.form.costLabel')} <strong>{(fiche.cout_portion || 0).toFixed(2)} €</strong>{isOu && hasSup && <span style={{ color: '#D97706', marginLeft: '8px' }}>{t('cartes.form.supplementValueShort', { val: Number(item.supplement).toFixed(0) })}</span>}{isOu && !hasSup && <span style={{ color: '#D97706', marginLeft: '8px' }}>{t('cartes.form.freeChoiceShort')}</span>}</div>}
                       </div>
                     </div>
                   )
                 })}
-                <button onClick={() => addItem(sIdx)} style={{ background: 'transparent', border: `1px dashed ${c.bordure}`, borderRadius: '8px', padding: '8px', width: '100%', fontSize: '12px', color: c.texteMuted, cursor: 'pointer', marginTop: '4px' }}>+ Ajouter un plat</button>
+                <button onClick={() => addItem(sIdx)} style={{ background: 'transparent', border: `1px dashed ${c.bordure}`, borderRadius: '8px', padding: '8px', width: '100%', fontSize: '12px', color: c.texteMuted, cursor: 'pointer', marginTop: '4px' }}>{t('cartes.form.addDish')}</button>
               </div>
             ))}
-            <button onClick={addSection} style={{ background: c.accentClair, border: `1px dashed ${c.accent}`, borderRadius: '12px', padding: '14px', width: '100%', fontSize: '13px', color: c.accent, cursor: 'pointer', fontWeight: '500', marginBottom: '16px' }}>+ Ajouter une section</button>
+            <button onClick={addSection} style={{ background: c.accentClair, border: `1px dashed ${c.accent}`, borderRadius: '12px', padding: '14px', width: '100%', fontSize: '13px', color: c.accent, cursor: 'pointer', fontWeight: '500', marginBottom: '16px' }}>{t('cartes.form.addSection')}</button>
 
             {/* Récap édition */}
             <div style={{ background: 'white', borderRadius: '12px', padding: '20px', border: `0.5px solid ${c.bordure}`, display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
               <div>
-                <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Co&ucirc;t mati&egrave;re</div>
+                <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>{t('cartes.recap.materialCost')}</div>
                 <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{calcEditFull.coutMatiere.toFixed(2)} &euro;</div>
               </div>
               {calcEditFull.totalSupp > 0 ? (
                 <>
-                  {calcEditBase.ratio && (() => { const s = fcColor(calcEditBase.ratio); return (<div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}><div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>Ratio base</div><div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{calcEditBase.ratio} %</div></div>) })()}
-                  {calcEditFull.ratio && (() => { const s = fcColor(calcEditFull.ratio); return (<div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}><div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>Ratio + suppl.</div><div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{calcEditFull.ratio} %</div></div>) })()}
+                  {calcEditBase.ratio && (() => { const s = fcColor(calcEditBase.ratio); return (<div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}><div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>{t('cartes.recap.ratioBase')}</div><div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{calcEditBase.ratio} %</div></div>) })()}
+                  {calcEditFull.ratio && (() => { const s = fcColor(calcEditFull.ratio); return (<div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}><div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>{t('cartes.recap.ratioWithSupplement')}</div><div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{calcEditFull.ratio} %</div></div>) })()}
                 </>
               ) : (
-                calcEditFull.ratio && (() => { const s = fcColor(calcEditFull.ratio); return (<div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}><div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>Ratio</div><div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{calcEditFull.ratio} %</div></div>) })()
+                calcEditFull.ratio && (() => { const s = fcColor(calcEditFull.ratio); return (<div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}><div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>{t('cartes.recap.ratio')}</div><div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{calcEditFull.ratio} %</div></div>) })()
               )}
             </div>
           </>
@@ -636,10 +638,10 @@ export default function CarteDetailPage() {
               const nextIsOu = arr[idx + 1]?.relation === 'ou'
               return (
                 <div key={item.id} style={{ textAlign: 'center', marginBottom: nextIsOu || isOu ? '4px' : '16px' }}>
-                  {isOu && <div style={{ fontSize: '11px', color: '#8B7355', fontStyle: 'italic', marginBottom: '4px' }}>ou</div>}
+                  {isOu && <div style={{ fontSize: '11px', color: '#8B7355', fontStyle: 'italic', marginBottom: '4px' }}>{t('cartes.detail.or')}</div>}
                   <div style={{ fontSize: '14px', color: '#2C1810', fontWeight: '500' }}>
                     {item.nom}
-                    {isOu && hasSup && <span style={{ fontSize: '11px', color: '#8B7355', fontStyle: 'italic' }}> (Suppl. {Number(item.supplement).toFixed(0)}€)</span>}
+                    {isOu && hasSup && <span style={{ fontSize: '11px', color: '#8B7355', fontStyle: 'italic' }}> {t('cartes.detail.supplementPrint', { val: Number(item.supplement).toFixed(0) })}</span>}
                   </div>
                   {item.description && (
                     <div style={{ fontSize: '11px', color: '#8B7355', fontStyle: 'italic', lineHeight: '1.6', maxWidth: '500px', margin: '4px auto 0' }}>
@@ -662,7 +664,7 @@ export default function CarteDetailPage() {
         {/* Allergènes (flux : juste au-dessus du trait du pied de page fixe à l’impression) */}
         {allergenesIds.length > 0 && (
           <div className="carte-print-allergenes" style={{ marginTop: '20px', fontSize: '9px', color: '#8B7355', textAlign: 'center', fontFamily: 'sans-serif' }}>
-            Allergènes présents : {allergenesIds.map(id => { const a = ALLERGENES.find(a => a.id === id); return a ? a.label : null }).filter(Boolean).join(', ')}
+            {t('cartes.detail.allergensPresentPrint')} {allergenesIds.map(id => { const a = ALLERGENES.find(a => a.id === id); return a ? a.label : null }).filter(Boolean).join(', ')}
           </div>
         )}
         </div>

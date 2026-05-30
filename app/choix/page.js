@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation'
 import { theme, Logo, LogoBand } from '../../lib/theme.jsx'
 import { useRole } from '../../lib/useRole'
 import ChefLoader from '../../components/ChefLoader'
+import { useTranslation } from 'react-i18next'
 
 export default function ChoixPage() {
   const router = useRouter()
   const c = theme.couleurs
   const { role, nom, loading } = useRole()
+  const { t } = useTranslation()
 
   useEffect(() => {
     checkUser()
@@ -70,7 +72,7 @@ export default function ChoixPage() {
       </LogoBand>
       
       <div style={{ fontSize: '12px', color: c.texteMuted, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '40px' }}>
-        Bonjour {nom} — Choisissez votre espace
+        {t('choix.menu.greeting', { name: nom })}
       </div>
 
       {/* Deux cases */}
@@ -97,10 +99,10 @@ export default function ChoixPage() {
         >
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>👨‍🍳</div>
           <div style={{ fontSize: '20px', fontWeight: '500', color: c.principal, marginBottom: '8px', letterSpacing: '2px', textTransform: 'uppercase' }}>
-            Cuisine
+            {t('choix.menu.cuisine')}
           </div>
           <div style={{ fontSize: '12px', color: c.texteMuted, lineHeight: '1.6' }}>
-            Fiches techniques<br />Ingrédients & menus
+            {t('choix.menu.cuisineLine1')}<br />{t('choix.menu.cuisineLine2')}
           </div>
         </div>
 
@@ -125,10 +127,10 @@ export default function ChoixPage() {
         >
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>🍸</div>
           <div style={{ fontSize: '20px', fontWeight: '500', color: '#3C3489', marginBottom: '8px', letterSpacing: '2px', textTransform: 'uppercase' }}>
-            Bar
+            {t('choix.menu.bar')}
           </div>
           <div style={{ fontSize: '12px', color: c.texteMuted, lineHeight: '1.6' }}>
-            Cocktails & boissons<br />Carte des drinks
+            {t('choix.menu.barLine1')}<br />{t('choix.menu.barLine2')}
           </div>
         </div>
       </div>
@@ -137,7 +139,7 @@ export default function ChoixPage() {
         marginTop: '32px', background: 'transparent', color: c.texteMuted,
         border: 'none', fontSize: '13px', cursor: 'pointer', textDecoration: 'underline'
       }}>
-        Se déconnecter
+        {t('choix.menu.logout')}
       </button>
     </div>
   )

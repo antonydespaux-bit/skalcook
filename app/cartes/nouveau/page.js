@@ -9,10 +9,12 @@ import { log } from '../../../lib/useLog'
 import { SAISONS, getYearsRange } from '../../../lib/saison'
 import BackButton from '../../../components/BackButton'
 import { Alert } from '../../../components/ui'
+import { useTranslation } from 'react-i18next'
 
 const genId = () => crypto.randomUUID()
 
 export default function NouvelleCarte() {
+  const { t } = useTranslation()
   const { nomEtablissement, logoUrl } = useTheme()
   const isMobile = useIsMobile()
   const [nom, setNom] = useState('')
@@ -170,13 +172,13 @@ export default function NouvelleCarte() {
   // ── Submit ──
 
   const handleSubmit = async () => {
-    if (!nom) { setError('Le nom de la carte est obligatoire'); return }
-    if (sections.some(s => !s.titre)) { setError('Chaque section doit avoir un titre'); return }
+    if (!nom) { setError(t('cartes.form.nameRequired')); return }
+    if (sections.some(s => !s.titre)) { setError(t('cartes.form.sectionTitleRequired')); return }
     setLoading(true)
     setError('')
 
     const clientId = await getClientId()
-    if (!clientId) { setError('Session expirée'); setLoading(false); return }
+    if (!clientId) { setError(t('cartes.form.sessionExpired')); setLoading(false); return }
 
     const { data: carte, error: errCarte } = await supabase
       .from('cartes')
@@ -188,7 +190,7 @@ export default function NouvelleCarte() {
       .select()
       .single()
 
-    if (errCarte) { setError('Erreur : ' + errCarte.message); setLoading(false); return }
+    if (errCarte) { setError(t('cartes.form.errorGeneric', { message: errCarte.message })); setLoading(false); return }
 
     for (let sIdx = 0; sIdx < sections.length; sIdx++) {
       const s = sections[sIdx]
@@ -198,7 +200,7 @@ export default function NouvelleCarte() {
         .select()
         .single()
 
-      if (errSec) { setError('Erreur section : ' + errSec.message); setLoading(false); return }
+      if (errSec) { setError(t('cartes.form.errorSection', { message: errSec.message })); setLoading(false); return }
 
       const itemsToInsert = s.items
         .filter(i => i.ficheId)
@@ -216,7 +218,7 @@ export default function NouvelleCarte() {
 
       if (itemsToInsert.length > 0) {
         const { error: errItems } = await supabase.from('carte_items').insert(itemsToInsert)
-        if (errItems) { setError('Erreur items : ' + errItems.message); setLoading(false); return }
+        if (errItems) { setError(t('cartes.form.errorItems', { message: errItems.message })); setLoading(false); return }
       }
     }
 
@@ -257,7 +259,7 @@ export default function NouvelleCarte() {
           <span style={{
             fontSize: isMobile ? '14px' : '15px', fontWeight: '500', color: 'white',
             minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>Nouvelle carte</span>
+          }}>{t('cartes.form.newTitle')}</span>
         </div>
         <button type="button" onClick={handleSubmit} disabled={loading} style={{
           background: loading ? c.texteMuted : c.accent,
@@ -267,7 +269,7 @@ export default function NouvelleCarte() {
           flex: isMobile ? '1 1 100%' : '0 0 auto',
           width: isMobile ? '100%' : 'auto',
         }}>
-          {loading ? 'Enregistrement...' : 'Enregistrer la carte'}
+          {loading ? t('cartes.form.saving') : t('cartes.form.saveCarte')}
         </button>
       </div>
 
@@ -282,56 +284,56 @@ export default function NouvelleCarte() {
         {/* Informations */}
         <div style={{ background: 'white', borderRadius: '12px', padding: '24px', border: `0.5px solid ${c.bordure}`, marginBottom: '16px' }}>
           <div className="sk-label-muted" style={{ fontSize: '13px', color: c.texteMuted, marginBottom: '16px' }}>
-            Informations de la carte
+            {t('cartes.form.infoTitle')}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Nom de la carte *</label>
+              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{t('cartes.form.nameLabel')}</label>
               <input type="text" value={nom} onChange={e => setNom(e.target.value)}
-                placeholder="Ex : Menu Dégustation Printemps"
+                placeholder={t('cartes.form.namePlaceholder')}
                 style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, boxSizing: 'border-box' }}
               />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
-                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Saison</label>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{t('cartes.form.season')}</label>
                 <select value={saison} onChange={e => setSaison(e.target.value)} style={{
                   width: '100%', padding: '10px 12px', borderRadius: '8px',
                   border: `0.5px solid ${c.bordure}`, fontSize: '14px',
                   background: 'white', outline: 'none', color: c.texte
                 }}>
-                  <option value="">— Aucune —</option>
+                  <option value="">{t('cartes.form.none')}</option>
                   {SAISONS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div>
-                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Année</label>
+                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{t('cartes.form.year')}</label>
                 <select value={annee || ''} onChange={e => setAnnee(e.target.value ? parseInt(e.target.value, 10) : null)} style={{
                   width: '100%', padding: '10px 12px', borderRadius: '8px',
                   border: `0.5px solid ${c.bordure}`, fontSize: '14px',
                   background: 'white', outline: 'none', color: c.texte
                 }}>
-                  <option value="">— Aucune —</option>
+                  <option value="">{t('cartes.form.none')}</option>
                   {annees.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
             </div>
             <div>
-              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix de base TTC (&euro;)</label>
+              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{t('cartes.form.basePriceLabel')}</label>
               <input type="number" value={prixBase} onChange={e => setPrixBase(e.target.value)}
-                placeholder="Ex : 260" step="0.01"
+                placeholder={t('cartes.form.basePricePlaceholder')} step="0.01"
                 style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, boxSizing: 'border-box' }}
               />
               {prixIndicatif && (
                 <div style={{ fontSize: '11px', color: c.vert, marginTop: '4px' }}>
-                  Prix indicatif ({seuilVert}% Ratio) : <strong>{prixIndicatif} &euro;</strong>
+                  {t('cartes.form.indicativePrice', { seuil: seuilVert })} <strong>{prixIndicatif} &euro;</strong>
                 </div>
               )}
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Description</label>
+              <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{t('cartes.form.description')}</label>
               <textarea value={description} onChange={e => setDescription(e.target.value)}
-                placeholder="Description de la carte..." rows={2}
+                placeholder={t('cartes.form.descriptionPlaceholder')} rows={2}
                 style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', color: c.texte, boxSizing: 'border-box' }}
               />
             </div>
@@ -344,11 +346,11 @@ export default function NouvelleCarte() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
               <div style={{ flex: 1 }}>
                 <input type="text" value={section.titre} onChange={e => updateSection(sIdx, 'titre', e.target.value)}
-                  placeholder={`Titre de la section (ex : Entr\u00e9es, Poissons, Viandes...)`}
+                  placeholder={t('cartes.form.sectionTitlePlaceholder')}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', fontWeight: '500', outline: 'none', color: c.texte, boxSizing: 'border-box' }}
                 />
               </div>
-              <span style={{ fontSize: '11px', color: c.texteMuted }}>Section {sIdx + 1}</span>
+              <span style={{ fontSize: '11px', color: c.texteMuted }}>{t('cartes.form.sectionN', { n: sIdx + 1 })}</span>
               {sections.length > 1 && (
                 <button onClick={() => removeSection(sIdx)} style={{
                   background: 'transparent', border: 'none', color: '#A32D2D',
@@ -370,11 +372,11 @@ export default function NouvelleCarte() {
                         <button onClick={() => updateItem(sIdx, iIdx, 'relation', 'et')} style={{
                           padding: '3px 12px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', border: 'none',
                           background: !isOu ? c.accent : 'white', color: !isOu ? 'white' : c.texteMuted
-                        }}>ET</button>
+                        }}>{t('cartes.form.relationAnd')}</button>
                         <button onClick={() => updateItem(sIdx, iIdx, 'relation', 'ou')} style={{
                           padding: '3px 12px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', border: 'none',
                           background: isOu ? '#D97706' : 'white', color: isOu ? 'white' : c.texteMuted
-                        }}>OU</button>
+                        }}>{t('cartes.form.relationOr')}</button>
                       </div>
                     </div>
                   )}
@@ -388,7 +390,7 @@ export default function NouvelleCarte() {
                         border: `0.5px solid ${c.bordure}`, fontSize: '13px',
                         background: 'white', outline: 'none', color: c.texte
                       }}>
-                        <option value="">-- Choisir une fiche --</option>
+                        <option value="">{t('cartes.form.chooseFiche')}</option>
                         {fiches.map(f => (
                           <option key={f.id} value={f.id}>{f.nom} {f.categorie ? `(${f.categorie})` : ''}</option>
                         ))}
@@ -396,7 +398,7 @@ export default function NouvelleCarte() {
                       {isOu && (
                         <div style={{ width: '100px' }}>
                           <input type="number" value={item.supplement} onChange={e => updateItem(sIdx, iIdx, 'supplement', e.target.value)}
-                            placeholder="Suppl. €" step="0.01" min="0"
+                            placeholder={t('cartes.form.supplementPlaceholder')} step="0.01" min="0"
                             style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${hasSup ? '#FDBA74' : c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, boxSizing: 'border-box' }}
                           />
                         </div>
@@ -409,15 +411,15 @@ export default function NouvelleCarte() {
                       )}
                     </div>
                     <textarea value={item.description} onChange={e => updateItem(sIdx, iIdx, 'description', e.target.value)}
-                      placeholder="Description gastronomique (optionnel)"
+                      placeholder={t('cartes.form.dishDescriptionPlaceholder')}
                       rows={1}
                       style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', fontStyle: 'italic', color: c.texteMuted, boxSizing: 'border-box' }}
                     />
                     {fiche && (
                       <div style={{ fontSize: '11px', color: c.texteMuted, marginTop: '4px', display: 'flex', gap: '12px' }}>
-                        <span>{isOu ? 'Alternative' : 'Inclus'} — coût : <strong>{(fiche.cout_portion || 0).toFixed(2)} €</strong></span>
-                        {isOu && hasSup && <span style={{ color: '#D97706' }}>Suppl. : +{Number(item.supplement).toFixed(0)} €</span>}
-                        {isOu && !hasSup && <span style={{ color: '#D97706' }}>Choix libre (sans supplément)</span>}
+                        <span>{isOu ? t('cartes.form.alternative') : t('cartes.form.included')} {t('cartes.form.costLabel')} <strong>{(fiche.cout_portion || 0).toFixed(2)} €</strong></span>
+                        {isOu && hasSup && <span style={{ color: '#D97706' }}>{t('cartes.form.supplementValue', { val: Number(item.supplement).toFixed(0) })}</span>}
+                        {isOu && !hasSup && <span style={{ color: '#D97706' }}>{t('cartes.form.freeChoice')}</span>}
                       </div>
                     )}
                   </div>
@@ -429,7 +431,7 @@ export default function NouvelleCarte() {
               background: 'transparent', border: `1px dashed ${c.bordure}`,
               borderRadius: '8px', padding: '8px', width: '100%',
               fontSize: '12px', color: c.texteMuted, cursor: 'pointer', marginTop: '4px'
-            }}>+ Ajouter un plat</button>
+            }}>{t('cartes.form.addDish')}</button>
           </div>
         ))}
 
@@ -438,7 +440,7 @@ export default function NouvelleCarte() {
           borderRadius: '12px', padding: '14px', width: '100%',
           fontSize: '13px', color: c.accent, cursor: 'pointer',
           fontWeight: '500', marginBottom: '16px'
-        }}>+ Ajouter une section</button>
+        }}>{t('cartes.form.addSection')}</button>
 
         {/* Récapitulatif */}
         <div style={{
@@ -446,12 +448,12 @@ export default function NouvelleCarte() {
           border: `0.5px solid ${c.bordure}`, display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-start'
         }}>
           <div>
-            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Co&ucirc;t mati&egrave;re</div>
+            <div style={{ fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>{t('cartes.recap.materialCost')}</div>
             <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: c.texte }}>{coutMatiere.toFixed(2)} &euro;</div>
           </div>
           {totalSupplements > 0 && (
             <div>
-              <div style={{ fontSize: '11px', color: '#D97706', fontWeight: '500', textTransform: 'uppercase' }}>Dont suppl. prix</div>
+              <div style={{ fontSize: '11px', color: '#D97706', fontWeight: '500', textTransform: 'uppercase' }}>{t('cartes.recap.ofWhichSupplement')}</div>
               <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: '#D97706' }}>+{totalSupplements.toFixed(0)} &euro;</div>
             </div>
           )}
@@ -459,13 +461,13 @@ export default function NouvelleCarte() {
             <>
               {ratioBase && (() => { const s = fcColor(ratioBase); return (
                 <div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>Ratio base</div>
+                  <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>{t('cartes.recap.ratioBase')}</div>
                   <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{ratioBase} %</div>
                 </div>
               )})()}
               {ratio && (() => { const s = fcColor(ratio); return (
                 <div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>Ratio + suppl.</div>
+                  <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>{t('cartes.recap.ratioWithSupplement')}</div>
                   <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{ratio} %</div>
                 </div>
               )})()}
@@ -475,7 +477,7 @@ export default function NouvelleCarte() {
               const s = fcColor(ratio)
               return (
                 <div style={{ background: s.bg, borderRadius: '8px', padding: '14px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>Ratio</div>
+                  <div style={{ fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', color: s.color }}>{t('cartes.recap.ratio')}</div>
                   <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: s.color }}>{ratio} %</div>
                 </div>
               )
@@ -483,9 +485,9 @@ export default function NouvelleCarte() {
           )}
           {prixIndicatif && (
             <div style={{ background: c.vertClair, borderRadius: '8px', padding: '14px' }}>
-              <div style={{ fontSize: '11px', color: c.vert, fontWeight: '500', textTransform: 'uppercase' }}>Prix indicatif TTC</div>
+              <div style={{ fontSize: '11px', color: c.vert, fontWeight: '500', textTransform: 'uppercase' }}>{t('cartes.recap.indicativePriceTTC')}</div>
               <div style={{ fontSize: '22px', fontWeight: '500', marginTop: '4px', color: c.vert }}>{prixIndicatif} &euro;</div>
-              <div style={{ fontSize: '10px', color: c.vert, opacity: 0.8 }}>Bas&eacute; sur {seuilVert}% Ratio</div>
+              <div style={{ fontSize: '10px', color: c.vert, opacity: 0.8 }}>{t('cartes.recap.basedOn', { seuil: seuilVert })}</div>
             </div>
           )}
         </div>
