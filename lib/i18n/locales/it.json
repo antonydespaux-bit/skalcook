@@ -74,5 +74,78 @@
     "forgotPassword": "Password dimenticata?",
     "loggingIn": "Accesso in corso...",
     "loginButton": "Accedi"
+  },
+  "landing": {
+    "nav": { "features": "Funzionalità", "multi": "Multi-sito", "contact": "Contatto", "login": "Accedi" },
+    "hero": {
+      "eyebrow": "Gestione professionale",
+      "titlePre": "Le schede tecniche che ",
+      "titleEm": "fanno la differenza",
+      "subtitle": "Calcola il tuo food cost in tempo reale, gestisci i tuoi allergeni e controlla i margini di Cucina e Bar da un'unica piattaforma.",
+      "demo": "Richiedi una demo",
+      "discover": "Scopri"
+    },
+    "stats": { "allergens": "14 allergeni UE", "kitchenBar": "Cucina e Bar", "multiSite": "Multi-sito", "realtime": "Tempo reale" },
+    "fiches": {
+      "eyebrow": "Funzionalità di punta",
+      "title": "Le tue schede tecniche, finalmente professionali",
+      "desc": "Crea le tue schede con ingredienti, costi, allergeni e foto. Food cost calcolato automaticamente a porzione, stampa A4 professionale.",
+      "foodCostTitle": "Food cost in tempo reale",
+      "foodCostDesc": "Ogni prezzo ingrediente aggiornato si riflette istantaneamente su tutte le schede — zero calcoli manuali.",
+      "allergensTitle": "14 allergeni UE",
+      "allergensDesc": "Conformità normativa con i 14 allergeni ufficiali. Tabella riepilogativa stampabile per la sala.",
+      "printTitle": "Stampa A4 pro",
+      "printDesc": "Schede tecniche professionali pronte per la cucina, con foto, ingredienti e costi dettagliati."
+    },
+    "multi": {
+      "eyebrow": "Multi-sito",
+      "title": "Una piattaforma, tutti i tuoi ristoranti",
+      "desc": "Ogni locale dispone del proprio spazio isolato, del proprio branding, dei moduli Cucina e Bar e dei propri team. Gestisci tutto da un unico account.",
+      "isolatedTitle": "Dati isolati",
+      "isolatedDesc": "Ogni locale dispone del proprio spazio sicuro con completo isolamento dei dati.",
+      "brandingTitle": "Branding personalizzato",
+      "brandingDesc": "Logo, colori e nome personalizzati per locale. Ogni team si sente a casa.",
+      "kitchenBarTitle": "Cucina + Bar separati",
+      "kitchenBarDesc": "Moduli dedicati con IVA automatica: 10% ristorazione, 20% alcolici. Gestione semplificata."
+    },
+    "cta": { "title": "Pronto a dominare i tuoi costi?", "desc": "Demo personalizzata in 15 minuti. Compila il modulo, ti ricontattiamo entro 24h." },
+    "form": {
+      "nameRequired": "Nome ed email obbligatori.",
+      "genericError": "Si è verificato un errore. Riprova o contattaci via email.",
+      "successTitle": "Richiesta inviata!",
+      "successDesc": "Ti ricontattiamo entro 24h.",
+      "name": "Nome *",
+      "namePlaceholder": "Mario Rossi",
+      "email": "Email *",
+      "emailPlaceholder": "mario@ristorante.it",
+      "phone": "Telefono",
+      "phonePlaceholder": "+39 300 000 0000",
+      "establishment": "Nome del locale",
+      "establishmentPlaceholder": "Il mio Ristorante",
+      "nbEstablishments": "Numero di locali",
+      "nb1": "1 locale",
+      "nb2": "2 locali",
+      "nb3": "3-5 locali",
+      "nb10": "6-10 locali",
+      "nb20": "10+ locali",
+      "message": "Messaggio (facoltativo)",
+      "messagePlaceholder": "Descrivi la tua esigenza...",
+      "submit": "Richiedi una demo gratuita",
+      "submitting": "Invio in corso…"
+    },
+    "footer": {
+      "brandDesc": "La piattaforma di gestione delle schede tecniche per i professionisti della ristorazione.",
+      "product": "Prodotto",
+      "features": "Funzionalità",
+      "foodCost": "Food cost",
+      "multiSite": "Multi-sito",
+      "legal": "Legale",
+      "cgu": "Termini",
+      "legalNotice": "Note legali",
+      "privacy": "Privacy",
+      "contact": "Contatto",
+      "demo": "Richiedi una demo",
+      "rights": "Tutti i diritti riservati"
+    }
   }
 }

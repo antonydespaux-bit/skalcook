@@ -74,5 +74,78 @@
     "forgotPassword": "¿Olvidaste tu contraseña?",
     "loggingIn": "Conectando...",
     "loginButton": "Iniciar sesión"
+  },
+  "landing": {
+    "nav": { "features": "Funciones", "multi": "Multi-sitio", "contact": "Contacto", "login": "Iniciar sesión" },
+    "hero": {
+      "eyebrow": "Gestión profesional",
+      "titlePre": "Las fichas técnicas que ",
+      "titleEm": "marcan la diferencia",
+      "subtitle": "Calcula tu coste de comida en tiempo real, gestiona tus alérgenos y controla tus márgenes de Cocina y Bar desde una sola plataforma.",
+      "demo": "Solicitar una demo",
+      "discover": "Descubrir"
+    },
+    "stats": { "allergens": "14 alérgenos UE", "kitchenBar": "Cocina y Bar", "multiSite": "Multi-sitio", "realtime": "Tiempo real" },
+    "fiches": {
+      "eyebrow": "Función estrella",
+      "title": "Tus fichas técnicas, por fin profesionales",
+      "desc": "Crea tus fichas con ingredientes, costes, alérgenos y foto. Coste de comida calculado automáticamente por ración, impresión A4 profesional.",
+      "foodCostTitle": "Coste de comida en tiempo real",
+      "foodCostDesc": "Cada precio de ingrediente actualizado se refleja al instante en todas las fichas — cero cálculos manuales.",
+      "allergensTitle": "14 alérgenos UE",
+      "allergensDesc": "Cumplimiento normativo con los 14 alérgenos oficiales. Tabla resumen imprimible para la sala.",
+      "printTitle": "Impresión A4 pro",
+      "printDesc": "Fichas técnicas profesionales listas para la cocina, con foto, ingredientes y costes detallados."
+    },
+    "multi": {
+      "eyebrow": "Multi-sitio",
+      "title": "Una plataforma, todos tus restaurantes",
+      "desc": "Cada establecimiento dispone de su propio espacio aislado, su branding, sus módulos de Cocina y Bar, y sus equipos. Gestiona todo desde una sola cuenta.",
+      "isolatedTitle": "Datos aislados",
+      "isolatedDesc": "Cada establecimiento dispone de su propio espacio seguro con aislamiento completo de datos.",
+      "brandingTitle": "Branding personalizado",
+      "brandingDesc": "Logo, colores y nombre personalizados por establecimiento. Cada equipo se siente como en casa.",
+      "kitchenBarTitle": "Cocina + Bar separados",
+      "kitchenBarDesc": "Módulos dedicados con IVA automático: 10% restauración, 20% alcohol. Gestión simplificada."
+    },
+    "cta": { "title": "¿Listo para dominar tus costes?", "desc": "Demo personalizada en 15 minutos. Rellena el formulario, te contactamos en 24h." },
+    "form": {
+      "nameRequired": "Nombre y correo obligatorios.",
+      "genericError": "Se ha producido un error. Inténtalo de nuevo o contáctanos por correo.",
+      "successTitle": "¡Solicitud enviada!",
+      "successDesc": "Te contactamos en 24h.",
+      "name": "Nombre *",
+      "namePlaceholder": "Juan Pérez",
+      "email": "Correo *",
+      "emailPlaceholder": "juan@restaurante.es",
+      "phone": "Teléfono",
+      "phonePlaceholder": "+34 600 00 00 00",
+      "establishment": "Nombre del establecimiento",
+      "establishmentPlaceholder": "Mi Restaurante",
+      "nbEstablishments": "Número de establecimientos",
+      "nb1": "1 establecimiento",
+      "nb2": "2 establecimientos",
+      "nb3": "3-5 establecimientos",
+      "nb10": "6-10 establecimientos",
+      "nb20": "10+ establecimientos",
+      "message": "Mensaje (opcional)",
+      "messagePlaceholder": "Describe tu necesidad...",
+      "submit": "Solicitar una demo gratis",
+      "submitting": "Enviando…"
+    },
+    "footer": {
+      "brandDesc": "La plataforma de gestión de fichas técnicas para los profesionales de la restauración.",
+      "product": "Producto",
+      "features": "Funciones",
+      "foodCost": "Coste de comida",
+      "multiSite": "Multi-sitio",
+      "legal": "Legal",
+      "cgu": "Términos",
+      "legalNotice": "Aviso legal",
+      "privacy": "Privacidad",
+      "contact": "Contacto",
+      "demo": "Solicitar una demo",
+      "rights": "Todos los derechos reservados"
+    }
   }
 }

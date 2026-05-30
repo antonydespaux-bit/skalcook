@@ -74,5 +74,78 @@
     "forgotPassword": "Forgot password?",
     "loggingIn": "Logging in...",
     "loginButton": "Sign in"
+  },
+  "landing": {
+    "nav": { "features": "Features", "multi": "Multi-site", "contact": "Contact", "login": "Log in" },
+    "hero": {
+      "eyebrow": "Professional management",
+      "titlePre": "Recipe sheets that ",
+      "titleEm": "make the difference",
+      "subtitle": "Calculate your food cost in real time, manage your allergens, and control your Kitchen & Bar margins from a single platform.",
+      "demo": "Request a demo",
+      "discover": "Discover"
+    },
+    "stats": { "allergens": "14 EU allergens", "kitchenBar": "Kitchen & Bar", "multiSite": "Multi-site", "realtime": "Real time" },
+    "fiches": {
+      "eyebrow": "Flagship feature",
+      "title": "Your recipe sheets, finally professional",
+      "desc": "Create your sheets with ingredients, costs, allergens and photo. Food cost calculated automatically per portion, professional A4 printing.",
+      "foodCostTitle": "Real-time food cost",
+      "foodCostDesc": "Every updated ingredient price is reflected instantly across all sheets — zero manual calculation.",
+      "allergensTitle": "14 EU allergens",
+      "allergensDesc": "Regulatory compliance with the 14 official allergens. Printable summary table for the dining room.",
+      "printTitle": "Pro A4 printing",
+      "printDesc": "Professional recipe sheets ready for the kitchen, with photo, ingredients and detailed costs."
+    },
+    "multi": {
+      "eyebrow": "Multi-site",
+      "title": "One platform, all your restaurants",
+      "desc": "Each establishment has its own isolated space, branding, Kitchen and Bar modules, and teams. Manage everything from a single account.",
+      "isolatedTitle": "Isolated data",
+      "isolatedDesc": "Each establishment has its own secure space with complete data isolation.",
+      "brandingTitle": "Custom branding",
+      "brandingDesc": "Custom logo, colors and name per establishment. Every team feels at home.",
+      "kitchenBarTitle": "Kitchen + Bar separated",
+      "kitchenBarDesc": "Dedicated modules with automatic VAT: 10% catering, 20% alcohol. Simplified management."
+    },
+    "cta": { "title": "Ready to master your costs?", "desc": "Personalized 15-minute demo. Fill out the form, we'll get back to you within 24h." },
+    "form": {
+      "nameRequired": "Name and email required.",
+      "genericError": "An error occurred. Try again or contact us by email.",
+      "successTitle": "Request sent!",
+      "successDesc": "We'll get back to you within 24h.",
+      "name": "Name *",
+      "namePlaceholder": "John Smith",
+      "email": "Email *",
+      "emailPlaceholder": "john@restaurant.com",
+      "phone": "Phone",
+      "phonePlaceholder": "+1 555 000 0000",
+      "establishment": "Establishment name",
+      "establishmentPlaceholder": "My Restaurant",
+      "nbEstablishments": "Number of establishments",
+      "nb1": "1 establishment",
+      "nb2": "2 establishments",
+      "nb3": "3-5 establishments",
+      "nb10": "6-10 establishments",
+      "nb20": "10+ establishments",
+      "message": "Message (optional)",
+      "messagePlaceholder": "Describe your needs...",
+      "submit": "Request a free demo",
+      "submitting": "Sending…"
+    },
+    "footer": {
+      "brandDesc": "The recipe sheet management platform for hospitality professionals.",
+      "product": "Product",
+      "features": "Features",
+      "foodCost": "Food cost",
+      "multiSite": "Multi-site",
+      "legal": "Legal",
+      "cgu": "Terms",
+      "legalNotice": "Legal notice",
+      "privacy": "Privacy",
+      "contact": "Contact",
+      "demo": "Request a demo",
+      "rights": "All rights reserved"
+    }
   }
 }

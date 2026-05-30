@@ -74,5 +74,78 @@
     "forgotPassword": "Mot de passe oublié ?",
     "loggingIn": "Connexion...",
     "loginButton": "Se connecter"
+  },
+  "landing": {
+    "nav": { "features": "Fonctionnalités", "multi": "Multi-sites", "contact": "Contact", "login": "Se connecter" },
+    "hero": {
+      "eyebrow": "Gestion professionnelle",
+      "titlePre": "Les fiches techniques qui ",
+      "titleEm": "font la différence",
+      "subtitle": "Calculez votre food cost en temps réel, gérez vos allergènes, et pilotez vos marges Cuisine & Bar depuis une seule plateforme.",
+      "demo": "Demander une démo",
+      "discover": "Découvrir"
+    },
+    "stats": { "allergens": "14 allergènes UE", "kitchenBar": "Cuisine & Bar", "multiSite": "Multi-sites", "realtime": "Temps réel" },
+    "fiches": {
+      "eyebrow": "Fonctionnalité phare",
+      "title": "Vos fiches techniques, enfin professionnelles",
+      "desc": "Créez vos fiches avec ingrédients, coûts, allergènes et photo. Food cost calculé automatiquement à la portion, impression A4 professionnelle.",
+      "foodCostTitle": "Food cost temps réel",
+      "foodCostDesc": "Chaque prix ingrédient mis à jour se répercute instantanément sur toutes les fiches — zéro calcul manuel.",
+      "allergensTitle": "14 allergènes UE",
+      "allergensDesc": "Conformité réglementaire avec les 14 allergènes officiels. Tableau récapitulatif imprimable pour la salle.",
+      "printTitle": "Impression A4 pro",
+      "printDesc": "Fiches techniques professionnelles prêtes pour la cuisine, avec photo, ingrédients et coûts détaillés."
+    },
+    "multi": {
+      "eyebrow": "Multi-sites",
+      "title": "Une plateforme, tous vos restaurants",
+      "desc": "Chaque établissement dispose de son espace isolé, son branding, ses modules Cuisine et Bar, et ses équipes. Pilotez tout depuis un seul compte.",
+      "isolatedTitle": "Données isolées",
+      "isolatedDesc": "Chaque établissement dispose de son propre espace sécurisé avec isolation complète des données.",
+      "brandingTitle": "Branding personnalisé",
+      "brandingDesc": "Logo, couleurs et nom personnalisés par établissement. Chaque équipe se sent chez elle.",
+      "kitchenBarTitle": "Cuisine + Bar séparés",
+      "kitchenBarDesc": "Modules dédiés avec TVA automatique : 10% restauration, 20% alcool. Gestion simplifiée."
+    },
+    "cta": { "title": "Prêt à maîtriser vos coûts ?", "desc": "Démo personnalisée en 15 minutes. Remplissez le formulaire, on vous recontacte sous 24h." },
+    "form": {
+      "nameRequired": "Nom et email requis.",
+      "genericError": "Une erreur est survenue. Réessayez ou contactez-nous par email.",
+      "successTitle": "Demande envoyée !",
+      "successDesc": "Nous vous recontactons sous 24h.",
+      "name": "Nom *",
+      "namePlaceholder": "Jean Dupont",
+      "email": "Email *",
+      "emailPlaceholder": "jean@restaurant.fr",
+      "phone": "Téléphone",
+      "phonePlaceholder": "+33 6 00 00 00 00",
+      "establishment": "Nom de l'établissement",
+      "establishmentPlaceholder": "Mon Restaurant",
+      "nbEstablishments": "Nombre d'établissements",
+      "nb1": "1 établissement",
+      "nb2": "2 établissements",
+      "nb3": "3-5 établissements",
+      "nb10": "6-10 établissements",
+      "nb20": "10+ établissements",
+      "message": "Message (optionnel)",
+      "messagePlaceholder": "Décrivez votre besoin...",
+      "submit": "Demander une démo gratuite",
+      "submitting": "Envoi en cours…"
+    },
+    "footer": {
+      "brandDesc": "La plateforme de gestion des fiches techniques pour les professionnels de la restauration.",
+      "product": "Produit",
+      "features": "Fonctionnalités",
+      "foodCost": "Food cost",
+      "multiSite": "Multi-sites",
+      "legal": "Légal",
+      "cgu": "CGU",
+      "legalNotice": "Mentions légales",
+      "privacy": "Confidentialité",
+      "contact": "Contact",
+      "demo": "Demander une démo",
+      "rights": "Tous droits réservés"
+    }
   }
 }

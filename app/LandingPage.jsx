@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Logo } from '../lib/theme.jsx'
+import LanguageSwitcher from '../components/LanguageSwitcher'
 import './landing.css'
 
 /* ── Safety net : si Supabase renvoie l'utilisateur sur la landing ──
@@ -129,29 +131,30 @@ const IconStar = () => (
   </svg>
 )
 
-/* ── Stats config ── */
+/* ── Stats config (labels via i18n: landing.stats.<key>) ── */
 const STATS = [
-  { icon: <IconShield />, label: '14 allergènes UE' },
-  { icon: <IconLayers />, label: 'Cuisine & Bar' },
-  { icon: <IconDatabase />, label: 'Multi-sites' },
-  { icon: <IconStar />, label: 'Temps réel' },
+  { icon: <IconShield />, key: 'allergens' },
+  { icon: <IconLayers />, key: 'kitchenBar' },
+  { icon: <IconDatabase />, key: 'multiSite' },
+  { icon: <IconStar />, key: 'realtime' },
 ]
 
-/* ── Features config ── */
+/* ── Features config (titre/desc via i18n: landing.fiches/multi.<key>Title|Desc) ── */
 const FEATURES_FICHES = [
-  { icon: <IconCalculator />, title: 'Food cost temps réel', desc: 'Chaque prix ingrédient mis à jour se répercute instantanément sur toutes les fiches — zéro calcul manuel.' },
-  { icon: <IconShield />, title: '14 allergènes UE', desc: 'Conformité réglementaire avec les 14 allergènes officiels. Tableau récapitulatif imprimable pour la salle.' },
-  { icon: <IconPrinter />, title: 'Impression A4 pro', desc: 'Fiches techniques professionnelles prêtes pour la cuisine, avec photo, ingrédients et coûts détaillés.' },
+  { icon: <IconCalculator />, key: 'foodCost' },
+  { icon: <IconShield />, key: 'allergens' },
+  { icon: <IconPrinter />, key: 'print' },
 ]
 
 const FEATURES_MULTI = [
-  { icon: <IconDatabase />, title: 'Données isolées', desc: 'Chaque établissement dispose de son propre espace sécurisé avec isolation complète des données.' },
-  { icon: <IconPalette />, title: 'Branding personnalisé', desc: 'Logo, couleurs et nom personnalisés par établissement. Chaque équipe se sent chez elle.' },
-  { icon: <IconLayers />, title: 'Cuisine + Bar séparés', desc: 'Modules dédiés avec TVA automatique : 10% restauration, 20% alcool. Gestion simplifiée.' },
+  { icon: <IconDatabase />, key: 'isolated' },
+  { icon: <IconPalette />, key: 'branding' },
+  { icon: <IconLayers />, key: 'kitchenBar' },
 ]
 
 /* ── Demo form ── */
 function DemoForm() {
+  const { t, i18n } = useTranslation()
   const [form, setForm] = useState({ nom: '', email: '', telephone: '', nom_etablissement: '', nb_etablissements: '1', message: '', website: '' })
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
@@ -162,18 +165,18 @@ function DemoForm() {
   const submit = async (e) => {
     e.preventDefault()
     setError('')
-    if (!form.nom.trim() || !form.email.trim()) { setError('Nom et email requis.'); return }
+    if (!form.nom.trim() || !form.email.trim()) { setError(t('landing.form.nameRequired')); return }
     setSending(true)
     try {
       const res = await fetch('/api/prospects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, nb_etablissements: parseInt(form.nb_etablissements) || 1, langue: 'fr' }),
+        body: JSON.stringify({ ...form, nb_etablissements: parseInt(form.nb_etablissements) || 1, langue: i18n.language || 'fr' }),
       })
       if (!res.ok) throw new Error('Erreur serveur')
       setSent(true)
     } catch {
-      setError('Une erreur est survenue. Réessayez ou contactez-nous par email.')
+      setError(t('landing.form.genericError'))
     } finally {
       setSending(false)
     }
@@ -183,8 +186,8 @@ function DemoForm() {
     return (
       <div className="sk-form__success">
         <div style={{ fontSize: '48px', marginBottom: '16px' }}>✓</div>
-        <div style={{ fontSize: '20px', fontWeight: '600', color: '#FAFAFA', marginBottom: '8px' }}>Demande envoyée !</div>
-        <div style={{ fontSize: '14px', color: '#A1A1AA' }}>Nous vous recontactons sous 24h.</div>
+        <div style={{ fontSize: '20px', fontWeight: '600', color: '#FAFAFA', marginBottom: '8px' }}>{t('landing.form.successTitle')}</div>
+        <div style={{ fontSize: '14px', color: '#A1A1AA' }}>{t('landing.form.successDesc')}</div>
       </div>
     )
   }
@@ -194,44 +197,44 @@ function DemoForm() {
       {error && <div className="sk-form__error">{error}</div>}
       <div className="sk-form__row">
         <div className="sk-form__field">
-          <label className="sk-form__label">Nom *</label>
-          <input className="sk-form__input" type="text" placeholder="Jean Dupont" value={form.nom} onChange={update('nom')} required />
+          <label className="sk-form__label">{t('landing.form.name')}</label>
+          <input className="sk-form__input" type="text" placeholder={t('landing.form.namePlaceholder')} value={form.nom} onChange={update('nom')} required />
         </div>
         <div className="sk-form__field">
-          <label className="sk-form__label">Email *</label>
-          <input className="sk-form__input" type="email" placeholder="jean@restaurant.fr" value={form.email} onChange={update('email')} required />
-        </div>
-      </div>
-      <div className="sk-form__row">
-        <div className="sk-form__field">
-          <label className="sk-form__label">Téléphone</label>
-          <input className="sk-form__input" type="tel" placeholder="+33 6 00 00 00 00" value={form.telephone} onChange={update('telephone')} />
-        </div>
-        <div className="sk-form__field">
-          <label className="sk-form__label">Nom de l'établissement</label>
-          <input className="sk-form__input" type="text" placeholder="Mon Restaurant" value={form.nom_etablissement} onChange={update('nom_etablissement')} />
+          <label className="sk-form__label">{t('landing.form.email')}</label>
+          <input className="sk-form__input" type="email" placeholder={t('landing.form.emailPlaceholder')} value={form.email} onChange={update('email')} required />
         </div>
       </div>
       <div className="sk-form__row">
         <div className="sk-form__field">
-          <label className="sk-form__label">Nombre d'établissements</label>
+          <label className="sk-form__label">{t('landing.form.phone')}</label>
+          <input className="sk-form__input" type="tel" placeholder={t('landing.form.phonePlaceholder')} value={form.telephone} onChange={update('telephone')} />
+        </div>
+        <div className="sk-form__field">
+          <label className="sk-form__label">{t('landing.form.establishment')}</label>
+          <input className="sk-form__input" type="text" placeholder={t('landing.form.establishmentPlaceholder')} value={form.nom_etablissement} onChange={update('nom_etablissement')} />
+        </div>
+      </div>
+      <div className="sk-form__row">
+        <div className="sk-form__field">
+          <label className="sk-form__label">{t('landing.form.nbEstablishments')}</label>
           <select className="sk-form__input" value={form.nb_etablissements} onChange={update('nb_etablissements')}>
-            <option value="1">1 établissement</option>
-            <option value="2">2 établissements</option>
-            <option value="3">3-5 établissements</option>
-            <option value="10">6-10 établissements</option>
-            <option value="20">10+ établissements</option>
+            <option value="1">{t('landing.form.nb1')}</option>
+            <option value="2">{t('landing.form.nb2')}</option>
+            <option value="3">{t('landing.form.nb3')}</option>
+            <option value="10">{t('landing.form.nb10')}</option>
+            <option value="20">{t('landing.form.nb20')}</option>
           </select>
         </div>
       </div>
       <div className="sk-form__field">
-        <label className="sk-form__label">Message (optionnel)</label>
-        <textarea className="sk-form__input sk-form__textarea" placeholder="Décrivez votre besoin..." value={form.message} onChange={update('message')} rows={3} />
+        <label className="sk-form__label">{t('landing.form.message')}</label>
+        <textarea className="sk-form__input sk-form__textarea" placeholder={t('landing.form.messagePlaceholder')} value={form.message} onChange={update('message')} rows={3} />
       </div>
       {/* Honeypot — hidden from humans */}
       <input type="text" name="website" value={form.website} onChange={update('website')} style={{ position: 'absolute', left: '-9999px', tabIndex: -1 }} autoComplete="off" />
       <button className="sk-form__submit" type="submit" disabled={sending}>
-        {sending ? 'Envoi en cours…' : 'Demander une démo gratuite'}
+        {sending ? t('landing.form.submitting') : t('landing.form.submit')}
       </button>
     </form>
   )
@@ -241,6 +244,7 @@ function DemoForm() {
  * Landing Page Component
  * ════════════════════════════════════════════════════════════════ */
 export default function LandingPage() {
+  const { t } = useTranslation()
   usePasswordLinkRedirect()
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -257,10 +261,11 @@ export default function LandingPage() {
         <div className="sk-nav__inner">
           <Logo height={32} couleur="#6366F1" />
           <div className={`sk-nav__links${menuOpen ? ' sk-nav__links--open' : ''}`}>
-            <a className="sk-nav__link" href="#features" onClick={e => { e.preventDefault(); scrollTo('features') }}>Fonctionnalités</a>
-            <a className="sk-nav__link" href="#multi" onClick={e => { e.preventDefault(); scrollTo('multi') }}>Multi-sites</a>
-            <a className="sk-nav__link" href="#contact" onClick={e => { e.preventDefault(); scrollTo('contact') }}>Contact</a>
-            <a className="sk-nav__cta" href="/login">Se connecter</a>
+            <a className="sk-nav__link" href="#features" onClick={e => { e.preventDefault(); scrollTo('features') }}>{t('landing.nav.features')}</a>
+            <a className="sk-nav__link" href="#multi" onClick={e => { e.preventDefault(); scrollTo('multi') }}>{t('landing.nav.multi')}</a>
+            <a className="sk-nav__link" href="#contact" onClick={e => { e.preventDefault(); scrollTo('contact') }}>{t('landing.nav.contact')}</a>
+            <a className="sk-nav__cta" href="/login">{t('landing.nav.login')}</a>
+            <LanguageSwitcher variant="light" />
           </div>
           <button className="sk-nav__burger" onClick={() => setMenuOpen(v => !v)} aria-label="Menu">
             {menuOpen ? <IconX /> : <IconMenu />}
@@ -273,27 +278,27 @@ export default function LandingPage() {
         <div className="sk-hero__inner">
           <div className="sk-hero__eyebrow">
             <span className="sk-hero__eyebrow-dot" />
-            Gestion professionnelle
+            {t('landing.hero.eyebrow')}
           </div>
           <h1 className="sk-hero__title">
-            Les fiches techniques qui <em>font la différence</em>
+            {t('landing.hero.titlePre')}<em>{t('landing.hero.titleEm')}</em>
           </h1>
           <p className="sk-hero__subtitle">
-            Calculez votre food cost en temps réel, gérez vos allergènes, et pilotez vos marges Cuisine & Bar depuis une seule plateforme.
+            {t('landing.hero.subtitle')}
           </p>
           <div className="sk-hero__actions">
             <a className="sk-btn-primary" href="#contact" onClick={e => { e.preventDefault(); scrollTo('contact') }}>
-              Demander une démo
+              {t('landing.hero.demo')}
             </a>
             <a className="sk-btn-ghost" href="#features" onClick={e => { e.preventDefault(); scrollTo('features') }}>
-              Découvrir
+              {t('landing.hero.discover')}
             </a>
           </div>
           <div className="sk-hero__stats">
-            {STATS.map(({ icon, label }) => (
-              <div key={label} className="sk-hero__stat">
+            {STATS.map(({ icon, key }) => (
+              <div key={key} className="sk-hero__stat">
                 <div className="sk-hero__stat-icon">{icon}</div>
-                {label}
+                {t(`landing.stats.${key}`)}
               </div>
             ))}
           </div>
@@ -307,19 +312,19 @@ export default function LandingPage() {
       <section id="features" className="sk-section">
         <div className="sk-section__inner">
           <Reveal>
-            <div className="sk-section__eyebrow">Fonctionnalité phare</div>
-            <h2 className="sk-section__title">Vos fiches techniques, enfin professionnelles</h2>
+            <div className="sk-section__eyebrow">{t('landing.fiches.eyebrow')}</div>
+            <h2 className="sk-section__title">{t('landing.fiches.title')}</h2>
             <p className="sk-section__desc">
-              Créez vos fiches avec ingrédients, coûts, allergènes et photo. Food cost calculé automatiquement à la portion, impression A4 professionnelle.
+              {t('landing.fiches.desc')}
             </p>
           </Reveal>
           <div className="sk-features">
-            {FEATURES_FICHES.map(({ icon, title, desc }, i) => (
-              <Reveal key={title} delay={i + 1}>
+            {FEATURES_FICHES.map(({ icon, key }, i) => (
+              <Reveal key={key} delay={i + 1}>
                 <div className="sk-feature">
                   <div className="sk-feature__icon">{icon}</div>
-                  <div className="sk-feature__title">{title}</div>
-                  <div className="sk-feature__desc">{desc}</div>
+                  <div className="sk-feature__title">{t(`landing.fiches.${key}Title`)}</div>
+                  <div className="sk-feature__desc">{t(`landing.fiches.${key}Desc`)}</div>
                 </div>
               </Reveal>
             ))}
@@ -336,19 +341,19 @@ export default function LandingPage() {
       <section id="multi" className="sk-section sk-section--alt">
         <div className="sk-section__inner">
           <Reveal>
-            <div className="sk-section__eyebrow">Multi-sites</div>
-            <h2 className="sk-section__title">Une plateforme, tous vos restaurants</h2>
+            <div className="sk-section__eyebrow">{t('landing.multi.eyebrow')}</div>
+            <h2 className="sk-section__title">{t('landing.multi.title')}</h2>
             <p className="sk-section__desc">
-              Chaque établissement dispose de son espace isolé, son branding, ses modules Cuisine et Bar, et ses équipes. Pilotez tout depuis un seul compte.
+              {t('landing.multi.desc')}
             </p>
           </Reveal>
           <div className="sk-features">
-            {FEATURES_MULTI.map(({ icon, title, desc }, i) => (
-              <Reveal key={title} delay={i + 1}>
+            {FEATURES_MULTI.map(({ icon, key }, i) => (
+              <Reveal key={key} delay={i + 1}>
                 <div className="sk-feature">
                   <div className="sk-feature__icon">{icon}</div>
-                  <div className="sk-feature__title">{title}</div>
-                  <div className="sk-feature__desc">{desc}</div>
+                  <div className="sk-feature__title">{t(`landing.multi.${key}Title`)}</div>
+                  <div className="sk-feature__desc">{t(`landing.multi.${key}Desc`)}</div>
                 </div>
               </Reveal>
             ))}
@@ -365,9 +370,9 @@ export default function LandingPage() {
       <section id="contact" className="sk-cta">
         <Reveal>
           <div className="sk-cta__inner">
-            <h2 className="sk-cta__title">Prêt à maîtriser vos coûts ?</h2>
+            <h2 className="sk-cta__title">{t('landing.cta.title')}</h2>
             <p className="sk-cta__desc">
-              Démo personnalisée en 15 minutes. Remplissez le formulaire, on vous recontacte sous 24h.
+              {t('landing.cta.desc')}
             </p>
             <DemoForm />
           </div>
@@ -380,29 +385,29 @@ export default function LandingPage() {
           <div className="sk-footer__brand">
             <Logo height={28} couleur="#6366F1" />
             <p className="sk-footer__brand-desc">
-              La plateforme de gestion des fiches techniques pour les professionnels de la restauration.
+              {t('landing.footer.brandDesc')}
             </p>
           </div>
           <div>
-            <div className="sk-footer__col-title">Produit</div>
-            <a className="sk-footer__link" href="#features" onClick={e => { e.preventDefault(); scrollTo('features') }}>Fonctionnalités</a>
-            <a className="sk-footer__link" href="#features" onClick={e => { e.preventDefault(); scrollTo('features') }}>Food cost</a>
-            <a className="sk-footer__link" href="#multi" onClick={e => { e.preventDefault(); scrollTo('multi') }}>Multi-sites</a>
+            <div className="sk-footer__col-title">{t('landing.footer.product')}</div>
+            <a className="sk-footer__link" href="#features" onClick={e => { e.preventDefault(); scrollTo('features') }}>{t('landing.footer.features')}</a>
+            <a className="sk-footer__link" href="#features" onClick={e => { e.preventDefault(); scrollTo('features') }}>{t('landing.footer.foodCost')}</a>
+            <a className="sk-footer__link" href="#multi" onClick={e => { e.preventDefault(); scrollTo('multi') }}>{t('landing.footer.multiSite')}</a>
           </div>
           <div>
-            <div className="sk-footer__col-title">Légal</div>
-            <a className="sk-footer__link" href="/cgu">CGU</a>
-            <a className="sk-footer__link" href="/mentions-legales">Mentions légales</a>
-            <a className="sk-footer__link" href="/politique-confidentialite">Confidentialité</a>
+            <div className="sk-footer__col-title">{t('landing.footer.legal')}</div>
+            <a className="sk-footer__link" href="/cgu">{t('landing.footer.cgu')}</a>
+            <a className="sk-footer__link" href="/mentions-legales">{t('landing.footer.legalNotice')}</a>
+            <a className="sk-footer__link" href="/politique-confidentialite">{t('landing.footer.privacy')}</a>
           </div>
           <div>
-            <div className="sk-footer__col-title">Contact</div>
+            <div className="sk-footer__col-title">{t('landing.footer.contact')}</div>
             <a className="sk-footer__link" href="mailto:contact@skalcook.fr">contact@skalcook.fr</a>
-            <a className="sk-footer__link" href="#contact" onClick={e => { e.preventDefault(); scrollTo('contact') }}>Demander une démo</a>
+            <a className="sk-footer__link" href="#contact" onClick={e => { e.preventDefault(); scrollTo('contact') }}>{t('landing.footer.demo')}</a>
           </div>
         </div>
         <div className="sk-footer__bottom">
-          © {new Date().getFullYear()} Skalcook — Tous droits réservés
+          © {new Date().getFullYear()} Skalcook — {t('landing.footer.rights')}
         </div>
       </footer>
     </div>
