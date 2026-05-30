@@ -21,6 +21,16 @@ const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'contact@skalcook.com'
 // Empty string -> null pour les champs optionnels.
 const blankToNull = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? null : v)
 
+// Échappe les champs prospect avant interpolation dans le HTML des emails
+// (Zod valide type/longueur mais pas le contenu — évite l'injection HTML/phishing).
+const esc = (v: unknown): string =>
+  String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
 const prospectSchema = z.object({
   nom:                z.string().min(1, 'Nom requis').max(255),
   email:              z.string().email('Email invalide').max(255),
@@ -75,12 +85,12 @@ export const POST = apiHandler({
             <div style="background:#FFFFFF;padding:28px;border:1px solid #E4E4E7;border-top:none;border-radius:0 0 12px 12px">
               <h2 style="font-size:18px;font-weight:600;margin:0 0 20px">Demande de démo</h2>
               <table style="width:100%;border-collapse:collapse;font-size:14px">
-                <tr><td style="padding:8px 0;color:#71717A;width:140px">Nom</td><td style="padding:8px 0;font-weight:500">${data.nom}</td></tr>
-                <tr><td style="padding:8px 0;color:#71717A">Email</td><td style="padding:8px 0"><a href="mailto:${data.email}" style="color:#6366F1">${data.email}</a></td></tr>
-                ${data.telephone ? `<tr><td style="padding:8px 0;color:#71717A">Téléphone</td><td style="padding:8px 0">${data.telephone}</td></tr>` : ''}
-                ${data.nom_etablissement ? `<tr><td style="padding:8px 0;color:#71717A">Établissement</td><td style="padding:8px 0">${data.nom_etablissement}</td></tr>` : ''}
-                <tr><td style="padding:8px 0;color:#71717A">Nb établissements</td><td style="padding:8px 0">${data.nb_etablissements || 1}</td></tr>
-                ${data.message ? `<tr><td style="padding:8px 0;color:#71717A;vertical-align:top">Message</td><td style="padding:8px 0">${data.message}</td></tr>` : ''}
+                <tr><td style="padding:8px 0;color:#71717A;width:140px">Nom</td><td style="padding:8px 0;font-weight:500">${esc(data.nom)}</td></tr>
+                <tr><td style="padding:8px 0;color:#71717A">Email</td><td style="padding:8px 0"><a href="mailto:${esc(data.email)}" style="color:#6366F1">${esc(data.email)}</a></td></tr>
+                ${data.telephone ? `<tr><td style="padding:8px 0;color:#71717A">Téléphone</td><td style="padding:8px 0">${esc(data.telephone)}</td></tr>` : ''}
+                ${data.nom_etablissement ? `<tr><td style="padding:8px 0;color:#71717A">Établissement</td><td style="padding:8px 0">${esc(data.nom_etablissement)}</td></tr>` : ''}
+                <tr><td style="padding:8px 0;color:#71717A">Nb établissements</td><td style="padding:8px 0">${esc(data.nb_etablissements || 1)}</td></tr>
+                ${data.message ? `<tr><td style="padding:8px 0;color:#71717A;vertical-align:top">Message</td><td style="padding:8px 0">${esc(data.message)}</td></tr>` : ''}
               </table>
               <div style="margin-top:24px;padding-top:16px;border-top:1px solid #E4E4E7">
                 <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://app.skalcook.com'}/superadmin/prospects"
@@ -112,7 +122,7 @@ export const POST = apiHandler({
               <span style="color:#6366F1;font-size:24px;font-weight:700">Skalcook</span>
             </div>
             <div style="background:#FFFFFF;padding:32px;border:1px solid #E4E4E7;border-top:none;border-radius:0 0 12px 12px">
-              <h1 style="font-size:22px;font-weight:700;margin:0 0 8px;color:#18181B">Merci ${prenom} !</h1>
+              <h1 style="font-size:22px;font-weight:700;margin:0 0 8px;color:#18181B">Merci ${esc(prenom)} !</h1>
               <p style="font-size:15px;color:#71717A;margin:0 0 24px">Nous avons bien reçu votre demande de démonstration.</p>
 
               <div style="background:#F4F4F5;border-radius:10px;padding:20px 24px;margin-bottom:24px">
