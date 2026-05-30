@@ -196,6 +196,12 @@ export default function FichesList({ section = 'cuisine' }) {
             border: `0.5px solid ${showArchives ? accent : c.bordure}`, background: showArchives ? accentClair : c.blanc,
             color: showArchives ? accent : c.texteMuted, fontWeight: showArchives ? '500' : '400', whiteSpace: 'nowrap'
           }}>📦 {showArchives ? 'Voir actives' : 'Voir archives'}</button>
+          {section === 'cuisine' && role === 'admin' && (
+            <button onClick={() => router.push('/fiches/import')} style={{
+              padding: '10px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer',
+              border: `0.5px solid ${c.bordure}`, background: c.blanc, color: c.texteMuted, whiteSpace: 'nowrap'
+            }}>📊 Importer Excel</button>
+          )}
           {peutModifier && fiches.length > 0 && (
             <button onClick={() => { setModeArchive(!modeArchive); setSelection([]) }} style={{
               padding: '10px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer',
