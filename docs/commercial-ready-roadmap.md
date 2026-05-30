@@ -93,13 +93,15 @@
 
 ## Plan d'action recommandé (ordre)
 
-1. 🔴 **Cloisonnement rôles bar/cuisine** — `lib/apiGuards.js` + nouvelle migration RLS. *(point de départ)*
-2. 🟠 **Guard sur `avis-response`** — `app/api/avis-response/route.ts` (rapide, stoppe le risque financier).
-3. 🔴 **Import Excel des fiches** — nouvelle route + UI (la feature qui débloque la vente).
-4. 🟠 **Upgrade `xlsx` + CSP stricte** — sécurité.
-5. 🟠 **Batch/transaction sur les imports** — robustesse.
-6. 🟡 **Design System** : étendre `components/ui/`, migrer les pires `page.js`, hex → tokens.
-7. ⚪ **Cleanup** code mort + `select('*')` ciblés + `next/image`.
+1. ✅ **Cloisonnement rôles bar/cuisine** — migration RLS `20260530160000` (helpers `user_can_read/write_section`). Appliqué prod.
+2. ✅ **Guard sur `avis-response`** — guard `authenticated` ajouté (`lib/apiGuards.js` + `apiHandler.ts`), page `/avis` envoie le Bearer. Risque Denial-of-Wallet fermé.
+3. ✅ **Import Excel des fiches** — route batch `app/api/import-fiches/route.ts` + UI `ImportFichesView.jsx` + entrée liste cuisine.
+4. ✅ **Upgrade `xlsx` 0.18.5 → 0.20.3** (patch CDN SheetJS, CVE résolue) **+ CSP unique** (doublon `next.config.mjs` supprimé).
+5. ✅ **Batch sur l'import ingrédients** — `ImportView.jsx` : 1 SELECT + inserts/upserts batchés (au lieu de ~600 requêtes). ⏳ Reste : transactionnalité de `import-data` (nécessite un RPC SQL) + limite de payload.
+6. 🟡 **Design System** : étendre `components/ui/`, migrer les pires `page.js`, hex → tokens. *(non commencé)*
+7. ⏳ **Cleanup** : 3 composants morts supprimés (DateSelector, StatsCards, FicheFormShared). Reste `select('*')` ciblés + `next/image`.
+
+> Note : avis-response **ne sera pas commercialisé** (décision produit) mais reste sécurisé contre le DoW. `marges/helpers.js` n'était PAS du code mort (utilisé par SalesTable/ConsoTable) — l'audit se trompait.
 
 ---
 
