@@ -1,18 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  async headers() {
-    return [
-      {
-        source: '/(.*)',
-        headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: "frame-src 'self' blob: https://*.supabase.co;",
-          },
-        ],
-      },
-    ]
-  },
+  // La CSP unique est définie dans proxy.ts (middleware). Ne PAS en ajouter
+  // une seconde ici : deux en-têtes CSP s'appliquent en intersection et se
+  // neutralisent (ex. frame-src supabase.co vs vercel.live → les deux bloqués).
   async rewrites() {
     return [
       // Versionnement API : /api/v1/* → /api/*
