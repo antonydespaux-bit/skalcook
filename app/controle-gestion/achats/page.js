@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useTranslation } from 'react-i18next'
 import * as XLSX from 'xlsx'
 import { supabase, getClientId } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
@@ -15,14 +16,14 @@ function formatEuro(n) {
   return `${Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
 }
 
-function formatDate(s) {
+function formatDate(s, locale = 'fr') {
   if (!s) return '—'
-  return new Date(s).toLocaleDateString('fr-FR')
+  return new Date(s).toLocaleDateString(locale)
 }
 
 // Cellule d'en-tête cliquable pour trier sur la colonne `col`. Affiche un
 // indicateur visuel (▲ asc, ▼ desc, ↕ inactif) à droite du libellé.
-function SortHeader({ col, label, baseStyle, sortBy, sortDir, onSort, c, right = false }) {
+function SortHeader({ col, label, baseStyle, sortBy, sortDir, onSort, c, right = false, titleText }) {
   const active = sortBy === col
   return (
     <th
@@ -33,7 +34,7 @@ function SortHeader({ col, label, baseStyle, sortBy, sortDir, onSort, c, right =
         userSelect: 'none',
         color: active ? c.texte : baseStyle.color,
       }}
-      title={`Trier par ${label.toLowerCase()}`}
+      title={titleText || `Trier par ${label.toLowerCase()}`}
     >
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: right ? 'flex-end' : 'flex-start', width: '100%' }}>
         {label}
@@ -52,9 +53,9 @@ const STATUTS_DEFAUT = ['bl', 'facture', 'avoir']
 
 // Sections affichables. "tout" = vue mixte cuisine + bar (avec badge bar).
 const SECTION_OPTIONS = [
-  { k: 'tout',    label: 'Tout' },
-  { k: 'cuisine', label: 'Cuisine' },
-  { k: 'bar',     label: 'Bar' },
+  { k: 'tout',    labelKey: 'cgAchats.list.sectionAll' },
+  { k: 'cuisine', labelKey: 'cgAchats.list.sectionCuisine' },
+  { k: 'bar',     labelKey: 'cgAchats.list.sectionBar' },
 ]
 
 export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
@@ -62,6 +63,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
   const searchParams = useSearchParams()
   const isMobile = useIsMobile()
   const { c } = useTheme()
+  const { t, i18n } = useTranslation()
 
   const { role, loading: roleLoading } = useRole()
   const [authReady, setAuthReady] = useState(false)
@@ -204,7 +206,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
     setError('')
     try {
       if (facturesFiltrees.length === 0) {
-        setError('Aucune facture à exporter.')
+        setError(t('cgAchats.list.exportEmptyError'))
         return
       }
       // Pied de facture : 1 ligne = 1 facture, avec HT / TVA / TTC.
@@ -214,13 +216,13 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
         const ht  = Number(f.total_ht) || 0
         const tva = tvaByFacture[f.id] || 0
         return {
-          'N° facture':   f.numero_facture || '',
-          'Date':         f.date_facture || '',
-          'Fournisseur':  f.fournisseur || '',
-          'Statut':       statutLabel(f.statut),
-          'HT':           ht,
-          'TVA':          tva,
-          'TTC':          ht + tva,
+          [t('cgAchats.list.exportColNumero')]:      f.numero_facture || '',
+          [t('cgAchats.list.exportColDate')]:        f.date_facture || '',
+          [t('cgAchats.list.exportColFournisseur')]: f.fournisseur || '',
+          [t('cgAchats.list.exportColStatut')]:      statutLabel(f.statut),
+          [t('cgAchats.list.exportColHt')]:          ht,
+          [t('cgAchats.list.exportColTva')]:         tva,
+          [t('cgAchats.list.exportColTtc')]:         ht + tva,
         }
       })
 
@@ -230,11 +232,11 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
         { wch: 12 }, { wch: 12 }, { wch: 12 },
       ]
       const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Factures')
+      XLSX.utils.book_append_sheet(wb, ws, t('cgAchats.list.exportSheetName'))
       const today = new Date().toISOString().slice(0, 10)
       XLSX.writeFile(wb, `achats_${today}.xlsx`)
     } catch (err) {
-      setError(`Export impossible : ${err.message}`)
+      setError(t('cgAchats.list.exportError', { message: err.message }))
     } finally {
       setExporting(false)
     }
@@ -279,7 +281,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
       })
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
-        throw new Error(j.error || j.message || 'Erreur lors de la fusion')
+        throw new Error(j.error || j.message || t('cgAchats.list.fusionError'))
       }
       const result = await res.json()
       setFusionModalOpen(false)
@@ -296,7 +298,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
 
   const handleDelete = async (f, e) => {
     e.stopPropagation()
-    if (!window.confirm(`Supprimer la facture ${f.numero_facture || f.fournisseur} ? Cette action est irréversible.`)) return
+    if (!window.confirm(t('cgAchats.list.deleteConfirm', { ref: f.numero_facture || f.fournisseur }))) return
     setDeleting(f.id)
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -305,7 +307,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
       if (res.ok) await loadFactures()
-      else setError('Erreur lors de la suppression.')
+      else setError(t('cgAchats.list.deleteError'))
     } finally {
       setDeleting(null)
     }
@@ -314,7 +316,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
   if (!authReady) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
-        Chargement…
+        {t('cgAchats.common.loading')}
       </div>
     )
   }
@@ -458,10 +460,10 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
           <div>
             <h1 style={{ margin: '0 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 600, color: c.texte }}>
-              Achats
+              {t('cgAchats.list.title')}
             </h1>
             <p style={{ margin: 0, fontSize: 14, color: c.texteMuted }}>
-              Historique des factures importées
+              {t('cgAchats.list.subtitle')}
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -472,22 +474,22 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                 border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
               }}
             >
-              🏢 Fournisseurs
+              {t('cgAchats.list.suppliers')}
             </button>
             <button
               onClick={() => router.push('/controle-gestion/mercuriale')}
-              title="Comparer les prix d'achat d'un même article chez plusieurs fournisseurs"
+              title={t('cgAchats.list.priceComparisonTitle')}
               style={{
                 padding: '8px 14px', borderRadius: 8, fontSize: 13,
                 border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
               }}
             >
-              📊 Comparaison prix
+              {t('cgAchats.list.priceComparison')}
             </button>
             <button
               onClick={handleExport}
               disabled={exporting || facturesFiltrees.length === 0}
-              title={facturesFiltrees.length === 0 ? 'Aucune facture à exporter' : 'Exporter les factures filtrées en Excel'}
+              title={facturesFiltrees.length === 0 ? t('cgAchats.list.exportEmptyTitle') : t('cgAchats.list.exportTitle')}
               style={{
                 padding: '8px 14px', borderRadius: 8, fontSize: 13,
                 border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte,
@@ -495,7 +497,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                 opacity: exporting || facturesFiltrees.length === 0 ? 0.6 : 1,
               }}
             >
-              {exporting ? 'Export…' : '⬇ Exporter Excel'}
+              {exporting ? t('cgAchats.list.exporting') : t('cgAchats.list.exportExcel')}
             </button>
             {role === 'admin' && (() => {
               // Le filtre section sert aussi d'indicateur pour les boutons d'import :
@@ -505,7 +507,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
               const targetSection = sectionFiltre === 'bar' ? 'bar' : 'cuisine'
               const sectionParam = targetSection === 'bar' ? '&section=bar' : ''
               const sectionParamFirst = targetSection === 'bar' ? '?section=bar' : ''
-              const barLabel = targetSection === 'bar' ? ' (bar)' : ''
+              const barLabel = targetSection === 'bar' ? t('cgAchats.list.barLabel') : ''
               return (
                 <>
                   <button
@@ -515,17 +517,17 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                       border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
                     }}
                   >
-                    ✏️ Saisir manuellement{barLabel}
+                    {t('cgAchats.list.manualEntry', { barLabel })}
                   </button>
                   <button
                     onClick={() => router.push(`/controle-gestion/achats/import-excel${sectionParamFirst}`)}
-                    title="Import en masse depuis un Excel (pied de facture)"
+                    title={t('cgAchats.list.importExcelTitle')}
                     style={{
                       padding: '8px 14px', borderRadius: 8, fontSize: 13,
                       border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
                     }}
                   >
-                    📊 Importer Excel{barLabel}
+                    {t('cgAchats.list.importExcel', { barLabel })}
                   </button>
                   <button
                     onClick={() => router.push(`/controle-gestion/achats/import${sectionParamFirst}`)}
@@ -534,7 +536,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                       border: 'none', background: c.accent, color: c.texte, cursor: 'pointer', fontWeight: 500,
                     }}
                   >
-                    + Importer{barLabel} (OCR)
+                    {t('cgAchats.list.importOcr', { barLabel })}
                   </button>
                 </>
               )
@@ -545,7 +547,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
         {/* Barre de recherche */}
         <input
           type="search"
-          placeholder="Rechercher par fournisseur ou n° facture…"
+          placeholder={t('cgAchats.list.searchPlaceholder')}
           value={recherche}
           onChange={(e) => setRecherche(e.target.value)}
           style={{
@@ -559,7 +561,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
         {/* Filtre par date */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 16 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: c.texteMuted }}>
-            Du
+            {t('cgAchats.list.from')}
             <input
               type="date"
               value={dateDebut}
@@ -568,7 +570,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
             />
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: c.texteMuted }}>
-            au
+            {t('cgAchats.list.to')}
             <input
               type="date"
               value={dateFin}
@@ -577,11 +579,11 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
             />
           </label>
           {[
-            { k: 'mois',           label: 'Ce mois' },
-            { k: 'mois-precedent', label: 'Mois préc.' },
-            { k: '30j',            label: '30 j' },
-            { k: '90j',            label: '90 j' },
-            { k: 'annee',          label: 'Année' },
+            { k: 'mois',           label: t('cgAchats.list.presetMonth') },
+            { k: 'mois-precedent', label: t('cgAchats.list.presetPrevMonth') },
+            { k: '30j',            label: t('cgAchats.list.preset30d') },
+            { k: '90j',            label: t('cgAchats.list.preset90d') },
+            { k: 'annee',          label: t('cgAchats.list.presetYear') },
           ].map((p) => (
             <button
               key={p.k}
@@ -596,18 +598,18 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
               onClick={() => applyPreset('clear')}
               style={{ padding: '6px 10px', borderRadius: 8, fontSize: 12, border: `1px solid ${c.bordure}`, background: 'transparent', color: c.texteMuted, cursor: 'pointer' }}
             >
-              ✕ Effacer
+              {t('cgAchats.list.clear')}
             </button>
           )}
         </div>
 
         {/* Filtre par statut */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <span style={{ fontSize: 12, color: c.texteMuted }}>Statut</span>
+          <span style={{ fontSize: 12, color: c.texteMuted }}>{t('cgAchats.list.statusLabel')}</span>
           {[
-            { k: 'bl',      label: 'BL' },
-            { k: 'facture', label: 'Factures' },
-            { k: 'avoir',   label: 'Avoirs' },
+            { k: 'bl',      label: t('cgAchats.list.statusBl') },
+            { k: 'facture', label: t('cgAchats.list.statusFactures') },
+            { k: 'avoir',   label: t('cgAchats.list.statusAvoirs') },
           ].map((p) => {
             const actif = statutsActifs.includes(p.k)
             return (
@@ -629,7 +631,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
 
         {/* Filtre par section (cuisine / bar / tout) */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <span style={{ fontSize: 12, color: c.texteMuted }}>Section</span>
+          <span style={{ fontSize: 12, color: c.texteMuted }}>{t('cgAchats.list.sectionLabel')}</span>
           {SECTION_OPTIONS.map((p) => {
             const actif = sectionFiltre === p.k
             return (
@@ -643,7 +645,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                   color: c.texte, cursor: 'pointer',
                 }}
               >
-                {p.label}
+                {t(p.labelKey)}
               </button>
             )
           })}
@@ -651,40 +653,40 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
 
         {error && <p style={{ color: '#B91C1C', fontSize: 14, marginBottom: 16 }}>{error}</p>}
 
-        {loading && <p style={{ color: c.texteMuted, fontSize: 14 }}>Chargement…</p>}
+        {loading && <p style={{ color: c.texteMuted, fontSize: 14 }}>{t('cgAchats.common.loading')}</p>}
 
         {!loading && !error && (
           <>
             {facturesFiltrees.length === 0 ? (
               <p style={{ color: c.texteMuted, fontSize: 14 }}>
                 {factures.length === 0
-                  ? 'Aucune facture importée.'
-                  : 'Aucune facture ne correspond à la recherche.'}
+                  ? t('cgAchats.list.noInvoices')
+                  : t('cgAchats.list.noMatch')}
               </p>
             ) : isMobile ? (
               /* ── Vue cartes mobile ── */
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {/* Sélecteur de tri (équivalent mobile des en-têtes cliquables desktop) */}
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: c.texteMuted }}>
-                  <span>Trier par</span>
+                  <span>{t('cgAchats.list.sortBy')}</span>
                   <select
                     value={sortBy}
                     onChange={e => { setSortBy(e.target.value); setSortDir(DEFAULT_SORT_DIR[e.target.value] || 'asc') }}
                     style={{ padding: '6px 8px', borderRadius: 6, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 12 }}
                   >
-                    <option value="fournisseur">Fournisseur</option>
-                    <option value="numero_facture">N° de facture</option>
-                    <option value="date_facture">Date</option>
-                    <option value="statut">Statut</option>
-                    <option value="ht">Montant HT</option>
-                    <option value="ttc">Montant TTC</option>
+                    <option value="fournisseur">{t('cgAchats.list.sortFournisseur')}</option>
+                    <option value="numero_facture">{t('cgAchats.list.sortNumero')}</option>
+                    <option value="date_facture">{t('cgAchats.list.sortDate')}</option>
+                    <option value="statut">{t('cgAchats.list.sortStatut')}</option>
+                    <option value="ht">{t('cgAchats.list.sortHt')}</option>
+                    <option value="ttc">{t('cgAchats.list.sortTtc')}</option>
                   </select>
                   <button
                     onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-                    title={sortDir === 'asc' ? 'Croissant (A→Z, 0→9)' : 'Décroissant (Z→A, 9→0)'}
+                    title={sortDir === 'asc' ? t('cgAchats.list.sortAscTitle') : t('cgAchats.list.sortDescTitle')}
                     style={{ padding: '6px 10px', borderRadius: 6, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, fontSize: 12, cursor: 'pointer' }}
                   >
-                    {sortDir === 'asc' ? '▲ A-Z' : '▼ Z-A'}
+                    {sortDir === 'asc' ? t('cgAchats.list.sortAsc') : t('cgAchats.list.sortDesc')}
                   </button>
                 </div>
                 {facturesAffichees.map((f) => {
@@ -715,7 +717,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                               onChange={(e) => toggleSelect(f.id, e)}
                               onClick={(e) => e.stopPropagation()}
                               style={{ cursor: 'pointer', width: 18, height: 18 }}
-                              aria-label={`Sélectionner BL ${f.numero_facture || ''}`}
+                              aria-label={t('cgAchats.list.selectBlAria', { numero: f.numero_facture || '' })}
                             />
                           )}
                           <span style={{ fontSize: 15, fontWeight: 600, color: c.texte, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -724,21 +726,21 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                           {f.section === 'bar' && (
-                            <span style={SECTION_BAR_BADGE_STYLE}>Bar</span>
+                            <span style={SECTION_BAR_BADGE_STYLE}>{t('cgAchats.list.barBadge')}</span>
                           )}
                           <span style={badgeStyle}>{statutLabel(f.statut)}</span>
                         </div>
                       </div>
                       {/* Ligne 2 : n° facture · date */}
                       <div style={{ fontSize: 13, color: c.texteMuted, marginBottom: 8 }}>
-                        {f.numero_facture ? `N° ${f.numero_facture}` : '—'}{f.date_facture ? ` · ${formatDate(f.date_facture)}` : ''}
+                        {f.numero_facture ? t('cgAchats.detail.numberPrefix', { numero: f.numero_facture }) : '—'}{f.date_facture ? ` · ${formatDate(f.date_facture, i18n.language || 'fr')}` : ''}
                       </div>
                       {/* Ligne 3 : articles + montants HT/TVA/TTC */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 8 }}>
-                        <span style={{ fontSize: 13, color: c.texteMuted }}>{nb} article{nb !== 1 ? 's' : ''}</span>
+                        <span style={{ fontSize: 13, color: c.texteMuted }}>{t('cgAchats.list.articles', { count: nb })}</span>
                         <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                          <div style={{ fontSize: 12, color: c.texteMuted }}>HT {formatEuro(ht)} · TVA {formatEuro(tva)}</div>
-                          <div style={{ fontSize: 16, fontWeight: 600, color: c.texte }}>{formatEuro(ttc)} <span style={{ fontSize: 11, color: c.texteMuted, fontWeight: 400 }}>TTC</span></div>
+                          <div style={{ fontSize: 12, color: c.texteMuted }}>{t('cgAchats.list.htTva', { ht: formatEuro(ht), tva: formatEuro(tva) })}</div>
+                          <div style={{ fontSize: 16, fontWeight: 600, color: c.texte }}>{formatEuro(ttc)} <span style={{ fontSize: 11, color: c.texteMuted, fontWeight: 400 }}>{t('cgAchats.list.ttcSuffix')}</span></div>
                         </div>
                       </div>
                       {role === 'admin' && (
@@ -748,7 +750,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                             disabled={deleting === f.id}
                             style={{ background: 'none', border: `1px solid ${c.bordure}`, borderRadius: 6, padding: '4px 10px', fontSize: 12, color: '#B91C1C', cursor: 'pointer' }}
                           >
-                            {deleting === f.id ? '…' : 'Supprimer'}
+                            {deleting === f.id ? t('cgAchats.common.deleting') : t('cgAchats.common.delete')}
                           </button>
                         </div>
                       )}
@@ -757,10 +759,10 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                 })}
                 {/* Total mobile */}
                 <div style={{ background: c.fond, borderRadius: 10, border: `0.5px solid ${c.bordure}`, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 8 }}>
-                  <span style={{ fontSize: 13, color: c.texteMuted }}>{facturesFiltrees.length} facture{facturesFiltrees.length !== 1 ? 's' : ''}</span>
+                  <span style={{ fontSize: 13, color: c.texteMuted }}>{t('cgAchats.list.invoices', { count: facturesFiltrees.length })}</span>
                   <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    <div style={{ fontSize: 12, color: c.texteMuted }}>HT {formatEuro(totalHT)} · TVA {formatEuro(totalTVA)}</div>
-                    <div style={{ fontSize: 16, fontWeight: 600, color: c.texte }}>{formatEuro(totalTTC)} <span style={{ fontSize: 11, color: c.texteMuted, fontWeight: 400 }}>TTC</span></div>
+                    <div style={{ fontSize: 12, color: c.texteMuted }}>{t('cgAchats.list.htTva', { ht: formatEuro(totalHT), tva: formatEuro(totalTVA) })}</div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: c.texte }}>{formatEuro(totalTTC)} <span style={{ fontSize: 11, color: c.texteMuted, fontWeight: 400 }}>{t('cgAchats.list.ttcSuffix')}</span></div>
                   </div>
                 </div>
               </div>
@@ -771,15 +773,15 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: c.fond }}>
-                        {role === 'admin' && <th style={{ ...th, width: 32, padding: '11px 8px' }} aria-label="Sélection" />}
-                        <SortHeader col="fournisseur"    label="Fournisseur" baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
-                        <SortHeader col="numero_facture" label="N° Facture"  baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
-                        <SortHeader col="date_facture"   label="Date"        baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
-                        <SortHeader col="statut"         label="Statut"      baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
-                        <SortHeader col="articles"       label="Articles"    baseStyle={thR} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} right />
-                        <SortHeader col="ht"             label="HT"          baseStyle={thR} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} right />
-                        <SortHeader col="tva"            label="TVA"         baseStyle={thR} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} right />
-                        <SortHeader col="ttc"            label="TTC"         baseStyle={thR} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} right />
+                        {role === 'admin' && <th style={{ ...th, width: 32, padding: '11px 8px' }} aria-label={t('cgAchats.list.selectionAria')} />}
+                        <SortHeader col="fournisseur"    label={t('cgAchats.list.colFournisseur')} titleText={t('cgAchats.list.sortHeaderTitle', { label: t('cgAchats.list.colFournisseur') })} baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
+                        <SortHeader col="numero_facture" label={t('cgAchats.list.colNumero')} titleText={t('cgAchats.list.sortHeaderTitle', { label: t('cgAchats.list.colNumero') })} baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
+                        <SortHeader col="date_facture"   label={t('cgAchats.list.colDate')} titleText={t('cgAchats.list.sortHeaderTitle', { label: t('cgAchats.list.colDate') })} baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
+                        <SortHeader col="statut"         label={t('cgAchats.list.colStatut')} titleText={t('cgAchats.list.sortHeaderTitle', { label: t('cgAchats.list.colStatut') })} baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
+                        <SortHeader col="articles"       label={t('cgAchats.list.colArticles')} titleText={t('cgAchats.list.sortHeaderTitle', { label: t('cgAchats.list.colArticles') })} baseStyle={thR} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} right />
+                        <SortHeader col="ht"             label={t('cgAchats.list.colHt')} titleText={t('cgAchats.list.sortHeaderTitle', { label: t('cgAchats.list.colHt') })} baseStyle={thR} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} right />
+                        <SortHeader col="tva"            label={t('cgAchats.list.colTva')} titleText={t('cgAchats.list.sortHeaderTitle', { label: t('cgAchats.list.colTva') })} baseStyle={thR} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} right />
+                        <SortHeader col="ttc"            label={t('cgAchats.list.colTtc')} titleText={t('cgAchats.list.sortHeaderTitle', { label: t('cgAchats.list.colTtc') })} baseStyle={thR} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} right />
                         {role === 'admin' && <th style={th} />}
                       </tr>
                     </thead>
@@ -811,7 +813,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                                     checked={isSelected}
                                     onChange={(e) => toggleSelect(f.id, e)}
                                     style={{ cursor: 'pointer', width: 16, height: 16 }}
-                                    aria-label={`Sélectionner BL ${f.numero_facture || ''}`}
+                                    aria-label={t('cgAchats.list.selectBlAria', { numero: f.numero_facture || '' })}
                                   />
                                 ) : null}
                               </td>
@@ -820,12 +822,12 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                               {f.fournisseur || <span style={{ color: c.texteMuted }}>—</span>}
                             </td>
                             <td style={tdM}>{f.numero_facture || '—'}</td>
-                            <td style={tdM}>{formatDate(f.date_facture)}</td>
+                            <td style={tdM}>{formatDate(f.date_facture, i18n.language || 'fr')}</td>
                             <td style={td}>
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                                 <span style={badgeStyleFor(f.statut)}>{statutLabel(f.statut)}</span>
                                 {f.section === 'bar' && (
-                                  <span style={SECTION_BAR_BADGE_STYLE}>Bar</span>
+                                  <span style={SECTION_BAR_BADGE_STYLE}>{t('cgAchats.list.barBadge')}</span>
                                 )}
                               </span>
                             </td>
@@ -840,7 +842,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                                   disabled={deleting === f.id}
                                   style={{ background: 'none', border: `1px solid ${c.bordure}`, borderRadius: 6, padding: '4px 10px', fontSize: 12, color: '#B91C1C', cursor: 'pointer' }}
                                 >
-                                  {deleting === f.id ? '…' : 'Supprimer'}
+                                  {deleting === f.id ? t('cgAchats.common.deleting') : t('cgAchats.common.delete')}
                                 </button>
                               </td>
                             )}
@@ -852,7 +854,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                       <tr style={{ fontWeight: 600, background: c.fond }}>
                         {role === 'admin' && <td style={td} />}
                         <td style={{ ...td, color: c.texte }}>
-                          {facturesFiltrees.length} facture{facturesFiltrees.length !== 1 ? 's' : ''}
+                          {t('cgAchats.list.invoices', { count: facturesFiltrees.length })}
                         </td>
                         <td style={td} colSpan={3} />
                         <td style={{ ...tdR, color: c.texte }}>{formatEuro(totalHT)}</td>
@@ -883,7 +885,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: c.texte }}>
-              {selectedBlIds.size} BL sélectionné{selectedBlIds.size > 1 ? 's' : ''}
+              {t('cgAchats.list.blSelected', { count: selectedBlIds.size })}
               {sameFournisseur && selectedBls[0]?.fournisseur && (
                 <span style={{ fontWeight: 400, color: c.texteMuted, marginLeft: 6 }}>
                   — {selectedBls[0].fournisseur}
@@ -892,8 +894,8 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
             </div>
             <div style={{ fontSize: 12, color: c.texteMuted, marginTop: 2 }}>
               {sameFournisseur
-                ? `Total HT : ${formatEuro(selectedTotalHt)} · TVA : ${formatEuro(selectedTotalTva)}`
-                : `⚠ Fournisseurs différents (${selectedFournisseurs.length}) — fusion impossible`}
+                ? t('cgAchats.list.fusionTotals', { ht: formatEuro(selectedTotalHt), tva: formatEuro(selectedTotalTva) })
+                : t('cgAchats.list.fusionDiffSuppliers', { count: selectedFournisseurs.length })}
             </div>
           </div>
           <button
@@ -903,15 +905,15 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
               border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
             }}
           >
-            Annuler
+            {t('cgAchats.common.cancel')}
           </button>
           <button
             onClick={() => setFusionModalOpen(true)}
             disabled={selectedBlIds.size < 2 || !sameFournisseur}
             title={
-              selectedBlIds.size < 2 ? 'Sélectionne au moins 2 BL'
-              : !sameFournisseur ? 'Tous les BL doivent être du même fournisseur'
-              : 'Fusionner les BL sélectionnés en une facture'
+              selectedBlIds.size < 2 ? t('cgAchats.list.fusionDisabledMin')
+              : !sameFournisseur ? t('cgAchats.list.fusionDisabledSuppliers')
+              : t('cgAchats.list.fusionEnabledTitle')
             }
             style={{
               padding: '8px 16px', borderRadius: 8, fontSize: 13,
@@ -922,7 +924,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
               opacity: (selectedBlIds.size < 2 || !sameFournisseur) ? 0.6 : 1,
             }}
           >
-            Fusionner en facture →
+            {t('cgAchats.list.fusionButton')}
           </button>
         </div>
       )}
@@ -948,6 +950,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
 // Pré-rempli avec les sommes des BL sélectionnés. L'utilisateur peut
 // ajuster numero, date, HT et TVA avant validation.
 function FusionModal({ c, isMobile, selectedBls, totalHt, totalTva, onClose, onSubmit, submitting }) {
+  const { t } = useTranslation()
   const [numero, setNumero] = useState('')
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [ht, setHt] = useState(() => Number(totalHt || 0).toFixed(2))
@@ -985,42 +988,42 @@ function FusionModal({ c, isMobile, selectedBls, totalHt, totalTva, onClose, onS
         }}
       >
         <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600, color: c.texte }}>
-          Fusionner {selectedBls.length} BL en facture
+          {t('cgAchats.list.modalTitle', { count: selectedBls.length })}
         </h2>
         <p style={{ margin: '0 0 16px', fontSize: 13, color: c.texteMuted }}>
-          Fournisseur : <strong style={{ color: c.texte }}>{selectedBls[0]?.fournisseur || '—'}</strong><br />
-          Les lignes des BL seront déplacées vers la nouvelle facture, et les BL passeront à zéro.
+          {t('cgAchats.list.modalSupplier')} <strong style={{ color: c.texte }}>{selectedBls[0]?.fournisseur || '—'}</strong><br />
+          {t('cgAchats.list.modalDesc')}
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <label style={{ display: 'block' }}>
-            <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 4 }}>N° facture *</div>
+            <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 4 }}>{t('cgAchats.list.modalNumeroLabel')}</div>
             <input
               type="text" value={numero} onChange={(e) => setNumero(e.target.value)}
-              placeholder="ex: FA-2026-042" required style={input}
+              placeholder={t('cgAchats.list.modalNumeroPlaceholder')} required style={input}
             />
           </label>
           <label style={{ display: 'block' }}>
-            <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 4 }}>Date facture *</div>
+            <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 4 }}>{t('cgAchats.list.modalDateLabel')}</div>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required style={input} />
           </label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
             <label>
-              <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 4 }}>Total HT</div>
+              <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 4 }}>{t('cgAchats.list.modalHtLabel')}</div>
               <input
                 type="number" step="0.01" value={ht}
                 onChange={(e) => setHt(e.target.value)} style={input}
               />
             </label>
             <label>
-              <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 4 }}>Montant TVA</div>
+              <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 4 }}>{t('cgAchats.list.modalTvaLabel')}</div>
               <input
                 type="number" step="0.01" value={tva}
                 onChange={(e) => setTva(e.target.value)} style={input}
               />
             </label>
             <label>
-              <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 4 }}>TTC (auto)</div>
+              <div style={{ fontSize: 12, color: c.texteMuted, marginBottom: 4 }}>{t('cgAchats.list.modalTtcLabel')}</div>
               <input
                 type="text" readOnly value={ttc.toFixed(2)}
                 style={{ ...input, background: c.fond, color: c.texteMuted }}
@@ -1037,7 +1040,7 @@ function FusionModal({ c, isMobile, selectedBls, totalHt, totalTva, onClose, onS
               border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
             }}
           >
-            Annuler
+            {t('cgAchats.common.cancel')}
           </button>
           <button
             type="submit" disabled={submitting || !numero.trim() || !date}
@@ -1048,7 +1051,7 @@ function FusionModal({ c, isMobile, selectedBls, totalHt, totalTva, onClose, onS
               opacity: (submitting || !numero.trim() || !date) ? 0.6 : 1,
             }}
           >
-            {submitting ? 'Création…' : 'Créer la facture'}
+            {submitting ? t('cgAchats.list.modalCreating') : t('cgAchats.list.modalCreate')}
           </button>
         </div>
       </form>

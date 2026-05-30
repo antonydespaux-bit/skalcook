@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
@@ -16,6 +17,7 @@ import { normDesig, todayIso, yesterdayIso, fmtPrix, fmtDelta, fileToBase64, mak
 // ─── Composant principal ─────────────────────────────────────────────────────
 
 export default function AchatsImportPage() {
+  const { t, i18n } = useTranslation()
   const router = useRouter()
   const searchParams = useSearchParams()
   const isManuelMode = searchParams.get('mode') === 'manuel'
@@ -318,7 +320,7 @@ export default function AchatsImportPage() {
         body: JSON.stringify({ fileBase64: base64, mimeType: mime, clientId }),
       })
       const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Erreur extraction')
+      if (!res.ok) throw new Error(result.error || t('cgAchats.import.errExtraction'))
 
       const factures = Array.isArray(result.factures) ? result.factures : []
       setSavedFactureIdxs(new Set())
@@ -338,7 +340,7 @@ export default function AchatsImportPage() {
       setStep('review')
     } catch (err) {
       console.error('Extraction IA échouée :', err)
-      setExtractError(err.message || 'Extraction échouée')
+      setExtractError(err.message || t('cgAchats.import.errExtractFailed'))
       setExtractedFactures(null)
       setLignes([])
       setStep('review')
@@ -366,7 +368,7 @@ export default function AchatsImportPage() {
     if (!selectedFile) return
     const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
     if (!allowed.includes(selectedFile.type)) {
-      setError('Format non supporté. Utilisez JPG, PNG, WebP ou PDF.')
+      setError(t('cgAchats.import.errUnsupportedFormat'))
       return
     }
     // Libérer l'ancienne URL objet si elle existe
@@ -490,7 +492,7 @@ export default function AchatsImportPage() {
         }),
       })
       const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Erreur création ingrédient')
+      if (!res.ok) throw new Error(result.error || t('cgAchats.import.errCreateIngredient'))
 
       const ing = result.ingredient
       // Met à jour le cache local
@@ -564,19 +566,19 @@ export default function AchatsImportPage() {
   }, [handleLinkIngredient])
 
   const handleSave = useCallback(async (forceInsert = false) => {
-    if (!fournisseur.trim()) { setError('Le nom du fournisseur est requis.'); return }
-    if (!dateFacture)        { setError('La date de la facture est requise.'); return }
+    if (!fournisseur.trim()) { setError(t('cgAchats.import.errSupplierRequired')); return }
+    if (!dateFacture)        { setError(t('cgAchats.import.errDateRequired')); return }
     // Ne garde que les lignes avec une désignation non vide (les autres sont des
     // lignes-brouillon que l'utilisateur n'a pas remplies).
     const lignesValides = lignes.filter((l) => l.designation && l.designation.trim())
     if (lignesValides.length === 0) {
-      setError('Ajoutez au moins une ligne avec une désignation avant d\'enregistrer.')
+      setError(t('cgAchats.import.errNeedLine'))
       return
     }
     // Doublon déjà signalé : empêche l'aller-retour inutile au serveur. L'utilisateur
     // doit explicitement cliquer "Importer quand même" (qui appelle handleSave(true)).
     if (duplicateWarning && !forceInsert) {
-      setError(`Cette facture (n° ${numeroFacture}) est déjà en base. Utilisez le bandeau d'avertissement en haut pour annuler ou forcer l'import.`)
+      setError(t('cgAchats.import.errDuplicate', { numero: numeroFacture }))
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
@@ -591,11 +593,7 @@ export default function AchatsImportPage() {
         savedFactureIdxs.size + (savedFactureIdxs.has(currentFactureIdx) ? 0 : 1) >= extractedFactures.length
       if (seraToutSave) {
         const total = extractedFactures.length
-        const ok = window.confirm(
-          `Vous êtes sur le point d'enregistrer la dernière facture restante.\n\n` +
-          `Au total, ${total} facture${total > 1 ? 's' : ''} auront été enregistrées depuis ce PDF.\n\n` +
-          `Confirmer ?`
-        )
+        const ok = window.confirm(t('cgAchats.import.confirmLastInvoice', { count: total }))
         if (!ok) return
       }
     }
@@ -632,15 +630,15 @@ export default function AchatsImportPage() {
           const flat = Object.entries(result.details.fieldErrors)
             .map(([k, v]) => `${k} : ${(v ).join(', ')}`)
             .join(' · ')
-          throw new Error(`${result.error || 'Données invalides'} — ${flat}`)
+          throw new Error(`${result.error || t('cgAchats.import.errInvalidData')} — ${flat}`)
         }
-        throw new Error(result.error || 'Erreur lors de l\'enregistrement.')
+        throw new Error(result.error || t('cgAchats.import.errSaveGeneric'))
       }
 
       setPrixMajCount(result.prix_maj ?? 0)
       // Avertir si l'upload du fichier source a échoué (stockage non bloquant)
       if (result.file_uploaded === false) {
-        window.alert('Facture enregistrée, mais le fichier source n\'a pas pu être stocké. Vous pourrez la consulter sans aperçu PDF/image.')
+        window.alert(t('cgAchats.import.fileNotStored'))
       }
 
       // Mode multi-factures : on marque la courante comme enregistrée et on
@@ -653,7 +651,7 @@ export default function AchatsImportPage() {
 
         // Mémorise le numéro de la facture qu'on vient d'enregistrer pour le
         // flash de succès qui s'affichera sur la facture suivante.
-        const savedNumero = extractedFactures[currentFactureIdx]?.numero_facture || `Facture ${currentFactureIdx + 1}`
+        const savedNumero = extractedFactures[currentFactureIdx]?.numero_facture || t('cgAchats.import.savedFlashFallback', { idx: currentFactureIdx + 1 })
 
         // Cherche la prochaine facture non-save (cyclique : on commence à idx+1)
         let nextIdx = null
@@ -666,7 +664,7 @@ export default function AchatsImportPage() {
           setCurrentFactureIdx(nextIdx)
           loadFactureIntoState(extractedFactures[nextIdx])
           await checkDuplicate(extractedFactures[nextIdx].numero_facture)
-          setLastSavedFlash(`✓ ${savedNumero} enregistrée — ${newSaved.size} / ${extractedFactures.length} factures sauvegardées`)
+          setLastSavedFlash(t('cgAchats.import.savedFlash', { numero: savedNumero, saved: newSaved.size, total: extractedFactures.length }))
           setStep('review')
           return
         }
@@ -675,7 +673,7 @@ export default function AchatsImportPage() {
       router.push('/controle-gestion/achats')
     } catch (err) {
       console.error('handleSave error:', err)
-      setError(err.message || 'Erreur lors de l\'enregistrement.')
+      setError(err.message || t('cgAchats.import.errSaveGeneric'))
       setStep('review')
     }
   }, [clientId, fournisseur, numeroFacture, dateFacture, statut, section, lignes, fileBase64, fileMime, autoCreateMissing, router, tauxTva, montantTvaSaisi, extractedFactures, currentFactureIdx, savedFactureIdxs, loadFactureIntoState, checkDuplicate, duplicateWarning])
@@ -685,7 +683,7 @@ export default function AchatsImportPage() {
   if (!authReady) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
-        Chargement…
+        {t('cgAchats.common.loading')}
       </div>
     )
   }
@@ -739,7 +737,7 @@ export default function AchatsImportPage() {
         <div style={{ marginBottom: 12 }}>
           <BackButton
             fallback={isBarMode ? '/bar/achats' : '/controle-gestion/achats'}
-            label="← Retour aux achats"
+            label={t('cgAchats.common.backToAchats')}
             style={{ background: 'transparent', border: 'none', color: c.texteMuted, fontSize: 13, padding: 0, cursor: 'pointer' }}
           />
         </div>
@@ -748,18 +746,18 @@ export default function AchatsImportPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 28 }}>
           <div>
             <h1 style={{ margin: '0 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 700, color: c.texte, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              {isManuelMode ? 'Saisie manuelle d\'une facture' : 'Importation de factures'}
+              {isManuelMode ? t('cgAchats.import.manualTitle') : t('cgAchats.import.importTitle')}
               {isBarMode && (
                 <span style={{ display: 'inline-block', background: '#F5F3FF', color: '#5B21B6', fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, letterSpacing: 0.3 }}>
-                  BAR
+                  {t('cgAchats.import.barBadge')}
                 </span>
               )}
             </h1>
             <p style={{ margin: 0, fontSize: 14, color: c.texteMuted }}>
               {isManuelMode
-                ? 'Saisissez les lignes une à une — créez les ingrédients manquants à la volée.'
-                : 'Photographiez ou déposez une facture fournisseur — les lignes sont extraites automatiquement.'}
-              {isBarMode && ' Les ingrédients sont rapprochés sur la liste bar et la facture sera exclue du food cost.'}
+                ? t('cgAchats.import.manualSubtitle')
+                : t('cgAchats.import.importSubtitle')}
+              {isBarMode && t('cgAchats.import.barSubtitle')}
             </p>
           </div>
           {!isManuelMode ? (
@@ -771,7 +769,7 @@ export default function AchatsImportPage() {
               }}
               style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}
             >
-              ✏️ Saisir manuellement
+              {t('cgAchats.import.switchToManual')}
             </button>
           ) : (
             <button
@@ -783,7 +781,7 @@ export default function AchatsImportPage() {
               }}
               style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}
             >
-              📷 Importer une photo / PDF
+              {t('cgAchats.import.switchToOcr')}
             </button>
           )}
         </div>
@@ -799,15 +797,15 @@ export default function AchatsImportPage() {
         {duplicateWarning && (
           <div style={{ background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 14, color: '#92400E' }}>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>
-              ⚠️ Cette facture a déjà été importée
+              {t('cgAchats.import.duplicateTitle')}
             </div>
             <div style={{ marginBottom: 10 }}>
-              N° <strong>{numeroFacture}</strong> — {duplicateWarning.fournisseur} —{' '}
-              {new Date(duplicateWarning.date_facture).toLocaleDateString('fr-FR')} —{' '}
-              {Number(duplicateWarning.total_ht).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} € HT
+              <strong>{t('cgAchats.detail.numberPrefix', { numero: numeroFacture })}</strong> — {duplicateWarning.fournisseur} —{' '}
+              {new Date(duplicateWarning.date_facture).toLocaleDateString(i18n.language || 'fr')} —{' '}
+              {Number(duplicateWarning.total_ht).toLocaleString(i18n.language || 'fr', { minimumFractionDigits: 2 })} {t('cgAchats.import.duplicateHtSuffix')}
               <br />
               <span style={{ fontSize: 12, opacity: 0.8 }}>
-                Importée le {new Date(duplicateWarning.created_at).toLocaleDateString('fr-FR')}
+                {t('cgAchats.import.duplicateImportedOn', { date: new Date(duplicateWarning.created_at).toLocaleDateString(i18n.language || 'fr') })}
               </span>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -815,7 +813,7 @@ export default function AchatsImportPage() {
                 onClick={() => setDuplicateWarning(null)}
                 style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #D97706', background: 'transparent', color: '#92400E', cursor: 'pointer', fontSize: 13 }}
               >
-                Annuler
+                {t('cgAchats.common.cancel')}
               </button>
               {/* En multi-factures : permet de sauter cette facture pour passer à la suivante non-save */}
               {extractedFactures && extractedFactures.length > 1 && (
@@ -835,15 +833,15 @@ export default function AchatsImportPage() {
                   }}
                   style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #D97706', background: c.blanc, color: '#92400E', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
                 >
-                  ⏭ Passer cette facture
+                  {t('cgAchats.import.skipInvoice')}
                 </button>
               )}
               <button
                 onClick={() => handleSave(true)}
                 style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: '#D97706', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
-                title="Tentera de forcer l'import. Échouera si une facture avec le même numéro existe déjà en base."
+                title={t('cgAchats.import.importAnywayTitle')}
               >
-                Importer quand même
+                {t('cgAchats.import.importAnyway')}
               </button>
             </div>
           </div>
@@ -864,7 +862,7 @@ export default function AchatsImportPage() {
                   onChange={e => handleFileSelected(e.target.files?.[0])}
                 />
                 <button style={btnPrimary} onClick={() => fileInputRef.current?.click()}>
-                  📷 Prendre une photo de la facture
+                  {t('cgAchats.import.takePhoto')}
                 </button>
                 {/* Fallback sans capture pour la galerie */}
                 <input
@@ -875,7 +873,7 @@ export default function AchatsImportPage() {
                   onChange={e => handleFileSelected(e.target.files?.[0])}
                 />
                 <button style={btnSecondary} onClick={() => document.getElementById('file-gallery').click()}>
-                  Choisir depuis la galerie / PDF
+                  {t('cgAchats.import.chooseGallery')}
                 </button>
               </div>
             ) : (
@@ -902,13 +900,13 @@ export default function AchatsImportPage() {
                 />
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📄</div>
                 <p style={{ margin: '0 0 6px', fontWeight: 600, fontSize: 15, color: c.texte }}>
-                  Glissez une facture ici
+                  {t('cgAchats.import.dropHere')}
                 </p>
                 <p style={{ margin: '0 0 16px', fontSize: 13, color: c.texteMuted }}>
-                  ou cliquez pour parcourir
+                  {t('cgAchats.import.orClickBrowse')}
                 </p>
                 <p style={{ margin: 0, fontSize: 12, color: c.texteMuted }}>
-                  Formats acceptés : JPG · PNG · WebP · PDF
+                  {t('cgAchats.import.acceptedFormats')}
                 </p>
               </div>
             )}
@@ -919,11 +917,11 @@ export default function AchatsImportPage() {
         {step === 'extracting' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, padding: '48px 0' }}>
             {previewUrl && !isPdf && (
-              <img src={previewUrl} alt="Aperçu" style={{ maxHeight: 180, maxWidth: '100%', borderRadius: 8, objectFit: 'contain', border: `1px solid ${c.bordure}` }} />
+              <img src={previewUrl} alt={t('cgAchats.import.previewAlt')} style={{ maxHeight: 180, maxWidth: '100%', borderRadius: 8, objectFit: 'contain', border: `1px solid ${c.bordure}` }} />
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: c.texteMuted, fontSize: 15 }}>
               <span style={{ display: 'inline-block', width: 20, height: 20, border: `3px solid ${c.accent}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-              Analyse de la facture par IA…
+              {t('cgAchats.import.analyzing')}
             </div>
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
@@ -947,24 +945,24 @@ export default function AchatsImportPage() {
                   isPdf ? (
                     <iframe
                       src={previewUrl}
-                      title="Aperçu facture PDF"
+                      title={t('cgAchats.import.previewPdfTitle')}
                       style={{ width: '100%', flex: 1, borderRadius: 10, border: `1px solid ${c.bordure}`, background: c.blanc }}
                     />
                   ) : (
                     <img
                       src={previewUrl}
-                      alt="Aperçu facture"
+                      alt={t('cgAchats.import.previewImgAlt')}
                       style={{ width: '100%', flex: 1, objectFit: 'contain', borderRadius: 10, border: `1px solid ${c.bordure}`, background: c.blanc }}
                     />
                   )
                 )}
                 {!previewUrl && (
                   <div style={{ flex: 1, background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
-                    Aucun fichier
+                    {t('cgAchats.import.noFile')}
                   </div>
                 )}
                 <button style={{ ...btnSecondary, marginTop: 10, width: '100%' }} onClick={resetForm}>
-                  ↩ Changer de fichier
+                  {t('cgAchats.import.changeFile')}
                 </button>
               </div>
             )}
@@ -976,11 +974,11 @@ export default function AchatsImportPage() {
               {isMobile && previewUrl && (
                 <div>
                   {isPdf ? (
-                    <iframe src={previewUrl} title="Aperçu facture PDF" style={{ width: '100%', height: 220, borderRadius: 10, border: `1px solid ${c.bordure}` }} />
+                    <iframe src={previewUrl} title={t('cgAchats.import.previewPdfTitle')} style={{ width: '100%', height: 220, borderRadius: 10, border: `1px solid ${c.bordure}` }} />
                   ) : (
-                    <img src={previewUrl} alt="Aperçu facture" style={{ width: '100%', maxHeight: 200, objectFit: 'contain', borderRadius: 10, border: `1px solid ${c.bordure}`, background: c.blanc }} />
+                    <img src={previewUrl} alt={t('cgAchats.import.previewImgAlt')} style={{ width: '100%', maxHeight: 200, objectFit: 'contain', borderRadius: 10, border: `1px solid ${c.bordure}`, background: c.blanc }} />
                   )}
-                  <button style={{ ...btnSecondary, marginTop: 10, width: '100%' }} onClick={resetForm}>↩ Changer de fichier</button>
+                  <button style={{ ...btnSecondary, marginTop: 10, width: '100%' }} onClick={resetForm}>{t('cgAchats.import.changeFile')}</button>
                 </div>
               )}
 
@@ -993,7 +991,7 @@ export default function AchatsImportPage() {
                       onClick={retryExtraction}
                       style={{ padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, border: '1px solid #F59E0B', background: '#FBBF24', color: '#78350F', cursor: 'pointer' }}
                     >
-                      🔄 Réessayer
+                      {t('cgAchats.import.retry')}
                     </button>
                   )}
                 </div>
@@ -1004,10 +1002,10 @@ export default function AchatsImportPage() {
                 <div style={{ background: c.accentClair || c.fond, border: `1px solid ${c.accent}`, borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: c.texte }}>
-                      📑 {extractedFactures.length} factures détectées dans le PDF
+                      {t('cgAchats.import.multiDetected', { count: extractedFactures.length })}
                     </div>
                     <div style={{ fontSize: 12, color: c.texteMuted }}>
-                      {savedFactureIdxs.size} / {extractedFactures.length} enregistrée{savedFactureIdxs.size > 1 ? 's' : ''}
+                      {t('cgAchats.import.multiSaved', { count: savedFactureIdxs.size, saved: savedFactureIdxs.size, total: extractedFactures.length })}
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -1016,7 +1014,7 @@ export default function AchatsImportPage() {
                       disabled={currentFactureIdx === 0 || step === 'saving'}
                       style={{ ...btnSecondary, padding: '6px 12px', width: 'auto', opacity: currentFactureIdx === 0 ? 0.4 : 1 }}
                     >
-                      ← Précédente
+                      {t('cgAchats.import.previous')}
                     </button>
                     <select
                       value={currentFactureIdx}
@@ -1026,10 +1024,10 @@ export default function AchatsImportPage() {
                     >
                       {extractedFactures.map((f, idx) => (
                         <option key={idx} value={idx}>
-                          {savedFactureIdxs.has(idx) ? '✓ ' : ''}
-                          Facture {idx + 1}/{extractedFactures.length}
-                          {f.numero_facture ? ` — ${f.numero_facture}` : ' — (sans numéro)'}
-                          {f.statut === 'avoir' ? ' · Avoir' : ''}
+                          {savedFactureIdxs.has(idx) ? t('cgAchats.import.optionSaved') : ''}
+                          {t('cgAchats.import.optionLabel', { idx: idx + 1, total: extractedFactures.length })}
+                          {f.numero_facture ? t('cgAchats.import.optionNumberSuffix', { numero: f.numero_facture }) : t('cgAchats.import.optionNoNumber')}
+                          {f.statut === 'avoir' ? t('cgAchats.import.optionAvoirSuffix') : ''}
                         </option>
                       ))}
                     </select>
@@ -1038,18 +1036,18 @@ export default function AchatsImportPage() {
                       disabled={currentFactureIdx === extractedFactures.length - 1 || step === 'saving'}
                       style={{ ...btnSecondary, padding: '6px 12px', width: 'auto', opacity: currentFactureIdx === extractedFactures.length - 1 ? 0.4 : 1 }}
                     >
-                      Suivante →
+                      {t('cgAchats.import.next')}
                     </button>
                   </div>
                   {savedFactureIdxs.has(currentFactureIdx) && (
                     <div style={{ fontSize: 12, color: c.vert, fontWeight: 600 }}>
-                      ✓ Cette facture a déjà été enregistrée. Vous pouvez la modifier et l&apos;enregistrer à nouveau, ou passer à la suivante.
+                      {t('cgAchats.import.savedAgainHint')}
                     </div>
                   )}
                   {!savedFactureIdxs.has(currentFactureIdx)
                     && savedFactureIdxs.size === extractedFactures.length - 1 && (
                     <div style={{ fontSize: 12, color: c.accent, fontWeight: 600 }}>
-                      🏁 Dernière facture restante. Après l&apos;enregistrement, vous serez redirigé vers la liste des achats.
+                      {t('cgAchats.import.lastInvoiceHint')}
                     </div>
                   )}
                 </div>
@@ -1068,7 +1066,7 @@ export default function AchatsImportPage() {
               {isManuelMode && (
                 <div style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 12, padding: 16 }}>
                   <p style={{ margin: '0 0 12px', fontWeight: 600, fontSize: 14, color: c.texte }}>
-                    Pièce jointe <span style={{ fontWeight: 400, color: c.texteMuted, fontSize: 12 }}>(optionnel)</span>
+                    {t('cgAchats.import.attachmentTitle')} <span style={{ fontWeight: 400, color: c.texteMuted, fontSize: 12 }}>{t('cgAchats.import.attachmentOptional')}</span>
                   </p>
                   {!fileBase64 ? (
                     <>
@@ -1084,10 +1082,10 @@ export default function AchatsImportPage() {
                         style={btnSecondary}
                         onClick={() => document.getElementById('file-attach-manuel').click()}
                       >
-                        📎 Joindre la facture (PDF / photo)
+                        {t('cgAchats.import.attachFile')}
                       </button>
                       <p style={{ margin: '8px 0 0', fontSize: 12, color: c.texteMuted }}>
-                        Le fichier sera stocké avec la facture pour consultation, sans extraction automatique.
+                        {t('cgAchats.import.attachHint')}
                       </p>
                     </>
                   ) : (
@@ -1096,28 +1094,28 @@ export default function AchatsImportPage() {
                         isPdf ? (
                           <iframe
                             src={previewUrl}
-                            title="Aperçu pièce jointe"
+                            title={t('cgAchats.import.attachmentPreviewPdfTitle')}
                             style={{ width: isMobile ? '100%' : 200, height: 160, borderRadius: 8, border: `1px solid ${c.bordure}` }}
                           />
                         ) : (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={previewUrl}
-                            alt="Aperçu pièce jointe"
+                            alt={t('cgAchats.import.attachmentPreviewImgAlt')}
                             style={{ width: isMobile ? '100%' : 200, height: 160, objectFit: 'contain', borderRadius: 8, border: `1px solid ${c.bordure}`, background: c.blanc }}
                           />
                         )
                       )}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
                         <p style={{ margin: 0, fontSize: 13, color: c.texte }}>
-                          {isPdf ? '📄 PDF joint' : '🖼️ Photo jointe'}
+                          {isPdf ? t('cgAchats.import.pdfAttached') : t('cgAchats.import.photoAttached')}
                         </p>
                         <button
                           type="button"
                           style={{ ...btnSecondary, alignSelf: 'flex-start' }}
                           onClick={handleDetachFile}
                         >
-                          ✕ Retirer la pièce jointe
+                          {t('cgAchats.import.removeAttachment')}
                         </button>
                       </div>
                     </div>
@@ -1127,10 +1125,10 @@ export default function AchatsImportPage() {
 
               {/* Métadonnées de la facture */}
               <div style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 12, padding: 16 }}>
-                <p style={{ margin: '0 0 12px', fontWeight: 600, fontSize: 14, color: c.texte }}>Informations de la facture</p>
+                <p style={{ margin: '0 0 12px', fontWeight: 600, fontSize: 14, color: c.texte }}>{t('cgAchats.import.invoiceInfo')}</p>
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                    Fournisseur *
+                    {t('cgAchats.import.supplierRequired')}
                     <FournisseurAutocomplete
                       value={fournisseur}
                       onChange={setFournisseur}
@@ -1139,19 +1137,19 @@ export default function AchatsImportPage() {
                     />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                    Date de la facture *
+                    {t('cgAchats.import.dateRequired')}
                     <input style={inputS} type="date" value={dateFacture} onChange={e => setDateFacture(e.target.value)} />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                    N° de facture
-                    <input style={inputS} value={numeroFacture} onChange={e => { setNumeroFacture(e.target.value); setDuplicateWarning(null) }} placeholder="Référence optionnelle" />
+                    {t('cgAchats.import.invoiceNumber')}
+                    <input style={inputS} value={numeroFacture} onChange={e => { setNumeroFacture(e.target.value); setDuplicateWarning(null) }} placeholder={t('cgAchats.import.invoiceNumberPlaceholder')} />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                    Type de document
+                    {t('cgAchats.import.documentType')}
                     <select style={inputS} value={statut} onChange={e => setStatut(e.target.value)}>
-                      <option value="facture">Facture</option>
-                      <option value="bl">Bon de livraison (BL)</option>
-                      <option value="avoir">Avoir</option>
+                      <option value="facture">{t('cgAchats.import.typeFacture')}</option>
+                      <option value="bl">{t('cgAchats.import.typeBl')}</option>
+                      <option value="avoir">{t('cgAchats.import.typeAvoir')}</option>
                     </select>
                   </label>
                 </div>
@@ -1159,38 +1157,38 @@ export default function AchatsImportPage() {
                 {/* Totaux HT / TVA / TTC — éditables (override sur le calcul depuis les lignes) */}
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${c.bordure}`, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 10 }}>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                    Total HT
+                    {t('cgAchats.import.totalHt')}
                     <input
                       style={inputS}
                       type="number"
                       min="0" step="0.01"
                       value={totalHtSaisi ?? ''}
                       placeholder={fmtPrix(totalHtCalcule)}
-                      title="Total HT en pied de facture. Pré-rempli par l'OCR. Vide → calcul automatique depuis les lignes."
+                      title={t('cgAchats.import.totalHtTitle')}
                       onChange={e => setTotalHtSaisi(e.target.value === '' ? null : e.target.value)}
                     />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                    Total TVA (€)
+                    {t('cgAchats.import.totalVat')}
                     <input
                       style={inputS}
                       type="number"
                       min="0" step="0.01"
                       value={montantTvaSaisi ?? ''}
                       placeholder={fmtPrix(montantTvaCalcule)}
-                      title="Total TVA en pied de facture. Pré-rempli par l'OCR. Vide → calcul automatique depuis les lignes."
+                      title={t('cgAchats.import.totalVatTitle')}
                       onChange={e => setMontantTvaSaisi(e.target.value === '' ? null : e.target.value)}
                     />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                    Total TTC
+                    {t('cgAchats.import.totalTtc')}
                     <input
                       style={{ ...inputS, fontWeight: 600 }}
                       type="number"
                       min="0" step="0.01"
                       value={totalTtcSaisi ?? ''}
                       placeholder={fmtPrix(totalTtcCalcule)}
-                      title="Total TTC en pied de facture. Pré-rempli par l'OCR. Vide → HT + TVA."
+                      title={t('cgAchats.import.totalTtcTitle')}
                       onChange={e => setTotalTtcSaisi(e.target.value === '' ? null : e.target.value)}
                     />
                   </label>
@@ -1198,7 +1196,7 @@ export default function AchatsImportPage() {
                 {/* Hint d'incohérence : si la somme des lignes diffère de plus de 1 € ou 2 % du Total HT saisi */}
                 {totalHtSaisi != null && totalHtSaisi !== '' && Math.abs(Number(totalHtSaisi) - totalHtCalcule) > Math.max(1, Number(totalHtSaisi) * 0.02) && (
                   <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 6, background: '#FEF3C7', border: '1px solid #F59E0B', fontSize: 12, color: '#92400E' }}>
-                    ⚠ La somme des lignes ({fmtPrix(totalHtCalcule)}) diffère du Total HT facture ({fmtPrix(Number(totalHtSaisi))}). Vérifie les prix unitaires des lignes ci-dessous.
+                    {t('cgAchats.import.inconsistencyWarning', { calcule: fmtPrix(totalHtCalcule), saisi: fmtPrix(Number(totalHtSaisi)) })}
                   </div>
                 )}
               </div>
@@ -1208,13 +1206,13 @@ export default function AchatsImportPage() {
             <div style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 12, overflow: 'hidden' }}>
               <div style={{ padding: '12px 16px', borderBottom: `1px solid ${c.bordure}` }}>
                 <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: c.texte }}>
-                  Lignes de la facture{lignes.length > 0 && ` (${lignes.length})`}
+                  {lignes.length > 0 ? t('cgAchats.import.linesTitleCount', { count: lignes.length }) : t('cgAchats.import.linesTitle')}
                 </p>
               </div>
 
                 {lignes.length === 0 && (
                   <p style={{ padding: 20, margin: 0, fontSize: 13, color: c.texteMuted, textAlign: 'center' }}>
-                    Aucune ligne. Cliquez sur &laquo;&nbsp;+ Ajouter une ligne&nbsp;&raquo; ci-dessous pour commencer.
+                    {t('cgAchats.import.noLines')}
                   </p>
                 )}
 
@@ -1224,16 +1222,16 @@ export default function AchatsImportPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 950 }}>
                       <thead>
                         <tr style={{ background: c.fond }}>
-                          <th style={{ ...th, width: '30%' }}>Désignation</th>
-                          <th style={{ ...th, width: '7%', textAlign: 'right' }}>Qté</th>
-                          <th style={{ ...th, width: '5%' }}>Unité</th>
-                          <th style={{ ...th, width: '9%', textAlign: 'right' }}>Prix HT/u</th>
-                          <th style={{ ...th, width: '6%', textAlign: 'right' }}>Remise %</th>
-                          <th style={{ ...th, width: '7%', textAlign: 'right' }}>TVA %</th>
-                          <th style={{ ...th, width: '9%', textAlign: 'right' }}>Total HT</th>
-                          <th style={{ ...th, width: '12%', textAlign: 'center' }}>Reconnu</th>
-                          <th style={{ ...th, width: '7%', textAlign: 'center' }}>Δ Prix</th>
-                          <th style={{ ...th, width: '7%', textAlign: 'center' }}>MAJ prix</th>
+                          <th style={{ ...th, width: '30%' }}>{t('cgAchats.import.colDesignation')}</th>
+                          <th style={{ ...th, width: '7%', textAlign: 'right' }}>{t('cgAchats.import.colQty')}</th>
+                          <th style={{ ...th, width: '5%' }}>{t('cgAchats.import.colUnit')}</th>
+                          <th style={{ ...th, width: '9%', textAlign: 'right' }}>{t('cgAchats.import.colUnitPrice')}</th>
+                          <th style={{ ...th, width: '6%', textAlign: 'right' }}>{t('cgAchats.import.colDiscount')}</th>
+                          <th style={{ ...th, width: '7%', textAlign: 'right' }}>{t('cgAchats.import.colVat')}</th>
+                          <th style={{ ...th, width: '9%', textAlign: 'right' }}>{t('cgAchats.import.colTotalHt')}</th>
+                          <th style={{ ...th, width: '12%', textAlign: 'center' }}>{t('cgAchats.import.colRecognized')}</th>
+                          <th style={{ ...th, width: '7%', textAlign: 'center' }}>{t('cgAchats.import.colDelta')}</th>
+                          <th style={{ ...th, width: '7%', textAlign: 'center' }}>{t('cgAchats.import.colUpdatePrice')}</th>
                           <th style={{ ...th, width: '5%' }} />
                         </tr>
                       </thead>
@@ -1270,7 +1268,7 @@ export default function AchatsImportPage() {
                                 <input
                                   style={{ ...inputS, width: 60, fontSize: 13 }}
                                   value={l.unite}
-                                  placeholder="kg"
+                                  placeholder={t('cgAchats.common.kgPlaceholder')}
                                   onChange={e => updateLigne(l._id, 'unite', e.target.value)}
                                 />
                               </td>
@@ -1309,12 +1307,12 @@ export default function AchatsImportPage() {
                                       autoFocus
                                       style={{ ...inputS, fontSize: 12, padding: '3px 6px' }}
                                       value={newIngNom}
-                                      placeholder="Nom de l'ingrédient"
+                                      placeholder={t('cgAchats.import.ingredientNamePlaceholder')}
                                       onChange={e => setNewIngNom(e.target.value)}
                                       onKeyDown={e => { if (e.key === 'Enter') handleCreateIngredient(l); if (e.key === 'Escape') { setCreatingIngFor(null); setNewIngNom('') } }}
                                     />
                                     <div style={{ display: 'flex', gap: 4 }}>
-                                      <button onClick={() => handleCreateIngredient(l)} style={{ flex: 1, padding: '2px 6px', fontSize: 11, background: c.vert, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>Créer</button>
+                                      <button onClick={() => handleCreateIngredient(l)} style={{ flex: 1, padding: '2px 6px', fontSize: 11, background: c.vert, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>{t('cgAchats.import.create')}</button>
                                       <button onClick={() => { setCreatingIngFor(null); setNewIngNom('') }} style={{ padding: '2px 6px', fontSize: 11, background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 4, cursor: 'pointer' }}>✕</button>
                                     </div>
                                   </div>
@@ -1324,7 +1322,7 @@ export default function AchatsImportPage() {
                                       autoFocus
                                       style={{ ...inputS, fontSize: 12, padding: '3px 6px' }}
                                       value={linkSearch}
-                                      placeholder="Rechercher un ingrédient…"
+                                      placeholder={t('cgAchats.import.searchIngredient')}
                                       onChange={e => setLinkSearch(e.target.value)}
                                       onKeyDown={e => { if (e.key === 'Escape') { setLinkingIngFor(null); setLinkSearch('') } }}
                                     />
@@ -1340,31 +1338,31 @@ export default function AchatsImportPage() {
                                         ))
                                       }
                                       {Object.values(ingredientsById).filter(ing => !linkSearch.trim() || normDesig(ing.nom).includes(normDesig(linkSearch))).length === 0 && (
-                                        <p style={{ margin: 0, padding: '6px 8px', fontSize: 11, color: c.texteMuted }}>Aucun résultat</p>
+                                        <p style={{ margin: 0, padding: '6px 8px', fontSize: 11, color: c.texteMuted }}>{t('cgAchats.import.noResult')}</p>
                                       )}
                                     </div>
-                                    <button onClick={() => { setLinkingIngFor(null); setLinkSearch('') }} style={{ padding: '2px 6px', fontSize: 11, background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 4, cursor: 'pointer' }}>✕ Annuler</button>
+                                    <button onClick={() => { setLinkingIngFor(null); setLinkSearch('') }} style={{ padding: '2px 6px', fontSize: 11, background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 4, cursor: 'pointer' }}>{t('cgAchats.import.cancelLink')}</button>
                                   </div>
                                 ) : l.reconnu ? (
                                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                    <span style={badgeVert}>✓ Reconnu</span>
+                                    <span style={badgeVert}>{t('cgAchats.import.recognized')}</span>
                                     {l.ingredient_nom && <span style={{ fontSize: 10, color: c.texteMuted }}>{l.ingredient_nom}</span>}
                                     <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
-                                      <button onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }} style={{ fontSize: 10, padding: '1px 5px', background: 'transparent', border: `1px solid ${c.bordure}`, color: c.texteMuted, borderRadius: 4, cursor: 'pointer' }}>Changer</button>
-                                      <button onClick={() => { setCreatingIngFor(l._id); setNewIngNom(l.designation); setLinkingIngFor(null) }} style={{ fontSize: 10, padding: '1px 5px', background: 'transparent', border: `1px solid ${c.accent}`, color: c.accent, borderRadius: 4, cursor: 'pointer' }} title="Créer un nouvel ingrédient au lieu de relier à un existant">＋ Nouveau</button>
+                                      <button onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }} style={{ fontSize: 10, padding: '1px 5px', background: 'transparent', border: `1px solid ${c.bordure}`, color: c.texteMuted, borderRadius: 4, cursor: 'pointer' }}>{t('cgAchats.import.change')}</button>
+                                      <button onClick={() => { setCreatingIngFor(l._id); setNewIngNom(l.designation); setLinkingIngFor(null) }} style={{ fontSize: 10, padding: '1px 5px', background: 'transparent', border: `1px solid ${c.accent}`, color: c.accent, borderRadius: 4, cursor: 'pointer' }} title={t('cgAchats.import.newIngredientTitle')}>{t('cgAchats.import.newIngredient')}</button>
                                     </div>
                                   </div>
                                 ) : (
                                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                                    <span style={badgeGris}>Inconnu</span>
+                                    <span style={badgeGris}>{t('cgAchats.import.unknown')}</span>
                                     <button
                                       onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }}
                                       style={{ fontSize: 10, padding: '2px 6px', background: '#EFF6FF', border: `1px solid #BFDBFE`, color: '#1D4ED8', borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                                    >🔗 Lier un ingrédient</button>
+                                    >{t('cgAchats.import.linkIngredient')}</button>
                                     <button
                                       onClick={() => { setCreatingIngFor(l._id); setNewIngNom(l.designation); setLinkingIngFor(null) }}
                                       style={{ fontSize: 10, padding: '2px 6px', background: 'transparent', border: `1px solid ${c.accent}`, color: c.accent, borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                                    >＋ Créer l&rsquo;ingrédient</button>
+                                    >{t('cgAchats.import.createIngredient')}</button>
                                   </div>
                                 )}
                               </td>
@@ -1388,7 +1386,7 @@ export default function AchatsImportPage() {
                                 <button
                                   onClick={() => removeLigne(l._id)}
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: c.texteMuted, fontSize: 16, padding: 4, lineHeight: 1 }}
-                                  title="Supprimer"
+                                  title={t('cgAchats.import.deleteLineTitle')}
                                 >×</button>
                               </td>
                             </tr>
@@ -1430,11 +1428,11 @@ export default function AchatsImportPage() {
                                 autoFocus
                                 style={{ ...inputS, flex: 1, fontSize: 13 }}
                                 value={newIngNom}
-                                placeholder="Nom de l'ingrédient"
+                                placeholder={t('cgAchats.import.ingredientNamePlaceholder')}
                                 onChange={e => setNewIngNom(e.target.value)}
                                 onKeyDown={e => { if (e.key === 'Enter') handleCreateIngredient(l); if (e.key === 'Escape') { setCreatingIngFor(null); setNewIngNom('') } }}
                               />
-                              <button onClick={() => handleCreateIngredient(l)} style={{ padding: '6px 10px', background: c.vert, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Créer</button>
+                              <button onClick={() => handleCreateIngredient(l)} style={{ padding: '6px 10px', background: c.vert, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>{t('cgAchats.import.create')}</button>
                               <button onClick={() => { setCreatingIngFor(null); setNewIngNom('') }} style={{ padding: '6px 8px', background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>✕</button>
                             </div>
                           ) : linkingIngFor === l._id ? (
@@ -1443,7 +1441,7 @@ export default function AchatsImportPage() {
                                 autoFocus
                                 style={{ ...inputS, fontSize: 13 }}
                                 value={linkSearch}
-                                placeholder="Rechercher un ingrédient…"
+                                placeholder={t('cgAchats.import.searchIngredient')}
                                 onChange={e => setLinkSearch(e.target.value)}
                                 onKeyDown={e => { if (e.key === 'Escape') { setLinkingIngFor(null); setLinkSearch('') } }}
                               />
@@ -1459,54 +1457,54 @@ export default function AchatsImportPage() {
                                   ))
                                 }
                                 {Object.values(ingredientsById).filter(ing => !linkSearch.trim() || normDesig(ing.nom).includes(normDesig(linkSearch))).length === 0 && (
-                                  <p style={{ margin: 0, padding: '8px 12px', fontSize: 13, color: c.texteMuted }}>Aucun résultat</p>
+                                  <p style={{ margin: 0, padding: '8px 12px', fontSize: 13, color: c.texteMuted }}>{t('cgAchats.import.noResult')}</p>
                                 )}
                               </div>
-                              <button onClick={() => { setLinkingIngFor(null); setLinkSearch('') }} style={{ alignSelf: 'flex-start', padding: '5px 10px', fontSize: 12, background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 6, cursor: 'pointer' }}>✕ Annuler</button>
+                              <button onClick={() => { setLinkingIngFor(null); setLinkSearch('') }} style={{ alignSelf: 'flex-start', padding: '5px 10px', fontSize: 12, background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 6, cursor: 'pointer' }}>{t('cgAchats.import.cancelLink')}</button>
                             </div>
                           ) : !l.reconnu ? (
                             <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                               <button
                                 onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }}
                                 style={{ fontSize: 12, padding: '5px 10px', background: '#EFF6FF', border: `1px solid #BFDBFE`, color: '#1D4ED8', borderRadius: 6, cursor: 'pointer' }}
-                              >🔗 Lier</button>
+                              >{t('cgAchats.import.linkShort')}</button>
                               <button
                                 onClick={() => { setCreatingIngFor(l._id); setNewIngNom(l.designation); setLinkingIngFor(null) }}
                                 style={{ fontSize: 12, padding: '5px 10px', background: 'transparent', border: `1px solid ${c.accent}`, color: c.accent, borderRadius: 6, cursor: 'pointer' }}
-                              >＋ Créer</button>
+                              >{t('cgAchats.import.createShort')}</button>
                             </div>
                           ) : (
                             <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
                               <button
                                 onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }}
                                 style={{ fontSize: 11, padding: '3px 8px', background: 'transparent', border: `1px solid ${c.bordure}`, color: c.texteMuted, borderRadius: 6, cursor: 'pointer' }}
-                              >Changer l&rsquo;ingrédient lié</button>
+                              >{t('cgAchats.import.changeLinkedIngredient')}</button>
                               <button
                                 onClick={() => { setCreatingIngFor(l._id); setNewIngNom(l.designation); setLinkingIngFor(null) }}
                                 style={{ fontSize: 11, padding: '3px 8px', background: 'transparent', border: `1px solid ${c.accent}`, color: c.accent, borderRadius: 6, cursor: 'pointer' }}
-                                title="Créer un nouvel ingrédient au lieu de relier à un existant"
-                              >＋ Créer un nouveau</button>
+                                title={t('cgAchats.import.newIngredientTitle')}
+                              >{t('cgAchats.import.createNew')}</button>
                             </div>
                           )}
                           {/* Ligne 2 : Qté / Unité / Prix / TVA */}
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
                             <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }}>
-                              Quantité
+                              {t('cgAchats.import.quantity')}
                               <input style={inputS} type="number" min="0" step="0.001" value={l.quantite}
                                 onChange={e => updateLigne(l._id, 'quantite', e.target.value)} />
                             </label>
                             <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }}>
-                              Unité
-                              <input style={inputS} value={l.unite} placeholder="kg"
+                              {t('cgAchats.import.unit')}
+                              <input style={inputS} value={l.unite} placeholder={t('cgAchats.common.kgPlaceholder')}
                                 onChange={e => updateLigne(l._id, 'unite', e.target.value)} />
                             </label>
                             <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }}>
-                              Prix HT/u
+                              {t('cgAchats.import.unitPrice')}
                               <input style={inputS} type="text" inputMode="decimal" value={l.prix_unitaire_ht ?? ''}
                                 onChange={e => updateLigne(l._id, 'prix_unitaire_ht', e.target.value.replace(',', '.'))} />
                             </label>
                             <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }}>
-                              TVA %
+                              {t('cgAchats.import.vat')}
                               <input style={inputS} type="number" min="0" max="100" step="0.1" value={l.taux_tva ?? ''}
                                 placeholder={String(tauxTva)}
                                 onChange={e => updateLigne(l._id, 'taux_tva', e.target.value === '' ? null : e.target.value)} />
@@ -1528,7 +1526,7 @@ export default function AchatsImportPage() {
                                   onChange={e => updateLigne(l._id, 'updatePrice', e.target.checked)}
                                   style={{ width: 18, height: 18 }}
                                 />
-                                MAJ prix
+                                {t('cgAchats.import.updatePrice')}
                               </label>
                               <button
                                 onClick={() => removeLigne(l._id)}
@@ -1544,7 +1542,7 @@ export default function AchatsImportPage() {
 
                 <div style={{ padding: '12px 16px', borderTop: lignes.length > 0 ? `1px solid ${c.bordure}` : 'none' }}>
                   <button style={{ ...btnSecondary, padding: '6px 12px', fontSize: 13, width: 'auto' }} onClick={addLigne}>
-                    + Ajouter une ligne
+                    {t('cgAchats.import.addLine')}
                   </button>
                 </div>
             </div>
@@ -1552,7 +1550,7 @@ export default function AchatsImportPage() {
             {/* Récapitulatif total */}
             {lignes.length > 0 && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12, fontSize: 14, color: c.texteMuted }}>
-                <span>Total HT :</span>
+                <span>{t('cgAchats.import.totalHtSummary')}</span>
                 <span style={{ fontWeight: 700, fontSize: 16, color: c.texte }}>
                   {fmtPrix(lignes.reduce((s, l) => {
                     const r = Number(l.remise) || 0
@@ -1571,7 +1569,7 @@ export default function AchatsImportPage() {
                   onChange={e => setAutoCreateMissing(e.target.checked)}
                   style={{ width: 16, height: 16 }}
                 />
-                Créer auto les ingrédients manquants
+                {t('cgAchats.import.autoCreateMissing')}
               </label>
               <button
                 style={{ ...btnPrimary, opacity: step === 'saving' ? 0.6 : 1 }}
@@ -1579,12 +1577,12 @@ export default function AchatsImportPage() {
                 onClick={() => handleSave()}
               >
                 {step === 'saving'
-                  ? 'Enregistrement…'
+                  ? t('cgAchats.import.saving')
                   : extractedFactures && extractedFactures.length > 1
                     ? savedFactureIdxs.size + (savedFactureIdxs.has(currentFactureIdx) ? 0 : 1) < extractedFactures.length
-                      ? `💾 Enregistrer la facture ${currentFactureIdx + 1}/${extractedFactures.length} et passer à la suivante`
-                      : `🏁 Valider la dernière facture et terminer l'import`
-                    : '💾 Enregistrer les achats et mettre à jour les prix'}
+                      ? t('cgAchats.import.saveAndNext', { idx: currentFactureIdx + 1, total: extractedFactures.length })
+                      : t('cgAchats.import.saveLast')
+                    : t('cgAchats.import.saveAndUpdatePrices')}
               </button>
             </div>
           </div>
@@ -1598,19 +1596,19 @@ export default function AchatsImportPage() {
           <div style={{ maxWidth: 480, margin: '0 auto', textAlign: 'center', paddingTop: 40 }}>
             <div style={{ fontSize: 52, marginBottom: 16 }}>✅</div>
             <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 700, color: c.texte }}>
-              Facture enregistrée
+              {t('cgAchats.import.doneTitle')}
             </h2>
             <p style={{ margin: '0 0 6px', fontSize: 15, color: c.texteMuted }}>
-              {lignes.length} ligne{lignes.length > 1 ? 's' : ''} importée{lignes.length > 1 ? 's' : ''}.
+              {t('cgAchats.import.doneLines', { count: lignes.length })}
             </p>
             {prixMajCount > 0 && (
               <p style={{ margin: '0 0 28px', fontSize: 14, color: c.vert, fontWeight: 600 }}>
-                {prixMajCount} prix d&apos;ingrédient{prixMajCount > 1 ? 's' : ''} mis à jour.
+                {t('cgAchats.import.donePrices', { count: prixMajCount })}
               </p>
             )}
             {prixMajCount === 0 && <div style={{ marginBottom: 28 }} />}
             <button style={{ ...btnPrimary, margin: '0 auto' }} onClick={resetForm}>
-              Importer une autre facture
+              {t('cgAchats.import.importAnother')}
             </button>
           </div>
         )}

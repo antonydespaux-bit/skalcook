@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
@@ -20,12 +21,13 @@ function formatQte(n) {
   if (n == null) return '—'
   return Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 4 })
 }
-function formatDate(s) {
+function formatDate(s, locale = 'fr') {
   if (!s) return '—'
-  return new Date(s).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+  return new Date(s).toLocaleDateString(locale, { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
 export default function AchatsDetailPage() {
+  const { t, i18n } = useTranslation()
   const router = useRouter()
   const { id } = useParams()
   const isMobile = useIsMobile()
@@ -97,7 +99,7 @@ export default function AchatsDetailPage() {
       .maybeSingle()
 
     if (fErr) { setError(fErr.message); setLoading(false); return }
-    if (!fac) { setError('Facture introuvable.'); setLoading(false); return }
+    if (!fac) { setError(t('cgAchats.detail.notFound')); setLoading(false); return }
     setFacture(fac)
 
     // Si ce BL a été fusionné, charge un mini-récap de la facture cible
@@ -265,7 +267,7 @@ export default function AchatsDetailPage() {
           lignes: lignesPayload,
         }),
       })
-      if (!res.ok) { const r = await res.json(); throw new Error(r.error || 'Erreur enregistrement') }
+      if (!res.ok) { const r = await res.json(); throw new Error(r.error || t('cgAchats.detail.saveError')) }
       setEditing(false)
       await loadFacture()
     } catch (err) {
@@ -276,7 +278,7 @@ export default function AchatsDetailPage() {
   }
 
   const handleDelete = async () => {
-    if (!window.confirm('Supprimer cette facture ? Toutes les lignes associées seront perdues.')) return
+    if (!window.confirm(t('cgAchats.detail.deleteConfirm'))) return
     setDeleting(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -285,14 +287,14 @@ export default function AchatsDetailPage() {
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
       if (res.ok) router.replace('/controle-gestion/achats')
-      else setError('Erreur lors de la suppression.')
+      else setError(t('cgAchats.detail.deleteError'))
     } finally {
       setDeleting(false)
     }
   }
 
   const handleConfirmFacture = async () => {
-    if (!window.confirm('Confirmer ce BL comme facture définitive ?')) return
+    if (!window.confirm(t('cgAchats.detail.confirmFactureConfirm'))) return
     setSaving(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -308,7 +310,7 @@ export default function AchatsDetailPage() {
   }
 
   if (!authReady) return (
-    <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>Chargement…</div>
+    <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>{t('cgAchats.common.loading')}</div>
   )
 
   const ht = facture ? Number(facture.total_ht) || 0 : 0
@@ -333,7 +335,7 @@ export default function AchatsDetailPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
           <BackButton
             fallback="/controle-gestion/achats"
-            label="← Retour aux achats"
+            label={t('cgAchats.common.backToAchats')}
             style={{ background: 'transparent', border: 'none', color: c.texteMuted, fontSize: 13, padding: 0 }}
           />
           {role === 'admin' && !loading && facture && (
@@ -341,23 +343,23 @@ export default function AchatsDetailPage() {
               {isBl && !estFusionne && (
                 <button onClick={handleConfirmFacture} disabled={saving}
                   style={{ padding: '7px 14px', borderRadius: 8, fontSize: 13, border: 'none', background: '#059669', color: '#fff', cursor: 'pointer', fontWeight: 500 }}>
-                  ✓ Confirmer comme facture
+                  {t('cgAchats.detail.confirmAsFacture')}
                 </button>
               )}
               <button onClick={() => editing ? setEditing(false) : openEdit()}
                 style={{ padding: '7px 14px', borderRadius: 8, fontSize: 13, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}>
-                {editing ? 'Annuler' : '✏️ Modifier'}
+                {editing ? t('cgAchats.common.cancel') : t('cgAchats.detail.edit')}
               </button>
               <button onClick={handleDelete} disabled={deleting}
                 style={{ padding: '7px 14px', borderRadius: 8, fontSize: 13, border: '1px solid #FECACA', background: '#FEF2F2', color: '#B91C1C', cursor: 'pointer' }}>
-                {deleting ? '…' : 'Supprimer'}
+                {deleting ? t('cgAchats.common.deleting') : t('cgAchats.common.delete')}
               </button>
             </div>
           )}
         </div>
 
         {error && <p style={{ color: '#B91C1C', fontSize: 14, margin: '8px 0' }}>{error}</p>}
-        {loading && <p style={{ color: c.texteMuted, fontSize: 14 }}>Chargement…</p>}
+        {loading && <p style={{ color: c.texteMuted, fontSize: 14 }}>{t('cgAchats.common.loading')}</p>}
 
         {/* Bannière BL fusionné — pointe vers la facture consolidée */}
         {estFusionne && (
@@ -368,12 +370,12 @@ export default function AchatsDetailPage() {
           }}>
             <span>📎</span>
             <span style={{ flex: 1, minWidth: 0 }}>
-              Ce BL a été fusionné dans la facture
-              {factureConsolidee?.numero_facture ? <strong> {factureConsolidee.numero_facture}</strong> : ' consolidée'}
+              {t('cgAchats.detail.mergedBannerStart')}
+              {factureConsolidee?.numero_facture ? <strong> {factureConsolidee.numero_facture}</strong> : t('cgAchats.detail.mergedBannerConsolidated')}
               {factureConsolidee?.date_facture && (
-                <span style={{ opacity: 0.75 }}> du {new Date(factureConsolidee.date_facture).toLocaleDateString('fr-FR')}</span>
+                <span style={{ opacity: 0.75 }}>{t('cgAchats.detail.mergedBannerDate', { date: new Date(factureConsolidee.date_facture).toLocaleDateString(i18n.language || 'fr') })}</span>
               )}
-              . Ses lignes et totaux ont été transférés (ce BL n&apos;est plus compté pour éviter le double-comptage).
+              {t('cgAchats.detail.mergedBannerEnd')}
             </span>
             {factureConsolidee?.id && (
               <button
@@ -383,7 +385,7 @@ export default function AchatsDetailPage() {
                   border: '1px solid #F59E0B', background: '#FBBF24', color: '#78350F', cursor: 'pointer',
                 }}
               >
-                Voir la facture →
+                {t('cgAchats.detail.viewInvoice')}
               </button>
             )}
           </div>
@@ -406,8 +408,8 @@ export default function AchatsDetailPage() {
                 {hasFichier && isMobile && (
                   <div style={{ marginBottom: 16 }}>
                     {fichierIsPdf
-                      ? <iframe src={fichierUrl} title="Facture" style={{ width: '100%', height: 300, borderRadius: 10, border: `1px solid ${c.bordure}` }} />
-                      : <img src={fichierUrl} alt="Facture" style={{ width: '100%', borderRadius: 10, border: `1px solid ${c.bordure}`, objectFit: 'contain', background: c.blanc }} />
+                      ? <iframe src={fichierUrl} title={t('cgAchats.detail.fileTitle')} style={{ width: '100%', height: 300, borderRadius: 10, border: `1px solid ${c.bordure}` }} />
+                      : <img src={fichierUrl} alt={t('cgAchats.detail.fileTitle')} style={{ width: '100%', borderRadius: 10, border: `1px solid ${c.bordure}`, objectFit: 'contain', background: c.blanc }} />
                     }
                   </div>
                 )}
@@ -417,7 +419,7 @@ export default function AchatsDetailPage() {
                   {editing ? (
                     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
                       <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                        Fournisseur
+                        {t('cgAchats.detail.supplier')}
                         <FournisseurAutocomplete
                           value={editFournisseur}
                           onChange={setEditFournisseur}
@@ -426,42 +428,42 @@ export default function AchatsDetailPage() {
                         />
                       </label>
                       <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                        N° de facture / BL
+                        {t('cgAchats.detail.invoiceOrBlNumber')}
                         <input style={inputS} value={editNumero} onChange={e => setEditNumero(e.target.value)} />
                       </label>
                       <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                        Date
+                        {t('cgAchats.detail.date')}
                         <input style={inputS} type="date" value={editDate} onChange={e => setEditDate(e.target.value)} />
                       </label>
                       <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
-                        Type
+                        {t('cgAchats.detail.type')}
                         <select style={inputS} value={editStatut} onChange={e => setEditStatut(e.target.value)}>
-                          <option value="bl">Bon de livraison</option>
-                          <option value="facture">Facture</option>
-                          <option value="avoir">Avoir</option>
+                          <option value="bl">{t('cgAchats.common.statutBl')}</option>
+                          <option value="facture">{t('cgAchats.common.statutFacture')}</option>
+                          <option value="avoir">{t('cgAchats.common.statutAvoir')}</option>
                         </select>
                       </label>
                       <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted, gridColumn: isMobile ? 'auto' : 'span 2' }}>
-                        Total TVA (€)
+                        {t('cgAchats.detail.totalVatLabel')}
                         <input
                           style={{ ...inputS, maxWidth: 200 }}
                           type="number"
                           min="0" step="0.01"
                           value={editMontantTvaSaisi ?? ''}
                           placeholder={formatEuro(editMontantTvaCalcule)}
-                          title="Saisissez le total TVA tel qu'il apparaît en pied de facture, ou laissez vide pour calculer automatiquement"
+                          title={t('cgAchats.detail.totalVatTitle')}
                           onChange={e => setEditMontantTvaSaisi(e.target.value === '' ? null : e.target.value)}
                         />
                       </label>
                       <div style={{ gridColumn: isMobile ? 'auto' : 'span 2', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                         <div style={{ display: 'flex', gap: 16, fontSize: 13, color: c.texteMuted, fontVariantNumeric: 'tabular-nums' }}>
-                          <span>HT : <strong style={{ color: c.texte }}>{formatEuro(editTotalHt)}</strong></span>
-                          <span>TVA : <strong style={{ color: c.texte }}>{formatEuro(editMontantTva)}</strong></span>
-                          <span>TTC : <strong style={{ color: c.texte }}>{formatEuro(editTotalTtc)}</strong></span>
+                          <span>{t('cgAchats.detail.htShort')} <strong style={{ color: c.texte }}>{formatEuro(editTotalHt)}</strong></span>
+                          <span>{t('cgAchats.detail.tvaShort')} <strong style={{ color: c.texte }}>{formatEuro(editMontantTva)}</strong></span>
+                          <span>{t('cgAchats.detail.ttcShort')} <strong style={{ color: c.texte }}>{formatEuro(editTotalTtc)}</strong></span>
                         </div>
                         <button onClick={handleSaveEdit} disabled={saving}
                           style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: c.accent, color: '#fff', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>
-                          {saving ? 'Enregistrement…' : 'Enregistrer'}
+                          {saving ? t('cgAchats.detail.saving') : t('cgAchats.detail.save')}
                         </button>
                       </div>
                     </div>
@@ -472,11 +474,11 @@ export default function AchatsDetailPage() {
                           <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 600, color: c.texte }}>{facture.fournisseur || '—'}</div>
                           <span style={badgeStyleFor(facture.statut)}>{statutLabel(facture.statut)}</span>
                         </div>
-                        {facture.numero_facture && <div style={{ fontSize: 13, color: c.texteMuted }}>N° {facture.numero_facture}</div>}
-                        <div style={{ fontSize: 13, color: c.texteMuted }}>{formatDate(facture.date_facture)}</div>
+                        {facture.numero_facture && <div style={{ fontSize: 13, color: c.texteMuted }}>{t('cgAchats.detail.numberPrefix', { numero: facture.numero_facture })}</div>}
+                        <div style={{ fontSize: 13, color: c.texteMuted }}>{formatDate(facture.date_facture, i18n.language || 'fr')}</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 11, color: c.texteMuted, fontWeight: 500, textTransform: 'uppercase' }}>Total HT</div>
+                        <div style={{ fontSize: 11, color: c.texteMuted, fontWeight: 500, textTransform: 'uppercase' }}>{t('cgAchats.detail.totalHtLabel')}</div>
                         <div style={{ fontSize: isMobile ? 20 : 26, fontWeight: 600, color: c.texte }}>{formatEuro(ht)}</div>
                         {(() => {
                           // 1. Si la facture a un montant_tva saisi, il prime.
@@ -490,7 +492,7 @@ export default function AchatsDetailPage() {
                           if (!montantTva && !tvaGlobale) return null
                           return (
                             <div style={{ fontSize: 12, color: c.texteMuted, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
-                              TVA <strong style={{ color: c.texte }}>{formatEuro(montantTva)}</strong> · TTC <strong style={{ color: c.texte }}>{formatEuro(ht + montantTva)}</strong>
+                              {t('cgAchats.detail.tvaTtcLine')} <strong style={{ color: c.texte }}>{formatEuro(montantTva)}</strong> · {t('cgAchats.detail.ttcInline')} <strong style={{ color: c.texte }}>{formatEuro(ht + montantTva)}</strong>
                             </div>
                           )
                         })()}
@@ -502,7 +504,7 @@ export default function AchatsDetailPage() {
                 {/* Lignes */}
                 <div style={{ marginBottom: 12 }}>
                   <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: c.texte }}>
-                    Articles ({editing ? editLignes.length : lignes.length})
+                    {t('cgAchats.detail.articlesTitle', { count: editing ? editLignes.length : lignes.length })}
                   </h2>
                 </div>
 
@@ -510,21 +512,21 @@ export default function AchatsDetailPage() {
                   /* ── Mode édition ── */
                   <>
                   {editLignes.length === 0 ? (
-                    <p style={{ color: c.texteMuted, fontSize: 14 }}>Aucune ligne. Cliquez sur « + Ajouter une ligne » ci-dessous.</p>
+                    <p style={{ color: c.texteMuted, fontSize: 14 }}>{t('cgAchats.detail.noLinesEdit')}</p>
                   ) : (
                     <div style={{ background: c.blanc, borderRadius: 12, border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
                       <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
                           <thead>
                             <tr style={{ background: c.fond }}>
-                              <th style={th}>Désignation</th>
-                              <th style={thR}>Qté</th>
-                              <th style={th}>Unité</th>
-                              <th style={thR}>Prix HT/u</th>
-                              <th style={thR}>Remise %</th>
-                              <th style={thR}>TVA %</th>
-                              <th style={thR}>Total HT</th>
-                              <th style={th}>Ingrédient</th>
+                              <th style={th}>{t('cgAchats.common.designation')}</th>
+                              <th style={thR}>{t('cgAchats.common.qty')}</th>
+                              <th style={th}>{t('cgAchats.common.unit')}</th>
+                              <th style={thR}>{t('cgAchats.common.unitPriceHt')}</th>
+                              <th style={thR}>{t('cgAchats.common.discountPct')}</th>
+                              <th style={thR}>{t('cgAchats.common.vatPct')}</th>
+                              <th style={thR}>{t('cgAchats.common.totalHt')}</th>
+                              <th style={th}>{t('cgAchats.common.ingredient')}</th>
                               <th style={th} />
                             </tr>
                           </thead>
@@ -552,7 +554,7 @@ export default function AchatsDetailPage() {
                                     <input
                                       style={{ ...inputS, fontSize: 13, padding: '6px 8px', width: 60 }}
                                       value={l.unite}
-                                      placeholder="kg"
+                                      placeholder={t('cgAchats.common.kgPlaceholder')}
                                       onChange={e => updateEditLigne(l._id, 'unite', e.target.value)}
                                     />
                                   </td>
@@ -589,7 +591,7 @@ export default function AchatsDetailPage() {
                                           autoFocus
                                           style={{ ...inputS, fontSize: 12, padding: '4px 6px' }}
                                           value={linkSearch}
-                                          placeholder="Rechercher un ingrédient…"
+                                          placeholder={t('cgAchats.common.searchIngredient')}
                                           onChange={e => setLinkSearch(e.target.value)}
                                           onKeyDown={e => { if (e.key === 'Escape') { setLinkingIngFor(null); setLinkSearch('') } }}
                                         />
@@ -605,23 +607,23 @@ export default function AchatsDetailPage() {
                                             ))
                                           }
                                           {Object.values(ingredientsById).filter(ing => !linkSearch.trim() || normDesig(ing.nom).includes(normDesig(linkSearch))).length === 0 && (
-                                            <p style={{ margin: 0, padding: '6px 8px', fontSize: 11, color: c.texteMuted }}>Aucun résultat</p>
+                                            <p style={{ margin: 0, padding: '6px 8px', fontSize: 11, color: c.texteMuted }}>{t('cgAchats.common.noResult')}</p>
                                           )}
                                         </div>
                                         <button onClick={() => { setLinkingIngFor(null); setLinkSearch('') }}
-                                          style={{ padding: '2px 6px', fontSize: 11, background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 4, cursor: 'pointer' }}>✕ Annuler</button>
+                                          style={{ padding: '2px 6px', fontSize: 11, background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 4, cursor: 'pointer' }}>{t('cgAchats.detail.cancelLink')}</button>
                                       </div>
                                     ) : l.ingredient_id ? (
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                                         <span style={{ fontSize: 12, background: c.accentClair, color: c.accent, borderRadius: 4, padding: '2px 7px' }}>{l.ingredient_nom || '—'}</span>
                                         <button onClick={() => { setLinkingIngFor(l._id); setLinkSearch('') }}
-                                          style={{ fontSize: 10, padding: '1px 5px', background: 'transparent', border: `1px solid ${c.bordure}`, color: c.texteMuted, borderRadius: 4, cursor: 'pointer' }}>Changer</button>
+                                          style={{ fontSize: 10, padding: '1px 5px', background: 'transparent', border: `1px solid ${c.bordure}`, color: c.texteMuted, borderRadius: 4, cursor: 'pointer' }}>{t('cgAchats.detail.changeIngredient')}</button>
                                         <button onClick={() => unlinkEditLigne(l._id)}
                                           style={{ fontSize: 10, padding: '1px 5px', background: 'transparent', border: `1px solid ${c.bordure}`, color: c.texteMuted, borderRadius: 4, cursor: 'pointer' }}>✕</button>
                                       </div>
                                     ) : (
                                       <button onClick={() => { setLinkingIngFor(l._id); setLinkSearch('') }}
-                                        style={{ fontSize: 11, padding: '3px 8px', background: '#EFF6FF', border: `1px solid #BFDBFE`, color: '#1D4ED8', borderRadius: 4, cursor: 'pointer' }}>🔗 Lier</button>
+                                        style={{ fontSize: 11, padding: '3px 8px', background: '#EFF6FF', border: `1px solid #BFDBFE`, color: '#1D4ED8', borderRadius: 4, cursor: 'pointer' }}>{t('cgAchats.common.link')}</button>
                                     )}
                                   </td>
                                   <td style={{ ...td, textAlign: 'center' }}>
@@ -634,7 +636,7 @@ export default function AchatsDetailPage() {
                           </tbody>
                           <tfoot>
                             <tr style={{ fontWeight: 600, background: c.fond }}>
-                              <td style={{ ...td, color: c.texte }} colSpan={6}>Total HT</td>
+                              <td style={{ ...td, color: c.texte }} colSpan={6}>{t('cgAchats.common.totalHt')}</td>
                               <td style={{ ...tdR, color: c.texte }}>{formatEuro(editTotalHt)}</td>
                               <td style={td} colSpan={2} />
                             </tr>
@@ -646,26 +648,26 @@ export default function AchatsDetailPage() {
                   <div style={{ marginTop: 12 }}>
                     <button onClick={addEditLigne}
                       style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer', fontSize: 13 }}>
-                      + Ajouter une ligne
+                      {t('cgAchats.common.addLine')}
                     </button>
                   </div>
                   </>
                 ) : lignes.length === 0 ? (
-                  <p style={{ color: c.texteMuted, fontSize: 14 }}>Aucun article enregistré.</p>
+                  <p style={{ color: c.texteMuted, fontSize: 14 }}>{t('cgAchats.detail.noLines')}</p>
                 ) : (
                   <div style={{ background: c.blanc, borderRadius: 12, border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? 540 : 0 }}>
                         <thead>
                           <tr style={{ background: c.fond }}>
-                            <th style={th}>Désignation</th>
-                            <th style={thR}>Qté</th>
-                            <th style={th}>Unité</th>
-                            <th style={thR}>Prix HT/u</th>
-                            <th style={thR}>Remise</th>
-                            <th style={thR}>TVA</th>
-                            <th style={thR}>Total HT</th>
-                            <th style={th}>Ingrédient</th>
+                            <th style={th}>{t('cgAchats.common.designation')}</th>
+                            <th style={thR}>{t('cgAchats.common.qty')}</th>
+                            <th style={th}>{t('cgAchats.common.unit')}</th>
+                            <th style={thR}>{t('cgAchats.common.unitPriceHt')}</th>
+                            <th style={thR}>{t('cgAchats.common.discount')}</th>
+                            <th style={thR}>{t('cgAchats.common.vat')}</th>
+                            <th style={thR}>{t('cgAchats.common.totalHt')}</th>
+                            <th style={th}>{t('cgAchats.common.ingredient')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -675,8 +677,8 @@ export default function AchatsDetailPage() {
                               <td style={tdM}>{formatQte(l.quantite)}</td>
                               <td style={tdM}>{l.unite || '—'}</td>
                               <td style={tdR}>{formatEuro(l.prix_unitaire_ht)}</td>
-                              <td style={tdM}>{l.remise ? `${l.remise} %` : '—'}</td>
-                              <td style={tdM}>{l.taux_tva != null ? `${Number(l.taux_tva).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} %` : '—'}</td>
+                              <td style={tdM}>{l.remise ? t('cgAchats.detail.discountValue', { value: l.remise }) : '—'}</td>
+                              <td style={tdM}>{l.taux_tva != null ? t('cgAchats.detail.vatValue', { value: Number(l.taux_tva).toLocaleString(i18n.language || 'fr', { maximumFractionDigits: 2 }) }) : '—'}</td>
                               <td style={tdR}>{formatEuro(l.montant_ht)}</td>
                               <td style={td}>
                                 {l.ingredient_id && ingredientsById[l.ingredient_id]?.nom
@@ -688,7 +690,7 @@ export default function AchatsDetailPage() {
                         </tbody>
                         <tfoot>
                           <tr style={{ fontWeight: 600, background: c.fond }}>
-                            <td style={{ ...td, color: c.texte }} colSpan={6}>Total</td>
+                            <td style={{ ...td, color: c.texte }} colSpan={6}>{t('cgAchats.detail.total')}</td>
                             <td style={{ ...tdR, color: c.texte }}>{formatEuro(lignes.reduce((s, l) => s + (Number(l.montant_ht) || 0), 0))}</td>
                             <td style={td} />
                           </tr>
@@ -705,13 +707,13 @@ export default function AchatsDetailPage() {
                   {fichierIsPdf ? (
                     <iframe
                       src={fichierUrl}
-                      title="Facture PDF"
+                      title={t('cgAchats.detail.fileTitlePdf')}
                       style={{ flex: 1, width: '100%', borderRadius: 10, border: `1px solid ${c.bordure}` }}
                     />
                   ) : (
                     <img
                       src={fichierUrl}
-                      alt="Facture"
+                      alt={t('cgAchats.detail.fileTitle')}
                       style={{ flex: 1, width: '100%', objectFit: 'contain', borderRadius: 10, border: `1px solid ${c.bordure}`, background: c.blanc }}
                     />
                   )}
@@ -721,7 +723,7 @@ export default function AchatsDetailPage() {
                     rel="noopener noreferrer"
                     style={{ textAlign: 'center', fontSize: 12, color: c.texteMuted, padding: '6px 0', textDecoration: 'none' }}
                   >
-                    ↗ Ouvrir en plein écran
+                    {t('cgAchats.detail.openFullscreen')}
                   </a>
                 </div>
               )}

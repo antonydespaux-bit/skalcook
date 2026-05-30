@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useTranslation } from 'react-i18next'
 import * as XLSX from 'xlsx'
 import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
@@ -76,6 +77,7 @@ export default function ImportExcelPage() {
   const isBarMode = section === 'bar'
   const isMobile = useIsMobile()
   const { c } = useTheme()
+  const { t, i18n } = useTranslation()
 
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
@@ -142,7 +144,7 @@ export default function ImportExcelPage() {
       // Auto-détection
       autoDetect(sheetsData[idx]?.rows ?? [])
     } catch (err) {
-      setError(`Lecture du fichier impossible : ${err.message}`)
+      setError(t('cgAchats.importExcel.readError', { message: err.message }))
     }
   }, [])
 
@@ -179,7 +181,7 @@ export default function ImportExcelPage() {
 
   const goReview = async () => {
     if (colFournisseur == null || colDate == null || colTotalHt == null) {
-      setError('Sélectionne au moins les colonnes Fournisseur, Date et Montant HT.')
+      setError(t('cgAchats.importExcel.errSelectColumns'))
       return
     }
     setError('')
@@ -197,11 +199,11 @@ export default function ImportExcelPage() {
       if (pref && fournisseur.toLowerCase().startsWith(pref.toLowerCase())) {
         fournisseur = fournisseur.slice(pref.length).trim()
       }
-      if (!fournisseur) errs.push('Fournisseur manquant')
+      if (!fournisseur) errs.push(t('cgAchats.importExcel.errSupplierMissing'))
 
       const dateCell = row[colDate]
       const date = parseDateCell(dateCell)
-      if (!date) errs.push('Date illisible')
+      if (!date) errs.push(t('cgAchats.importExcel.errDateUnreadable'))
 
       let numero = null
       if (dateMode === 'combined') {
@@ -212,7 +214,7 @@ export default function ImportExcelPage() {
       }
 
       const totalHt = parseMontant(row[colTotalHt])
-      if (totalHt == null) errs.push('Montant HT invalide')
+      if (totalHt == null) errs.push(t('cgAchats.importExcel.errHtInvalid'))
 
       parsed.push({
         sourceIdx: i,
@@ -227,7 +229,7 @@ export default function ImportExcelPage() {
     }
 
     if (parsed.length === 0) {
-      setError('Aucune ligne exploitable trouvée dans la feuille.')
+      setError(t('cgAchats.importExcel.errNoUsableRow'))
       return
     }
 
@@ -288,7 +290,7 @@ export default function ImportExcelPage() {
       }))
 
     if (rowsToImport.length === 0) {
-      setError('Aucune ligne cochée à importer.')
+      setError(t('cgAchats.importExcel.errNoRowChecked'))
       return
     }
 
@@ -309,7 +311,7 @@ export default function ImportExcelPage() {
       setImportResult({ imported: json.imported })
       setStep('done')
     } catch (err) {
-      setError(`Import échoué : ${err.message}`)
+      setError(t('cgAchats.importExcel.importError', { message: err.message }))
       setStep('review')
     }
   }
@@ -318,7 +320,7 @@ export default function ImportExcelPage() {
   if (!authReady) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
-        Chargement…
+        {t('cgAchats.common.loading')}
       </div>
     )
   }
@@ -350,18 +352,18 @@ export default function ImportExcelPage() {
     <div style={{ minHeight: '100vh', background: c.fond }}>
       <Navbar section={section} />
       <div style={{ padding: isMobile ? 16 : 24, maxWidth: 1100, margin: '0 auto' }}>
-        <BackButton onClick={() => router.push(isBarMode ? '/bar/achats' : '/controle-gestion/achats')} label="Retour aux achats" />
+        <BackButton onClick={() => router.push(isBarMode ? '/bar/achats' : '/controle-gestion/achats')} label={t('cgAchats.importExcel.backToAchats')} />
 
         <h1 style={{ margin: '12px 0 4px', fontSize: isMobile ? 22 : 26, fontWeight: 600, color: c.texte, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          Importer un Excel de factures
+          {t('cgAchats.importExcel.title')}
           {isBarMode && (
             <span style={{ display: 'inline-block', background: '#F5F3FF', color: '#5B21B6', fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, letterSpacing: 0.3 }}>
-              BAR
+              {t('cgAchats.importExcel.barBadge')}
             </span>
           )}
         </h1>
         <p style={{ margin: '0 0 20px', fontSize: 14, color: c.texteMuted }}>
-          Import en masse des pieds de factures (fournisseur, date, total HT). Une ligne fictive « Facture (import Excel) » sera créée par facture.
+          {t('cgAchats.importExcel.subtitle')}
         </p>
 
         {error && (
@@ -392,10 +394,10 @@ export default function ImportExcelPage() {
             >
               <div style={{ fontSize: 36, marginBottom: 8 }}>📊</div>
               <div style={{ fontSize: 15, fontWeight: 500, color: c.texte, marginBottom: 4 }}>
-                Glisse ton fichier .xlsx ou clique pour parcourir
+                {t('cgAchats.importExcel.dropFile')}
               </div>
               <div style={{ fontSize: 13, color: c.texteMuted }}>
-                Le format des colonnes sera détecté à l&apos;étape suivante.
+                {t('cgAchats.importExcel.columnsHint')}
               </div>
               <input
                 ref={fileInputRef}
@@ -414,25 +416,25 @@ export default function ImportExcelPage() {
             <div style={card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
                 <div>
-                  <div style={{ fontSize: 13, color: c.texteMuted }}>Fichier</div>
+                  <div style={{ fontSize: 13, color: c.texteMuted }}>{t('cgAchats.importExcel.fileLabel')}</div>
                   <div style={{ fontSize: 14, fontWeight: 500, color: c.texte }}>{fileName}</div>
                 </div>
                 {sheets.length > 1 && (
                   <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: c.texteMuted }}>
-                    Feuille
+                    {t('cgAchats.importExcel.sheetLabel')}
                     <select
                       value={sheetIdx}
                       onChange={(e) => { const i = Number(e.target.value); setSheetIdx(i); autoDetect(sheets[i]?.rows ?? []) }}
                       style={select}
                     >
-                      {sheets.map((s, i) => <option key={i} value={i}>{s.name} ({Math.max(0, s.rows.length - 1)} lignes)</option>)}
+                      {sheets.map((s, i) => <option key={i} value={i}>{t('cgAchats.importExcel.sheetOption', { name: s.name, count: Math.max(0, s.rows.length - 1) })}</option>)}
                     </select>
                   </label>
                 )}
               </div>
 
               <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 600, color: c.texte }}>
-                Aperçu (5 premières lignes)
+                {t('cgAchats.importExcel.previewTitle')}
               </h3>
               <div style={{ overflowX: 'auto', border: `1px solid ${c.bordure}`, borderRadius: 8 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -441,7 +443,7 @@ export default function ImportExcelPage() {
                       {headers.map((h, i) => (
                         <th key={i} style={{ ...th, fontSize: 10 }}>
                           {h}
-                          <div style={{ fontSize: 9, color: c.texteMuted, fontWeight: 400, textTransform: 'none' }}>col. {i + 1}</div>
+                          <div style={{ fontSize: 9, color: c.texteMuted, fontWeight: 400, textTransform: 'none' }}>{t('cgAchats.importExcel.colSuffix', { n: i + 1 })}</div>
                         </th>
                       ))}
                     </tr>
@@ -451,7 +453,7 @@ export default function ImportExcelPage() {
                       <tr key={i}>
                         {headers.map((_, j) => (
                           <td key={j} style={{ ...td, fontSize: 12 }}>
-                            {r[j] instanceof Date ? r[j].toLocaleDateString('fr-FR') : (r[j] == null ? '' : String(r[j]))}
+                            {r[j] instanceof Date ? r[j].toLocaleDateString(i18n.language || 'fr') : (r[j] == null ? '' : String(r[j]))}
                           </td>
                         ))}
                       </tr>
@@ -462,61 +464,61 @@ export default function ImportExcelPage() {
             </div>
 
             <div style={card}>
-              <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600, color: c.texte }}>Mapper les colonnes</h3>
+              <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600, color: c.texte }}>{t('cgAchats.importExcel.mapColumns')}</h3>
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14 }}>
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: c.texteMuted, fontWeight: 500 }}>Fournisseur *</span>
+                  <span style={{ fontSize: 12, color: c.texteMuted, fontWeight: 500 }}>{t('cgAchats.importExcel.supplierRequired')}</span>
                   <select value={colFournisseur ?? ''} onChange={(e) => setColFournisseur(e.target.value === '' ? null : Number(e.target.value))} style={select}>
-                    <option value="">— Choisir —</option>
+                    <option value="">{t('cgAchats.importExcel.choose')}</option>
                     {headers.map((h, i) => <option key={i} value={i}>{h}</option>)}
                   </select>
                   <input
                     type="text"
                     value={fournisseurPrefix}
                     onChange={(e) => setFournisseurPrefix(e.target.value)}
-                    placeholder='Préfixe à retirer (ex. "FOOD")'
+                    placeholder={t('cgAchats.importExcel.prefixPlaceholder')}
                     style={{ ...select, marginTop: 4 }}
                   />
                   <span style={{ fontSize: 11, color: c.texteMuted }}>
-                    Si renseigné, sera retiré du début du nom (ex. « FOOD Vergers » → « Vergers »).
+                    {t('cgAchats.importExcel.prefixHint')}
                   </span>
                 </label>
 
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: c.texteMuted, fontWeight: 500 }}>Montant HT *</span>
+                  <span style={{ fontSize: 12, color: c.texteMuted, fontWeight: 500 }}>{t('cgAchats.importExcel.totalHtRequired')}</span>
                   <select value={colTotalHt ?? ''} onChange={(e) => setColTotalHt(e.target.value === '' ? null : Number(e.target.value))} style={select}>
-                    <option value="">— Choisir —</option>
+                    <option value="">{t('cgAchats.importExcel.choose')}</option>
                     {headers.map((h, i) => <option key={i} value={i}>{h}</option>)}
                   </select>
                 </label>
 
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: c.texteMuted, fontWeight: 500 }}>Date *</span>
+                  <span style={{ fontSize: 12, color: c.texteMuted, fontWeight: 500 }}>{t('cgAchats.importExcel.dateRequired')}</span>
                   <select value={colDate ?? ''} onChange={(e) => setColDate(e.target.value === '' ? null : Number(e.target.value))} style={select}>
-                    <option value="">— Choisir —</option>
+                    <option value="">{t('cgAchats.importExcel.choose')}</option>
                     {headers.map((h, i) => <option key={i} value={i}>{h}</option>)}
                   </select>
                 </label>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: c.texteMuted, fontWeight: 500 }}>Contenu de la colonne Date</span>
+                  <span style={{ fontSize: 12, color: c.texteMuted, fontWeight: 500 }}>{t('cgAchats.importExcel.dateColumnContent')}</span>
                   <div style={{ display: 'flex', gap: 12, fontSize: 13, color: c.texte }}>
                     <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
                       <input type="radio" name="dateMode" checked={dateMode === 'combined'} onChange={() => setDateMode('combined')} />
-                      Date + N° facture mélangés
+                      {t('cgAchats.importExcel.dateModeCombined')}
                     </label>
                     <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
                       <input type="radio" name="dateMode" checked={dateMode === 'separated'} onChange={() => setDateMode('separated')} />
-                      Date seule
+                      {t('cgAchats.importExcel.dateModeSeparated')}
                     </label>
                   </div>
                 </div>
 
                 {dateMode === 'separated' && (
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <span style={{ fontSize: 12, color: c.texteMuted, fontWeight: 500 }}>N° facture (colonne dédiée, optionnel)</span>
+                    <span style={{ fontSize: 12, color: c.texteMuted, fontWeight: 500 }}>{t('cgAchats.importExcel.numeroColumn')}</span>
                     <select value={colNumero ?? ''} onChange={(e) => setColNumero(e.target.value === '' ? null : Number(e.target.value))} style={select}>
-                      <option value="">— Aucune —</option>
+                      <option value="">{t('cgAchats.importExcel.none')}</option>
                       {headers.map((h, i) => <option key={i} value={i}>{h}</option>)}
                     </select>
                   </label>
@@ -524,8 +526,8 @@ export default function ImportExcelPage() {
               </div>
 
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
-                <button onClick={() => { setStep('upload'); setSheets([]); setFileName('') }} style={btnSecondary}>← Changer de fichier</button>
-                <button onClick={goReview} style={btnPrimary}>Continuer →</button>
+                <button onClick={() => { setStep('upload'); setSheets([]); setFileName('') }} style={btnSecondary}>{t('cgAchats.importExcel.changeFile')}</button>
+                <button onClick={goReview} style={btnPrimary}>{t('cgAchats.importExcel.continue')}</button>
               </div>
             </div>
           </>
@@ -537,24 +539,24 @@ export default function ImportExcelPage() {
             <div style={{ ...card, display: 'flex', flexWrap: 'wrap', gap: 24, justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
                 <div>
-                  <div style={{ fontSize: 11, color: c.texteMuted, textTransform: 'uppercase', fontWeight: 600 }}>À importer</div>
+                  <div style={{ fontSize: 11, color: c.texteMuted, textTransform: 'uppercase', fontWeight: 600 }}>{t('cgAchats.importExcel.statToImport')}</div>
                   <div style={{ fontSize: 22, fontWeight: 600, color: c.texte }}>{stats.checked} / {stats.total}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: c.texteMuted, textTransform: 'uppercase', fontWeight: 600 }}>Déjà en base</div>
+                  <div style={{ fontSize: 11, color: c.texteMuted, textTransform: 'uppercase', fontWeight: 600 }}>{t('cgAchats.importExcel.statInDb')}</div>
                   <div style={{ fontSize: 22, fontWeight: 600, color: '#B45309' }}>{stats.inDb}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: c.texteMuted, textTransform: 'uppercase', fontWeight: 600 }}>Erreurs</div>
+                  <div style={{ fontSize: 11, color: c.texteMuted, textTransform: 'uppercase', fontWeight: 600 }}>{t('cgAchats.importExcel.statErrors')}</div>
                   <div style={{ fontSize: 22, fontWeight: 600, color: '#B91C1C' }}>{stats.errors}</div>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button onClick={() => toggleAll(true)} style={btnSecondary}>Tout cocher</button>
-                <button onClick={() => toggleAll(false)} style={btnSecondary}>Tout décocher</button>
-                <button onClick={() => setStep('mapping')} style={btnSecondary}>← Mapping</button>
+                <button onClick={() => toggleAll(true)} style={btnSecondary}>{t('cgAchats.importExcel.checkAll')}</button>
+                <button onClick={() => toggleAll(false)} style={btnSecondary}>{t('cgAchats.importExcel.uncheckAll')}</button>
+                <button onClick={() => setStep('mapping')} style={btnSecondary}>{t('cgAchats.importExcel.backMapping')}</button>
                 <button onClick={handleImport} style={btnPrimary} disabled={stats.checked === 0}>
-                  Importer {stats.checked} facture{stats.checked > 1 ? 's' : ''}
+                  {t('cgAchats.importExcel.importBtn', { count: stats.checked })}
                 </button>
               </div>
             </div>
@@ -565,12 +567,12 @@ export default function ImportExcelPage() {
                   <thead>
                     <tr style={{ background: c.fond }}>
                       <th style={{ ...th, width: 32 }}></th>
-                      <th style={th}>Ligne</th>
-                      <th style={th}>Fournisseur</th>
-                      <th style={th}>Date</th>
-                      <th style={th}>N° facture</th>
-                      <th style={{ ...th, textAlign: 'right' }}>Total HT</th>
-                      <th style={th}>Statut</th>
+                      <th style={th}>{t('cgAchats.importExcel.colLine')}</th>
+                      <th style={th}>{t('cgAchats.importExcel.colFournisseur')}</th>
+                      <th style={th}>{t('cgAchats.importExcel.colDate')}</th>
+                      <th style={th}>{t('cgAchats.importExcel.colNumero')}</th>
+                      <th style={{ ...th, textAlign: 'right' }}>{t('cgAchats.importExcel.colTotalHt')}</th>
+                      <th style={th}>{t('cgAchats.importExcel.colStatut')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -593,20 +595,20 @@ export default function ImportExcelPage() {
                           </td>
                           <td style={{ ...td, color: c.texteMuted, fontSize: 12 }}>{p.sourceIdx + 1}</td>
                           <td style={{ ...td, fontWeight: 500 }}>{p.fournisseur || '—'}</td>
-                          <td style={td}>{p.date ? new Date(p.date).toLocaleDateString('fr-FR') : <span style={{ color: '#B91C1C' }}>illisible</span>}</td>
+                          <td style={td}>{p.date ? new Date(p.date).toLocaleDateString(i18n.language || 'fr') : <span style={{ color: '#B91C1C' }}>{t('cgAchats.importExcel.unreadable')}</span>}</td>
                           <td style={{ ...td, fontFamily: 'monospace', fontSize: 12 }}>
                             {p.numero || <span style={{ color: c.texteMuted }}>—</span>}
                           </td>
                           <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                             {p.totalHt != null
-                              ? `${p.totalHt.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+                              ? `${p.totalHt.toLocaleString(i18n.language || 'fr', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
                               : <span style={{ color: '#B91C1C' }}>—</span>}
                           </td>
                           <td style={{ ...td, fontSize: 12 }}>
-                            {!p.valid && <span style={{ color: '#B91C1C' }}>⚠ {p.errors.join(', ')}</span>}
-                            {p.valid && inDb && <span style={{ color: '#B45309' }}>Déjà en base</span>}
-                            {p.valid && !inDb && internalDup && <span style={{ color: '#9A3412' }}>Doublon dans le fichier</span>}
-                            {p.valid && !inDb && !internalDup && <span style={{ color: '#15803D' }}>✓ Nouveau</span>}
+                            {!p.valid && <span style={{ color: '#B91C1C' }}>{t('cgAchats.importExcel.rowErrorPrefix', { errors: p.errors.join(', ') })}</span>}
+                            {p.valid && inDb && <span style={{ color: '#B45309' }}>{t('cgAchats.importExcel.alreadyInDb')}</span>}
+                            {p.valid && !inDb && internalDup && <span style={{ color: '#9A3412' }}>{t('cgAchats.importExcel.internalDup')}</span>}
+                            {p.valid && !inDb && !internalDup && <span style={{ color: '#15803D' }}>{t('cgAchats.importExcel.newRow')}</span>}
                           </td>
                         </tr>
                       )
@@ -622,7 +624,7 @@ export default function ImportExcelPage() {
         {step === 'saving' && (
           <div style={{ ...card, textAlign: 'center', padding: 48 }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
-            <div style={{ fontSize: 15, color: c.texte }}>Import en cours…</div>
+            <div style={{ fontSize: 15, color: c.texte }}>{t('cgAchats.importExcel.importing')}</div>
           </div>
         )}
 
@@ -631,18 +633,18 @@ export default function ImportExcelPage() {
           <div style={{ ...card, textAlign: 'center', padding: 48 }}>
             <div style={{ fontSize: 36, marginBottom: 8 }}>✅</div>
             <div style={{ fontSize: 18, fontWeight: 600, color: c.texte, marginBottom: 6 }}>
-              {importResult.imported} facture{importResult.imported > 1 ? 's' : ''} importée{importResult.imported > 1 ? 's' : ''}
+              {t('cgAchats.importExcel.doneImported', { count: importResult.imported })}
             </div>
             <div style={{ fontSize: 13, color: c.texteMuted, marginBottom: 20 }}>
-              Tu peux les retrouver et les compléter dans la liste des achats.
+              {t('cgAchats.importExcel.doneHint')}
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-              <button onClick={() => router.push('/controle-gestion/achats')} style={btnPrimary}>Voir la liste</button>
+              <button onClick={() => router.push('/controle-gestion/achats')} style={btnPrimary}>{t('cgAchats.importExcel.viewList')}</button>
               <button onClick={() => {
                 setStep('upload'); setSheets([]); setFileName(''); setParsedRows([])
                 setColFournisseur(null); setColDate(null); setColTotalHt(null); setColNumero(null)
                 setImportResult(null)
-              }} style={btnSecondary}>Importer un autre fichier</button>
+              }} style={btnSecondary}>{t('cgAchats.importExcel.importAnother')}</button>
             </div>
           </div>
         )}
