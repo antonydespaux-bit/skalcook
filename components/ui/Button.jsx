@@ -31,7 +31,9 @@ export function Button({
   const dynStyle = {}
   if (variant === 'primary' && c) {
     dynStyle.background = c.accent
-    dynStyle.color = '#fff'
+    // c.texte (pas #fff) : sur certains brandings (ex. Marsan) l'accent est
+    // clair et un texte blanc devient invisible.
+    dynStyle.color = c.texte
   }
   if (variant === 'ghost' && c) {
     dynStyle.color = c.texte
