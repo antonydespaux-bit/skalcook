@@ -1,11 +1,13 @@
 'use client'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { supabase } from '../../../lib/supabase'
 import { isSuperadminEmail } from '../../../lib/superadmin'
 import { useRouter } from 'next/navigation'
 import { theme, Logo, LogoBand } from '../../../lib/theme.jsx'
 
 export default function LoginPage() {
+  const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -23,7 +25,7 @@ export default function LoginPage() {
     })
 
     if (errLogin) {
-      setError('Email ou mot de passe incorrect')
+      setError(t('auth.invalidCredentials'))
       setLoading(false)
       return
     }
@@ -100,7 +102,7 @@ export default function LoginPage() {
             <Logo height={32} couleur="white" />
           </LogoBand>
           <div style={{ fontSize: '13px', color: c.texteMuted, letterSpacing: '2px', textTransform: 'uppercase' }}>
-            Gestion des fiches techniques
+            {t('auth.subtitle')}
           </div>
         </div>
 
@@ -110,7 +112,7 @@ export default function LoginPage() {
           boxShadow: '0 4px 24px rgba(44, 24, 16, 0.06)'
         }}>
           <h2 style={{ fontSize: '18px', fontWeight: '500', color: c.texte, marginBottom: '24px', textAlign: 'center' }}>
-            Connexion
+            {t('auth.login')}
           </h2>
 
           {error && (
@@ -124,10 +126,10 @@ export default function LoginPage() {
           <form onSubmit={handleLogin}>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Email
+                {t('auth.email')}
               </label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="votre@email.com" required
+                placeholder={t('auth.emailPlaceholder')} required
                 style={{
                   width: '100%', padding: '12px 14px', borderRadius: '8px',
                   border: `0.5px solid ${c.bordure}`, fontSize: '14px',
@@ -138,7 +140,7 @@ export default function LoginPage() {
 
             <div style={{ marginBottom: '8px' }}>
               <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Mot de passe
+                {t('auth.password')}
               </label>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••" required
@@ -159,7 +161,7 @@ export default function LoginPage() {
                   fontSize: '12px', color: c.texteMuted,
                   cursor: 'pointer', textDecoration: 'underline', padding: 0
                 }}>
-                Mot de passe oublié ?
+                {t('auth.forgotPassword')}
               </button>
             </div>
 
@@ -170,7 +172,7 @@ export default function LoginPage() {
               fontSize: '14px', fontWeight: '600', cursor: loading ? 'not-allowed' : 'pointer',
               letterSpacing: '1px', textTransform: 'uppercase'
             }}>
-              {loading ? 'Connexion...' : 'Se connecter'}
+              {loading ? t('auth.loggingIn') : t('auth.loginButton')}
             </button>
           </form>
         </div>

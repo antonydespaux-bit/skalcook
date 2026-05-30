@@ -63,5 +63,16 @@
       "salesBudgets": "Sales budgets",
       "salesImport": "Import sales"
     }
+  },
+  "auth": {
+    "subtitle": "Recipe sheet management",
+    "login": "Log in",
+    "invalidCredentials": "Incorrect email or password",
+    "email": "Email",
+    "emailPlaceholder": "your@email.com",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "loggingIn": "Logging in...",
+    "loginButton": "Sign in"
   }
 }

@@ -63,5 +63,16 @@
       "salesBudgets": "Presupuestos de ventas",
       "salesImport": "Importar ventas"
     }
+  },
+  "auth": {
+    "subtitle": "Gestión de fichas técnicas",
+    "login": "Iniciar sesión",
+    "invalidCredentials": "Correo o contraseña incorrectos",
+    "email": "Correo",
+    "emailPlaceholder": "tu@correo.com",
+    "password": "Contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "loggingIn": "Conectando...",
+    "loginButton": "Iniciar sesión"
   }
 }

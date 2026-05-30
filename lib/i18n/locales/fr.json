@@ -63,5 +63,16 @@
       "salesBudgets": "Budgets CA",
       "salesImport": "Import ventes"
     }
+  },
+  "auth": {
+    "subtitle": "Gestion des fiches techniques",
+    "login": "Connexion",
+    "invalidCredentials": "Email ou mot de passe incorrect",
+    "email": "Email",
+    "emailPlaceholder": "votre@email.com",
+    "password": "Mot de passe",
+    "forgotPassword": "Mot de passe oublié ?",
+    "loggingIn": "Connexion...",
+    "loginButton": "Se connecter"
   }
 }

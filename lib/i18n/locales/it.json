@@ -63,5 +63,16 @@
       "salesBudgets": "Budget vendite",
       "salesImport": "Importa vendite"
     }
+  },
+  "auth": {
+    "subtitle": "Gestione delle schede tecniche",
+    "login": "Accesso",
+    "invalidCredentials": "Email o password non corretti",
+    "email": "Email",
+    "emailPlaceholder": "tua@email.com",
+    "password": "Password",
+    "forgotPassword": "Password dimenticata?",
+    "loggingIn": "Accesso in corso...",
+    "loginButton": "Accedi"
   }
 }
