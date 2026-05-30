@@ -355,99 +355,90 @@ export default function ImportView({ section = 'cuisine' }) {
       return
     }
 
-    const batchSize = 50
+    // \u2500\u2500 Charge l'\u00e9tat serveur existant en UNE requ\u00eate (au lieu d'un SELECT par
+    // ligne). On classe ensuite les lignes en inserts / updates, puis on \u00e9crit
+    // en lots \u2014 au lieu de ~2 round-trips par ingr\u00e9dient (timeout sur 300+). \u2500\u2500
+    const selectCols = cfg.hasCategories ? 'id, nom, prix_kg, categorie_id' : 'id, nom, prix_kg'
+    const { data: existingRows, error: errExisting } = await supabase
+      .from(cfg.table)
+      .select(selectCols)
+      .eq('client_id', clientId)
+    if (errExisting) {
+      setLoading(false)
+      alert(`Impossible de charger les donn\u00e9es existantes : ${errExisting.message}`)
+      return
+    }
+    const existingByNom = new Map()
+    ;(existingRows || []).forEach(r => existingByNom.set(r.nom, r))
+
+    // D\u00e9doublonne le fichier par nom (la derni\u00e8re ligne l'emporte, comme en
+    // s\u00e9quentiel o\u00f9 une 2\u1d49 ligne de m\u00eame nom mettait \u00e0 jour la 1\u02b3\u1d49).
+    const dedup = new Map()
+    for (const ing of itemsToImport) dedup.set(ing.nom, ing)
+    const uniqueItems = [...dedup.values()]
+
+    const nowIso = new Date().toISOString()
+    const toInsert = []
+    const toUpdate = []
+
+    for (const ing of uniqueItems) {
+      const existing = existingByNom.get(ing.nom)
+      if (!existing) {
+        const row = { nom: ing.nom, prix_kg: ing.prix_kg, unite: ing.unite, client_id: clientId }
+        if (cfg.hasCategories) row.categorie_id = ing.categorie_id || null
+        toInsert.push({ row, hasCat: cfg.hasCategories && !!ing.categorie_id })
+      } else {
+        const prixChange = existing.prix_kg !== ing.prix_kg
+        const catChange = cfg.hasCategories && !!ing.categorie_id && existing.categorie_id !== ing.categorie_id
+        if (!prixChange && !catChange) continue
+        // upsert sur la PK id : on inclut les colonnes NOT NULL (nom, client_id)
+        // pour satisfaire la partie INSERT ; le conflit d\u00e9clenche l'UPDATE.
+        const row = { id: existing.id, nom: ing.nom, client_id: clientId, prix_kg: ing.prix_kg, unite: ing.unite }
+        if (prixChange) {
+          row.prix_precedent = existing.prix_kg
+          row.prix_updated_at = nowIso
+        }
+        if (catChange) row.categorie_id = ing.categorie_id
+        toUpdate.push({ row, catChange })
+      }
+    }
+
+    const CHUNK = 200
     let importes = 0
     let misAJour = 0
     let erreurs = 0
     let categoriesAssignees = 0
     const total = totalSelectionnes
+    let processed = 0
 
-    for (let i = 0; i < itemsToImport.length; i += batchSize) {
-      const batch = itemsToImport.slice(i, i + batchSize)
-      for (const ing of batch) {
-        try {
-          if (cfg.hasCategories) {
-            // Cuisine: full category-aware import
-            const { data: existing } = await supabase
-              .from(cfg.table)
-              .select('id, prix_kg, categorie_id')
-              .eq('nom', ing.nom)
-              .eq('client_id', clientId)
-              .single()
-
-            const updateData = {
-              prix_kg: ing.prix_kg,
-              unite: ing.unite,
-            }
-            if (ing.categorie_id) updateData.categorie_id = ing.categorie_id
-
-            if (existing) {
-              const prixChange = existing.prix_kg !== ing.prix_kg
-              const catChange = ing.categorie_id && existing.categorie_id !== ing.categorie_id
-
-              if (prixChange || catChange) {
-                if (prixChange) {
-                  updateData.prix_precedent = existing.prix_kg
-                  updateData.prix_updated_at = new Date().toISOString()
-                }
-                await supabase.from(cfg.table)
-                  .update(updateData)
-                  .eq('id', existing.id)
-                  .eq('client_id', clientId)
-                misAJour++
-                if (catChange) categoriesAssignees++
-              }
-            } else {
-              await supabase.from(cfg.table).insert([{
-                nom: ing.nom,
-                prix_kg: ing.prix_kg,
-                unite: ing.unite,
-                categorie_id: ing.categorie_id || null,
-                client_id: clientId
-              }])
-              importes++
-              if (ing.categorie_id) categoriesAssignees++
-            }
-          } else {
-            // Bar: simpler import without category matching
-            const { data: existing } = await supabase
-              .from(cfg.table)
-              .select('id, prix_kg')
-              .eq('nom', ing.nom)
-              .eq('client_id', clientId)
-              .single()
-
-            if (existing) {
-              if (existing.prix_kg !== ing.prix_kg) {
-                await supabase.from(cfg.table)
-                  .update({
-                    prix_kg: ing.prix_kg,
-                    unite: ing.unite,
-                    prix_precedent: existing.prix_kg,
-                    prix_updated_at: new Date().toISOString()
-                  })
-                  .eq('id', existing.id)
-                  .eq('client_id', clientId)
-                misAJour++
-              }
-            } else {
-              await supabase.from(cfg.table).insert([{
-                nom: ing.nom,
-                prix_kg: ing.prix_kg,
-                unite: ing.unite,
-                client_id: clientId
-              }])
-              importes++
-            }
-          }
-        } catch { erreurs++ }
+    for (let i = 0; i < toInsert.length; i += CHUNK) {
+      const slice = toInsert.slice(i, i + CHUNK)
+      const { error } = await supabase.from(cfg.table).insert(slice.map(s => s.row))
+      if (error) {
+        erreurs += slice.length
+      } else {
+        importes += slice.length
+        categoriesAssignees += slice.filter(s => s.hasCat).length
       }
-
-      const done = Math.min(i + batchSize, total)
-      setProgression(Math.round((done / total) * 100))
-      setEtape(`Traitement ${done} / ${total} ingr\u00e9dients...`)
-      await new Promise(r => setTimeout(r, 10))
+      processed += slice.length
+      setProgression(Math.round((processed / total) * 100))
+      setEtape(`Traitement ${processed} / ${total}...`)
     }
+
+    for (let i = 0; i < toUpdate.length; i += CHUNK) {
+      const slice = toUpdate.slice(i, i + CHUNK)
+      const { error } = await supabase.from(cfg.table).upsert(slice.map(s => s.row), { onConflict: 'id' })
+      if (error) {
+        erreurs += slice.length
+      } else {
+        misAJour += slice.length
+        categoriesAssignees += slice.filter(s => s.catChange).length
+      }
+      processed += slice.length
+      setProgression(Math.round((processed / total) * 100))
+      setEtape(`Traitement ${processed} / ${total}...`)
+    }
+    setProgression(100)
 
     await log({
       action: 'IMPORT',
