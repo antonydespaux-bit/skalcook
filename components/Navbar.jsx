@@ -1,12 +1,14 @@
 'use client'
 import { useRouter, usePathname } from 'next/navigation'
 import { useEffect, useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { supabase, getClientId } from '../lib/supabase'
 import { isSuperadminEmail } from '../lib/superadmin'
 import { useTheme } from '../lib/useTheme'
 import { useRole } from '../lib/useRole'
 import { useIsMobile } from '../lib/useIsMobile'
 import { useTenant } from '../lib/useTenant'
+import LanguageSwitcher from './LanguageSwitcher'
 
 function hrefWithClient(path, clientId) {
   if (!clientId || typeof path !== 'string' || path.startsWith('http')) return path
@@ -24,6 +26,7 @@ export default function Navbar({ section = 'cuisine' }) {
 
   const router = useRouter()
   const pathname = usePathname()
+  const { t } = useTranslation()
   const { c, nomEtablissement, logoUrl } = useTheme()
   const { tenant } = useTenant()
   const { role } = useRole()
@@ -66,7 +69,7 @@ export default function Navbar({ section = 'cuisine' }) {
   const DASHBOARD_PATH     = isBar ? '/bar/dashboard'      : '/dashboard'
   const NOUVELLE_FICHE_PATH = isBar ? '/bar/fiches/nouvelle' : '/fiches/nouvelle'
   const CROSS_PATH         = isBar ? '/dashboard'          : '/bar/dashboard'
-  const CROSS_LABEL        = isBar ? '🍽️ Cuisine'          : '🍸 Bar'
+  const CROSS_LABEL        = isBar ? t('nav.kitchen')      : t('nav.bar')
   const LOGO_EMOJI         = isBar ? '🍸'                   : '🍽️'
 
   // ─── Modules / Rôles ─────────────────────────────────────────────────────────
@@ -135,86 +138,94 @@ export default function Navbar({ section = 'cuisine' }) {
   const groupes = isBar
     ? [
         {
-          label: 'Fiches bar',
+          id: 'barSheets',
+          label: t('nav.groups.barSheets'),
           paths: ['/bar/fiches', '/bar/sous-fiches', '/bar/archives'],
           items: [
-            ...(hasModule('fiches')      ? [{ label: 'Toutes les fiches', path: '/bar/fiches' }]   : []),
-            ...(hasModule('sous-fiches') ? [{ label: 'Sous-fiches',       path: '/bar/sous-fiches' }] : []),
-            { label: 'Archives', path: '/bar/archives' },
+            ...(hasModule('fiches')      ? [{ label: t('nav.items.allSheets'), path: '/bar/fiches' }]   : []),
+            ...(hasModule('sous-fiches') ? [{ label: t('nav.items.subSheets'), path: '/bar/sous-fiches' }] : []),
+            { label: t('nav.items.archives'), path: '/bar/archives' },
           ]
         },
         {
-          label: 'Contenus',
+          id: 'content',
+          label: t('nav.groups.content'),
           paths: ['/bar/recap', '/bar/ingredients', '/bar/import'],
           items: [
-            ...(hasModule('recap')                     ? [{ label: 'Récap bev cost', path: '/bar/recap' }]       : []),
-            ...(hasModule('ingredients') && peutModifier ? [{ label: 'Ingrédients',  path: '/bar/ingredients' }] : []),
+            ...(hasModule('recap')                     ? [{ label: t('nav.items.recapBev'), path: '/bar/recap' }]       : []),
+            ...(hasModule('ingredients') && peutModifier ? [{ label: t('nav.items.ingredients'),  path: '/bar/ingredients' }] : []),
           ]
         },
         ...(hasModule('gestion') ? [{
-          label: 'Gestion',
+          id: 'management',
+          label: t('nav.groups.management'),
           paths: ['/inventaire', '/bar/achats'],
           items: [
-            { label: 'Inventaire', path: '/inventaire?section=bar' },
-            { label: 'Achats',     path: '/bar/achats' },
+            { label: t('nav.items.inventory'), path: '/inventaire?section=bar' },
+            { label: t('nav.items.purchases'), path: '/bar/achats' },
           ]
         }] : []),
       ].filter(g => g.items.length > 0)
     : [
         {
-          label: 'Fiches',
+          id: 'sheets',
+          label: t('nav.groups.sheets'),
           paths: ['/fiches', '/sous-fiches', '/archives'],
           items: [
-            ...(hasModule('fiches')      ? [{ label: 'Toutes les fiches', path: '/fiches' }]     : []),
-            ...(hasModule('sous-fiches') ? [{ label: 'Sous-fiches',       path: '/sous-fiches' }] : []),
-            { label: 'Archives', path: '/archives' },
+            ...(hasModule('fiches')      ? [{ label: t('nav.items.allSheets'), path: '/fiches' }]     : []),
+            ...(hasModule('sous-fiches') ? [{ label: t('nav.items.subSheets'), path: '/sous-fiches' }] : []),
+            { label: t('nav.items.archives'), path: '/archives' },
           ]
         },
         {
-          label: 'Contenus',
+          id: 'content',
+          label: t('nav.groups.content'),
           paths: ['/menus', '/cartes', '/recap', '/ingredients', '/import', '/avis'],
           items: [
             ...(hasModule('menus') || hasModule('cartes')
-              ? [{ label: 'Menus & Cartes', path: '/menus' }]
+              ? [{ label: t('nav.items.menusCartes'), path: '/menus' }]
               : []),
-            ...(hasModule('recap')                     ? [{ label: 'Récap food cost', path: '/recap' }]        : []),
-            ...(hasModule('ingredients') && peutModifier ? [{ label: 'Ingrédients',  path: '/ingredients' }] : []),
-            ...(hasModule('avis')                      ? [{ label: 'Avis clients',    path: '/avis' }]         : []),
+            ...(hasModule('recap')                     ? [{ label: t('nav.items.recapFood'), path: '/recap' }]        : []),
+            ...(hasModule('ingredients') && peutModifier ? [{ label: t('nav.items.ingredients'),  path: '/ingredients' }] : []),
+            ...(hasModule('avis')                      ? [{ label: t('nav.items.reviews'),    path: '/avis' }]         : []),
           ]
         },
         ...(hasModule('crm') && (role === 'admin' || role === 'directeur') ? [{
-          label: 'CRM',
+          id: 'crm',
+          label: t('nav.groups.crm'),
           paths: ['/crm'],
           items: [
-            { label: 'Dashboard',   path: '/crm' },
-            { label: 'Clients',     path: '/crm/clients' },
-            { label: 'Événements',  path: '/crm/evenements' },
-            { label: 'Devis',       path: '/crm/devis' },
+            { label: t('nav.items.dashboard'),   path: '/crm' },
+            { label: t('nav.items.clients'),     path: '/crm/clients' },
+            { label: t('nav.items.events'),  path: '/crm/evenements' },
+            { label: t('nav.items.quotes'),       path: '/crm/devis' },
           ]
         }] : []),
         ...(role === 'admin' ? [{
-          label: 'Admin',
+          id: 'admin',
+          label: t('nav.groups.admin'),
           paths: ['/parametres', '/admin', '/admin/logs', '/admin/ardoise'],
           items: [
-            { label: 'Paramètres',   path: '/parametres' },
-            { label: 'Utilisateurs', path: '/admin' },
-            { label: 'Activité',     path: '/admin/logs' },
-            ...(hasModule('ardoise') ? [{ label: 'Ardoise', path: '/admin/ardoise' }] : []),
+            { label: t('nav.items.settings'),   path: '/parametres' },
+            { label: t('nav.items.users'), path: '/admin' },
+            { label: t('nav.items.activity'),     path: '/admin/logs' },
+            ...(hasModule('ardoise') ? [{ label: t('nav.items.ardoise'), path: '/admin/ardoise' }] : []),
           ]
         }] : []),
         ...(hasModule('gestion') ? [{
-          label: 'Gestion',
+          id: 'management',
+          label: t('nav.groups.management'),
           paths: ['/inventaire', '/controle-gestion'],
           items: [
-            { label: 'Inventaire',       path: '/inventaire' },
-            { label: 'Achats',        path: '/controle-gestion/achats' },
-            { label: 'Fournisseurs',  path: '/controle-gestion/fournisseurs' },
-            ...(role === 'admin' || role === 'directeur' ? [{ label: 'Food cost',     path: '/controle-gestion/food-cost' }] : []),
-            ...(role === 'admin' || role === 'directeur' ? [{ label: 'Analyses',      path: '/controle-gestion/analyses' }] : []),
-            { label: 'Suivi CA',      path: '/controle-gestion/ventes' },
-            ...(role === 'admin' || role === 'directeur' ? [{ label: 'Rapport hebdo',  path: '/controle-gestion/ventes/rapport-hebdo' }] : []),
-            { label: 'Budgets CA',    path: '/controle-gestion/ventes/budgets' },
-            ...(role === 'admin' ? [{ label: 'Import ventes', path: '/controle-gestion/import' }] : []),
+            { label: t('nav.items.inventory'),       path: '/inventaire' },
+            { label: t('nav.items.purchases'),        path: '/controle-gestion/achats' },
+            { label: t('nav.items.suppliers'),  path: '/controle-gestion/fournisseurs' },
+            ...(role === 'admin' || role === 'directeur' ? [{ label: t('nav.items.foodCost'),     path: '/controle-gestion/food-cost' }] : []),
+            ...(role === 'admin' || role === 'directeur' ? [{ label: t('nav.items.analytics'),      path: '/controle-gestion/analyses' }] : []),
+            { label: t('nav.items.salesTracking'),      path: '/controle-gestion/ventes' },
+            ...(role === 'admin' || role === 'directeur' ? [{ label: t('nav.items.weeklyReport'),  path: '/controle-gestion/ventes/rapport-hebdo' }] : []),
+            { label: t('nav.items.salesBudgets'),    path: '/controle-gestion/ventes/budgets' },
+            ...(role === 'admin' ? [{ label: t('nav.items.salesImport'), path: '/controle-gestion/import' }] : []),
           ]
         }] : []),
       ].filter(g => g.items.length > 0)
@@ -292,17 +303,17 @@ export default function Navbar({ section = 'cuisine' }) {
                 color: isActive(DASHBOARD_PATH) ? 'white' : 'rgba(255,255,255,0.55)',
                 cursor: 'pointer', transition: 'all 0.15s',
               }}
-            >Dashboard</button>
+            >{t('nav.dashboard')}</button>
           )}
 
           {/* Groupes dropdown */}
           {!isMobile && groupes.map((groupe) => {
             const active = isActive(groupe.paths)
-            const ouvert = groupeOuvert === groupe.label
+            const ouvert = groupeOuvert === groupe.id
             return (
-              <div key={groupe.label} style={{ position: 'relative' }}>
+              <div key={groupe.id} style={{ position: 'relative' }}>
                 <button
-                  onClick={(e) => toggleGroupe(e, groupe.label)}
+                  onClick={(e) => toggleGroupe(e, groupe.id)}
                   style={{
                     background: ouvert ? 'rgba(255,255,255,0.06)' : 'transparent',
                     border: 'none',
@@ -370,21 +381,22 @@ export default function Navbar({ section = 'cuisine' }) {
                 fontSize: '13px', fontWeight: '500', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: '5px',
               }}
-            ><span style={{ fontSize: '16px', lineHeight: 1 }}>+</span> Nouvelle fiche</button>
+            ><span style={{ fontSize: '16px', lineHeight: 1 }}>+</span> {t('nav.newSheet')}</button>
           )}
+          {!isMobile && <LanguageSwitcher variant="nav" />}
           {!isMobile && (
             <button onClick={(e) => { e.stopPropagation(); pushWithClient('/mon-compte') }} style={{
               background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.55)',
               border: '0.5px solid rgba(255,255,255,0.1)',
               borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer',
-            }}>Mon Compte</button>
+            }}>{t('nav.account')}</button>
           )}
           {!isMobile && (
             <button onClick={handleLogout} style={{
               background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.55)',
               border: '0.5px solid rgba(255,255,255,0.1)',
               borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer',
-            }}>Déconnexion</button>
+            }}>{t('nav.logout')}</button>
           )}
           {!isMobile && showReturnSuperAdmin && (
             <button onClick={() => router.push('/superadmin')}
@@ -393,7 +405,7 @@ export default function Navbar({ section = 'cuisine' }) {
                 border: '0.5px solid rgba(99,102,241,0.35)',
                 borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer', fontWeight: '500'
               }}
-            >← Retour SuperAdmin</button>
+            >{t('nav.backToSuperadmin')}</button>
           )}
           {isMobile && (
             <button onClick={() => setMenuOuvert(!menuOuvert)} style={{
@@ -424,7 +436,7 @@ export default function Navbar({ section = 'cuisine' }) {
                 borderRadius: '8px', padding: '12px 16px',
                 fontSize: '14px', cursor: 'pointer', marginBottom: '8px'
               }}
-            >← Retour SuperAdmin</button>
+            >{t('nav.backToSuperadmin')}</button>
           )}
           {peutModifier && (
             <button onClick={() => { setMenuOuvert(false); pushWithClient(NOUVELLE_FICHE_PATH) }}
@@ -434,7 +446,7 @@ export default function Navbar({ section = 'cuisine' }) {
                 borderRadius: '8px', padding: '12px 16px',
                 fontSize: '14px', fontWeight: '500', cursor: 'pointer', marginBottom: '4px'
               }}
-            >+ Nouvelle fiche{isBar ? ' bar' : ''}</button>
+            >+ {isBar ? t('nav.newSheetBar') : t('nav.newSheet')}</button>
           )}
           <button onClick={() => { setMenuOuvert(false); pushWithClient(DASHBOARD_PATH) }}
             style={{
@@ -444,7 +456,7 @@ export default function Navbar({ section = 'cuisine' }) {
               border: 'none', borderRadius: '8px', padding: '12px 16px',
               fontSize: '14px', cursor: 'pointer', marginBottom: '4px'
             }}
-          >Dashboard</button>
+          >{t('nav.dashboard')}</button>
           {(() => {
             const allItems = groupes.flatMap(g => g.items)
             const activePath = matchingItemPath(allItems)
@@ -463,7 +475,7 @@ export default function Navbar({ section = 'cuisine' }) {
           <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '8px 0' }} />
           <button onClick={() => { setMenuOuvert(false); pushWithClient('/mon-compte') }}
             style={mobileItemStyle(isActive('/mon-compte'))}
-          >Mon Compte</button>
+          >{t('nav.account')}</button>
           <button onClick={handleLogout}
             style={{
               display: 'block', width: '100%', textAlign: 'left',
@@ -471,7 +483,10 @@ export default function Navbar({ section = 'cuisine' }) {
               border: 'none', borderRadius: '8px', padding: '11px 16px',
               fontSize: '14px', cursor: 'pointer'
             }}
-          >Déconnexion</button>
+          >{t('nav.logout')}</button>
+          <div style={{ marginTop: '8px', padding: '0 4px' }}>
+            <LanguageSwitcher variant="nav" style={{ width: '100%' }} />
+          </div>
         </div>
       )}
     </>
