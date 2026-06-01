@@ -89,8 +89,9 @@ export const checkDuplicateSchema = z.object({
 export const createIngredientSchema = z.object({
   clientId: clientIdSchema,
   nom:      z.string().min(1, 'Nom requis').max(255),
-  unite:    z.string().min(1).max(20),
-  prix_kg:  z.coerce.number().min(0).optional().default(0),
+  // Unité optionnelle : si absente, le service applique une unité par défaut.
+  unite:    z.string().max(20).optional().nullable(),
+  prix_kg:  z.coerce.number().min(0).nullable().optional().default(0),
   section:  sectionSchema,
 })
 

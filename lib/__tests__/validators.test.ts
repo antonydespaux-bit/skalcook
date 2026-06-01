@@ -121,6 +121,22 @@ describe('createIngredientSchema', () => {
       expect(result.data.prix_kg).toBe(0)
     }
   })
+
+  it('accepts a missing/null unité (le service applique un défaut)', () => {
+    const nullUnite = createIngredientSchema.safeParse({
+      clientId: '550e8400-e29b-41d4-a716-446655440000',
+      nom: 'JAMBON 50% IBERIQUE AVEC OS',
+      unite: null,
+      prix_kg: null,
+    })
+    expect(nullUnite.success).toBe(true)
+
+    const noUnite = createIngredientSchema.safeParse({
+      clientId: '550e8400-e29b-41d4-a716-446655440000',
+      nom: 'JAMBON 50% IBERIQUE AVEC OS',
+    })
+    expect(noUnite.success).toBe(true)
+  })
 })
 
 // ── Inventaire schemas ─────────────────────────────────────────────────────
