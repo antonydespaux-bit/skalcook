@@ -499,7 +499,20 @@ export async function updateFacture(
     .eq('id', factureId)
     .eq('client_id', clientId)
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    // Conflit sur le numéro : une autre facture active du même client porte
+    // déjà ce numéro (index partiel achats_factures_client_numero_unique).
+    // On renvoie un 409 explicite plutôt qu'un 500 opaque.
+    if (error.code === '23505' || /duplicate key/i.test(error.message)) {
+      const numero = (dbUpdates.numero_facture as string | undefined) || ''
+      throw new ConflictError(
+        numero
+          ? `Une autre facture porte déjà le numéro "${numero}".`
+          : 'Une autre facture porte déjà ce numéro.'
+      )
+    }
+    throw new Error(error.message)
+  }
   return { updated: true }
 }
 
@@ -675,10 +688,13 @@ async function autoCreateMissingIngredients<T extends {
   if (missing.length === 0) return { lignes: lignesInput, autoCreatedCount: 0 }
 
   const norms = [...new Set(missing.map((l) => normDesignation(l.designation)))].filter(Boolean)
+  // limit explicite : sans ça, PostgREST plafonne à 1000 lignes et un client
+  // avec plus d'ingrédients verrait des doublons recréés à tort.
   const { data: existingIngs } = await db
     .from(ingredientTable)
     .select('id, nom')
     .eq('client_id', clientId)
+    .limit(10000)
   const ingByNorm: Record<string, { id: string }> = {}
   for (const ing of existingIngs ?? []) {
     ingByNorm[normDesignation((ing as { nom: string }).nom)] = ing as { id: string }
@@ -794,13 +810,18 @@ export async function findOrCreateIngredient(
   const defaultUnite = section === 'bar' ? 'cl' : 'kg'
 
   // 1. Existe pour ce client ?
-  const { data: existing } = await db
+  // On échappe %, _ et \ : ce sont des métacaractères LIKE, or les désignations
+  // en contiennent souvent ("JAMBON 50%", "CRÈME 35%"). Sans échappement, le
+  // motif matcherait plusieurs lignes (maybeSingle renverrait alors une erreur,
+  // donc data=null) et on tomberait dans l'INSERT → conflit (client_id, nom).
+  const nomLike = nomTrim.replace(/[\\%_]/g, '\\$&')
+  const { data: matches } = await db
     .from(table)
     .select('id, nom, unite, prix_kg')
     .eq('client_id', clientId)
-    .ilike('nom', nomTrim)
-    .maybeSingle()
-  if (existing) return existing
+    .ilike('nom', nomLike)
+    .limit(1)
+  if (matches && matches.length > 0) return matches[0]
 
   // 2. Création — on assigne une catégorie par défaut si fournie (les articles
   // créés depuis une facture atterrissent ainsi dans « À classer » plutôt que
