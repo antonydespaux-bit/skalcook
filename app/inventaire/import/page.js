@@ -54,7 +54,15 @@ export default function ImportInventairePage() {
             const qStr = String(row[1] || '').replace(',', '.').replace(/[^0-9.\-]/g, '')
             const quantite = parseFloat(qStr)
             if (!nom || isNaN(quantite)) continue
-            out.push({ nom, quantite })
+            const unite = String(row[2] || '').trim()
+            const pStr = String(row[3] || '').replace(',', '.').replace(/[^0-9.\-]/g, '')
+            const prix = pStr === '' ? null : parseFloat(pStr)
+            out.push({
+              nom,
+              quantite,
+              unite: unite || null,
+              prix_unitaire: prix != null && !isNaN(prix) ? prix : null,
+            })
           }
           return out
         }
@@ -75,7 +83,7 @@ export default function ImportInventairePage() {
         }
 
         if (parsed.length === 0) {
-          setError('Aucune ligne valide trouvée. Vérifie le format : colonne A = Nom, colonne B = Quantité.')
+          setError('Aucune ligne valide trouvée. Vérifie le format : colonne A = Nom, colonne B = Quantité (Unité, Prix unitaire et Total optionnels).')
           setLignes([])
           return
         }
@@ -90,13 +98,13 @@ export default function ImportInventairePage() {
   const telechargerModele = () => {
     const wb = XLSX.utils.book_new()
     const rows = [
-      ['Nom', 'Quantité'],
-      ['Beurre doux', '4.5'],
-      ['Farine T55', '12'],
-      ['Tomates cerises', '2.3'],
+      ['Nom', 'Quantité', 'Unité', 'Prix unitaire', 'Total'],
+      ['Beurre doux', '4.5', 'kg', '8.90', '40.05'],
+      ['Farine T55', '12', 'kg', '1.20', '14.40'],
+      ['Tomates cerises', '2.3', 'kg', '4.50', '10.35'],
     ]
     const ws = XLSX.utils.aoa_to_sheet(rows)
-    ws['!cols'] = [{ wch: 30 }, { wch: 12 }]
+    ws['!cols'] = [{ wch: 30 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 12 }]
     XLSX.utils.book_append_sheet(wb, ws, 'Inventaire')
     XLSX.writeFile(wb, 'modele_import_inventaire.xlsx')
   }
@@ -222,7 +230,10 @@ export default function ImportInventairePage() {
           </div>
           <div>
             <strong style={{ color: c.texte }}>Colonne A</strong> — Nom de l&apos;ingrédient (la première ligne est ignorée comme en-tête)<br />
-            <strong style={{ color: c.texte }}>Colonne B</strong> — Quantité (point ou virgule décimale)
+            <strong style={{ color: c.texte }}>Colonne B</strong> — Quantité (point ou virgule décimale)<br />
+            <strong style={{ color: c.texte }}>Colonne C</strong> — Unité <em>(optionnel)</em><br />
+            <strong style={{ color: c.texte }}>Colonne D</strong> — Prix unitaire <em>(optionnel — sinon prix connu de l&apos;ingrédient)</em><br />
+            <strong style={{ color: c.texte }}>Colonne E</strong> — Total <em>(optionnel, recalculé automatiquement)</em>
           </div>
         </div>
 
@@ -248,6 +259,9 @@ export default function ImportInventairePage() {
                 <tr style={{ background: c.fond }}>
                   <th style={{ padding: '8px 16px', textAlign: 'left', fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Nom</th>
                   <th style={{ padding: '8px 16px', textAlign: 'right', fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Quantité</th>
+                  <th style={{ padding: '8px 16px', textAlign: 'left', fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Unité</th>
+                  <th style={{ padding: '8px 16px', textAlign: 'right', fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Prix unit.</th>
+                  <th style={{ padding: '8px 16px', textAlign: 'right', fontSize: '11px', color: c.texteMuted, fontWeight: '500', textTransform: 'uppercase' }}>Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -255,6 +269,9 @@ export default function ImportInventairePage() {
                   <tr key={i} style={{ borderTop: `0.5px solid ${c.bordure}` }}>
                     <td style={{ padding: '8px 16px', color: c.texte }}>{l.nom}</td>
                     <td style={{ padding: '8px 16px', textAlign: 'right', color: c.texte }}>{l.quantite}</td>
+                    <td style={{ padding: '8px 16px', color: c.texteMuted }}>{l.unite || '—'}</td>
+                    <td style={{ padding: '8px 16px', textAlign: 'right', color: c.texteMuted }}>{l.prix_unitaire != null ? l.prix_unitaire.toFixed(2) : '—'}</td>
+                    <td style={{ padding: '8px 16px', textAlign: 'right', color: c.texte }}>{l.prix_unitaire != null ? (l.quantite * l.prix_unitaire).toFixed(2) : '—'}</td>
                   </tr>
                 ))}
               </tbody>

@@ -620,19 +620,26 @@ export async function importInventaire(
   clientId: string,
   section: 'cuisine' | 'bar',
   dateInventaire: string,
-  lignes: { nom: string; quantite: number }[]
+  lignes: { nom: string; quantite: number; unite?: string | null; prix_unitaire?: number | null }[]
 ) {
   const isBar = section === 'bar'
   const table = isBar ? 'ingredients_bar' : 'ingredients'
   const defaultUnit = isBar ? 'cl' : 'kg'
 
+  type ImportLigne = { nom: string; quantite: number; unite: string | null; prix_unitaire: number | null }
+
   // 1. Dédoublonne les lignes par nom (insensible à la casse). Si l'utilisateur
   // a deux fois le même ingrédient dans le fichier, on garde le dernier.
-  const lignesByNorm = new Map<string, { nom: string; quantite: number }>()
+  const lignesByNorm = new Map<string, ImportLigne>()
   for (const l of lignes) {
     const nomTrim = l.nom.trim()
     if (!nomTrim) continue
-    lignesByNorm.set(nomTrim.toLowerCase(), { nom: nomTrim, quantite: l.quantite })
+    lignesByNorm.set(nomTrim.toLowerCase(), {
+      nom: nomTrim,
+      quantite: l.quantite,
+      unite: l.unite?.trim() || null,
+      prix_unitaire: l.prix_unitaire ?? null,
+    })
   }
   const lignesUniq = Array.from(lignesByNorm.values())
 
@@ -647,11 +654,18 @@ export async function importInventaire(
     ingByNom.set(ing.nom.toLowerCase().trim(), ing as never)
   }
 
-  // 3. Crée les ingrédients manquants (prix=null, unite par défaut selon section).
-  const toCreate: { nom: string; client_id: string; unite: string }[] = []
+  // 3. Crée les ingrédients manquants. Reprend l'unité et le prix du fichier
+  // quand ils sont fournis, sinon unité par défaut selon section et prix null.
+  const toCreate: { nom: string; client_id: string; unite: string; prix_kg?: number }[] = []
   for (const l of lignesUniq) {
     if (!ingByNom.has(l.nom.toLowerCase())) {
-      toCreate.push({ nom: l.nom, client_id: clientId, unite: defaultUnit })
+      const row: { nom: string; client_id: string; unite: string; prix_kg?: number } = {
+        nom: l.nom,
+        client_id: clientId,
+        unite: l.unite || defaultUnit,
+      }
+      if (l.prix_unitaire != null) row.prix_kg = l.prix_unitaire
+      toCreate.push(row)
     }
   }
   let nbCrees = 0
@@ -665,6 +679,35 @@ export async function importInventaire(
       ingByNom.set(ing.nom.toLowerCase().trim(), ing as never)
     }
     nbCrees = created?.length ?? 0
+  }
+
+  // 3b. Met à jour le prix de référence (prix_kg) et l'unité des ingrédients
+  // existants quand le fichier les fournit : le prix importé devient la
+  // nouvelle référence pour les calculs de valeur de stock.
+  const ingUpdates: { id: string; patch: { prix_kg?: number; unite?: string } }[] = []
+  for (const l of lignesUniq) {
+    const ing = ingByNom.get(l.nom.toLowerCase())
+    if (!ing) continue
+    const patch: { prix_kg?: number; unite?: string } = {}
+    if (l.prix_unitaire != null && Number(l.prix_unitaire) !== Number(ing.prix_kg)) {
+      patch.prix_kg = l.prix_unitaire
+      ing.prix_kg = l.prix_unitaire
+    }
+    if (l.unite && l.unite !== ing.unite) {
+      patch.unite = l.unite
+      ing.unite = l.unite
+    }
+    if (Object.keys(patch).length > 0) ingUpdates.push({ id: ing.id, patch })
+  }
+  const UCHUNK = 50
+  for (let i = 0; i < ingUpdates.length; i += UCHUNK) {
+    const batch = ingUpdates.slice(i, i + UCHUNK)
+    const results = await Promise.all(
+      batch.map((u) => db.from(table).update(u.patch).eq('id', u.id).eq('client_id', clientId))
+    )
+    for (const r of results) {
+      if (r.error) throw new Error(`Mise à jour ingrédient : ${r.error.message}`)
+    }
   }
 
   // 4. Crée l'inventaire (statut='valide' pour qu'il serve de baseline aux
@@ -692,7 +735,7 @@ export async function importInventaire(
   // l'ingrédient existant n'a pas d'unité renseignée.
   const ligneRows = lignesUniq.map((l) => {
     const ing = ingByNom.get(l.nom.toLowerCase())!
-    const coutUnit = Number(ing.prix_kg) || 0
+    const coutUnit = l.prix_unitaire != null ? Number(l.prix_unitaire) : (Number(ing.prix_kg) || 0)
     const qReelle = Number(l.quantite) || 0
     return {
       inventaire_id: inventaire.id,
@@ -700,7 +743,7 @@ export async function importInventaire(
       ingredient_id: ing.id,
       section,
       nom_ingredient: ing.nom,
-      unite: ing.unite || defaultUnit,
+      unite: l.unite || ing.unite || defaultUnit,
       quantite_theorique: null,
       quantite_reelle: round3(qReelle),
       cout_unitaire: coutUnit,
