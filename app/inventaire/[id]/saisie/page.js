@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import * as XLSX from 'xlsx'
 import { supabase, getClientId } from '../../../../lib/supabase'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '../../../../lib/useTheme'
@@ -192,6 +193,47 @@ export default function SaisieInventairePage() {
     }
   }
 
+  // Export Excel de l'inventaire en cours de saisie. On recalcule l'écart et
+  // la valeur de stock à la volée car les colonnes générées par Postgres
+  // (ecart, valeur_stock) ne reflètent pas les quantités tout juste tapées
+  // (sauvegarde debouncée, état local non rechargé).
+  const exportXlsx = () => {
+    if (lignes.length === 0) return
+    const header = [
+      'Ingrédient', 'Unité', 'Prix unitaire (€)',
+      'Qté théorique', 'Qté réelle', 'Écart',
+      'Écart valorisé (€)', 'Valeur stock (€)',
+    ]
+    const rows = lignes.map(l => {
+      const cout = l.cout_unitaire != null ? Number(l.cout_unitaire) : null
+      const theo = l.quantite_theorique != null ? Number(l.quantite_theorique) : null
+      const reelle = l.quantite_reelle != null ? Number(l.quantite_reelle) : null
+      const ecart = reelle != null && theo != null ? +(reelle - theo).toFixed(3) : null
+      const valeur = reelle != null && cout != null ? +(reelle * cout).toFixed(2) : null
+      return [
+        l.nom_ingredient || '',
+        l.unite || '',
+        cout,
+        theo,
+        reelle,
+        ecart,
+        ecart != null && cout != null ? +(ecart * cout).toFixed(2) : null,
+        valeur,
+      ]
+    })
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows])
+    ws['!cols'] = [
+      { wch: 32 }, { wch: 10 }, { wch: 14 },
+      { wch: 14 }, { wch: 14 }, { wch: 10 },
+      { wch: 16 }, { wch: 14 },
+    ]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Inventaire')
+    const safeDate = (inventaire?.date_inventaire || '').slice(0, 10) || 'sans-date'
+    const safeSection = (inventaire?.section || 'inventaire').replace(/[^a-z0-9-]/gi, '-').toLowerCase()
+    XLSX.writeFile(wb, `inventaire_${safeSection}_${safeDate}_en-cours.xlsx`)
+  }
+
   // Filtrer les lignes
   const filteredLignes = lignes.filter(l => {
     if (recherche && !l.nom_ingredient.toLowerCase().includes(recherche.toLowerCase())) return false
@@ -229,9 +271,25 @@ export default function SaisieInventairePage() {
             >
               ← Inventaires
             </button>
-            <span style={{ fontSize: '13px', color: c.texteMuted }}>
-              {inventaire?.type === 'tournant' ? 'Flash' : 'Complet'} — {inventaire?.section}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                onClick={exportXlsx}
+                disabled={lignes.length === 0}
+                title="Exporter l'inventaire en cours au format Excel"
+                style={{
+                  padding: '6px 12px', background: c.blanc,
+                  border: `0.5px solid ${c.bordure}`, color: c.texte,
+                  borderRadius: '20px', fontSize: '12px', fontWeight: '500',
+                  cursor: lignes.length === 0 ? 'not-allowed' : 'pointer',
+                  opacity: lignes.length === 0 ? 0.5 : 1, whiteSpace: 'nowrap',
+                }}
+              >
+                📤 Export Excel
+              </button>
+              <span style={{ fontSize: '13px', color: c.texteMuted, whiteSpace: 'nowrap' }}>
+                {inventaire?.type === 'tournant' ? 'Flash' : 'Complet'} — {inventaire?.section}
+              </span>
+            </div>
           </div>
 
           {/* Barre de progression */}
