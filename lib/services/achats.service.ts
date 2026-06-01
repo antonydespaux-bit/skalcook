@@ -130,65 +130,14 @@ export async function saveFacture(
   ])
 
   // 2bis. Création auto des ingrédients manquants (avant insert lignes).
-  // Pour chaque ligne sans ingredient_id mais avec une designation non vide :
-  //   - on tente d'abord de matcher un ingrédient existant par nom normalisé
-  //   - sinon on le crée avec nom = designation, unite = ligne.unite ?? 'kg',
-  //     prix_kg = prix unitaire de la ligne
-  // Idempotent : si plusieurs lignes partagent la même désignation, un seul
-  // ingrédient est créé et toutes les lignes pointent dessus.
+  // Voir autoCreateMissingIngredients : matche par nom normalisé, sinon crée
+  // dans la catégorie « À classer ». Idempotent sur les désignations dupliquées.
   let lignes = lignesInput
   let autoCreatedCount = 0
   if (autoCreateMissing) {
-    const missing = lignesInput.filter((l) => !l.ingredient_id && l.designation?.trim())
-    if (missing.length > 0) {
-      const norms = [...new Set(missing.map((l) => normDesignation(l.designation)))].filter(Boolean)
-      // Recherche des ingrédients déjà existants pour ces normes (par nom exact normalisé)
-      const { data: existingIngs } = await db
-        .from(ingredientTable)
-        .select('id, nom, unite, prix_kg')
-        .eq('client_id', clientId)
-      const ingByNorm: Record<string, { id: string }> = {}
-      for (const ing of existingIngs ?? []) {
-        ingByNorm[normDesignation((ing as { nom: string }).nom)] = ing as { id: string }
-      }
-      const idByNorm: Record<string, string> = {}
-      // Catégorie « À classer » résolue paresseusement : on ne la crée que si
-      // au moins un nouvel article doit effectivement être créé.
-      let aClasserCatId: string | null = null
-      for (const norm of norms) {
-        if (ingByNorm[norm]) {
-          idByNorm[norm] = ingByNorm[norm].id
-          continue
-        }
-        // À créer : prend la 1re ligne qui matche cette norme comme source
-        const src = missing.find((l) => normDesignation(l.designation) === norm)
-        if (!src) continue
-        if (!aClasserCatId) {
-          aClasserCatId = await findOrCreateCategorie(db, clientId, section, 'À classer')
-        }
-        // Utilise findOrCreateIngredient : retourne l'existant si déjà présent
-        // pour le client, sinon crée (dans la catégorie « À classer »).
-        // Conflit global → erreur exploitable.
-        const ing = await findOrCreateIngredient(
-          db,
-          clientId,
-          src.designation,
-          src.unite,
-          Number(src.prix_unitaire_ht) || 0,
-          section,
-          aClasserCatId,
-        )
-        idByNorm[norm] = ing.id
-        autoCreatedCount++
-      }
-      // Reassign ingredient_id sur les lignes
-      lignes = lignesInput.map((l) => {
-        if (l.ingredient_id || !l.designation?.trim()) return l
-        const norm = normDesignation(l.designation)
-        const id = idByNorm[norm]
-        return id ? { ...l, ingredient_id: id } : l
-      })
-    }
+    const r = await autoCreateMissingIngredients(db, clientId, section, lignesInput)
+    lignes = r.lignes
+    autoCreatedCount = r.autoCreatedCount
   }
 
   // 3. Calculate total HT (négatif pour un avoir)
@@ -414,7 +363,7 @@ export async function updateFacture(
   }
 
   // ── Remplacement des lignes (optionnel) ─────────────────────────────────
-  const lignes = updates.lignes as Array<{
+  let lignes = updates.lignes as Array<{
     designation: string
     ingredient_id?: string | null
     quantite: number
@@ -425,18 +374,26 @@ export async function updateFacture(
   }> | undefined
 
   if (lignes) {
-    // Détermine le signe applicable : statut envoyé en update, sinon statut courant
+    // Statut + section effectifs : valeurs envoyées en update, sinon courantes.
     let statutEffectif = (dbUpdates.statut as string | undefined) || undefined
-    if (!statutEffectif) {
+    let sectionEffectif = (dbUpdates.section as 'cuisine' | 'bar' | undefined) || undefined
+    if (!statutEffectif || !sectionEffectif) {
       const { data: cur } = await db
         .from('achats_factures')
-        .select('statut')
+        .select('statut, section')
         .eq('id', factureId)
         .eq('client_id', clientId)
         .maybeSingle()
-      statutEffectif = (cur?.statut as string) || 'facture'
+      statutEffectif = statutEffectif || (cur?.statut as string) || 'facture'
+      sectionEffectif = sectionEffectif || ((cur?.section as 'cuisine' | 'bar') || 'cuisine')
     }
     const signe: 1 | -1 = statutEffectif === 'avoir' ? -1 : 1
+
+    // Création auto des ingrédients manquants : un article ajouté pendant
+    // l'édition (désignation sans ingredient_id) est créé dans « À classer »
+    // et apparaît ainsi dans la vue ingrédients, comme à l'import initial.
+    const auto = await autoCreateMissingIngredients(db, clientId, sectionEffectif, lignes)
+    lignes = auto.lignes
 
     // Recalcul du total HT depuis les nouvelles lignes
     const totalHt = lignes.reduce((sum, l) => {
@@ -693,6 +650,74 @@ export async function deleteFacture(
 
   if (error) throw new Error(error.message)
   return { deleted: true, soft: true }
+}
+
+/**
+ * Pour chaque ligne sans ingredient_id mais avec une désignation : matche un
+ * ingrédient existant par nom normalisé, sinon le crée dans la catégorie
+ * « À classer » (nom = désignation, unité/prix de la ligne). Idempotent : des
+ * lignes partageant la même désignation pointent vers un seul ingrédient.
+ * Retourne les lignes avec ingredient_id réaffecté + le nombre de créations.
+ */
+async function autoCreateMissingIngredients<T extends {
+  designation: string
+  ingredient_id?: string | null
+  unite?: string | null
+  prix_unitaire_ht: number | string
+}>(
+  db: SupabaseClient,
+  clientId: string,
+  section: 'cuisine' | 'bar',
+  lignesInput: T[],
+): Promise<{ lignes: T[]; autoCreatedCount: number }> {
+  const ingredientTable = section === 'bar' ? 'ingredients_bar' : 'ingredients'
+  const missing = lignesInput.filter((l) => !l.ingredient_id && l.designation?.trim())
+  if (missing.length === 0) return { lignes: lignesInput, autoCreatedCount: 0 }
+
+  const norms = [...new Set(missing.map((l) => normDesignation(l.designation)))].filter(Boolean)
+  const { data: existingIngs } = await db
+    .from(ingredientTable)
+    .select('id, nom')
+    .eq('client_id', clientId)
+  const ingByNorm: Record<string, { id: string }> = {}
+  for (const ing of existingIngs ?? []) {
+    ingByNorm[normDesignation((ing as { nom: string }).nom)] = ing as { id: string }
+  }
+
+  const idByNorm: Record<string, string> = {}
+  // Catégorie « À classer » résolue paresseusement : créée seulement si au
+  // moins un nouvel article doit effectivement être créé.
+  let aClasserCatId: string | null = null
+  let autoCreatedCount = 0
+  for (const norm of norms) {
+    if (ingByNorm[norm]) {
+      idByNorm[norm] = ingByNorm[norm].id
+      continue
+    }
+    const src = missing.find((l) => normDesignation(l.designation) === norm)
+    if (!src) continue
+    if (!aClasserCatId) {
+      aClasserCatId = await findOrCreateCategorie(db, clientId, section, 'À classer')
+    }
+    const ing = await findOrCreateIngredient(
+      db,
+      clientId,
+      src.designation,
+      src.unite,
+      Number(src.prix_unitaire_ht) || 0,
+      section,
+      aClasserCatId,
+    )
+    idByNorm[norm] = ing.id
+    autoCreatedCount++
+  }
+
+  const lignes = lignesInput.map((l) => {
+    if (l.ingredient_id || !l.designation?.trim()) return l
+    const id = idByNorm[normDesignation(l.designation)]
+    return id ? { ...l, ingredient_id: id } : l
+  })
+  return { lignes, autoCreatedCount }
 }
 
 /**
