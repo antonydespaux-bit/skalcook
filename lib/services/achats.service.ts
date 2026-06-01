@@ -152,6 +152,9 @@ export async function saveFacture(
         ingByNorm[normDesignation((ing as { nom: string }).nom)] = ing as { id: string }
       }
       const idByNorm: Record<string, string> = {}
+      // Catégorie « À classer » résolue paresseusement : on ne la crée que si
+      // au moins un nouvel article doit effectivement être créé.
+      let aClasserCatId: string | null = null
       for (const norm of norms) {
         if (ingByNorm[norm]) {
           idByNorm[norm] = ingByNorm[norm].id
@@ -160,8 +163,12 @@ export async function saveFacture(
         // À créer : prend la 1re ligne qui matche cette norme comme source
         const src = missing.find((l) => normDesignation(l.designation) === norm)
         if (!src) continue
+        if (!aClasserCatId) {
+          aClasserCatId = await findOrCreateCategorie(db, clientId, section, 'À classer')
+        }
         // Utilise findOrCreateIngredient : retourne l'existant si déjà présent
-        // pour le client, sinon crée. Conflit global → erreur exploitable.
+        // pour le client, sinon crée (dans la catégorie « À classer »).
+        // Conflit global → erreur exploitable.
         const ing = await findOrCreateIngredient(
           db,
           clientId,
@@ -169,6 +176,7 @@ export async function saveFacture(
           src.unite,
           Number(src.prix_unitaire_ht) || 0,
           section,
+          aClasserCatId,
         )
         idByNorm[norm] = ing.id
         autoCreatedCount++
@@ -688,6 +696,54 @@ export async function deleteFacture(
 }
 
 /**
+ * Cherche une catégorie d'ingrédients par nom (case-insensitive) pour ce
+ * client et cette section, sinon la crée. Sert à garantir l'existence de la
+ * catégorie « À classer » utilisée pour les articles créés depuis une facture.
+ */
+async function findOrCreateCategorie(
+  db: SupabaseClient,
+  clientId: string,
+  section: 'cuisine' | 'bar',
+  nom: string,
+  emoji = '🏷️',
+): Promise<string> {
+  const { data: existing } = await db
+    .from('categories_ingredients')
+    .select('id')
+    .eq('client_id', clientId)
+    .eq('section', section)
+    .ilike('nom', nom)
+    .maybeSingle()
+  if (existing) return (existing as { id: string }).id
+
+  const { count } = await db
+    .from('categories_ingredients')
+    .select('id', { count: 'exact', head: true })
+    .eq('client_id', clientId)
+    .eq('section', section)
+
+  const { data: created, error } = await db
+    .from('categories_ingredients')
+    .insert({ client_id: clientId, section, nom, emoji, ordre: (count ?? 0) + 1 })
+    .select('id')
+    .single()
+
+  if (error) {
+    // Course possible : une autre requête a créé la catégorie entre-temps.
+    const { data: again } = await db
+      .from('categories_ingredients')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('section', section)
+      .ilike('nom', nom)
+      .maybeSingle()
+    if (again) return (again as { id: string }).id
+    throw new Error(error.message)
+  }
+  return (created as { id: string }).id
+}
+
+/**
  * Cherche un ingrédient existant pour ce client (par nom case-insensitive),
  * sinon le crée. Depuis la migration 2026-05-15, la contrainte unique est
  * scopée par client (`UNIQUE (client_id, nom)`), donc le seul cas de conflit
@@ -703,6 +759,7 @@ export async function findOrCreateIngredient(
   unite?: string | null,
   prix_kg?: number | null,
   section: 'cuisine' | 'bar' = 'cuisine',
+  categorieId?: string | null,
 ) {
   // Convention skalcook : tous les noms d'ingrédients en MAJUSCULES.
   const nomTrim = nom.trim().toUpperCase()
@@ -720,16 +777,28 @@ export async function findOrCreateIngredient(
     .maybeSingle()
   if (existing) return existing
 
-  // 2. Création
+  // 2. Création — on assigne une catégorie par défaut si fournie (les articles
+  // créés depuis une facture atterrissent ainsi dans « À classer » plutôt que
+  // dans « Sans catégorie », pour être faciles à retrouver et à reclasser.)
+  const insertRow: {
+    client_id: string
+    nom: string
+    unite: string
+    prix_kg: number
+    est_sous_fiche: boolean
+    categorie_id?: string
+  } = {
+    client_id: clientId,
+    nom: nomTrim,
+    unite: unite || defaultUnite,
+    prix_kg: prix_kg ?? 0,
+    est_sous_fiche: false,
+  }
+  if (categorieId) insertRow.categorie_id = categorieId
+
   const { data: created, error } = await db
     .from(table)
-    .insert({
-      client_id: clientId,
-      nom: nomTrim,
-      unite: unite || defaultUnite,
-      prix_kg: prix_kg ?? 0,
-      est_sous_fiche: false,
-    })
+    .insert(insertRow)
     .select('id, nom, unite, prix_kg')
     .single()
 
