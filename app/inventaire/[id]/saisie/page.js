@@ -35,6 +35,8 @@ export default function SaisieInventairePage() {
   const [showAddPanel, setShowAddPanel] = useState(false)
   const [addingIngredient, setAddingIngredient] = useState(false)
   const [validating, setValidating] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState('')
   const debounceTimers = useRef({})
 
   useEffect(() => {
@@ -193,6 +195,72 @@ export default function SaisieInventairePage() {
     }
   }
 
+  // Met à jour l'inventaire avec les articles créés depuis qu'il a démarré
+  // (ex : nouveaux ingrédients issus d'une facture). Recharge le pool frais
+  // puis ajoute comme nouvelles lignes les ingrédients de la/les section(s)
+  // qui ne sont pas encore dans l'inventaire. Les sous-fiches sont exclues.
+  const handleSyncArticles = async () => {
+    if (syncing || !inventaire) return
+    setSyncing(true)
+    setSyncMsg('')
+    try {
+      const clientId = await getClientId()
+      const { data: { session } } = await supabase.auth.getSession()
+      const sections = inventaire.section === 'global' ? ['cuisine', 'bar'] : [inventaire.section]
+
+      // Recharge le pool d'ingrédients (frais) pour la/les section(s).
+      const pool = []
+      for (const sec of sections) {
+        const table = sec === 'bar' ? 'ingredients_bar' : 'ingredients'
+        const { data: ings } = await supabase
+          .from(table)
+          .select('id, nom, unite, prix_kg, categorie_id, est_sous_fiche')
+          .eq('client_id', clientId)
+        if (ings) for (const ing of ings) pool.push({ ...ing, _section: sec })
+      }
+      setAllIngredients(pool)
+
+      // Articles déjà présents dans l'inventaire.
+      const presentIds = new Set(lignes.map(l => l.ingredient_id).filter(Boolean))
+      const toAdd = pool.filter(i => !i.est_sous_fiche && !presentIds.has(i.id))
+
+      if (toAdd.length === 0) {
+        setSyncMsg('Aucun nouvel article à ajouter — l\'inventaire est à jour.')
+        return
+      }
+
+      // Ajoute les lignes manquantes (par lots pour limiter les requêtes).
+      const added = []
+      const CHUNK = 10
+      for (let i = 0; i < toAdd.length; i += CHUNK) {
+        const batch = toAdd.slice(i, i + CHUNK)
+        const results = await Promise.all(batch.map(async (ing) => {
+          const res = await fetch('/api/inventaire/add-ligne', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            body: JSON.stringify({ inventaireId, ingredientId: ing.id, clientId, section: ing._section }),
+          })
+          if (!res.ok) return null
+          const ligne = await res.json()
+          return ligne?.id ? { ...ligne, _categorie_id: ing.categorie_id || null } : null
+        }))
+        for (const r of results) if (r) added.push(r)
+      }
+
+      if (added.length > 0) {
+        setLignes(prev => {
+          const existing = new Set(prev.map(l => l.id))
+          return [...prev, ...added.filter(a => !existing.has(a.id))]
+        })
+      }
+      setSyncMsg(`${added.length} article${added.length > 1 ? 's' : ''} ajouté${added.length > 1 ? 's' : ''} à l'inventaire.`)
+    } catch (e) {
+      setSyncMsg('Erreur lors de la mise à jour : ' + (e.message || ''))
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   // Export Excel de l'inventaire en cours de saisie. On recalcule l'écart et
   // la valeur de stock à la volée car les colonnes générées par Postgres
   // (ecart, valeur_stock) ne reflètent pas les quantités tout juste tapées
@@ -271,7 +339,21 @@ export default function SaisieInventairePage() {
             >
               ← Inventaires
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button
+                onClick={handleSyncArticles}
+                disabled={syncing}
+                title="Ajouter les articles créés depuis le démarrage de l'inventaire (ex : nouveaux ingrédients d'une facture)"
+                style={{
+                  padding: '6px 12px', background: c.accentClair,
+                  border: `0.5px solid ${c.accent}40`, color: c.accent,
+                  borderRadius: '20px', fontSize: '12px', fontWeight: '500',
+                  cursor: syncing ? 'not-allowed' : 'pointer',
+                  opacity: syncing ? 0.6 : 1, whiteSpace: 'nowrap',
+                }}
+              >
+                {syncing ? '⏳ Mise à jour…' : '🔄 Mettre à jour les articles'}
+              </button>
               <button
                 onClick={exportXlsx}
                 disabled={lignes.length === 0}
@@ -291,6 +373,12 @@ export default function SaisieInventairePage() {
               </span>
             </div>
           </div>
+
+          {syncMsg && (
+            <div style={{ fontSize: '12px', color: c.texteMuted, marginTop: '6px' }}>
+              {syncMsg}
+            </div>
+          )}
 
           {/* Barre de progression */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
