@@ -2,29 +2,42 @@
 
 import {
   ResponsiveContainer, ComposedChart, LineChart, BarChart, Line, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, Cell as PieCell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
+  PieChart, Pie, Cell,
 } from 'recharts'
 import HeroCa from './HeroCa'
+import CompareTooltip from '../widgets/CompareTooltip'
 import { formatEur } from '../../../lib/caAnalyses'
 
-// Vue Synthèse : héros CA + grille de graphes comparés (style validé sur le
-// prototype). Toutes les couleurs viennent du thème (`c`) → respecte le
-// branding client + dark mode.
+// Vue Synthèse. Les widgets s'adaptent au mode de comparaison :
+//   - 'n-1'    → tout compare N vs N-1 et met l'écart en avant.
+//   - 'budget' → la carte « vs Objectif » prend son sens.
+//   - 'aucune' → vue simple, une seule année.
 export default function SyntheseView({
   c, isMobile, data, comparaison, currentLabel, compareLabel,
 }) {
   const {
     totals, totalsCompare, periodBudget,
-    evolutionBuckets, cumulBuckets, monthlyBuckets, mix, classement,
+    evolutionBuckets, cumulBuckets, monthlyBuckets, monthlyCompare,
+    mix, mixCompare, classement, classementCompare,
   } = data
-  const compareActive = comparaison === 'n-1' && totalsCompare && totalsCompare.caTtc > 0
+  const n1 = comparaison === 'n-1' && totalsCompare && totalsCompare.caTtc > 0
   const compareTotals = comparaison === 'n-1' ? totalsCompare : null
 
+  // Écart mensuel N − N-1 (aligné par index de mois).
+  const ecartMensuel = monthlyCompare
+    ? monthlyBuckets.map((b, i) => {
+        const prev = monthlyCompare[i]?.caTot || 0
+        return { label: b.label, ecart: b.caTot - prev, caTot: b.caTot, caTotN1: prev }
+      })
+    : null
+
   const cols = isMobile ? '1fr' : '1fr 1fr'
+  const span2 = isMobile ? 'auto' : 'span 2'
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 16 }}>
-      <div style={{ gridColumn: isMobile ? 'auto' : 'span 2' }}>
+      <div style={{ gridColumn: span2 }}>
         <HeroCa
           c={c} isMobile={isMobile} totals={totals} compareTotals={compareTotals}
           periodBudget={periodBudget} sparkBuckets={evolutionBuckets}
@@ -32,34 +45,44 @@ export default function SyntheseView({
         />
       </div>
 
+      {/* Évolution */}
       <ChartCard c={c} isMobile={isMobile} title="Évolution du CA"
-        hint={compareActive ? `${currentLabel} vs ${compareLabel}` : 'Sur la période'}>
-        <EvolutionChart c={c} buckets={evolutionBuckets} compareActive={compareActive}
+        hint={n1 ? `${currentLabel} vs ${compareLabel}` : 'Sur la période'}>
+        <EvolutionChart c={c} buckets={evolutionBuckets} compareActive={n1}
           currentLabel={currentLabel} compareLabel={compareLabel} />
       </ChartCard>
 
-      <ChartCard c={c} isMobile={isMobile} title="CA cumulé"
-        hint={compareActive ? `Progression ${currentLabel} vs ${compareLabel}` : 'Progression cumulée'}>
-        <CumulChart c={c} buckets={cumulBuckets} compareActive={compareActive}
-          currentLabel={currentLabel} compareLabel={compareLabel} />
-      </ChartCard>
-
-      <ChartCard c={c} isMobile={isMobile} title="CA mensuel vs Objectif"
-        hint="Vert = budget atteint · Rouge = en dessous">
-        <ObjectifChart c={c} buckets={monthlyBuckets} />
-      </ChartCard>
-
-      <ChartCard c={c} isMobile={isMobile} title="Mix CA · Food / Boissons"
-        hint="Répartition du CA TTC">
-        <MixDonut c={c} mix={mix} />
-      </ChartCard>
-
-      <div style={{ gridColumn: isMobile ? 'auto' : 'span 2' }}>
-        <ChartCard c={c} isMobile={isMobile} title="Classement par lieu"
-          hint="Contribution au CA TTC de la période">
-          <Classement c={c} rows={classement} />
+      {/* Slot 2 : écart (N-1) / objectif (budget) / cumulé (aucune) */}
+      {n1 ? (
+        <ChartCard c={c} isMobile={isMobile} title="Écart mensuel vs N-1"
+          hint={`Gain (vert) / perte (rouge) vs ${compareLabel}`}>
+          <EcartChart c={c} buckets={ecartMensuel} currentLabel={currentLabel} compareLabel={compareLabel} />
         </ChartCard>
-      </div>
+      ) : comparaison === 'budget' ? (
+        <ChartCard c={c} isMobile={isMobile} title="CA mensuel vs Objectif"
+          hint="Vert = budget atteint · Rouge = en dessous">
+          <ObjectifChart c={c} buckets={monthlyBuckets} />
+        </ChartCard>
+      ) : (
+        <ChartCard c={c} isMobile={isMobile} title="CA cumulé" hint="Progression cumulée">
+          <CumulChart c={c} buckets={cumulBuckets} />
+        </ChartCard>
+      )}
+
+      {/* Mix CA */}
+      <ChartCard c={c} isMobile={isMobile} title="Mix CA · Food / Boissons"
+        hint={n1 ? `Structure ${currentLabel} vs ${compareLabel}` : 'Répartition du CA TTC'}>
+        {n1
+          ? <MixCompare c={c} mix={mix} mixCompare={mixCompare} currentLabel={currentLabel} compareLabel={compareLabel} />
+          : <MixDonut c={c} mix={mix} />}
+      </ChartCard>
+
+      {/* Classement par lieu */}
+      <ChartCard c={c} isMobile={isMobile} title="Classement par lieu"
+        hint={n1 ? `Contribution & écart vs ${compareLabel}` : 'Contribution au CA TTC de la période'}>
+        <Classement c={c} rows={classement} compareRows={n1 ? classementCompare : null}
+          currentLabel={currentLabel} compareLabel={compareLabel} />
+      </ChartCard>
     </div>
   )
 }
@@ -87,20 +110,70 @@ function EvolutionChart({ c, buckets, compareActive, currentLabel, compareLabel 
         <CartesianGrid strokeDasharray="3 3" stroke={c.bordure} />
         <XAxis dataKey="label" tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false} tickFormatter={kEur} />
-        <Tooltip contentStyle={tooltipStyle(c)} formatter={(v, n) => [formatEur(v), n]} />
+        {compareActive ? (
+          <Tooltip content={<CompareTooltip c={c} currentLabel={currentLabel} compareLabel={compareLabel}
+            field="caTot" compareField="caTotN1" unit="eur" />} />
+        ) : (
+          <Tooltip contentStyle={tooltipStyle(c)} formatter={(v, n) => [formatEur(v), n]} />
+        )}
         {compareActive && <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />}
         {compareActive && (
           <Line type="monotone" dataKey="caTotN1" name={compareLabel} stroke={c.texteMuted}
-            strokeWidth={2} strokeDasharray="5 4" dot={{ r: 2 }} connectNulls />
+            strokeWidth={2} strokeDasharray="5 4" dot={false} connectNulls isAnimationActive={false} />
         )}
         <Line type="monotone" dataKey="caTot" name={compareActive ? currentLabel : 'CA TTC'}
-          stroke={c.accent} strokeWidth={2.5} dot={{ r: 2 }} />
+          stroke={c.accent} strokeWidth={2.5} dot={{ r: 2 }} isAnimationActive={false} />
       </LineChart>
     </ResponsiveContainer>
   )
 }
 
-function CumulChart({ c, buckets, compareActive, currentLabel, compareLabel }) {
+// Écart mensuel N − N-1 : barres signées vert/rouge. Fait ressortir d'un
+// coup d'œil les mois gagnés / perdus vs l'an dernier.
+function EcartChart({ c, buckets, currentLabel, compareLabel }) {
+  if (!buckets || buckets.length === 0) return <Empty c={c} />
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <BarChart data={buckets} margin={{ top: 4, right: 8, left: -14, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke={c.bordure} />
+        <XAxis dataKey="label" tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false} tickFormatter={kEur}
+          domain={[(min) => Math.min(0, min), (max) => Math.max(0, max)]} />
+        <Tooltip content={<EcartTip c={c} currentLabel={currentLabel} compareLabel={compareLabel} />} />
+        <ReferenceLine y={0} stroke={c.texteMuted} strokeWidth={1.5} />
+        <Bar dataKey="ecart" name="Écart" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+          {buckets.map((b, i) => <Cell key={i} fill={b.ecart >= 0 ? c.vert : c.rouge} />)}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+function EcartTip({ active, payload, label, c, currentLabel, compareLabel }) {
+  if (!active || !payload || !payload.length) return null
+  const d = payload[0].payload
+  const pct = d.caTotN1 ? (d.ecart / d.caTotN1) * 100 : null
+  return (
+    <div style={{ ...tooltipStyle(c), padding: '8px 10px', minWidth: 150 }}>
+      <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
+      <Line2 c={c} k={currentLabel} v={formatEur(d.caTot)} />
+      <Line2 c={c} k={compareLabel} v={formatEur(d.caTotN1)} muted />
+      <div style={{ marginTop: 4, paddingTop: 4, borderTop: `0.5px solid ${c.bordure}`, color: d.ecart >= 0 ? c.vert : c.rouge, fontWeight: 600, textAlign: 'right' }}>
+        {d.ecart >= 0 ? '+' : ''}{formatEur(d.ecart)}{pct != null && ` (${pct >= 0 ? '+' : ''}${pct.toFixed(1)} %)`}
+      </div>
+    </div>
+  )
+}
+
+function Line2({ c, k, v, muted }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, color: muted ? c.texteMuted : c.texte }}>
+      <span>{k}</span><b style={{ fontWeight: muted ? 400 : 600 }}>{v}</b>
+    </div>
+  )
+}
+
+function CumulChart({ c, buckets }) {
   if (!buckets || buckets.length === 0) return <Empty c={c} />
   return (
     <ResponsiveContainer width="100%" height={220}>
@@ -109,11 +182,7 @@ function CumulChart({ c, buckets, compareActive, currentLabel, compareLabel }) {
         <XAxis dataKey="label" tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false} tickFormatter={kEur} />
         <Tooltip contentStyle={tooltipStyle(c)} formatter={(v, n) => [formatEur(v), n]} />
-        {compareActive && <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />}
-        {compareActive && (
-          <Bar dataKey="caTotN1" name={compareLabel} fill={c.bordure} radius={[4, 4, 0, 0]} />
-        )}
-        <Bar dataKey="caTot" name={compareActive ? currentLabel : 'CA cumulé'} fill={c.accent} radius={[4, 4, 0, 0]} />
+        <Bar dataKey="caTot" name="CA cumulé" fill={c.accent} radius={[4, 4, 0, 0]} isAnimationActive={false} />
       </BarChart>
     </ResponsiveContainer>
   )
@@ -129,14 +198,14 @@ function ObjectifChart({ c, buckets }) {
         <XAxis dataKey="label" tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false} tickFormatter={kEur} />
         <Tooltip contentStyle={tooltipStyle(c)} formatter={(v, n) => [formatEur(v), n]} />
-        <Bar dataKey="caTot" name="CA réel" radius={[4, 4, 0, 0]}>
+        <Bar dataKey="caTot" name="CA réel" radius={[4, 4, 0, 0]} isAnimationActive={false}>
           {buckets.map((b, i) => (
             <Cell key={i} fill={!b.budget ? c.accent : b.caTot >= b.budget ? c.vert : c.rouge} />
           ))}
         </Bar>
         {hasBudget && (
           <Line type="monotone" dataKey="budget" name="Budget" stroke={c.texte}
-            strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
+            strokeWidth={1.5} strokeDasharray="4 4" dot={false} isAnimationActive={false} />
         )}
       </ComposedChart>
     </ResponsiveContainer>
@@ -151,7 +220,7 @@ function MixDonut({ c, mix }) {
         <Pie data={mix} dataKey="value" nameKey="label" cx="42%" cy="50%"
           innerRadius={48} outerRadius={78} paddingAngle={2} stroke={c.blanc} strokeWidth={2}
           isAnimationActive={false}>
-          {mix.map((s) => <PieCell key={s.id} fill={s.color} />)}
+          {mix.map((s) => <Cell key={s.id} fill={s.color} />)}
         </Pie>
         <Tooltip contentStyle={tooltipStyle(c)} formatter={(v, n) => [formatEur(v), n]} />
         <Legend layout="vertical" align="right" verticalAlign="middle" iconSize={9}
@@ -161,24 +230,78 @@ function MixDonut({ c, mix }) {
   )
 }
 
-function Classement({ c, rows }) {
+// Mix N vs N-1 : barres groupées par catégorie → on voit le glissement de
+// structure (ex : part Food qui monte, Alcool qui baisse).
+function MixCompare({ c, mix, mixCompare, currentLabel, compareLabel }) {
+  if (!mix || mix.length === 0) return <Empty c={c} />
+  const prevById = new Map((mixCompare || []).map((s) => [s.id, s.value]))
+  const data = mix.map((s) => ({ label: s.label, color: s.color, N: s.value, N1: prevById.get(s.id) || 0 }))
+  return (
+    <ResponsiveContainer width="100%" height={200}>
+      <BarChart data={data} margin={{ top: 4, right: 8, left: -14, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke={c.bordure} />
+        <XAxis dataKey="label" tick={{ fontSize: 11, fill: c.texteMuted }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false} tickFormatter={kEur} />
+        <Tooltip contentStyle={tooltipStyle(c)} formatter={(v, n) => [formatEur(v), n === 'N' ? currentLabel : compareLabel]} />
+        <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }}
+          payload={[
+            { value: currentLabel, type: 'rect', color: c.accent },
+            { value: compareLabel, type: 'rect', color: c.bordure },
+          ]} />
+        <Bar dataKey="N1" name={compareLabel} fill={c.bordure} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+        <Bar dataKey="N" name={currentLabel} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+          {data.map((d, i) => <Cell key={i} fill={d.color} />)}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+// Classement par lieu. En mode N-1 : barre = année N, repère = N-1, + écart %.
+function Classement({ c, rows, compareRows, compareLabel }) {
   const visible = (rows || []).filter((r) => r.value > 0)
   if (visible.length === 0) return <Empty c={c} />
-  const max = Math.max(...visible.map((r) => r.value))
+  const prevBySerie = new Map((compareRows || []).map((r) => [r.serie, r.value]))
+  const allValues = [...visible.map((r) => r.value), ...(compareRows || []).map((r) => r.value)]
+  const max = Math.max(...allValues, 1)
   const palette = [c.accent, c.violet, c.orange, c.vert, c.rouge, c.principal]
+
   return (
     <div style={{ marginTop: 4 }}>
-      {visible.map((r, i) => (
-        <div key={r.serie} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 9, fontSize: 13 }}>
-          <span style={{ width: 110, color: c.texteMuted, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.serie}</span>
-          <div style={{ flex: 1, height: 22, background: c.fond, borderRadius: 6, overflow: 'hidden' }}>
-            <div style={{ width: `${(r.value / max) * 100}%`, height: '100%', background: palette[i % palette.length], borderRadius: 6 }} />
+      {visible.map((r, i) => {
+        const prev = compareRows ? (prevBySerie.get(r.serie) || 0) : null
+        const ecartPct = prev ? ((r.value - prev) / prev) * 100 : null
+        const prevLeft = prev != null ? (prev / max) * 100 : null
+        return (
+          <div key={r.serie} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: compareRows ? 12 : 9, fontSize: 13 }}>
+            <span style={{ width: 110, color: c.texteMuted, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.serie}>{r.serie}</span>
+            <div style={{ flex: 1, height: 22, background: c.fond, borderRadius: 6, position: 'relative', overflow: 'hidden' }}>
+              <div style={{ width: `${(r.value / max) * 100}%`, height: '100%', background: palette[i % palette.length], borderRadius: 6 }} />
+              {prevLeft != null && (
+                <div title={`${compareLabel} : ${formatEur(prev)}`} style={{
+                  position: 'absolute', top: -2, bottom: -2, left: `${prevLeft}%`,
+                  width: 2, background: c.texte, opacity: 0.55,
+                }} />
+              )}
+            </div>
+            <span style={{ width: compareRows ? 168 : 120, textAlign: 'right', flexShrink: 0, color: c.texte }}>
+              <b>{formatEur(r.value)}</b>
+              {ecartPct != null ? (
+                <span style={{ marginLeft: 6, fontWeight: 600, fontSize: 12, color: ecartPct >= 0 ? c.vert : c.rouge }}>
+                  {ecartPct >= 0 ? '▲' : '▼'}{Math.abs(ecartPct).toFixed(0)}%
+                </span>
+              ) : (
+                <span style={{ color: c.texteMuted, fontWeight: 400 }}> · {r.pct.toFixed(0)}%</span>
+              )}
+            </span>
           </div>
-          <span style={{ width: 120, textAlign: 'right', fontWeight: 600, color: c.texte, flexShrink: 0 }}>
-            {formatEur(r.value)} <span style={{ color: c.texteMuted, fontWeight: 400 }}>· {r.pct.toFixed(0)}%</span>
-          </span>
+        )
+      })}
+      {compareRows && (
+        <div style={{ fontSize: 11, color: c.texteMuted, marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 2, height: 12, background: c.texte, opacity: 0.55, display: 'inline-block' }} /> repère = {compareLabel}
         </div>
-      ))}
+      )}
     </div>
   )
 }
