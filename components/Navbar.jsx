@@ -222,6 +222,7 @@ export default function Navbar({ section = 'cuisine' }) {
             { label: t('nav.items.suppliers'),  path: '/controle-gestion/fournisseurs' },
             ...(role === 'admin' || role === 'directeur' ? [{ label: t('nav.items.foodCost'),     path: '/controle-gestion/food-cost' }] : []),
             ...(role === 'admin' || role === 'directeur' ? [{ label: t('nav.items.analytics'),      path: '/controle-gestion/analyses' }] : []),
+            ...(role === 'admin' || role === 'directeur' ? [{ label: `${t('nav.items.analytics')} ✨ (nouveau)`, path: '/controle-gestion/analyses-v2' }] : []),
             { label: t('nav.items.salesTracking'),      path: '/controle-gestion/ventes' },
             ...(role === 'admin' || role === 'directeur' ? [{ label: t('nav.items.weeklyReport'),  path: '/controle-gestion/ventes/rapport-hebdo' }] : []),
             { label: t('nav.items.salesBudgets'),    path: '/controle-gestion/ventes/budgets' },
