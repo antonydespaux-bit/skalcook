@@ -12,6 +12,7 @@ import Navbar from '../../../components/Navbar'
 import AnalysesRail from '../../../components/analyses/v2/AnalysesRail'
 import SyntheseView from '../../../components/analyses/v2/SyntheseView'
 import DetailView from '../../../components/analyses/v2/DetailView'
+import PivotView from '../../../components/analyses/v2/PivotView'
 
 const DEFAULT_PERIODE = 'mois-en-cours'
 
@@ -108,7 +109,7 @@ export default function AnalysesV2Page() {
       }}>
         <h1 style={{ fontSize: isMobile ? 18 : 20, fontWeight: 700, color: c.texte, margin: 0 }}>Analyses CA</h1>
         <div style={{ display: 'flex', gap: 4 }}>
-          {[['synthese', 'Synthèse'], ['detail', 'Détail']].map(([id, label]) => (
+          {[['synthese', 'Synthèse'], ['detail', 'Détail'], ['pivot', 'Tableau croisé']].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)} style={{
               padding: '7px 16px', borderRadius: 9, fontSize: 14, fontWeight: tab === id ? 600 : 500,
               border: 'none', cursor: 'pointer',
@@ -145,8 +146,16 @@ export default function AnalysesV2Page() {
               c={c} isMobile={isMobile} data={data} comparaison={comparaison}
               currentLabel={yearLabels.current} compareLabel={yearLabels.compare}
             />
-          ) : (
+          ) : tab === 'detail' ? (
             <DetailView c={c} isMobile={isMobile} days={data.daysWithBudget} />
+          ) : (
+            <PivotView
+              c={c} isMobile={isMobile} lieuxLabels={data.lieuxLabels}
+              multiYear={comparaison === 'n-1'}
+              rows={comparaison === 'n-1'
+                ? [...(data.filteredRows || []), ...(data.filteredCompareRows || [])]
+                : (data.filteredRows || [])}
+            />
           )}
         </main>
       </div>
