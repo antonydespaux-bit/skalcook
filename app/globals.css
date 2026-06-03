@@ -64,15 +64,46 @@ body {
     visibility: hidden !important;
   }
 
-  /* Page Analyses CA : éviter de couper un widget en plein milieu. Les
-     graphes recharts utilisent SVG → on garde la couleur (color-adjust
-     déjà actif au-dessus). */
+  /* Page Analyses CA — impression A4 paysage.
+     Le conteneur écran (max-width 1300px + padding) dépasse la zone
+     imprimable : on le contraint à 100 % pour que rien ne soit tronqué
+     à droite. */
+  .sk-analyses-page > div {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Les lignes de sections sont en 2 colonnes à l'écran (graphe + graphe).
+     Empilées en 1 colonne à l'impression, sinon la colonne de droite sort
+     de la page et se fait couper. Chaque graphe occupe alors toute la
+     largeur imprimable. */
+  .sk-section-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Éviter de couper un petit widget (KPI / graphe) en plein milieu. */
   .sk-print-section {
     page-break-inside: avoid;
     break-inside: avoid;
   }
-  .sk-print-section table,
   .sk-print-section .recharts-responsive-container {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Gros tableau "Détail jour par jour" (151 lignes) : il DOIT pouvoir se
+     répartir sur plusieurs pages. On laisse la coupure libre sur le tableau
+     (sinon il saute en entier à la page suivante, laissant une page blanche
+     derrière son titre), on protège chaque ligne et on répète l'en-tête /
+     le total sur chaque page. */
+  .sk-print-section table {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+  .sk-print-section thead { display: table-header-group; }
+  .sk-print-section tfoot { display: table-footer-group; }
+  .sk-print-section tr {
     page-break-inside: avoid;
     break-inside: avoid;
   }

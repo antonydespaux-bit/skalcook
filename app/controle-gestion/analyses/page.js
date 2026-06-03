@@ -877,6 +877,7 @@ export default function AnalysesPage() {
         {!loading && !error && sectionRows.map((row, idx) => (
           <div
             key={row.map((r) => r.id).join('|')}
+            className="sk-section-row"
             style={{
               display: 'grid',
               gridTemplateColumns: isMobile || row.length === 1 ? '1fr' : '1fr 1fr',
