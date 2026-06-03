@@ -1,13 +1,14 @@
 'use client'
 
+import { useState } from 'react'
 import {
-  ResponsiveContainer, ComposedChart, LineChart, BarChart, Line, Bar,
+  ResponsiveContainer, ComposedChart, LineChart, BarChart, AreaChart, Area, Line, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
   PieChart, Pie, Cell,
 } from 'recharts'
 import HeroCa from './HeroCa'
 import CompareTooltip from '../widgets/CompareTooltip'
-import { formatEur } from '../../../lib/caAnalyses'
+import { formatEur, formatNombre } from '../../../lib/caAnalyses'
 
 // Vue Synthèse. Les widgets s'adaptent au mode de comparaison :
 //   - 'n-1'    → tout compare N vs N-1 et met l'écart en avant.
@@ -24,6 +25,11 @@ export default function SyntheseView({
   const n1 = comparaison === 'n-1' && totalsCompare && totalsCompare.caTtc > 0
   const compareTotals = comparaison === 'n-1' ? totalsCompare : null
 
+  const [vue, setVue] = useState('cumule')
+  const byLieu = data.byLieu || []
+  const canSplit = byLieu.length >= 2
+  const parLieu = canSplit && vue === 'parLieu'
+
   // Écart mensuel N − N-1 (aligné par index de mois).
   const ecartMensuel = monthlyCompare
     ? monthlyBuckets.map((b, i) => {
@@ -35,15 +41,57 @@ export default function SyntheseView({
   const cols = isMobile ? '1fr' : '1fr 1fr'
   const span2 = isMobile ? 'auto' : 'span 2'
 
+  const hero = (
+    <HeroCa
+      c={c} isMobile={isMobile} totals={totals} compareTotals={compareTotals}
+      periodBudget={periodBudget} sparkBuckets={evolutionBuckets}
+      currentLabel={currentLabel} compareLabel={compareLabel} comparaison={comparaison}
+    />
+  )
+
+  return (
+    <div>
+      {canSplit && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <Segmented c={c} value={vue} onChange={setVue}
+            options={[['cumule', 'Cumulé'], ['parLieu', `Par lieu (${byLieu.length})`]]} />
+        </div>
+      )}
+
+      {parLieu ? (
+        <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 16 }}>
+          <div style={{ gridColumn: span2 }}>{hero}</div>
+          <div style={{ gridColumn: span2 }}>
+            <div style={{
+              display: 'grid', gap: 16,
+              gridTemplateColumns: isMobile ? '1fr' : `repeat(${Math.min(byLieu.length, 3)}, 1fr)`,
+            }}>
+              {byLieu.map((l) => (
+                <LieuCard key={l.id} c={c} isMobile={isMobile} lieu={l}
+                  n1={n1} currentLabel={currentLabel} compareLabel={compareLabel} />
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <CumuleGrid
+          c={c} isMobile={isMobile} cols={cols} span2={span2} hero={hero}
+          data={data} comparaison={comparaison} n1={n1} ecartMensuel={ecartMensuel}
+          currentLabel={currentLabel} compareLabel={compareLabel}
+        />
+      )}
+    </div>
+  )
+}
+
+function CumuleGrid({ c, isMobile, cols, span2, hero, data, comparaison, n1, ecartMensuel, currentLabel, compareLabel }) {
+  const {
+    monthlyBuckets, cumulBuckets, evolutionBuckets,
+    mix, mixCompare, classement, classementCompare,
+  } = data
   return (
     <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 16 }}>
-      <div style={{ gridColumn: span2 }}>
-        <HeroCa
-          c={c} isMobile={isMobile} totals={totals} compareTotals={compareTotals}
-          periodBudget={periodBudget} sparkBuckets={evolutionBuckets}
-          currentLabel={currentLabel} compareLabel={compareLabel} comparaison={comparaison}
-        />
-      </div>
+      <div style={{ gridColumn: span2 }}>{hero}</div>
 
       {/* Évolution */}
       <ChartCard c={c} isMobile={isMobile} title="Évolution du CA"
@@ -304,6 +352,72 @@ function Classement({ c, rows, compareRows, compareLabel }) {
       )}
     </div>
   )
+}
+
+// Carte compacte par lieu (small multiple) : CA + écart N-1 + sparkline + KPIs.
+function LieuCard({ c, lieu, n1, compareLabel }) {
+  const { label, totals, totalsCompare, spark, id } = lieu
+  const caDelta = n1 ? deltaPct(totals.caTtc, totalsCompare?.caTtc) : null
+  const cvDelta = n1 ? deltaPct(totals.couverts, totalsCompare?.couverts) : null
+  const gid = `sp-${String(id).replace(/[^a-zA-Z0-9]/g, '')}`
+  return (
+    <div style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 14, padding: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: c.texte, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={label}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: c.texte }}>{formatEur(totals.caTtc)}</div>
+      {caDelta != null && (
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: caDelta >= 0 ? c.vert : c.rouge, marginTop: 2 }}>
+          {caDelta >= 0 ? '▲' : '▼'} {Math.abs(caDelta).toFixed(1)} % vs {compareLabel}
+        </div>
+      )}
+      {spark && spark.length > 1 && (
+        <div style={{ height: 44, marginTop: 8 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={spark} margin={{ top: 2, right: 2, left: 2, bottom: 0 }}>
+              {spark[0]?.caTotN1 != null && (
+                <Line type="monotone" dataKey="caTotN1" stroke={c.texteMuted} strokeWidth={1.5}
+                  strokeDasharray="4 3" dot={false} connectNulls isAnimationActive={false} />
+              )}
+              <defs>
+                <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={c.accent} stopOpacity={0.16} />
+                  <stop offset="100%" stopColor={c.accent} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <Area type="monotone" dataKey="caTot" stroke={c.accent} strokeWidth={2}
+                fill={`url(#${gid})`} dot={false} isAnimationActive={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 12, color: c.texteMuted }}>
+        <span>Couverts <b style={{ color: c.texte }}>{formatNombre(totals.couverts)}</b>
+          {cvDelta != null && <span style={{ color: cvDelta >= 0 ? c.vert : c.rouge, fontWeight: 600 }}> {cvDelta >= 0 ? '▲' : '▼'}{Math.abs(cvDelta).toFixed(0)}%</span>}
+        </span>
+        <span>TM <b style={{ color: c.texte }}>{totals.tm != null ? formatEur(totals.tm) : '—'}</b></span>
+      </div>
+    </div>
+  )
+}
+
+function Segmented({ c, value, onChange, options }) {
+  return (
+    <div style={{ display: 'inline-flex', background: c.fond, borderRadius: 10, padding: 3, gap: 2, border: `1px solid ${c.bordure}` }}>
+      {options.map(([val, label]) => (
+        <button key={val} onClick={() => onChange(val)} style={{
+          padding: '6px 14px', borderRadius: 8, fontSize: 13, fontWeight: value === val ? 600 : 500,
+          border: 'none', cursor: 'pointer',
+          background: value === val ? c.blanc : 'transparent',
+          color: value === val ? c.texte : c.texteMuted,
+          boxShadow: value === val ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+        }}>{label}</button>
+      ))}
+    </div>
+  )
+}
+
+function deltaPct(cur, prev) {
+  if (prev == null || cur == null || prev === 0) return null
+  return ((cur - prev) / prev) * 100
 }
 
 function Empty({ c }) {
