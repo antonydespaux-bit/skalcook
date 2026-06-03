@@ -8,12 +8,23 @@ import {
 // Bar chart : moyenne CA TTC et moyenne couverts par jour de la semaine
 // (lundi → dimanche). En mode split, 1 bar groupée par lieu/service par jour.
 //
-// `perf` (cumulé) : sortie de perfByWeekday(daysWithBudget)
+// `perf` (cumulé) : sortie de perfByWeekday(daysWithBudget), avec caN1 ajouté
+//   par zipComparePerf quand compareActive.
 // `perfMulti` (split) : { series: [...], data: [{ label, ['Salle']: 150, … }] }
-export default function SectionPerfJourSemaine({ c, isMobile, perf, perfMulti, isSplit }) {
+// En comparaison N-1 (compareActive, non split) : barres groupées CA moyen
+//   N vs N-1 par jour (les couverts sont masqués pour rester lisible).
+export default function SectionPerfJourSemaine({
+  c, isMobile, perf, perfMulti, isSplit,
+  compareActive = false, currentLabel, compareLabel,
+}) {
   const empty = isSplit
     ? !perfMulti || perfMulti.data.every((p) => Object.keys(p).filter((k) => k !== 'label' && k !== 'isoJds').length === 0)
     : !perf || perf.every((p) => p.count === 0)
+  const subtitle = isSplit
+    ? 'CA TTC moyen par série'
+    : compareActive
+      ? `CA TTC moyen par jour — ${currentLabel} vs ${compareLabel}`
+      : 'Moyenne CA TTC et couverts (jours fermés ignorés)'
   return (
     <div style={{
       background: c.blanc, borderRadius: 12,
@@ -22,18 +33,17 @@ export default function SectionPerfJourSemaine({ c, isMobile, perf, perfMulti, i
     }}>
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: c.texte }}>Performance par jour de la semaine</div>
-        <div style={{ fontSize: 12, color: c.texteMuted, marginTop: 2 }}>
-          {isSplit ? 'CA TTC moyen par série' : 'Moyenne CA TTC et couverts (jours fermés ignorés)'}
-        </div>
+        <div style={{ fontSize: 12, color: c.texteMuted, marginTop: 2 }}>{subtitle}</div>
       </div>
       {empty ? <EmptyState c={c} />
         : isSplit ? <MultiBarChart c={c} isMobile={isMobile} perfMulti={perfMulti} />
-        : <CumulatedBarChart c={c} isMobile={isMobile} perf={perf} />}
+        : <CumulatedBarChart c={c} isMobile={isMobile} perf={perf}
+            compareActive={compareActive} currentLabel={currentLabel} compareLabel={compareLabel} />}
     </div>
   )
 }
 
-function CumulatedBarChart({ c, isMobile, perf }) {
+function CumulatedBarChart({ c, isMobile, perf, compareActive, currentLabel, compareLabel }) {
   return (
     <ResponsiveContainer width="100%" height={isMobile ? 220 : 280}>
       <BarChart data={perf} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
@@ -42,16 +52,26 @@ function CumulatedBarChart({ c, isMobile, perf }) {
           tickFormatter={(v) => v.slice(0, 3)} />
         <YAxis yAxisId="left" tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false}
           tickFormatter={(v) => v >= 1000 ? `${Math.round(v / 1000)} k€` : `${Math.round(v)} €`} />
-        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false} />
+        {!compareActive && (
+          <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false} />
+        )}
         <Tooltip contentStyle={{ borderRadius: 8, border: `0.5px solid ${c.bordure}`, fontSize: 12 }}
           formatter={(v, name) => {
-            if (name === 'CA TTC moyen') return [formatTooltipEur(v), name]
             if (name === 'Couverts moyens') return [`${Math.round(Number(v))}`, name]
-            return [v, name]
+            return [formatTooltipEur(v), name]
           }} />
         <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-        <Bar yAxisId="left" dataKey="ca" name="CA TTC moyen" fill={c.accent} radius={[4, 4, 0, 0]} />
-        <Bar yAxisId="right" dataKey="cv" name="Couverts moyens" fill={c.violet} radius={[4, 4, 0, 0]} />
+        {compareActive ? (
+          <>
+            <Bar yAxisId="left" dataKey="caN1" name={compareLabel} fill={c.bordure} radius={[4, 4, 0, 0]} />
+            <Bar yAxisId="left" dataKey="ca" name={currentLabel} fill={c.accent} radius={[4, 4, 0, 0]} />
+          </>
+        ) : (
+          <>
+            <Bar yAxisId="left" dataKey="ca" name="CA TTC moyen" fill={c.accent} radius={[4, 4, 0, 0]} />
+            <Bar yAxisId="right" dataKey="cv" name="Couverts moyens" fill={c.violet} radius={[4, 4, 0, 0]} />
+          </>
+        )}
       </BarChart>
     </ResponsiveContainer>
   )

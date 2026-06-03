@@ -17,6 +17,8 @@ import {
   pickGranularity,
   bucketDays,
   perfByWeekday,
+  zipCompareBuckets,
+  zipComparePerf,
   mixSegments,
   topBottomDays,
   aggregateBySerie,
@@ -59,6 +61,7 @@ import SectionPerfJourSemaine from '../../../components/analyses/widgets/Section
 import SectionMixFoodBev from '../../../components/analyses/widgets/SectionMixFoodBev'
 import SectionTopBottomJours from '../../../components/analyses/widgets/SectionTopBottomJours'
 import SectionTableauJourJour from '../../../components/analyses/widgets/SectionTableauJourJour'
+import ComparisonRecapBanner from '../../../components/analyses/widgets/ComparisonRecapBanner'
 import KpiFoodCostMoyen from '../../../components/analyses/widgets/KpiFoodCostMoyen'
 import KpiMargeBrute from '../../../components/analyses/widgets/KpiMargeBrute'
 import SectionChartsMarges from '../../../components/analyses/widgets/SectionChartsMarges'
@@ -523,9 +526,13 @@ export default function AnalysesPage() {
   }, [lieux])
   const splitByLieu = useMemo(() => {
     if (lieuxSelected.length >= 2) return true
-    if (lieuxSelected.length === 0 && lieuxAffiches.length >= 2) return true // "Tous" + plusieurs lieux
+    // "Tous" + plusieurs lieux → split par défaut, SAUF en comparaison N-1 où
+    // l'intention est de confronter les deux années sur le cumulé (l'overlay
+    // 2 années × N lieux serait illisible). Le split explicite (2+ lieux
+    // cochés) reste prioritaire.
+    if (lieuxSelected.length === 0 && lieuxAffiches.length >= 2) return comparaison !== 'n-1'
     return false
-  }, [lieuxSelected.length, lieuxAffiches.length])
+  }, [lieuxSelected.length, lieuxAffiches.length, comparaison])
   const splitByService = useMemo(() => {
     if (servicesSelected.length === ALL_SERVICES.length) return true
     if (servicesSelected.length === 0) return false // "Tous" mais pas split par défaut
@@ -540,6 +547,36 @@ export default function AnalysesPage() {
   }, [splitByLieu, splitByService])
 
   const isSplit = splitDims.length > 0
+
+  // ── Comparaison N-1 superposée sur les charts temporels ──────────────────
+  // On reconstruit les séries journalières N-1 (filtres lieu/service/jours déjà
+  // appliqués à filteredCompareRows) puis on les aligne positionnellement sur
+  // la période courante. Désactivé en mode split (lecture 2 années × N séries
+  // illisible) et hors comparaison 'n-1'.
+  const compareActive = comparaison === 'n-1' && !isSplit
+
+  const compareDays = useMemo(() => {
+    if (!compareActive || !compareBudgetRange) return null
+    const all = aggregateByDay(filteredCompareRows, compareBudgetRange.debut, compareBudgetRange.fin)
+    if (!filterJoursActive) return all
+    return all.filter((d) => joursSet.has(d.isoJds))
+  }, [compareActive, compareBudgetRange, filteredCompareRows, filterJoursActive, joursSet])
+
+  const bucketsCompare = useMemo(() => {
+    if (!compareDays) return buckets
+    return zipCompareBuckets(buckets, bucketDays(compareDays, granularity))
+  }, [buckets, compareDays, granularity])
+
+  const perfCompare = useMemo(() => {
+    if (!compareDays) return perfWeekday
+    return zipComparePerf(perfWeekday, perfByWeekday(compareDays))
+  }, [perfWeekday, compareDays])
+
+  const yearLabels = useMemo(() => {
+    if (!dateDebut) return { current: '', compare: '' }
+    const y = fromIsoDate(dateDebut).getFullYear()
+    return { current: String(y), compare: String(y - 1) }
+  }, [dateDebut])
 
   // Séries agrégées sur la période entière : { 'Salle / Déjeuner': totals, … }
   const seriesByGroup = useMemo(
@@ -647,11 +684,11 @@ export default function AnalysesPage() {
       case 'kpi-tm':               return <KpiTm {...common} />
       case 'kpi-ecart-budget-pct': return <KpiEcartBudgetPct c={c} isMobile={isMobile} totals={totals} budget={periodBudget} />
       case 'section-evolution-ca':
-        return <SectionEvolutionCa c={c} isMobile={isMobile} buckets={buckets} bucketsMulti={bucketsMultiCa} isSplit={isSplit} granularity={granularity} hasBudget={hasBudget} />
+        return <SectionEvolutionCa c={c} isMobile={isMobile} buckets={bucketsCompare} bucketsMulti={bucketsMultiCa} isSplit={isSplit} granularity={granularity} hasBudget={hasBudget} compareActive={compareActive} currentLabel={yearLabels.current} compareLabel={yearLabels.compare} />
       case 'section-evolution-couverts':
-        return <SectionEvolutionCouverts c={c} isMobile={isMobile} buckets={buckets} bucketsMulti={bucketsMultiCouverts} isSplit={isSplit} granularity={granularity} />
+        return <SectionEvolutionCouverts c={c} isMobile={isMobile} buckets={bucketsCompare} bucketsMulti={bucketsMultiCouverts} isSplit={isSplit} granularity={granularity} compareActive={compareActive} currentLabel={yearLabels.current} compareLabel={yearLabels.compare} />
       case 'section-perf-jour-semaine':
-        return <SectionPerfJourSemaine c={c} isMobile={isMobile} perf={perfWeekday} perfMulti={perfMultiCa} isSplit={isSplit} />
+        return <SectionPerfJourSemaine c={c} isMobile={isMobile} perf={perfCompare} perfMulti={perfMultiCa} isSplit={isSplit} compareActive={compareActive} currentLabel={yearLabels.current} compareLabel={yearLabels.compare} />
       case 'section-mix-food-bev':
         return <SectionMixFoodBev c={c} isMobile={isMobile} segments={mix} totalCaTtc={totals.caTtc} matrix={mixServiceMatrix} />
       case 'section-top-bottom-jours':
@@ -819,6 +856,14 @@ export default function AnalysesPage() {
 
         {error && <p style={{ color: '#B91C1C', fontSize: 14, marginBottom: 16 }}>{error}</p>}
         {loading && <p style={{ color: c.texteMuted, fontSize: 14 }}>Chargement…</p>}
+
+        {!loading && !error && comparaison === 'n-1' && (
+          <ComparisonRecapBanner
+            c={c} isMobile={isMobile}
+            totals={totals} compareTotals={totalsCompare}
+            currentLabel={yearLabels.current} compareLabel={yearLabels.compare}
+          />
+        )}
 
         {!loading && !error && kpiLayout.length > 0 && (
           <div style={{

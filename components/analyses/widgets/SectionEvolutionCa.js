@@ -4,19 +4,29 @@ import {
   ResponsiveContainer, ComposedChart, LineChart, Line, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
+import CompareTooltip from './CompareTooltip'
 
 // Évolution du CA TTC sur la période, granularité automatique.
 // Modes :
 //   - cumulé (isSplit=false) : ComposedChart avec barres budget + ligne CA réel
 //   - multi-séries (isSplit=true) : LineChart avec une ligne par lieu/service
 //     sélectionné. Le budget est masqué (il ne se split pas naturellement).
+//   - comparaison N-1 (compareActive, non split) : seconde courbe N-1 en
+//     pointillés superposée à la courbe courante (budget masqué pour la
+//     lisibilité), avec tooltip qui affiche l'écart entre les deux années.
 //
-// `buckets` (cumulé) : sortie de bucketDays(daysWithBudget, granularity)
+// `buckets` (cumulé) : sortie de bucketDays(daysWithBudget, granularity), avec
+//   caTotN1 ajouté par zipCompareBuckets quand compareActive.
 // `bucketsMulti` (split) : { series: [...], buckets: [{ key, label, ['Salle']: 100, ['Privat']: 80, … }] }
-export default function SectionEvolutionCa({ c, isMobile, buckets, bucketsMulti, isSplit, granularity, hasBudget }) {
-  const hint = `Granularité : ${granularityLabel(granularity)}${
-    isSplit ? ' — 1 ligne par série' : (hasBudget ? ' — barres = budget cible' : '')
-  }`
+export default function SectionEvolutionCa({
+  c, isMobile, buckets, bucketsMulti, isSplit, granularity, hasBudget,
+  compareActive = false, currentLabel, compareLabel,
+}) {
+  const hint = isSplit
+    ? `Granularité : ${granularityLabel(granularity)} — 1 ligne par série`
+    : compareActive
+      ? `Granularité : ${granularityLabel(granularity)} — ${currentLabel} vs ${compareLabel}`
+      : `Granularité : ${granularityLabel(granularity)}${hasBudget ? ' — barres = budget cible' : ''}`
   return (
     <div style={{
       background: c.blanc, borderRadius: 12,
@@ -29,12 +39,14 @@ export default function SectionEvolutionCa({ c, isMobile, buckets, bucketsMulti,
       </div>
       {isSplit
         ? <MultiSeriesChart c={c} isMobile={isMobile} bucketsMulti={bucketsMulti} />
-        : <CumulatedChart c={c} isMobile={isMobile} buckets={buckets} hasBudget={hasBudget} />}
+        : <CumulatedChart c={c} isMobile={isMobile} buckets={buckets}
+            hasBudget={hasBudget && !compareActive}
+            compareActive={compareActive} currentLabel={currentLabel} compareLabel={compareLabel} />}
     </div>
   )
 }
 
-function CumulatedChart({ c, isMobile, buckets, hasBudget }) {
+function CumulatedChart({ c, isMobile, buckets, hasBudget, compareActive, currentLabel, compareLabel }) {
   if (!buckets || buckets.length === 0) return <EmptyState c={c} />
   return (
     <ResponsiveContainer width="100%" height={isMobile ? 220 : 280}>
@@ -42,11 +54,21 @@ function CumulatedChart({ c, isMobile, buckets, hasBudget }) {
         <CartesianGrid strokeDasharray="3 3" stroke={c.bordure} />
         <XAxis dataKey="label" tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false} tickFormatter={formatAxisEur} />
-        <Tooltip contentStyle={{ borderRadius: 8, border: `0.5px solid ${c.bordure}`, fontSize: 12 }}
-          formatter={(v, name) => [formatTooltipEur(v), name]} />
+        {compareActive ? (
+          <Tooltip content={<CompareTooltip c={c} currentLabel={currentLabel} compareLabel={compareLabel}
+            field="caTot" compareField="caTotN1" unit="eur" />} />
+        ) : (
+          <Tooltip contentStyle={{ borderRadius: 8, border: `0.5px solid ${c.bordure}`, fontSize: 12 }}
+            formatter={(v, name) => [formatTooltipEur(v), name]} />
+        )}
         <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
         {hasBudget && <Bar dataKey="budget" name="Budget" fill={c.accentClair} radius={[4, 4, 0, 0]} />}
-        <Line type="monotone" dataKey="caTot" name="CA TTC réel" stroke={c.accent} strokeWidth={2} dot={{ r: 3 }} />
+        {compareActive && (
+          <Line type="monotone" dataKey="caTotN1" name={compareLabel} stroke={c.texteMuted}
+            strokeWidth={2} strokeDasharray="5 4" dot={{ r: 2 }} connectNulls />
+        )}
+        <Line type="monotone" dataKey="caTot" name={compareActive ? currentLabel : 'CA TTC réel'}
+          stroke={c.accent} strokeWidth={compareActive ? 2.5 : 2} dot={{ r: 3 }} />
       </ComposedChart>
     </ResponsiveContainer>
   )

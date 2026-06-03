@@ -4,10 +4,16 @@ import {
   ResponsiveContainer, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
+import CompareTooltip from './CompareTooltip'
 
 // Évolution des couverts servis sur la période, granularité auto.
 // `bucketsMulti` activé en mode split (1 ligne par lieu/service).
-export default function SectionEvolutionCouverts({ c, isMobile, buckets, bucketsMulti, isSplit, granularity }) {
+// En comparaison N-1 (compareActive, non split) : seconde courbe N-1 en
+// pointillés superposée, avec tooltip d'écart entre les deux années.
+export default function SectionEvolutionCouverts({
+  c, isMobile, buckets, bucketsMulti, isSplit, granularity,
+  compareActive = false, currentLabel, compareLabel,
+}) {
   const empty = isSplit
     ? !bucketsMulti || bucketsMulti.buckets.length === 0
     : !buckets || buckets.length === 0
@@ -20,7 +26,8 @@ export default function SectionEvolutionCouverts({ c, isMobile, buckets, buckets
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: c.texte }}>Évolution des couverts</div>
         <div style={{ fontSize: 12, color: c.texteMuted, marginTop: 2 }}>
-          {granularityLabel(granularity)}{isSplit ? ' — 1 ligne par série' : ''}
+          {granularityLabel(granularity)}
+          {isSplit ? ' — 1 ligne par série' : compareActive ? ` — ${currentLabel} vs ${compareLabel}` : ''}
         </div>
       </div>
       {empty ? (
@@ -28,22 +35,34 @@ export default function SectionEvolutionCouverts({ c, isMobile, buckets, buckets
       ) : isSplit ? (
         <MultiSeriesChart c={c} isMobile={isMobile} bucketsMulti={bucketsMulti} />
       ) : (
-        <SingleChart c={c} isMobile={isMobile} buckets={buckets} />
+        <SingleChart c={c} isMobile={isMobile} buckets={buckets}
+          compareActive={compareActive} currentLabel={currentLabel} compareLabel={compareLabel} />
       )}
     </div>
   )
 }
 
-function SingleChart({ c, isMobile, buckets }) {
+function SingleChart({ c, isMobile, buckets, compareActive, currentLabel, compareLabel }) {
   return (
     <ResponsiveContainer width="100%" height={isMobile ? 220 : 280}>
       <LineChart data={buckets} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={c.bordure} />
         <XAxis dataKey="label" tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 10, fill: c.texteMuted }} axisLine={false} tickLine={false} />
-        <Tooltip contentStyle={{ borderRadius: 8, border: `0.5px solid ${c.bordure}`, fontSize: 12 }}
-          formatter={(v) => [`${Number(v).toLocaleString('fr-FR')} couverts`, 'Couverts']} />
-        <Line type="monotone" dataKey="couverts" name="Couverts" stroke={c.violet} strokeWidth={2} dot={{ r: 3 }} />
+        {compareActive ? (
+          <Tooltip content={<CompareTooltip c={c} currentLabel={currentLabel} compareLabel={compareLabel}
+            field="couverts" compareField="couvertsN1" unit="count" />} />
+        ) : (
+          <Tooltip contentStyle={{ borderRadius: 8, border: `0.5px solid ${c.bordure}`, fontSize: 12 }}
+            formatter={(v) => [`${Number(v).toLocaleString('fr-FR')} couverts`, 'Couverts']} />
+        )}
+        {compareActive && <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />}
+        {compareActive && (
+          <Line type="monotone" dataKey="couvertsN1" name={compareLabel} stroke={c.texteMuted}
+            strokeWidth={2} strokeDasharray="5 4" dot={{ r: 2 }} connectNulls />
+        )}
+        <Line type="monotone" dataKey="couverts" name={compareActive ? currentLabel : 'Couverts'}
+          stroke={c.violet} strokeWidth={compareActive ? 2.5 : 2} dot={{ r: 3 }} />
       </LineChart>
     </ResponsiveContainer>
   )

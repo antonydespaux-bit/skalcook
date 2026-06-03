@@ -17,6 +17,8 @@ import {
   mixByService,
   bucketDaysMultiSeries,
   perfByWeekdayMultiSeries,
+  zipCompareBuckets,
+  zipComparePerf,
   TVA_FOOD,
   TVA_BEV_20,
 } from '../caAnalyses'
@@ -467,6 +469,60 @@ describe('perfByWeekday', () => {
     // Mardi : pas de data → 0
     expect(perf[1].count).toBe(0)
     expect(perf[1].ca).toBe(0)
+  })
+})
+
+describe('zipCompareBuckets', () => {
+  it('aligne caTotN1 / couvertsN1 positionnellement sur les buckets courants', () => {
+    const buckets = [
+      { key: '2026-01-01', label: '01/01', caTot: 100, couverts: 10 },
+      { key: '2026-01-02', label: '02/01', caTot: 200, couverts: 20 },
+    ]
+    const compare = [
+      { key: '2025-01-01', label: '01/01', caTot: 80, couverts: 8 },
+      { key: '2025-01-02', label: '02/01', caTot: 250, couverts: 25 },
+    ]
+    const out = zipCompareBuckets(buckets, compare)
+    expect(out[0]).toMatchObject({ caTot: 100, caTotN1: 80, couvertsN1: 8 })
+    expect(out[1]).toMatchObject({ caTot: 200, caTotN1: 250, couvertsN1: 25 })
+  })
+
+  it('met N-1 à null quand le bucket courant n’a pas d’équivalent', () => {
+    const buckets = [
+      { key: '2026-01-01', label: '01/01', caTot: 100, couverts: 10 },
+      { key: '2026-01-02', label: '02/01', caTot: 200, couverts: 20 },
+    ]
+    const compare = [{ key: '2025-01-01', label: '01/01', caTot: 80, couverts: 8 }]
+    const out = zipCompareBuckets(buckets, compare)
+    expect(out[1].caTotN1).toBeNull()
+    expect(out[1].couvertsN1).toBeNull()
+  })
+
+  it('renvoie les buckets inchangés sans données de comparaison', () => {
+    const buckets = [{ key: '2026-01-01', label: '01/01', caTot: 100, couverts: 10 }]
+    expect(zipCompareBuckets(buckets, [])).toBe(buckets)
+    expect(zipCompareBuckets(buckets, null)).toBe(buckets)
+  })
+})
+
+describe('zipComparePerf', () => {
+  it('colle caN1 / cvN1 par jour-de-semaine (isoJds)', () => {
+    const perf = [
+      { isoJds: 1, label: 'Lundi', ca: 150, cv: 15 },
+      { isoJds: 2, label: 'Mardi', ca: 0, cv: 0 },
+    ]
+    const comparePerf = [
+      { isoJds: 1, label: 'Lundi', ca: 120, cv: 12 },
+      { isoJds: 2, label: 'Mardi', ca: 90, cv: 9 },
+    ]
+    const out = zipComparePerf(perf, comparePerf)
+    expect(out[0]).toMatchObject({ ca: 150, caN1: 120, cvN1: 12 })
+    expect(out[1]).toMatchObject({ ca: 0, caN1: 90, cvN1: 9 })
+  })
+
+  it('renvoie la perf inchangée sans données de comparaison', () => {
+    const perf = [{ isoJds: 1, label: 'Lundi', ca: 150, cv: 15 }]
+    expect(zipComparePerf(perf, [])).toBe(perf)
   })
 })
 
