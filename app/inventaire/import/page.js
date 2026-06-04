@@ -28,6 +28,7 @@ export default function ImportInventairePage() {
   const [section, setSection] = useState(sectionForced || (role === 'bar' ? 'bar' : 'cuisine'))
   const [dateInventaire, setDateInventaire] = useState(todayIso())
   const [lignes, setLignes] = useState([])
+  const [skipped, setSkipped] = useState([])
   const [fileName, setFileName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -36,6 +37,7 @@ export default function ImportInventairePage() {
   const handleFile = (e) => {
     setError('')
     setResult(null)
+    setSkipped([])
     const f = e.target.files?.[0]
     if (!f) return
     setFileName(f.name)
@@ -44,27 +46,42 @@ export default function ImportInventairePage() {
       try {
         const wb = XLSX.read(evt.target.result, { type: 'binary' })
 
+        // Assainit chaque ligne pour respecter les contraintes serveur
+        // (nom ≤ 200, unité ≤ 20, quantité/prix ≥ 0). Les lignes parasites
+        // (quantité absente/négative — typiquement des lignes de remise ou de
+        // service exportées par la caisse) sont écartées et listées à part :
+        // une seule valeur invalide ne doit pas faire échouer tout l'import.
         const parseSheet = (sheet) => {
           const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 })
           const out = []
+          const dropped = []
           for (let i = 1; i < rows.length; i++) {
             const row = rows[i]
             if (!row || row.length === 0) continue
-            const nom = String(row[0] || '').trim()
+            let nom = String(row[0] || '').trim()
+            if (!nom) continue
             const qStr = String(row[1] || '').replace(',', '.').replace(/[^0-9.\-]/g, '')
             const quantite = parseFloat(qStr)
-            if (!nom || isNaN(quantite)) continue
-            const unite = String(row[2] || '').trim()
+            if (isNaN(quantite)) continue
+            if (quantite < 0) {
+              dropped.push({ nom, raison: `quantité négative (${quantite})` })
+              continue
+            }
+            if (nom.length > 200) nom = nom.slice(0, 200)
+            let unite = String(row[2] || '').trim()
+            if (unite.length > 20) unite = unite.slice(0, 20)
             const pStr = String(row[3] || '').replace(',', '.').replace(/[^0-9.\-]/g, '')
-            const prix = pStr === '' ? null : parseFloat(pStr)
+            let prix = pStr === '' ? null : parseFloat(pStr)
+            // Prix négatif ou non numérique → on l'ignore (prix inconnu)
+            if (prix == null || isNaN(prix) || prix < 0) prix = null
             out.push({
               nom,
               quantite,
               unite: unite || null,
-              prix_unitaire: prix != null && !isNaN(prix) ? prix : null,
+              prix_unitaire: prix,
             })
           }
-          return out
+          return { out, dropped }
         }
 
         // Excel peut masquer des feuilles vides en première position : on scanne
@@ -76,18 +93,20 @@ export default function ImportInventairePage() {
         const hidden = wb.SheetNames.filter((_, i) => isHidden(i))
         const ordered = [...visible, ...hidden]
 
-        let parsed = []
+        let parsed = { out: [], dropped: [] }
         for (const name of ordered) {
           parsed = parseSheet(wb.Sheets[name])
-          if (parsed.length > 0) break
+          if (parsed.out.length > 0) break
         }
 
-        if (parsed.length === 0) {
+        if (parsed.out.length === 0) {
           setError('Aucune ligne valide trouvée. Vérifie le format : colonne A = Nom, colonne B = Quantité (Unité, Prix unitaire et Total optionnels).')
           setLignes([])
+          setSkipped([])
           return
         }
-        setLignes(parsed)
+        setLignes(parsed.out)
+        setSkipped(parsed.dropped)
       } catch (err) {
         setError('Lecture du fichier échouée : ' + (err.message || 'fichier invalide'))
       }
@@ -134,7 +153,16 @@ export default function ImportInventairePage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error || 'Erreur lors de l\'import')
+        // Surface le détail de validation Zod si présent (sinon "Données
+        // invalides" tout seul n'aide pas à diagnostiquer).
+        let msg = data.error || 'Erreur lors de l\'import'
+        const fieldErrs = data.details?.fieldErrors
+        if (fieldErrs && typeof fieldErrs === 'object') {
+          const parts = Object.entries(fieldErrs)
+            .map(([champ, errs]) => `${champ} : ${Array.isArray(errs) ? errs.join(', ') : errs}`)
+          if (parts.length) msg += ' — ' + parts.join(' ; ')
+        }
+        setError(msg)
         return
       }
       setResult(data)
@@ -245,6 +273,18 @@ export default function ImportInventairePage() {
         {fileName && lignes.length > 0 && (
           <div style={{ background: c.blanc, borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', color: c.texte }}>
             <strong>{fileName}</strong> — {lignes.length} ligne{lignes.length > 1 ? 's' : ''} détectée{lignes.length > 1 ? 's' : ''}
+          </div>
+        )}
+
+        {skipped.length > 0 && (
+          <div style={{ background: '#FEF3C7', border: '0.5px solid #FDE68A', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#92400E' }}>
+            <strong>{skipped.length} ligne{skipped.length > 1 ? 's' : ''} ignorée{skipped.length > 1 ? 's' : ''}</strong> (valeurs invalides, non importée{skipped.length > 1 ? 's' : ''}) :
+            <div style={{ marginTop: '6px', fontSize: '12px' }}>
+              {skipped.slice(0, 8).map((s, i) => (
+                <div key={i}>• {s.nom} — {s.raison}</div>
+              ))}
+              {skipped.length > 8 && <div>… + {skipped.length - 8} autre{skipped.length - 8 > 1 ? 's' : ''}</div>}
+            </div>
           </div>
         )}
 
