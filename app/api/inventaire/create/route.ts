@@ -7,7 +7,7 @@ export const POST = apiHandler({
   guard: 'memberOfClient',
   clientIdFrom: 'body.client_id',
   handler: async ({ data, db }) => {
-    const result = await createInventaire(db, data.client_id, data.type, data.section, data.categorie_ids)
+    const result = await createInventaire(db, data.client_id, data.type, data.section, data.categorie_ids, data.date_inventaire)
     return Response.json(result)
   },
 })

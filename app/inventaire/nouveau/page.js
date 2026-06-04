@@ -7,10 +7,13 @@ import { useRole } from '../../../lib/useRole'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import Navbar from '../../../components/Navbar'
 
+const todayIso = () => new Date().toISOString().slice(0, 10)
+
 export default function NouvelInventairePage() {
   const [step, setStep] = useState(1)
   const [type, setType] = useState(null)
   const [section, setSection] = useState(null)
+  const [dateInventaire, setDateInventaire] = useState(todayIso())
   const [categories, setCategories] = useState([])
   const [selectedCategorieIds, setSelectedCategorieIds] = useState([])
   const [creating, setCreating] = useState(false)
@@ -44,6 +47,7 @@ export default function NouvelInventairePage() {
         client_id: clientId,
         type: chosenType,
         section: chosenSection,
+        date_inventaire: dateInventaire || todayIso(),
       }
       if (chosenType === 'tournant' && chosenCategorieIds && chosenCategorieIds.length > 0) {
         body.categorie_ids = chosenCategorieIds
@@ -155,6 +159,23 @@ export default function NouvelInventairePage() {
             {error}
           </div>
         )}
+
+        {/* Date de l'inventaire — par défaut aujourd'hui, modifiable (ex. saisie
+            d'un inventaire passé). */}
+        <div style={{ background: c.blanc, borderRadius: '12px', padding: '14px 16px', border: `0.5px solid ${c.bordure}`, marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+          <label htmlFor="date-inv" style={{ fontSize: '13px', fontWeight: '500', color: c.texte }}>
+            📅 Date de l&apos;inventaire
+          </label>
+          <input
+            id="date-inv"
+            type="date"
+            value={dateInventaire}
+            max={todayIso()}
+            onChange={e => setDateInventaire(e.target.value)}
+            disabled={creating}
+            style={{ padding: '8px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: c.blanc, outline: 'none', color: c.texte, cursor: creating ? 'not-allowed' : 'pointer' }}
+          />
+        </div>
 
         {/* Étape 1 : Choix du type */}
         {step === 1 && (
