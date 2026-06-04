@@ -170,6 +170,12 @@ export default function InventairePage() {
           {(role === 'admin' || role === 'cuisine' || role === 'bar') && (
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button
+                onClick={() => router.push(`/inventaire/comparaison${queryString}`)}
+                style={{ padding: '10px 16px', background: c.blanc, color: c.texte, border: `0.5px solid ${c.bordure}`, borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}
+              >
+                ⇄ Comparer
+              </button>
+              <button
                 onClick={() => router.push(`/inventaire/import${queryString}`)}
                 style={{ padding: '10px 16px', background: c.blanc, color: c.texte, border: `0.5px solid ${c.bordure}`, borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}
               >

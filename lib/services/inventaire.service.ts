@@ -267,7 +267,8 @@ export async function createInventaire(
   clientId: string,
   type: 'tournant' | 'complet',
   section: 'cuisine' | 'bar' | 'global',
-  categorieIds?: string[]
+  categorieIds?: string[],
+  dateInventaire?: string
 ) {
   const sections = section === 'global' ? ['cuisine', 'bar'] as const : [section] as const
 
@@ -314,8 +315,10 @@ export async function createInventaire(
     }
   }
 
-  // Create inventory header
+  // Create inventory header — date_inventaire choisie par l'utilisateur si
+  // fournie (sinon aujourd'hui). periode_fin suit la date d'inventaire.
   const today = new Date().toISOString().slice(0, 10)
+  const dateInv = dateInventaire || today
   const { data: inventaire, error: invErr } = await db
     .from('inventaires')
     .insert({
@@ -323,9 +326,9 @@ export async function createInventaire(
       type,
       section,
       statut: 'brouillon',
-      date_inventaire: today,
+      date_inventaire: dateInv,
       periode_debut: periodeDebut,
-      periode_fin: today,
+      periode_fin: dateInv,
     })
     .select()
     .single()

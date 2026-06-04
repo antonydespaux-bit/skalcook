@@ -11,6 +11,9 @@ export const createInventaireSchema = z.object({
     error: 'section invalide.',
   }).default('cuisine'),
   categorie_ids: z.array(uuidSchema).max(2, 'Maximum 2 catégories.').optional(),
+  date_inventaire: z.string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date au format YYYY-MM-DD requise.')
+    .optional(),
 })
 
 export type CreateInventaireInput = z.infer<typeof createInventaireSchema>
