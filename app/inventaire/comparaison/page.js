@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
+import * as XLSX from 'xlsx'
 import { supabase, getClientId } from '../../../lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTheme } from '../../../lib/useTheme'
@@ -109,6 +110,44 @@ export default function ComparaisonInventairesPage() {
     return { rows, totA, totB, totVar: totB - totA }
   }, [lignesA, lignesB])
 
+  // Export Excel de la comparaison : une ligne par article + ligne de total.
+  const exportXlsx = () => {
+    if (!compare || !invA || !invB) return
+    const dA = (invA.date_inventaire || '').slice(0, 10)
+    const dB = (invB.date_inventaire || '').slice(0, 10)
+    const header = [
+      'Article', 'Unité',
+      `Qté A (${dA})`, `Qté B (${dB})`, 'Δ Qté',
+      `Valeur A (€)`, `Valeur B (€)`, 'Δ Valeur (€)',
+      'Statut',
+    ]
+    const rows = compare.rows.map(r => {
+      const statut = r.qtyB == null ? 'absent de B' : r.qtyA == null ? 'nouveau' : ''
+      return [
+        r.nom || '',
+        r.unite || '',
+        r.qtyA != null ? +Number(r.qtyA).toFixed(3) : null,
+        r.qtyB != null ? +Number(r.qtyB).toFixed(3) : null,
+        +Number(r.varQty).toFixed(3),
+        +Number(r.valA).toFixed(2),
+        +Number(r.valB).toFixed(2),
+        +Number(r.varVal).toFixed(2),
+        statut,
+      ]
+    })
+    const total = ['TOTAL', '', null, null, null,
+      +compare.totA.toFixed(2), +compare.totB.toFixed(2), +compare.totVar.toFixed(2), '']
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows, [], total])
+    ws['!cols'] = [
+      { wch: 36 }, { wch: 10 },
+      { wch: 14 }, { wch: 14 }, { wch: 10 },
+      { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 },
+    ]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Comparaison')
+    XLSX.writeFile(wb, `comparaison_inventaires_${dA}_vs_${dB}.xlsx`)
+  }
+
   const selectStyle = {
     width: '100%', padding: '10px 12px', borderRadius: '8px',
     border: `0.5px solid ${c.bordure}`, fontSize: '14px', background: c.blanc,
@@ -192,8 +231,15 @@ export default function ComparaisonInventairesPage() {
 
                 {/* Tableau de variation */}
                 <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
-                  <div style={{ padding: '12px 16px', borderBottom: `0.5px solid ${c.bordure}`, fontSize: '13px', fontWeight: '600', color: c.texte }}>
-                    Variation par article ({compare.rows.length})
+                  <div style={{ padding: '12px 16px', borderBottom: `0.5px solid ${c.bordure}`, fontSize: '13px', fontWeight: '600', color: c.texte, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                    <span>Variation par article ({compare.rows.length})</span>
+                    <button
+                      onClick={exportXlsx}
+                      title="Exporter la comparaison au format Excel"
+                      style={{ padding: '6px 12px', background: c.blanc, color: c.texte, border: `0.5px solid ${c.bordure}`, borderRadius: '8px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      📤 Export Excel
+                    </button>
                   </div>
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
