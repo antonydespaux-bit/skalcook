@@ -227,7 +227,8 @@ export default function ModifierFiche() {
   const unitCostFor = (sfId) => listeIngredients.find(i => i.est_sous_fiche && (i.fiche_id === sfId || i.id === sfId))?.prix_kg || null
 
   const calculerCout = () => {
-    if (formatAffichage === 'etoile') {
+    // Coût indépendant du toggle d'affichage : dose-aware dès qu'il y a des sections.
+    if (sections.length > 0) {
       const sectionsCout = sections.map(s => ({
         sousFicheId: s.sous_fiche_id, dosePortion: s.dose_portion, doseUnite: s.dose_unite,
         rendementPortion: s.rendement_portion, rendementUnite: s.rendement_unite,

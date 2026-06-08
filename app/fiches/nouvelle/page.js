@@ -155,7 +155,8 @@ export default function NouvelleFiche() {
   // calculerCoutPortion/foodCost/prixIndicatif (qui divisent par nb_portions)
   // restent justes sans modification.
   const calculerCout = () => {
-    if (formatAffichage === 'etoile') {
+    // Coût indépendant du toggle d'affichage : dose-aware dès qu'il y a des sections.
+    if (sections.length > 0) {
       const sectionsCout = sections.map(s => ({
         sousFicheId: s.sous_fiche_id, dosePortion: s.dose_portion, doseUnite: s.dose_unite,
         rendementPortion: s.rendement_portion, rendementUnite: s.rendement_unite,

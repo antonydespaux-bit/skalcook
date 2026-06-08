@@ -149,7 +149,8 @@ export default function FicheDetail() {
   // Coût "total" : en étoilé = coût/portion (dose-aware) × nb_portions (pour que
   // foodCost/prixIndicatif qui divisent par nb_portions restent justes).
   const calculerCout = () => {
-    if (formatAffichage === 'etoile') {
+    // Coût indépendant du toggle d'affichage : dose-aware dès qu'il y a des sections.
+    if (sections.length > 0) {
       const sectionsCout = sections.map(s => ({
         sousFicheId: s.sous_fiche_id, dosePortion: s.dose_portion, doseUnite: s.dose_unite,
         rendementPortion: s.rendement_portion, rendementUnite: s.rendement_unite,
