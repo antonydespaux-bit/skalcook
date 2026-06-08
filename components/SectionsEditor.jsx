@@ -73,6 +73,12 @@ export default function SectionsEditor({
     setIngredients([...ingredients, { ingredient_id: '', nom: '', quantite: '', unite: 'kg', section_temp_id: sectionTempId }])
   }
 
+  // Ingrédient de finition/dressage : sans section (section_temp_id = null),
+  // quantité = par assiette, compté directement dans le coût/assiette.
+  const ajouterIngredientLibre = () => {
+    setIngredients([...ingredients, { ingredient_id: '', nom: '', quantite: '', unite: 'g', section_temp_id: null }])
+  }
+
   const modifierIngredient = (gIdx, champ, valeur) => {
     const nouveaux = [...ingredients]
     nouveaux[gIdx][champ] = valeur
@@ -308,6 +314,56 @@ export default function SectionsEditor({
             Aucune préparation pour l'instant. Cliquez sur « Ajouter une préparation » pour démarrer.
           </div>
         )}
+
+        {/* Finition / dressage : ingrédients seuls (sans section), quantité par assiette */}
+        {(() => {
+          const freeIngs = ingredients.map((ing, gIdx) => ({ ing, gIdx })).filter(({ ing }) => !ing.section_temp_id)
+          const coutFinition = freeIngs.reduce((t, { ing }) => t + coutLigneEditor(listeIngredients.find(i => i.id === ing.ingredient_id), ing.quantite, ing.unite), 0)
+          return (
+            <div style={{ background: c.fond, borderRadius: '10px', padding: '14px', border: `0.5px dashed ${c.bordure}` }}>
+              <div style={{ fontSize: '13px', color: c.texteMuted, fontWeight: '500', marginBottom: '4px' }}>✨ Finition / dressage</div>
+              <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '10px' }}>Ingrédients seuls, ajoutés directement à l'assiette (quantité par assiette).</div>
+              <div style={{ background: c.blanc, borderRadius: '8px', padding: '10px', border: `0.5px solid ${c.bordure}` }}>
+                {freeIngs.length === 0 && (
+                  <div style={{ fontSize: '12px', color: c.texteMuted, fontStyle: 'italic', padding: '6px 0' }}>Aucun ingrédient de finition.</div>
+                )}
+                {freeIngs.map(({ ing, gIdx }) => {
+                  const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
+                  const coutLigne = coutLigneEditor(ingData, ing.quantite, ing.unite) || null
+                  return (
+                    <div key={gIdx} style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: `0.5px solid ${c.bordure}` }}>
+                      <div style={{ marginBottom: '6px' }}>
+                        <IngredientSearch ingredients={listeIngredients} value={ing.ingredient_id} onChange={val => modifierIngredient(gIdx, 'ingredient_id', val)} />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 80px) minmax(0, 90px) 1fr 32px', gap: '6px', alignItems: 'center' }}>
+                        <input type="number" value={ing.quantite} step="0.01" placeholder="Qté/ass."
+                          onChange={e => modifierIngredient(gIdx, 'quantite', e.target.value)}
+                          style={{ padding: '8px 10px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, background: c.blanc, minWidth: 0 }} />
+                        <select value={ing.unite} onChange={e => modifierIngredient(gIdx, 'unite', e.target.value)}
+                          style={{ padding: '8px 6px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: c.blanc, outline: 'none', color: c.texte, minWidth: 0 }}>
+                          {UNITES.map(u => <option key={u}>{u}</option>)}
+                        </select>
+                        <div style={{ fontSize: '11px', color: coutLigne ? c.texte : c.texteMuted, textAlign: 'right', whiteSpace: 'nowrap', paddingRight: '4px' }}>
+                          {coutLigne ? `${coutLigne.toFixed(2)} €` : '—'}
+                        </div>
+                        <button type="button" onClick={() => supprimerIngredient(gIdx)} style={{ background: 'transparent', border: `0.5px solid ${c.bordure}`, borderRadius: '6px', cursor: 'pointer', color: '#aaa', fontSize: '14px', height: '32px', width: '32px' }}>×</button>
+                      </div>
+                    </div>
+                  )
+                })}
+                <button type="button" onClick={ajouterIngredientLibre} style={{ background: c.vertClair, color: c.vert, border: `0.5px solid ${c.vert}40`, borderRadius: '6px', padding: '6px 10px', fontSize: '12px', cursor: 'pointer', marginTop: '4px' }}>
+                  + Ingrédient de finition
+                </button>
+                {coutFinition > 0 && (
+                  <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: `0.5px solid ${c.bordure}`, fontSize: '11px', color: c.texteMuted, display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Coût finition / assiette</span>
+                    <strong style={{ color: c.texte }}>{coutFinition.toFixed(2)} €</strong>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })()}
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <button type="button" onClick={ajouterSection} style={{ background: c.accentClair, color: c.accent, border: `0.5px solid ${c.accent}40`, borderRadius: '8px', padding: '10px 16px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}>
