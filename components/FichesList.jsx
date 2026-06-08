@@ -128,7 +128,14 @@ export default function FichesList({ section = 'cuisine' }) {
         supabase.from('categories_plats').select('*').eq('client_id', clientId).eq('section', cfg.sectionFilter).order('ordre'),
       ])
       if (error) throw error
-      setFiches(fichesData || [])
+      // Garde-fou : exclure les sous-fiches de la liste principale (elles vivent
+      // dans /sous-fiches). Le filtre `.or()` côté requête ne les écarte pas de
+      // façon fiable (plusieurs `or=` non combinés en AND par PostgREST).
+      let rows = fichesData || []
+      if (cfg.hasSousFicheFilter) {
+        rows = rows.filter(f => !(f.is_sub_fiche === true || (typeof f.categorie === 'string' && f.categorie.toLowerCase().includes('sous'))))
+      }
+      setFiches(rows)
       setLieux(lieuxData || [])
       setCategories(catsData || [])
       setSelection([])
