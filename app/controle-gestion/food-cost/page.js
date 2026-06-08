@@ -782,66 +782,6 @@ export default function FoodCostPage() {
                 Montant signé : <strong>positif</strong> = ajout au coût (transferts entrants), <strong>négatif</strong> = déduction (repas staff, casse, cadeaux).
               </p>
 
-              {ajustements.length > 0 && (
-                <div style={{ overflowX: 'auto', marginBottom: 14, border: `1px solid ${c.bordure}`, borderRadius: 8 }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: c.fond }}>
-                        <th style={{ ...th(c), width: 110 }}>Date</th>
-                        <th style={th(c)}>Libellé</th>
-                        <th style={{ ...th(c), textAlign: 'right', width: 120 }}>Montant</th>
-                        <th style={th(c)}>Commentaire</th>
-                        <th style={{ ...th(c), width: 130 }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ajustements.map((a) => editingId === a.id ? (
-                        <tr key={a.id} style={{ background: c.fond }}>
-                          <td style={td(c)}>
-                            <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} style={{ ...input, padding: '4px 8px', fontSize: 12 }} />
-                          </td>
-                          <td style={td(c)}>
-                            <input value={editLibelle} onChange={(e) => setEditLibelle(e.target.value)} style={{ ...input, padding: '4px 8px', fontSize: 12 }} />
-                          </td>
-                          <td style={td(c)}>
-                            <input type="number" step="0.01" value={editMontant} onChange={(e) => setEditMontant(e.target.value)} style={{ ...input, padding: '4px 8px', fontSize: 12, textAlign: 'right' }} />
-                          </td>
-                          <td style={td(c)}>
-                            <input value={editCommentaire} onChange={(e) => setEditCommentaire(e.target.value)} style={{ ...input, padding: '4px 8px', fontSize: 12 }} />
-                          </td>
-                          <td style={td(c)}>
-                            <button onClick={saveEditAjustement} disabled={savingEdit} style={{ background: 'none', border: 'none', color: '#15803D', cursor: 'pointer', fontSize: 12, marginRight: 6 }}>
-                              {savingEdit ? '…' : 'OK'}
-                            </button>
-                            <button onClick={cancelEditAjustement} style={{ background: 'none', border: 'none', color: c.texteMuted, cursor: 'pointer', fontSize: 12 }}>Annuler</button>
-                          </td>
-                        </tr>
-                      ) : (
-                        <tr key={a.id}>
-                          <td style={{ ...td(c), fontSize: 12, color: c.texteMuted }}>{formatDate(a.date_ajustement)}</td>
-                          <td style={td(c)}>{a.libelle}</td>
-                          <td style={{ ...td(c), textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: Number(a.montant) < 0 ? '#15803D' : '#B91C1C' }}>
-                            {Number(a.montant) > 0 ? '+' : ''}{formatEuro(a.montant)}
-                          </td>
-                          <td style={{ ...td(c), color: c.texteMuted, fontSize: 12 }}>{a.commentaire || '—'}</td>
-                          <td style={td(c)}>
-                            <button onClick={() => startEditAjustement(a)} style={{ background: 'none', border: 'none', color: c.texte, cursor: 'pointer', fontSize: 12, marginRight: 8 }}>Modifier</button>
-                            <button onClick={() => deleteAjustement(a.id)} style={{ background: 'none', border: 'none', color: '#B91C1C', cursor: 'pointer', fontSize: 12 }}>Suppr.</button>
-                          </td>
-                        </tr>
-                      ))}
-                      <tr style={{ background: c.fond, fontWeight: 600 }}>
-                        <td style={td(c)} colSpan={2}>Total ajustements</td>
-                        <td style={{ ...td(c), textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                          {totaux.sumAjust > 0 ? '+' : ''}{formatEuro(totaux.sumAjust)}
-                        </td>
-                        <td style={td(c)} colSpan={2} />
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
               {/* Form d'ajout */}
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '110px 2fr 1fr 3fr auto', gap: 8, alignItems: 'end' }}>
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
