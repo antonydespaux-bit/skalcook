@@ -399,7 +399,7 @@ export default function FicheDetail() {
             {ingredients.some(i => !i.section_id) && (
               <div style={{ background: c.blanc, borderRadius: '12px', border: sections.length > 0 ? `0.5px dashed ${c.bordure}` : `0.5px solid ${c.bordure}`, padding: '14px 18px' }}>
                 <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '8px', fontStyle: sections.length > 0 ? 'italic' : 'normal', textTransform: sections.length > 0 ? 'none' : 'uppercase' }}>
-                  {sections.length > 0 ? 'Ingrédients non rattachés à une préparation' : 'Ingrédients'}
+                  {sections.length > 0 ? 'Finition / dressage' : 'Ingrédients'}
                 </div>
                 <ul style={{ listStyleType: 'disc', paddingLeft: '20px', margin: 0 }}>
                   {ingredients.filter(i => !i.section_id).map((ing, i) => (
