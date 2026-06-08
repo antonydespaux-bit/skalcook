@@ -9,7 +9,7 @@ import { useRole } from '../../../lib/useRole'
 import { log } from '../../../lib/useLog'
 import { ALLERGENES } from '../../../lib/allergenes'
 import { formatSaison } from '../../../lib/saison'
-import { coutLigneAffichage } from '../../../lib/cout'
+import { coutLigneAffichage, coutDose, coutPortionEtoile } from '../../../lib/cout'
 import FichePhoto, { FicheHeaderInfo, FicheHeaderInfoStyles } from '../../../components/FichePhoto'
 import { AllergenesBlock, FicheDetailNavbar } from '../../../components/FicheDetailShared'
 import ChefLoader from '../../../components/ChefLoader'
@@ -26,6 +26,7 @@ export default function FicheDetail() {
   const [signedUrl, setSignedUrl] = useState(null)
   const [allergenesCascade, setAllergenesCascade] = useState([])
   const [sections, setSections] = useState([])
+  const [sousFicheCout, setSousFicheCout] = useState({}) // { ficheId: cout_portion } pour les sections dosées
   const [formatAffichage, setFormatAffichage] = useState('brasserie')
   const [clientFormatDefaut, setClientFormatDefaut] = useState('brasserie')
   const router = useRouter()
@@ -102,17 +103,22 @@ export default function FicheDetail() {
       if (errIngs) console.error('Ingrédients error:', errIngs)
       setIngredients(ingsData || [])
 
-      const sousFicheIds = (ingsData || [])
-        .filter(ing => ing.ingredients?.est_sous_fiche && ing.ingredients?.fiche_id)
-        .map(ing => ing.ingredients.fiche_id)
+      // Sous-fiches référencées : via lignes d'ingrédients (miroir) ET via sections dosées (sous_fiche_id).
+      const sousFicheIds = [...new Set([
+        ...(ingsData || []).filter(ing => ing.ingredients?.est_sous_fiche && ing.ingredients?.fiche_id).map(ing => ing.ingredients.fiche_id),
+        ...(sectionsData || []).filter(s => s.sous_fiche_id).map(s => s.sous_fiche_id),
+      ])]
       if (sousFicheIds.length > 0) {
         const { data: sfFiches } = await supabase
           .from('fiches')
-          .select('allergenes')
+          .select('id, allergenes, cout_portion')
           .in('id', sousFicheIds)
           .eq('client_id', cId)
         const sfAllergs = (sfFiches || []).flatMap(sf => sf.allergenes || [])
         setAllergenesCascade([...new Set(sfAllergs)])
+        const coutMap = {}
+        ;(sfFiches || []).forEach(sf => { coutMap[sf.id] = sf.cout_portion })
+        setSousFicheCout(coutMap)
       }
     } catch (err) {
       console.error('Load fiche error:', err)
@@ -124,7 +130,31 @@ export default function FicheDetail() {
 
   const coutIngredient = (ing) => coutLigneAffichage(ing)
 
-  const calculerCout = () => ingredients.reduce((total, ing) => total + coutIngredient(ing), 0)
+  // Coût unitaire (€/unité de base) d'une sous-fiche liée à une section dosée.
+  const sectionUnitCostFor = (sfId) => sousFicheCout[sfId] || null
+  // Coût d'une section : dose-based si dosée, sinon Σ de ses lignes.
+  const coutSectionAffichage = (section) => {
+    if (section.sous_fiche_id) {
+      // Section liée : coût = dose (0 si non dosée — intermédiaire/référence, déjà compté ailleurs).
+      return section.dose_portion ? coutDose(sectionUnitCostFor(section.sous_fiche_id), section.dose_portion, section.dose_unite) : 0
+    }
+    return ingredients.filter(i => i.section_id === section.id).reduce((t, i) => t + coutIngredient(i), 0)
+  }
+
+  // Coût "total" : en étoilé = coût/portion (dose-aware) × nb_portions (pour que
+  // foodCost/prixIndicatif qui divisent par nb_portions restent justes).
+  const calculerCout = () => {
+    if (formatAffichage === 'etoile') {
+      const sectionsCout = sections.map(s => ({
+        sousFicheId: s.sous_fiche_id, dosePortion: s.dose_portion, doseUnite: s.dose_unite,
+        lineCost: ingredients.filter(i => i.section_id === s.id).reduce((t, i) => t + coutIngredient(i), 0),
+      }))
+      const freeLineCost = ingredients.filter(i => !i.section_id).reduce((t, i) => t + coutIngredient(i), 0)
+      const n = parseFloat(fiche?.nb_portions) || 1
+      return coutPortionEtoile({ sections: sectionsCout, freeLineCost, nbPortions: fiche?.nb_portions, unitCostFor: sectionUnitCostFor }) * n
+    }
+    return ingredients.reduce((total, ing) => total + coutIngredient(ing), 0)
+  }
 
   // Coût ventilé par section (clé = section_id ; '_libre' = ingrédients non rattachés)
   const coutParSection = () => {
@@ -306,7 +336,8 @@ export default function FicheDetail() {
           <div className="fiche-ingredients-after-header" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '12px' }}>
             {sections.map(section => {
               const ingsSection = ingredients.filter(i => i.section_id === section.id)
-              const coutSection = ingsSection.reduce((tot, ing) => tot + coutIngredient(ing), 0)
+              const estDosee = !!(section.sous_fiche_id && section.dose_portion)
+              const coutSection = coutSectionAffichage(section)
               return (
                 <div key={section.id} style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
                   <div style={{ padding: '12px 18px', borderBottom: `0.5px solid ${c.bordure}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', background: c.fond }}>
@@ -316,9 +347,14 @@ export default function FicheDetail() {
                         <a href={`/fiches/${section.sous_fiche_id}`} className="no-print" title="Voir la sous-fiche réutilisable" style={{ fontSize: '11px', fontWeight: '600', color: '#3C3489', background: '#EEEDFE', border: '0.5px solid #AFA9EC', borderRadius: '6px', padding: '3px 7px', textDecoration: 'none', whiteSpace: 'nowrap' }}>↗ réutilisable</a>
                       )}
                     </div>
-                    {peutVoirCosts && coutSection > 0 && (
-                      <div style={{ fontSize: '12px', color: c.texteMuted }}>Coût : <strong style={{ color: c.texte }}>{coutSection.toFixed(2)} €</strong></div>
-                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      {estDosee && (
+                        <span style={{ fontSize: '12px', color: c.texteMuted }}>Par assiette : <strong style={{ color: c.texte }}>{section.dose_portion} {section.dose_unite}</strong></span>
+                      )}
+                      {peutVoirCosts && coutSection > 0 && (
+                        <div style={{ fontSize: '12px', color: c.texteMuted }}>Coût{estDosee ? '/assiette' : ''} : <strong style={{ color: c.texte }}>{coutSection.toFixed(2)} €</strong></div>
+                      )}
+                    </div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '0' }}>
                     {/* Colonne gauche : ingrédients */}
@@ -330,7 +366,7 @@ export default function FicheDetail() {
                           {ingsSection.map((ing, i) => (
                             <li key={i} style={{ fontSize: '13px', color: c.texte, lineHeight: '1.8', display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
                               <span>{ing.quantite} {ing.unite} {ing.ingredients?.nom || '—'}</span>
-                              {peutVoirCosts && coutIngredient(ing) > 0 && (
+                              {peutVoirCosts && !estDosee && coutIngredient(ing) > 0 && (
                                 <span style={{ color: c.texteMuted, fontSize: '11px', whiteSpace: 'nowrap' }}>{coutIngredient(ing).toFixed(2)} €</span>
                               )}
                             </li>

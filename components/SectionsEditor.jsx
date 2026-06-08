@@ -2,10 +2,11 @@
 import { useState } from 'react'
 import IngredientSearch from './IngredientSearch'
 import { Card } from './ui'
-import { coutLigneEditor } from '../lib/cout'
+import { coutLigneEditor, coutDose } from '../lib/cout'
 
 const UNITES = ['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce', 'portions']
 const UNITES_RENDEMENT = ['g', 'kg', 'ml', 'cl', 'L', 'u', 'portions']
+const UNITES_DOSE = ['g', 'kg', 'ml', 'cl', 'L', 'u', 'portions']
 
 export default function SectionsEditor({
   sections,
@@ -31,7 +32,17 @@ export default function SectionsEditor({
 
   const ajouterSection = () => {
     const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-    setSections([...sections, { tempId, nom: '', descriptif: '', sous_fiche_id: null }])
+    setSections([...sections, { tempId, nom: '', descriptif: '', sous_fiche_id: null, dose_portion: '', dose_unite: 'g' }])
+  }
+
+  // Coût unitaire (€ / unité de base) d'une sous-fiche via son ingrédient miroir.
+  const unitCostFor = (sfId) => {
+    const m = listeIngredients.find(i => i.est_sous_fiche && (i.fiche_id === sfId || i.id === sfId))
+    return m?.prix_kg || null
+  }
+  const uniteFor = (sfId) => {
+    const m = listeIngredients.find(i => i.est_sous_fiche && (i.fiche_id === sfId || i.id === sfId))
+    return m?.unite || 'g'
   }
 
   const modifierSection = (tempId, champ, valeur) => {
@@ -134,11 +145,15 @@ export default function SectionsEditor({
           const ingsSection = ingredients
             .map((ing, gIdx) => ({ ing, gIdx }))
             .filter(({ ing }) => ing.section_temp_id === section.tempId)
-          const coutSection = ingsSection.reduce((tot, { ing }) => {
+          const coutLignes = ingsSection.reduce((tot, { ing }) => {
             const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
             return tot + coutLigneEditor(ingData, ing.quantite, ing.unite)
           }, 0)
           const estLiee = !!section.sous_fiche_id
+          const estDosee = estLiee && section.dose_portion
+          const coutSection = estDosee
+            ? coutDose(unitCostFor(section.sous_fiche_id), section.dose_portion, section.dose_unite || uniteFor(section.sous_fiche_id))
+            : coutLignes
           return (
             <div key={section.tempId} style={{ background: c.fond, borderRadius: '10px', padding: '14px', border: `0.5px solid ${c.bordure}` }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
@@ -191,6 +206,23 @@ export default function SectionsEditor({
                 </div>
               )}
 
+              {/* Dose par portion (assiette) — uniquement pour une section liée à une sous-fiche */}
+              {estLiee && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '10px', background: '#FBFBFE', border: `0.5px solid ${c.bordure}`, borderRadius: '8px', padding: '8px 10px' }}>
+                  <span style={{ fontSize: '12px', color: c.texteMuted }}>Dose par assiette :</span>
+                  <input type="number" step="0.01" value={section.dose_portion || ''} placeholder="ex. 4"
+                    onChange={e => modifierSection(section.tempId, 'dose_portion', e.target.value)}
+                    style={{ width: '90px', padding: '7px 9px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, background: c.blanc }} />
+                  <select value={section.dose_unite || uniteFor(section.sous_fiche_id)} onChange={e => modifierSection(section.tempId, 'dose_unite', e.target.value)}
+                    style={{ padding: '7px 6px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: c.blanc, outline: 'none', color: c.texte }}>
+                    {UNITES_DOSE.map(u => <option key={u}>{u}</option>)}
+                  </select>
+                  {estDosee && coutSection > 0 && (
+                    <span style={{ fontSize: '12px', color: c.texte, marginLeft: 'auto' }}>= <strong>{coutSection.toFixed(2)} €</strong> / assiette</span>
+                  )}
+                </div>
+              )}
+
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.3fr) minmax(0, 1fr)', gap: '10px', alignItems: 'stretch' }}>
                 {/* Colonne gauche : ingrédients */}
                 <div style={{ background: c.blanc, borderRadius: '8px', padding: '10px', border: `0.5px solid ${c.bordure}` }}>
@@ -228,10 +260,10 @@ export default function SectionsEditor({
                   <button type="button" onClick={() => ajouterIngredientSection(section.tempId)} style={{ background: c.vertClair, color: c.vert, border: `0.5px solid ${c.vert}40`, borderRadius: '6px', padding: '6px 10px', fontSize: '12px', cursor: 'pointer', marginTop: '4px' }}>
                     + Ingrédient
                   </button>
-                  {coutSection > 0 && (
+                  {coutLignes > 0 && (
                     <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: `0.5px solid ${c.bordure}`, fontSize: '11px', color: c.texteMuted, display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Coût section</span>
-                      <strong style={{ color: c.texte }}>{coutSection.toFixed(2)} €</strong>
+                      <span>{estLiee ? 'Coût recette (batch)' : 'Coût section'}</span>
+                      <strong style={{ color: c.texte }}>{coutLignes.toFixed(2)} €</strong>
                     </div>
                   )}
                 </div>

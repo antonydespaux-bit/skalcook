@@ -18,7 +18,7 @@ import { Card, Alert } from '../../../../components/ui'
 
 import { isIngredientPossible } from '../../../../lib/foodCost'
 import { UNITES_PRODUCTION } from '../../../../lib/constants'
-import { coutLigneEditor } from '../../../../lib/cout'
+import { coutLigneEditor, coutPortionEtoile } from '../../../../lib/cout'
 import { promoteSectionToSousFiche, loadSousFicheLignes } from '../../../../lib/sousFicheFromSection'
 
 export default function ModifierFiche() {
@@ -158,7 +158,9 @@ export default function ModifierFiche() {
       dbId: s.id,
       nom: s.nom || '',
       descriptif: s.descriptif || '',
-      sous_fiche_id: s.sous_fiche_id || null
+      sous_fiche_id: s.sous_fiche_id || null,
+      dose_portion: s.dose_portion != null ? String(s.dose_portion) : '',
+      dose_unite: s.dose_unite || 'g'
     }))
     setSections(sectionsLocales)
 
@@ -219,11 +221,20 @@ export default function ModifierFiche() {
     setIngredients(nouveaux)
   }
 
+  const coutLigne = (ing) => coutLigneEditor(listeIngredients.find(i => i.id === ing.ingredient_id), ing.quantite, ing.unite)
+  const unitCostFor = (sfId) => listeIngredients.find(i => i.est_sous_fiche && (i.fiche_id === sfId || i.id === sfId))?.prix_kg || null
+
   const calculerCout = () => {
-    return ingredients.reduce((total, ing) => {
-      const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
-      return total + coutLigneEditor(ingData, ing.quantite, ing.unite)
-    }, 0)
+    if (formatAffichage === 'etoile') {
+      const sectionsCout = sections.map(s => ({
+        sousFicheId: s.sous_fiche_id, dosePortion: s.dose_portion, doseUnite: s.dose_unite,
+        lineCost: ingredients.filter(i => i.section_temp_id === s.tempId).reduce((t, i) => t + coutLigne(i), 0),
+      }))
+      const freeLineCost = ingredients.filter(i => !i.section_temp_id).reduce((t, i) => t + coutLigne(i), 0)
+      const n = parseFloat(nbPortions) || 1
+      return coutPortionEtoile({ sections: sectionsCout, freeLineCost, nbPortions, unitCostFor }) * n
+    }
+    return ingredients.reduce((total, ing) => total + coutLigne(ing), 0)
   }
 
   // Sous-fiches importables comme section.
@@ -246,10 +257,10 @@ export default function ModifierFiche() {
   const handlePromoteSection = async (section, lignes, rendement) => {
     const cid = await getClientId()
     if (!cid) throw new Error('Session expirée')
-    const { ficheId } = await promoteSectionToSousFiche({
+    const { ficheId, uniteBase } = await promoteSectionToSousFiche({
       supabase, clientId: cid, section, lignes, listeIngredients, rendement, categorieSousFiche,
     })
-    setSections(prev => prev.map(s => s.tempId === section.tempId ? { ...s, sous_fiche_id: ficheId } : s))
+    setSections(prev => prev.map(s => s.tempId === section.tempId ? { ...s, sous_fiche_id: ficheId, dose_unite: s.dose_unite || uniteBase } : s))
     await rechargerIngredients()
   }
 
@@ -263,7 +274,8 @@ export default function ModifierFiche() {
       throw new Error('Cycle détecté : cette sous-fiche utilise déjà la fiche courante.')
     }
     const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-    setSections(prev => [...prev, { tempId, nom: sfNom || sf.nom, descriptif: instructions || '', sous_fiche_id: sf.id }])
+    const doseUnite = listeIngredients.find(i => i.est_sous_fiche && (i.fiche_id === sf.id || i.id === sf.id))?.unite || 'g'
+    setSections(prev => [...prev, { tempId, nom: sfNom || sf.nom, descriptif: instructions || '', sous_fiche_id: sf.id, dose_portion: '', dose_unite: doseUnite }])
     setIngredients(prev => [
       ...prev,
       ...lignes.filter(l => l.ingredient_id).map(l => ({
@@ -362,7 +374,9 @@ export default function ModifierFiche() {
             ordre: i,
             nom: (s.nom || '').trim() || `Préparation ${i + 1}`,
             descriptif: s.descriptif || null,
-            sous_fiche_id: s.sous_fiche_id || null
+            sous_fiche_id: s.sous_fiche_id || null,
+            dose_portion: s.dose_portion ? parseFloat(s.dose_portion) : null,
+            dose_unite: s.dose_portion ? (s.dose_unite || null) : null
           })
           .select('id')
           .single()
