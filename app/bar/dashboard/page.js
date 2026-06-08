@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
-import { calculerFoodCost, foodCostColor, getSeuilsFromParams } from '../../../lib/foodCost'
+import { calculerFoodCost, foodCostColor, getSeuilsFromParams, estSousFiche } from '../../../lib/foodCost'
 import Navbar from '../../../components/Navbar'
 import ChefLoader from '../../../components/ChefLoader'
 import { Badge } from '../../../components/ui'
@@ -51,7 +51,7 @@ export default function BarDashboardPage() {
       .not('prix_precedent', 'is', null)
       .order('prix_updated_at', { ascending: false })
       .limit(20)
-    setFiches(fichesData || [])
+    setFiches((fichesData || []).filter(f => !estSousFiche(f)))
     setIngredientsPrixHausse(prixData || [])
     setLoading(false)
   }

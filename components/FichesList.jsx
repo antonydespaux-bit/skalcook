@@ -8,6 +8,7 @@ import { useIsMobile } from '../lib/useIsMobile'
 import { useTheme } from '../lib/useTheme'
 import { useRole } from '../lib/useRole'
 import { log } from '../lib/useLog'
+import { estSousFiche } from '../lib/foodCost'
 import Navbar from './Navbar'
 import Pagination from './Pagination'
 import { Badge } from './ui'
@@ -132,9 +133,7 @@ export default function FichesList({ section = 'cuisine' }) {
       // dans /sous-fiches). Le filtre `.or()` côté requête ne les écarte pas de
       // façon fiable (plusieurs `or=` non combinés en AND par PostgREST).
       let rows = fichesData || []
-      if (cfg.hasSousFicheFilter) {
-        rows = rows.filter(f => !(f.is_sub_fiche === true || (typeof f.categorie === 'string' && f.categorie.toLowerCase().includes('sous'))))
-      }
+      if (cfg.hasSousFicheFilter) rows = rows.filter(f => !estSousFiche(f))
       setFiches(rows)
       setLieux(lieuxData || [])
       setCategories(catsData || [])

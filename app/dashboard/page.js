@@ -7,7 +7,7 @@ import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
 import { useTenant } from '../../lib/useTenant'
-import { calculerFoodCost, foodCostColor, getSeuilsFromParams } from '../../lib/foodCost'
+import { calculerFoodCost, foodCostColor, getSeuilsFromParams, estSousFiche } from '../../lib/foodCost'
 import { getDashboardLayout, WIDGET_BY_ID, isWidgetAvailable } from '../../lib/dashboardPreferences'
 import Navbar from '../../components/Navbar'
 import InventaireBanner from '../../components/InventaireBanner'
@@ -76,7 +76,8 @@ export default function DashboardPage() {
       supabase.from('categories_plats').select('id, nom, emoji').eq('client_id', clientId).eq('section', 'cuisine').order('ordre'),
       getDashboardLayout(),
     ])
-    setFiches(fichesData || [])
+    // Garde-fou robuste : exclure les sous-fiches (booléen ou catégorie « sous »)
+    setFiches((fichesData || []).filter(f => !estSousFiche(f)))
     setLieux(lieuxData || [])
     setMenus(menusData || [])
     setIngredientsPrixHausse(prixData || [])
