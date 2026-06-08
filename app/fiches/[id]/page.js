@@ -302,7 +302,7 @@ export default function FicheDetail() {
         )}
 
         {/* ── MODE ÉTOILÉ : Préparations ── */}
-        {formatAffichage === 'etoile' && sections.length > 0 && (
+        {formatAffichage === 'etoile' && (sections.length > 0 || ingredients.length > 0) && (
           <div className="fiche-ingredients-after-header" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '12px' }}>
             {sections.map(section => {
               const ingsSection = ingredients.filter(i => i.section_id === section.id)
@@ -350,14 +350,21 @@ export default function FicheDetail() {
                 </div>
               )
             })}
-            {/* Ingrédients libres (sans section) */}
+            {/* Ingrédients libres (sans section). Si la fiche n'a aucune section
+                (ex. dressage à plat avec des sous-fiches), on les présente comme
+                une liste simple plutôt que comme « non rattachés ». */}
             {ingredients.some(i => !i.section_id) && (
-              <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px dashed ${c.bordure}`, padding: '14px 18px' }}>
-                <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '8px', fontStyle: 'italic' }}>Ingrédients non rattachés à une préparation</div>
+              <div style={{ background: c.blanc, borderRadius: '12px', border: sections.length > 0 ? `0.5px dashed ${c.bordure}` : `0.5px solid ${c.bordure}`, padding: '14px 18px' }}>
+                <div style={{ fontSize: '12px', color: c.texteMuted, marginBottom: '8px', fontStyle: sections.length > 0 ? 'italic' : 'normal', textTransform: sections.length > 0 ? 'none' : 'uppercase' }}>
+                  {sections.length > 0 ? 'Ingrédients non rattachés à une préparation' : 'Ingrédients'}
+                </div>
                 <ul style={{ listStyleType: 'disc', paddingLeft: '20px', margin: 0 }}>
                   {ingredients.filter(i => !i.section_id).map((ing, i) => (
-                    <li key={i} style={{ fontSize: '13px', color: c.texte, lineHeight: '1.8' }}>
-                      {ing.quantite} {ing.unite} {ing.ingredients?.nom || '—'}
+                    <li key={i} style={{ fontSize: '13px', color: c.texte, lineHeight: '1.8', display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                      <span>{ing.quantite} {ing.unite} {ing.ingredients?.nom || '—'}</span>
+                      {peutVoirCosts && coutIngredient(ing) > 0 && (
+                        <span style={{ color: c.texteMuted, fontSize: '11px', whiteSpace: 'nowrap' }}>{coutIngredient(ing).toFixed(2)} €</span>
+                      )}
                     </li>
                   ))}
                 </ul>
