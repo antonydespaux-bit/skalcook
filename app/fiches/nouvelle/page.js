@@ -16,6 +16,8 @@ import { uploadFichePhoto } from '../../../lib/uploadPhoto'
 
 import { isIngredientPossible } from '../../../lib/foodCost'
 import { UNITES_PRODUCTION } from '../../../lib/constants'
+import { coutLigneEditor } from '../../../lib/cout'
+import { promoteSectionToSousFiche, loadSousFicheLignes } from '../../../lib/sousFicheFromSection'
 import { Alert, Card } from '../../../components/ui'
 
 export default function NouvelleFiche() {
@@ -149,9 +151,41 @@ export default function NouvelleFiche() {
   const calculerCout = () => {
     return ingredients.reduce((total, ing) => {
       const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
-      if (ingData?.prix_kg && ing.quantite) return total + (ingData.prix_kg * parseFloat(ing.quantite))
-      return total
+      return total + coutLigneEditor(ingData, ing.quantite, ing.unite)
     }, 0)
+  }
+
+  // Sous-fiches disponibles (ingrédients miroirs) pour l'import en section.
+  const listeSousFiches = listeIngredients
+    .filter(i => i.est_sous_fiche && i.fiche_id)
+    .map(i => ({ id: i.fiche_id, nom: i.nom }))
+
+  const categorieSousFiche = categoriesDyn.find(cat => cat.nom === 'Sous-fiches' || cat.nom === 'Sous-fiche') || null
+
+  // Promotion : crée une vraie sous-fiche depuis une section, puis lie la section.
+  const handlePromoteSection = async (section, lignes, rendement) => {
+    const clientId = await getClientId()
+    if (!clientId) throw new Error('Session expirée')
+    const { ficheId } = await promoteSectionToSousFiche({
+      supabase, clientId, section, lignes, listeIngredients, rendement, categorieSousFiche,
+    })
+    setSections(prev => prev.map(s => s.tempId === section.tempId ? { ...s, sous_fiche_id: ficheId } : s))
+    await loadIngredients() // le nouvel ingrédient miroir devient sélectionnable
+  }
+
+  // Import : ajoute une section pré-remplie depuis une sous-fiche existante.
+  const handleImportSousFiche = async (sf) => {
+    const clientId = await getClientId()
+    if (!clientId) throw new Error('Session expirée')
+    const { nom: sfNom, instructions, lignes } = await loadSousFicheLignes({ supabase, clientId, sousFicheId: sf.id })
+    const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+    setSections(prev => [...prev, { tempId, nom: sfNom || sf.nom, descriptif: instructions || '', sous_fiche_id: sf.id }])
+    setIngredients(prev => [
+      ...prev,
+      ...lignes.filter(l => l.ingredient_id).map(l => ({
+        ingredient_id: l.ingredient_id, nom: l.nom, quantite: l.quantite, unite: l.unite, section_temp_id: tempId,
+      })),
+    ])
   }
 
   const calculerCoutAvecPerte = () => {
@@ -257,7 +291,8 @@ export default function NouvelleFiche() {
             fiche_id: fiche.id,
             ordre: i,
             nom: (s.nom || '').trim() || `Préparation ${i + 1}`,
-            descriptif: s.descriptif || null
+            descriptif: s.descriptif || null,
+            sous_fiche_id: s.sous_fiche_id || null
           })
           .select('id')
           .single()
@@ -629,6 +664,9 @@ export default function NouvelleFiche() {
             ingredients={ingredients}
             setIngredients={setIngredients}
             listeIngredients={listeIngredients}
+            listeSousFiches={listeSousFiches}
+            onPromoteSection={handlePromoteSection}
+            onImportSousFiche={handleImportSousFiche}
             c={c}
             isMobile={isMobile}
           />

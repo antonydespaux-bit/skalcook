@@ -18,6 +18,8 @@ import { Card, Alert } from '../../../../components/ui'
 
 import { isIngredientPossible } from '../../../../lib/foodCost'
 import { UNITES_PRODUCTION } from '../../../../lib/constants'
+import { coutLigneEditor } from '../../../../lib/cout'
+import { promoteSectionToSousFiche, loadSousFicheLignes } from '../../../../lib/sousFicheFromSection'
 
 export default function ModifierFiche() {
   const [nom, setNom] = useState('')
@@ -49,6 +51,7 @@ export default function ModifierFiche() {
   // un `section_temp_id` (string) qui pointe vers une section ; NULL = ligne
   // libre (brasserie).
   const [sections, setSections] = useState([])
+  const [sousFichesDispo, setSousFichesDispo] = useState([])
   const router = useRouter()
   const params_route = useParams()
   const { c, logoUrl, nomEtablissement } = useTheme()
@@ -113,6 +116,8 @@ export default function ModifierFiche() {
       est_sous_fiche: true
     }))
     setListeIngredients([...(liste || []), ...sousFichesFormatees])
+    // Sous-fiches importables (hors la fiche courante pour éviter un cycle direct).
+    setSousFichesDispo((sousFiches || []).filter(sf => sf.id !== params_route.id).map(sf => ({ id: sf.id, nom: sf.nom })))
 
     setPhotoPath(ficheData.photo_url || null)
     setNom(ficheData.nom)
@@ -152,7 +157,8 @@ export default function ModifierFiche() {
       tempId: s.id,
       dbId: s.id,
       nom: s.nom || '',
-      descriptif: s.descriptif || ''
+      descriptif: s.descriptif || '',
+      sous_fiche_id: s.sous_fiche_id || null
     }))
     setSections(sectionsLocales)
 
@@ -216,9 +222,54 @@ export default function ModifierFiche() {
   const calculerCout = () => {
     return ingredients.reduce((total, ing) => {
       const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
-      if (ingData?.prix_kg && ing.quantite) return total + (ingData.prix_kg * parseFloat(ing.quantite))
-      return total
+      return total + coutLigneEditor(ingData, ing.quantite, ing.unite)
     }, 0)
+  }
+
+  // Sous-fiches importables comme section.
+  const listeSousFiches = sousFichesDispo
+  const categorieSousFiche = categoriesDyn.find(cat => cat.nom === 'Sous-fiches' || cat.nom === 'Sous-fiche') || null
+
+  // Recharge le catalogue d'ingrédients (après promotion d'une section).
+  const rechargerIngredients = async () => {
+    const cid = await getClientId()
+    if (!cid) return
+    const [{ data: liste }, { data: sousFiches }] = await Promise.all([
+      supabase.from('ingredients').select('*').eq('client_id', cid).order('nom').limit(5000),
+      supabase.from('fiches').select('id, nom, cout_portion').eq('client_id', cid).eq('is_sub_fiche', true).eq('archive', false).order('nom'),
+    ])
+    const sousFichesFormatees = (sousFiches || []).map(sf => ({ id: sf.id, nom: sf.nom, prix_kg: sf.cout_portion, unite: 'portion', est_sous_fiche: true }))
+    setListeIngredients([...(liste || []), ...sousFichesFormatees])
+    setSousFichesDispo((sousFiches || []).filter(sf => sf.id !== params_route.id).map(sf => ({ id: sf.id, nom: sf.nom })))
+  }
+
+  const handlePromoteSection = async (section, lignes, rendement) => {
+    const cid = await getClientId()
+    if (!cid) throw new Error('Session expirée')
+    const { ficheId } = await promoteSectionToSousFiche({
+      supabase, clientId: cid, section, lignes, listeIngredients, rendement, categorieSousFiche,
+    })
+    setSections(prev => prev.map(s => s.tempId === section.tempId ? { ...s, sous_fiche_id: ficheId } : s))
+    await rechargerIngredients()
+  }
+
+  const handleImportSousFiche = async (sf) => {
+    if (sf.id === params_route.id) throw new Error('Une fiche ne peut pas s\'importer elle-même.')
+    const cid = await getClientId()
+    if (!cid) throw new Error('Session expirée')
+    const { nom: sfNom, instructions, lignes } = await loadSousFicheLignes({ supabase, clientId: cid, sousFicheId: sf.id })
+    // Garde anti-cycle : refuser si la sous-fiche consomme déjà la fiche courante.
+    if (lignes.some(l => l.ingredientFicheId === params_route.id)) {
+      throw new Error('Cycle détecté : cette sous-fiche utilise déjà la fiche courante.')
+    }
+    const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+    setSections(prev => [...prev, { tempId, nom: sfNom || sf.nom, descriptif: instructions || '', sous_fiche_id: sf.id }])
+    setIngredients(prev => [
+      ...prev,
+      ...lignes.filter(l => l.ingredient_id).map(l => ({
+        ingredient_id: l.ingredient_id, nom: l.nom, quantite: l.quantite, unite: l.unite, section_temp_id: tempId,
+      })),
+    ])
   }
 
   const calculerCoutAvecPerte = () => {
@@ -310,7 +361,8 @@ export default function ModifierFiche() {
             fiche_id: params_route.id,
             ordre: i,
             nom: (s.nom || '').trim() || `Préparation ${i + 1}`,
-            descriptif: s.descriptif || null
+            descriptif: s.descriptif || null,
+            sous_fiche_id: s.sous_fiche_id || null
           })
           .select('id')
           .single()
@@ -577,6 +629,9 @@ export default function ModifierFiche() {
             ingredients={ingredients}
             setIngredients={setIngredients}
             listeIngredients={listeIngredients}
+            listeSousFiches={listeSousFiches}
+            onPromoteSection={handlePromoteSection}
+            onImportSousFiche={handleImportSousFiche}
             c={c}
             isMobile={isMobile}
           />

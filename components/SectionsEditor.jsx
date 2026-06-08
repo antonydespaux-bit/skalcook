@@ -1,8 +1,11 @@
 'use client'
+import { useState } from 'react'
 import IngredientSearch from './IngredientSearch'
 import { Card } from './ui'
+import { coutLigneEditor } from '../lib/cout'
 
 const UNITES = ['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce', 'portions']
+const UNITES_RENDEMENT = ['g', 'kg', 'ml', 'cl', 'L', 'u', 'portions']
 
 export default function SectionsEditor({
   sections,
@@ -10,12 +13,25 @@ export default function SectionsEditor({
   ingredients,
   setIngredients,
   listeIngredients,
+  listeSousFiches = [],
+  onPromoteSection,
+  onImportSousFiche,
   c,
   isMobile,
 }) {
+  // Modale "rendement" pour la promotion d'une section en sous-fiche.
+  const [promoteFor, setPromoteFor] = useState(null) // tempId de la section
+  const [rendQte, setRendQte] = useState('')
+  const [rendUnite, setRendUnite] = useState('g')
+  const [promoBusy, setPromoBusy] = useState(false)
+  // Picker d'import de sous-fiche existante.
+  const [importOpen, setImportOpen] = useState(false)
+  const [importSel, setImportSel] = useState('')
+  const [importBusy, setImportBusy] = useState(false)
+
   const ajouterSection = () => {
     const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-    setSections([...sections, { tempId, nom: '', descriptif: '' }])
+    setSections([...sections, { tempId, nom: '', descriptif: '', sous_fiche_id: null }])
   }
 
   const modifierSection = (tempId, champ, valeur) => {
@@ -63,10 +79,49 @@ export default function SectionsEditor({
     setIngredients(ingredients.filter((_, i) => i !== gIdx))
   }
 
-  // Sur desktop, on rend l'ingrédient sur sa propre ligne (large) + qté/unité/suppr
-  // en dessous, pour que le nom long de l'ingrédient soit toujours visible.
-  // Sur mobile, tout en colonne unique.
-  const rowTemplate = isMobile ? '1fr' : 'minmax(0, 1fr)'
+  const lignesDeSection = (tempId) => ingredients.filter(i => i.section_temp_id === tempId)
+
+  const ouvrirPromotion = (section) => {
+    const lignes = lignesDeSection(section.tempId)
+    if (!(section.nom || '').trim()) { alert('Donnez d\'abord un nom à la préparation.'); return }
+    if (lignes.filter(l => l.ingredient_id && l.quantite).length === 0) { alert('Ajoutez au moins un ingrédient avant de créer une sous-fiche.'); return }
+    setPromoteFor(section.tempId)
+    setRendQte('')
+    setRendUnite('g')
+  }
+
+  const lancerPromotion = async (section) => {
+    if (!rendQte || parseFloat(rendQte) <= 0) { alert('Indiquez la quantité produite.'); return }
+    setPromoBusy(true)
+    try {
+      await onPromoteSection(section, lignesDeSection(section.tempId), { qte: rendQte, unite: rendUnite })
+      setPromoteFor(null)
+      setRendQte('')
+    } catch (e) {
+      alert('Erreur création sous-fiche : ' + (e?.message || e))
+    } finally {
+      setPromoBusy(false)
+    }
+  }
+
+  const lancerImport = async () => {
+    if (!importSel) return
+    const sf = listeSousFiches.find(s => String(s.id) === String(importSel))
+    if (!sf) return
+    setImportBusy(true)
+    try {
+      await onImportSousFiche(sf)
+      setImportOpen(false)
+      setImportSel('')
+    } catch (e) {
+      alert('Erreur import : ' + (e?.message || e))
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
+  const peutPromouvoir = typeof onPromoteSection === 'function'
+  const peutImporter = typeof onImportSousFiche === 'function' && listeSousFiches.length > 0
 
   return (
     <Card c={c} style={{ marginBottom: '12px' }}>
@@ -81,18 +136,21 @@ export default function SectionsEditor({
             .filter(({ ing }) => ing.section_temp_id === section.tempId)
           const coutSection = ingsSection.reduce((tot, { ing }) => {
             const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
-            if (ingData?.prix_kg && ing.quantite) return tot + (ingData.prix_kg * parseFloat(ing.quantite))
-            return tot
+            return tot + coutLigneEditor(ingData, ing.quantite, ing.unite)
           }, 0)
+          const estLiee = !!section.sous_fiche_id
           return (
             <div key={section.tempId} style={{ background: c.fond, borderRadius: '10px', padding: '14px', border: `0.5px solid ${c.bordure}` }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
                 <input
                   type="text" value={section.nom}
                   onChange={e => modifierSection(section.tempId, 'nom', e.target.value)}
                   placeholder={`Préparation ${sIdx + 1} — ex : Garniture navet ail noir`}
-                  style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', fontWeight: '500', outline: 'none', color: c.texte, background: c.blanc }}
+                  style={{ flex: 1, minWidth: '160px', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', fontWeight: '500', outline: 'none', color: c.texte, background: c.blanc }}
                 />
+                {estLiee && (
+                  <span title="Une sous-fiche réutilisable a été créée à partir de cette préparation." style={{ fontSize: '11px', fontWeight: '600', color: '#3C3489', background: '#EEEDFE', border: '0.5px solid #AFA9EC', borderRadius: '6px', padding: '5px 8px', whiteSpace: 'nowrap' }}>↗ réutilisable</span>
+                )}
                 <button type="button" onClick={() => monterSection(sIdx)} disabled={sIdx === 0}
                   style={{ width: '32px', height: '36px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, background: c.blanc, cursor: sIdx === 0 ? 'not-allowed' : 'pointer', color: c.texteMuted, opacity: sIdx === 0 ? 0.3 : 1 }}>↑</button>
                 <button type="button" onClick={() => descendreSection(sIdx)} disabled={sIdx === sections.length - 1}
@@ -100,6 +158,38 @@ export default function SectionsEditor({
                 <button type="button" onClick={() => supprimerSection(section.tempId)}
                   style={{ width: '36px', height: '36px', borderRadius: '8px', border: '0.5px solid #FECACA', background: c.blanc, cursor: 'pointer', color: '#DC2626', fontSize: '16px' }}>🗑</button>
               </div>
+
+              {/* Action : rendre la section réutilisable (promotion en sous-fiche) */}
+              {peutPromouvoir && !estLiee && promoteFor !== section.tempId && (
+                <button type="button" onClick={() => ouvrirPromotion(section)}
+                  style={{ background: '#EEEDFE', color: '#3C3489', border: '0.5px solid #AFA9EC', borderRadius: '6px', padding: '6px 10px', fontSize: '12px', cursor: 'pointer', marginBottom: '10px' }}>
+                  ↗ Rendre réutilisable
+                </button>
+              )}
+              {peutPromouvoir && promoteFor === section.tempId && (
+                <div style={{ background: '#F6F5FE', border: '0.5px solid #AFA9EC', borderRadius: '8px', padding: '10px', marginBottom: '10px' }}>
+                  <div style={{ fontSize: '12px', color: '#3C3489', marginBottom: '8px' }}>
+                    Cette préparation produit quelle quantité au total ? (pour calculer le coût par unité)
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <input type="number" step="0.01" value={rendQte} placeholder="ex. 2800"
+                      onChange={e => setRendQte(e.target.value)}
+                      style={{ width: '110px', padding: '8px 10px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, background: c.blanc }} />
+                    <select value={rendUnite} onChange={e => setRendUnite(e.target.value)}
+                      style={{ padding: '8px 6px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: c.blanc, outline: 'none', color: c.texte }}>
+                      {UNITES_RENDEMENT.map(u => <option key={u}>{u}</option>)}
+                    </select>
+                    <button type="button" onClick={() => lancerPromotion(section)} disabled={promoBusy}
+                      style={{ background: '#3C3489', color: 'white', border: 'none', borderRadius: '6px', padding: '8px 12px', fontSize: '12px', cursor: promoBusy ? 'not-allowed' : 'pointer', fontWeight: '600', opacity: promoBusy ? 0.6 : 1 }}>
+                      {promoBusy ? '…' : 'Créer la sous-fiche'}
+                    </button>
+                    <button type="button" onClick={() => setPromoteFor(null)} disabled={promoBusy}
+                      style={{ background: 'transparent', color: c.texteMuted, border: `0.5px solid ${c.bordure}`, borderRadius: '6px', padding: '8px 12px', fontSize: '12px', cursor: 'pointer' }}>
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.3fr) minmax(0, 1fr)', gap: '10px', alignItems: 'stretch' }}>
                 {/* Colonne gauche : ingrédients */}
@@ -110,7 +200,7 @@ export default function SectionsEditor({
                   )}
                   {ingsSection.map(({ ing, gIdx }) => {
                     const ingData = listeIngredients.find(i => i.id === ing.ingredient_id)
-                    const coutLigne = ingData?.prix_kg && ing.quantite ? (ingData.prix_kg * parseFloat(ing.quantite)) : null
+                    const coutLigne = coutLigneEditor(ingData, ing.quantite, ing.unite) || null
                     return (
                       <div key={gIdx} style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: `0.5px solid ${c.bordure}` }}>
                         {/* Ligne 1 : nom ingrédient pleine largeur (lisibilité) */}
@@ -166,9 +256,35 @@ export default function SectionsEditor({
             Aucune préparation pour l'instant. Cliquez sur « Ajouter une préparation » pour démarrer.
           </div>
         )}
-        <button type="button" onClick={ajouterSection} style={{ background: c.accentClair, color: c.accent, border: `0.5px solid ${c.accent}40`, borderRadius: '8px', padding: '10px 16px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}>
-          + Ajouter une préparation
-        </button>
+
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button type="button" onClick={ajouterSection} style={{ background: c.accentClair, color: c.accent, border: `0.5px solid ${c.accent}40`, borderRadius: '8px', padding: '10px 16px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}>
+            + Ajouter une préparation
+          </button>
+          {peutImporter && !importOpen && (
+            <button type="button" onClick={() => setImportOpen(true)} style={{ background: '#EEEDFE', color: '#3C3489', border: '0.5px solid #AFA9EC', borderRadius: '8px', padding: '10px 16px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}>
+              ⮈ Importer une sous-fiche
+            </button>
+          )}
+        </div>
+        {peutImporter && importOpen && (
+          <div style={{ background: '#F6F5FE', border: '0.5px solid #AFA9EC', borderRadius: '8px', padding: '10px', display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', color: '#3C3489' }}>Importer :</span>
+            <select value={importSel} onChange={e => setImportSel(e.target.value)}
+              style={{ flex: 1, minWidth: '180px', padding: '8px 10px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: c.blanc, outline: 'none', color: c.texte }}>
+              <option value="">— Choisir une sous-fiche —</option>
+              {listeSousFiches.map(sf => <option key={sf.id} value={sf.id}>{sf.nom}</option>)}
+            </select>
+            <button type="button" onClick={lancerImport} disabled={importBusy || !importSel}
+              style={{ background: '#3C3489', color: 'white', border: 'none', borderRadius: '6px', padding: '8px 12px', fontSize: '12px', cursor: (importBusy || !importSel) ? 'not-allowed' : 'pointer', fontWeight: '600', opacity: (importBusy || !importSel) ? 0.6 : 1 }}>
+              {importBusy ? '…' : 'Importer'}
+            </button>
+            <button type="button" onClick={() => { setImportOpen(false); setImportSel('') }} disabled={importBusy}
+              style={{ background: 'transparent', color: c.texteMuted, border: `0.5px solid ${c.bordure}`, borderRadius: '6px', padding: '8px 12px', fontSize: '12px', cursor: 'pointer' }}>
+              Annuler
+            </button>
+          </div>
+        )}
       </div>
     </Card>
   )

@@ -9,6 +9,7 @@ import { useRole } from '../../../lib/useRole'
 import { log } from '../../../lib/useLog'
 import { ALLERGENES } from '../../../lib/allergenes'
 import { formatSaison } from '../../../lib/saison'
+import { coutLigneAffichage } from '../../../lib/cout'
 import FichePhoto, { FicheHeaderInfo, FicheHeaderInfoStyles } from '../../../components/FichePhoto'
 import { AllergenesBlock, FicheDetailNavbar } from '../../../components/FicheDetailShared'
 import ChefLoader from '../../../components/ChefLoader'
@@ -121,11 +122,7 @@ export default function FicheDetail() {
     }
   }
 
-  const coutIngredient = (ing) => {
-    if (!ing.ingredients?.prix_kg || !ing.quantite) return 0
-    const coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
-    return ing.ingredients.prix_kg * ing.quantite * coef
-  }
+  const coutIngredient = (ing) => coutLigneAffichage(ing)
 
   const calculerCout = () => ingredients.reduce((total, ing) => total + coutIngredient(ing), 0)
 
@@ -313,7 +310,12 @@ export default function FicheDetail() {
               return (
                 <div key={section.id} style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
                   <div style={{ padding: '12px 18px', borderBottom: `0.5px solid ${c.bordure}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', background: c.fond }}>
-                    <div style={{ fontSize: '15px', fontWeight: '500', color: c.texte, textDecoration: 'underline', textUnderlineOffset: '3px' }}>{section.nom}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '15px', fontWeight: '500', color: c.texte, textDecoration: 'underline', textUnderlineOffset: '3px' }}>{section.nom}</span>
+                      {section.sous_fiche_id && (
+                        <a href={`/fiches/${section.sous_fiche_id}`} className="no-print" title="Voir la sous-fiche réutilisable" style={{ fontSize: '11px', fontWeight: '600', color: '#3C3489', background: '#EEEDFE', border: '0.5px solid #AFA9EC', borderRadius: '6px', padding: '3px 7px', textDecoration: 'none', whiteSpace: 'nowrap' }}>↗ réutilisable</a>
+                      )}
+                    </div>
                     {peutVoirCosts && coutSection > 0 && (
                       <div style={{ fontSize: '12px', color: c.texteMuted }}>Coût : <strong style={{ color: c.texte }}>{coutSection.toFixed(2)} €</strong></div>
                     )}
@@ -371,8 +373,7 @@ export default function FicheDetail() {
           {isMobile ? (
             <div style={{ padding: '12px' }}>
               {ingredients.map((ing, i) => {
-                const coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
-                const coutLigne = ing.ingredients?.prix_kg && ing.quantite ? ing.ingredients.prix_kg * ing.quantite * coef : null
+                const coutLigne = coutLigneAffichage(ing) || null
                 return (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < ingredients.length - 1 ? `0.5px solid ${c.bordure}` : 'none' }}>
                     <div>
@@ -397,8 +398,7 @@ export default function FicheDetail() {
               </thead>
               <tbody>
                 {ingredients.map((ing, i) => {
-                  const coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
-                  const coutLigne = ing.ingredients?.prix_kg && ing.quantite ? ing.ingredients.prix_kg * ing.quantite * coef : null
+                  const coutLigne = coutLigneAffichage(ing) || null
                   return (
                     <tr key={i} style={{ borderBottom: i < ingredients.length - 1 ? `0.5px solid ${c.bordure}` : 'none' }}>
                       <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '500', color: c.texte }}>{ing.ingredients?.nom || '—'}</td>
@@ -555,8 +555,7 @@ export default function FicheDetail() {
             </thead>
             <tbody>
               {ingredients.map((ing, i) => {
-                const coef = (ing.unite === 'g' || ing.unite === 'ml') ? 0.001 : (ing.unite === 'cl' ? 0.01 : 1)
-                const coutLigne = ing.ingredients?.prix_kg && ing.quantite ? ing.ingredients.prix_kg * ing.quantite * coef : null
+                const coutLigne = coutLigneAffichage(ing) || null
                 return (
                   <tr key={i} style={{ background: i % 2 === 0 ? 'white' : '#FAF9F6' }}>
                     <td style={{ padding: '7px 12px', color: '#2C1810', fontWeight: '500', border: '0.5px solid #e8e4dc' }}>{ing.ingredients?.nom || '—'}</td>
