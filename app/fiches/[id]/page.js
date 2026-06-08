@@ -9,7 +9,7 @@ import { useRole } from '../../../lib/useRole'
 import { log } from '../../../lib/useLog'
 import { ALLERGENES } from '../../../lib/allergenes'
 import { formatSaison } from '../../../lib/saison'
-import { coutLigneAffichage, coutDose, coutPortionEtoile } from '../../../lib/cout'
+import { coutLigneAffichage, coutDose, coutSectionDosee, coutPortionEtoile } from '../../../lib/cout'
 import FichePhoto, { FicheHeaderInfo, FicheHeaderInfoStyles } from '../../../components/FichePhoto'
 import { AllergenesBlock, FicheDetailNavbar } from '../../../components/FicheDetailShared'
 import ChefLoader from '../../../components/ChefLoader'
@@ -134,11 +134,16 @@ export default function FicheDetail() {
   const sectionUnitCostFor = (sfId) => sousFicheCout[sfId] || null
   // Coût d'une section : dose-based si dosée, sinon Σ de ses lignes.
   const coutSectionAffichage = (section) => {
-    if (section.sous_fiche_id) {
-      // Section liée : coût = dose (0 si non dosée — intermédiaire/référence, déjà compté ailleurs).
-      return section.dose_portion ? coutDose(sectionUnitCostFor(section.sous_fiche_id), section.dose_portion, section.dose_unite) : 0
+    const lineCost = ingredients.filter(i => i.section_id === section.id).reduce((t, i) => t + coutIngredient(i), 0)
+    if (section.sous_fiche_id || section.rendement_portion) {
+      if (!section.dose_portion) return 0 // liée non dosée (intermédiaire) → ne compte pas
+      // Live (recette ÷ rendement × dose) si rendement saisi, sinon coût figé sous-fiche.
+      const live = section.rendement_portion
+        ? coutSectionDosee(lineCost, section.rendement_portion, section.rendement_unite, section.dose_portion, section.dose_unite)
+        : null
+      return live != null ? live : coutDose(sectionUnitCostFor(section.sous_fiche_id), section.dose_portion, section.dose_unite)
     }
-    return ingredients.filter(i => i.section_id === section.id).reduce((t, i) => t + coutIngredient(i), 0)
+    return lineCost
   }
 
   // Coût "total" : en étoilé = coût/portion (dose-aware) × nb_portions (pour que
@@ -147,6 +152,7 @@ export default function FicheDetail() {
     if (formatAffichage === 'etoile') {
       const sectionsCout = sections.map(s => ({
         sousFicheId: s.sous_fiche_id, dosePortion: s.dose_portion, doseUnite: s.dose_unite,
+        rendementPortion: s.rendement_portion, rendementUnite: s.rendement_unite,
         lineCost: ingredients.filter(i => i.section_id === s.id).reduce((t, i) => t + coutIngredient(i), 0),
       }))
       const freeLineCost = ingredients.filter(i => !i.section_id).reduce((t, i) => t + coutIngredient(i), 0)
@@ -336,7 +342,7 @@ export default function FicheDetail() {
           <div className="fiche-ingredients-after-header" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '12px' }}>
             {sections.map(section => {
               const ingsSection = ingredients.filter(i => i.section_id === section.id)
-              const estDosee = !!(section.sous_fiche_id && section.dose_portion)
+              const estDosee = !!(section.dose_portion && (section.sous_fiche_id || section.rendement_portion))
               const coutSection = coutSectionAffichage(section)
               return (
                 <div key={section.id} style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
