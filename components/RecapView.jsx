@@ -127,6 +127,8 @@ export default function RecapView({ section = 'cuisine' }) {
   }
 
   const fichesFiltrees = fiches.filter(f => {
+    // Exclure les sous-fiches du récap food cost (elles vivent dans /sous-fiches)
+    if (f.is_sub_fiche === true || (typeof f.categorie === 'string' && f.categorie.toLowerCase().includes('sous'))) return false
     if (saisonFiltree !== 'toutes' && f.saison !== saisonFiltree) return false
     if (anneeFiltree !== 'toutes' && f.annee !== parseInt(anneeFiltree, 10)) return false
     if (filtreLieu && f.lieu_id !== filtreLieu) return false
