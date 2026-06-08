@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import IngredientSearch from './IngredientSearch'
 import { Card } from './ui'
-import { coutLigneEditor, coutDose } from '../lib/cout'
+import { coutLigneEditor, coutDose, coutSectionDosee } from '../lib/cout'
 
 const UNITES = ['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce', 'portions']
 const UNITES_RENDEMENT = ['g', 'kg', 'ml', 'cl', 'L', 'u', 'portions']
@@ -32,7 +32,7 @@ export default function SectionsEditor({
 
   const ajouterSection = () => {
     const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-    setSections([...sections, { tempId, nom: '', descriptif: '', sous_fiche_id: null, dose_portion: '', dose_unite: 'g' }])
+    setSections([...sections, { tempId, nom: '', descriptif: '', sous_fiche_id: null, dose_portion: '', dose_unite: 'g', rendement_portion: '', rendement_unite: 'g' }])
   }
 
   // Coût unitaire (€ / unité de base) d'une sous-fiche via son ingrédient miroir.
@@ -150,10 +150,15 @@ export default function SectionsEditor({
             return tot + coutLigneEditor(ingData, ing.quantite, ing.unite)
           }, 0)
           const estLiee = !!section.sous_fiche_id
-          const estDosee = estLiee && section.dose_portion
-          const coutSection = estDosee
-            ? coutDose(unitCostFor(section.sous_fiche_id), section.dose_portion, section.dose_unite || uniteFor(section.sous_fiche_id))
-            : coutLignes
+          const estDosee = !!(section.dose_portion && (estLiee || section.rendement_portion))
+          // Coût/assiette : live (recette ÷ rendement × dose) si rendement saisi,
+          // sinon fallback sur le coût figé de la sous-fiche.
+          const coutLive = section.rendement_portion
+            ? coutSectionDosee(coutLignes, section.rendement_portion, section.rendement_unite, section.dose_portion, section.dose_unite)
+            : null
+          const coutSection = !estDosee
+            ? coutLignes
+            : (coutLive != null ? coutLive : coutDose(unitCostFor(section.sous_fiche_id), section.dose_portion, section.dose_unite || uniteFor(section.sous_fiche_id)))
           return (
             <div key={section.tempId} style={{ background: c.fond, borderRadius: '10px', padding: '14px', border: `0.5px solid ${c.bordure}` }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
@@ -206,19 +211,34 @@ export default function SectionsEditor({
                 </div>
               )}
 
-              {/* Dose par portion (assiette) — uniquement pour une section liée à une sous-fiche */}
+              {/* Rendement + dose par assiette — pour une section liée à une sous-fiche */}
               {estLiee && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '10px', background: '#FBFBFE', border: `0.5px solid ${c.bordure}`, borderRadius: '8px', padding: '8px 10px' }}>
-                  <span style={{ fontSize: '12px', color: c.texteMuted }}>Dose par assiette :</span>
-                  <input type="number" step="0.01" value={section.dose_portion || ''} placeholder="ex. 4"
-                    onChange={e => modifierSection(section.tempId, 'dose_portion', e.target.value)}
-                    style={{ width: '90px', padding: '7px 9px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, background: c.blanc }} />
-                  <select value={section.dose_unite || uniteFor(section.sous_fiche_id)} onChange={e => modifierSection(section.tempId, 'dose_unite', e.target.value)}
-                    style={{ padding: '7px 6px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: c.blanc, outline: 'none', color: c.texte }}>
-                    {UNITES_DOSE.map(u => <option key={u}>{u}</option>)}
-                  </select>
-                  {estDosee && coutSection > 0 && (
-                    <span style={{ fontSize: '12px', color: c.texte, marginLeft: 'auto' }}>= <strong>{coutSection.toFixed(2)} €</strong> / assiette</span>
+                <div style={{ marginBottom: '10px', background: '#FBFBFE', border: `0.5px solid ${c.bordure}`, borderRadius: '8px', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '12px', color: c.texteMuted, minWidth: '120px' }}>Cette recette produit :</span>
+                    <input type="number" step="0.01" value={section.rendement_portion || ''} placeholder="ex. 2800"
+                      onChange={e => modifierSection(section.tempId, 'rendement_portion', e.target.value)}
+                      style={{ width: '90px', padding: '7px 9px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, background: c.blanc }} />
+                    <select value={section.rendement_unite || uniteFor(section.sous_fiche_id)} onChange={e => modifierSection(section.tempId, 'rendement_unite', e.target.value)}
+                      style={{ padding: '7px 6px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: c.blanc, outline: 'none', color: c.texte }}>
+                      {UNITES_DOSE.map(u => <option key={u}>{u}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '12px', color: c.texteMuted, minWidth: '120px' }}>Dose par assiette :</span>
+                    <input type="number" step="0.01" value={section.dose_portion || ''} placeholder="ex. 4"
+                      onChange={e => modifierSection(section.tempId, 'dose_portion', e.target.value)}
+                      style={{ width: '90px', padding: '7px 9px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', outline: 'none', color: c.texte, background: c.blanc }} />
+                    <select value={section.dose_unite || uniteFor(section.sous_fiche_id)} onChange={e => modifierSection(section.tempId, 'dose_unite', e.target.value)}
+                      style={{ padding: '7px 6px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '13px', background: c.blanc, outline: 'none', color: c.texte }}>
+                      {UNITES_DOSE.map(u => <option key={u}>{u}</option>)}
+                    </select>
+                    {estDosee && coutSection > 0 && (
+                      <span style={{ fontSize: '12px', color: c.texte, marginLeft: 'auto' }}>= <strong>{coutSection.toFixed(2)} €</strong> / assiette</span>
+                    )}
+                  </div>
+                  {estDosee && !section.rendement_portion && (
+                    <span style={{ fontSize: '11px', color: '#B45309' }}>⚠ Renseigne le rendement pour que le coût suive la recette en direct.</span>
                   )}
                 </div>
               )}

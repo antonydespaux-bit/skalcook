@@ -160,7 +160,9 @@ export default function ModifierFiche() {
       descriptif: s.descriptif || '',
       sous_fiche_id: s.sous_fiche_id || null,
       dose_portion: s.dose_portion != null ? String(s.dose_portion) : '',
-      dose_unite: s.dose_unite || 'g'
+      dose_unite: s.dose_unite || 'g',
+      rendement_portion: s.rendement_portion != null ? String(s.rendement_portion) : '',
+      rendement_unite: s.rendement_unite || 'g'
     }))
     setSections(sectionsLocales)
 
@@ -228,6 +230,7 @@ export default function ModifierFiche() {
     if (formatAffichage === 'etoile') {
       const sectionsCout = sections.map(s => ({
         sousFicheId: s.sous_fiche_id, dosePortion: s.dose_portion, doseUnite: s.dose_unite,
+        rendementPortion: s.rendement_portion, rendementUnite: s.rendement_unite,
         lineCost: ingredients.filter(i => i.section_temp_id === s.tempId).reduce((t, i) => t + coutLigne(i), 0),
       }))
       const freeLineCost = ingredients.filter(i => !i.section_temp_id).reduce((t, i) => t + coutLigne(i), 0)
@@ -260,7 +263,12 @@ export default function ModifierFiche() {
     const { ficheId, uniteBase } = await promoteSectionToSousFiche({
       supabase, clientId: cid, section, lignes, listeIngredients, rendement, categorieSousFiche,
     })
-    setSections(prev => prev.map(s => s.tempId === section.tempId ? { ...s, sous_fiche_id: ficheId, dose_unite: s.dose_unite || uniteBase } : s))
+    setSections(prev => prev.map(s => s.tempId === section.tempId ? {
+      ...s, sous_fiche_id: ficheId,
+      dose_unite: s.dose_unite || uniteBase,
+      rendement_portion: s.rendement_portion || String(rendement.qte),
+      rendement_unite: s.rendement_unite || rendement.unite,
+    } : s))
     await rechargerIngredients()
   }
 
@@ -275,7 +283,7 @@ export default function ModifierFiche() {
     }
     const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
     const doseUnite = listeIngredients.find(i => i.est_sous_fiche && (i.fiche_id === sf.id || i.id === sf.id))?.unite || 'g'
-    setSections(prev => [...prev, { tempId, nom: sfNom || sf.nom, descriptif: instructions || '', sous_fiche_id: sf.id, dose_portion: '', dose_unite: doseUnite }])
+    setSections(prev => [...prev, { tempId, nom: sfNom || sf.nom, descriptif: instructions || '', sous_fiche_id: sf.id, dose_portion: '', dose_unite: doseUnite, rendement_portion: '', rendement_unite: doseUnite }])
     setIngredients(prev => [
       ...prev,
       ...lignes.filter(l => l.ingredient_id).map(l => ({
@@ -376,7 +384,9 @@ export default function ModifierFiche() {
             descriptif: s.descriptif || null,
             sous_fiche_id: s.sous_fiche_id || null,
             dose_portion: s.dose_portion ? parseFloat(s.dose_portion) : null,
-            dose_unite: s.dose_portion ? (s.dose_unite || null) : null
+            dose_unite: s.dose_portion ? (s.dose_unite || null) : null,
+            rendement_portion: s.rendement_portion ? parseFloat(s.rendement_portion) : null,
+            rendement_unite: s.rendement_portion ? (s.rendement_unite || null) : null
           })
           .select('id')
           .single()
