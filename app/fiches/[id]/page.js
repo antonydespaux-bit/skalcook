@@ -567,7 +567,7 @@ export default function FicheDetail() {
             {sections.map((section, sIdx) => {
               const ingsSection = ingredients.filter(i => i.section_id === section.id)
               return (
-                <div key={section.id} style={{ marginBottom: '14px', borderBottom: sIdx < sections.length - 1 ? '0.5px solid #e8e4dc' : 'none', paddingBottom: '10px' }}>
+                <div key={section.id} style={{ marginBottom: '14px', borderBottom: sIdx < sections.length - 1 ? '0.5px solid #e8e4dc' : 'none', paddingBottom: '10px', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
                   <div style={{ fontSize: '13px', fontWeight: '700', color: '#2C1810', marginBottom: '6px', textDecoration: 'underline', textUnderlineOffset: '2px' }}>{section.nom} :</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'flex-start' }}>
                     <div>
@@ -588,6 +588,18 @@ export default function FicheDetail() {
                 </div>
               )
             })}
+            {ingredients.some(i => !i.section_id) && (
+              <div style={{ marginBottom: '14px', paddingTop: '10px', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#2C1810', marginBottom: '6px', textDecoration: 'underline', textUnderlineOffset: '2px' }}>Finition / dressage :</div>
+                <ul style={{ listStyleType: 'disc', paddingLeft: '20px', margin: 0 }}>
+                  {ingredients.filter(i => !i.section_id).map((ing, i) => (
+                    <li key={i} style={{ fontSize: '11px', color: '#2C1810', lineHeight: '1.7' }}>
+                      {ing.quantite} {ing.unite} {ing.ingredients?.nom || '—'}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 
