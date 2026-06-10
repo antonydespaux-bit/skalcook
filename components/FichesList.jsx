@@ -9,6 +9,7 @@ import { useTheme } from '../lib/useTheme'
 import { useRole } from '../lib/useRole'
 import { log } from '../lib/useLog'
 import { estSousFiche } from '../lib/foodCost'
+import { buildCommandeWorkbook, downloadXlsx } from '../lib/fichesExport'
 import Navbar from './Navbar'
 import Pagination from './Pagination'
 import { Badge } from './ui'
@@ -78,6 +79,10 @@ export default function FichesList({ section = 'cuisine' }) {
   const [saving, setSaving] = useState(false)
   const [showArchives, setShowArchives] = useState(false)
   const [page, setPage] = useState(1)
+  const [modeExtraire, setModeExtraire] = useState(false)
+  const [selectionExtraire, setSelectionExtraire] = useState([])
+  const [rechercheExtraire, setRechercheExtraire] = useState('')
+  const [extracting, setExtracting] = useState(false)
   const router = useRouter()
   const isMobile = useIsMobile()
   const { c } = useTheme()
@@ -168,6 +173,39 @@ export default function FichesList({ section = 'cuisine' }) {
     finally { setSaving(false) }
   }
 
+  const toggleSelectionExtraire = (id) => setSelectionExtraire(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
+
+  const extraireSelection = async () => {
+    if (selectionExtraire.length === 0) return
+    setExtracting(true)
+    try {
+      const clientId = await getClientId()
+      if (!clientId) return
+      const { data: ingsData, error } = await supabase
+        .from('fiche_ingredients')
+        .select('fiche_id, quantite, unite, ingredients (nom, unite)')
+        .in('fiche_id', selectionExtraire)
+        .eq('client_id', clientId)
+      if (error) throw error
+      // Regroupe les ingrédients par fiche, en respectant l'ordre d'affichage des fiches.
+      const parFiche = new Map()
+      for (const ligne of ingsData || []) {
+        if (!parFiche.has(ligne.fiche_id)) parFiche.set(ligne.fiche_id, [])
+        parFiche.get(ligne.fiche_id).push(ligne)
+      }
+      const fichesPourExport = fiches
+        .filter(f => selectionExtraire.includes(f.id))
+        .map(f => ({ nom: f.nom, ingredients: parFiche.get(f.id) || [] }))
+      const wb = await buildCommandeWorkbook(fichesPourExport)
+      const dateStr = new Date().toISOString().slice(0, 10)
+      await downloadXlsx(wb, `commande_fiches_${dateStr}.xlsx`)
+      setModeExtraire(false); setSelectionExtraire([]); setRechercheExtraire('')
+    } catch (err) { console.error('Extract error:', err); alert('Erreur lors de l\'extraction Excel') }
+    finally { setExtracting(false) }
+  }
+
+  const fichesExtraireFiltrees = fiches.filter(f => f.nom.toLowerCase().includes(rechercheExtraire.toLowerCase()))
+
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
       <Navbar section={section} />
@@ -214,6 +252,12 @@ export default function FichesList({ section = 'cuisine' }) {
               border: `0.5px solid ${modeArchive ? '#DC2626' : c.bordure}`, background: modeArchive ? '#FEE2E2' : c.blanc,
               color: modeArchive ? '#DC2626' : c.texteMuted, fontWeight: modeArchive ? '500' : '400', whiteSpace: 'nowrap'
             }}>{modeArchive ? '✕ Annuler' : showArchives ? '📤 Désarchiver' : '📥 Archiver'}</button>
+          )}
+          {fiches.length > 0 && (
+            <button onClick={() => { setModeExtraire(true); setSelectionExtraire([]); setRechercheExtraire('') }} style={{
+              padding: '10px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer',
+              border: `0.5px solid ${c.bordure}`, background: c.blanc, color: c.texteMuted, whiteSpace: 'nowrap'
+            }}>📤 Extraire</button>
           )}
         </div>
 
@@ -321,6 +365,70 @@ export default function FichesList({ section = 'cuisine' }) {
         )}
         {cfg.hasPagination && <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />}
       </div>
+
+      {/* Modale d'extraction Excel */}
+      {modeExtraire && (
+        <div onClick={() => !extracting && setModeExtraire(false)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: c.blanc, borderRadius: '14px', width: '100%', maxWidth: '480px',
+            maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden'
+          }}>
+            <div style={{ padding: '18px 20px', borderBottom: `0.5px solid ${c.bordure}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                <div style={{ fontSize: '16px', fontWeight: '600', color: c.texte }}>📤 Extraire les ingrédients</div>
+                <button onClick={() => !extracting && setModeExtraire(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: c.texteMuted, lineHeight: 1 }}>×</button>
+              </div>
+              <div style={{ fontSize: '12px', color: c.texteMuted, marginTop: '4px' }}>
+                Sélectionnez les fiches à inclure dans le fichier Excel de commande.
+              </div>
+            </div>
+
+            <div style={{ padding: '12px 20px', borderBottom: `0.5px solid ${c.bordure}`, display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input type="text" placeholder="Rechercher une fiche..." value={rechercheExtraire} onChange={e => setRechercheExtraire(e.target.value)}
+                style={{ flex: 1, minWidth: '160px', padding: '8px 10px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, background: c.blanc, outline: 'none', fontSize: '13px', color: c.texte }} />
+              <button onClick={() => setSelectionExtraire(
+                selectionExtraire.length === fichesExtraireFiltrees.length ? [] : fichesExtraireFiltrees.map(f => f.id)
+              )} style={{ padding: '8px 12px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', border: `0.5px solid ${c.bordure}`, background: c.blanc, color: c.texteMuted, whiteSpace: 'nowrap' }}>
+                {selectionExtraire.length === fichesExtraireFiltrees.length && fichesExtraireFiltrees.length > 0 ? 'Tout désélectionner' : 'Tout sélectionner'}
+              </button>
+            </div>
+
+            <div style={{ overflowY: 'auto', padding: '8px 12px', flex: 1 }}>
+              {fichesExtraireFiltrees.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px', color: c.texteMuted, fontSize: '13px' }}>Aucune fiche</div>
+              ) : fichesExtraireFiltrees.map(f => {
+                const checked = selectionExtraire.includes(f.id)
+                return (
+                  <label key={f.id} style={{
+                    display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '8px', cursor: 'pointer',
+                    background: checked ? accentClair : 'transparent'
+                  }}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleSelectionExtraire(f.id)}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: accent }} />
+                    <span style={{ fontSize: '13px', color: c.texte, flex: 1 }}>{f.nom}</span>
+                    {(f.saison || f.annee) && <span style={{ fontSize: '11px', color: c.texteMuted }}>{formatSaison(f.saison, f.annee)}</span>}
+                  </label>
+                )
+              })}
+            </div>
+
+            <div style={{ padding: '14px 20px', borderTop: `0.5px solid ${c.bordure}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '12px', color: c.texteMuted }}>
+                {selectionExtraire.length} fiche{selectionExtraire.length > 1 ? 's' : ''} sélectionnée{selectionExtraire.length > 1 ? 's' : ''}
+              </span>
+              <button onClick={extraireSelection} disabled={extracting || selectionExtraire.length === 0} style={{
+                padding: '9px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: '500', border: 'none',
+                cursor: (extracting || selectionExtraire.length === 0) ? 'not-allowed' : 'pointer',
+                background: (extracting || selectionExtraire.length === 0) ? c.bordure : accent,
+                color: (extracting || selectionExtraire.length === 0) ? c.texteMuted : c.texte
+              }}>{extracting ? 'Génération...' : `📊 Extraire Excel (${selectionExtraire.length})`}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
