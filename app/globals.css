@@ -6,19 +6,6 @@
   padding: 0;
 }
 
-/* ── Axeptio : repositionner le badge en bas-droite sur mobile ── */
-@media (max-width: 767px) {
-  #axeptio_overlay,
-  #axeptio_btn,
-  .axeptio-button,
-  [id^="axeptio"][style*="position: fixed"],
-  [id^="axeptio"][style*="position:fixed"] {
-    bottom: 72px !important;
-    right: 16px !important;
-    left: auto !important;
-  }
-}
-
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: #f5f5f0;
@@ -50,18 +37,6 @@ body {
 
   .print-only {
     display: block !important;
-  }
-
-  /* Axeptio (cookies + shadow DOM) — ne pas imprimer le widget */
-  #axeptio_overlay,
-  .axeptio_mount,
-  .axeptio-badge,
-  [id^='axeptio'],
-  [id*='axeptio' i],
-  [class*='axeptio'],
-  iframe[src*='axept.io'] {
-    display: none !important;
-    visibility: hidden !important;
   }
 
   /* Page Analyses CA — impression A4 paysage.

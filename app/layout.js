@@ -1,10 +1,8 @@
 import './globals.css'
 import './landing.css'
 import './crm.css'
-import Script from 'next/script'
 import Providers from '../components/Providers'
 import AnalyticsWrapper from '../components/AnalyticsWrapper'
-import AxeptioPrintHide from '../components/AxeptioPrintHide'
 
 export const metadata = {
   icons: {
@@ -25,30 +23,7 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body>
-        <Script id="axeptio-settings" strategy="afterInteractive">
-          {`
-window.axeptioSettings = {
-  clientId: "69c93192a77e258463cb2f3b",
-  cookiesVersion: "45afdbc3-f61f-46f5-aba6-c3d4070f538a",
-  googleConsentMode: {
-    default: {
-      analytics_storage: "denied",
-      ad_storage: "denied",
-      ad_user_data: "denied",
-      ad_personalization: "denied",
-      wait_for_update: 500
-    }
-  }
-};
-          `}
-        </Script>
-        <Script
-          id="axeptio-sdk"
-          src="https://static.axept.io/sdk.js"
-          strategy="afterInteractive"
-        />
         <AnalyticsWrapper />
-        <AxeptioPrintHide />
         <Providers>{children}</Providers>
       </body>
     </html>
