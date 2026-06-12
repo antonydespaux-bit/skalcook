@@ -21,6 +21,7 @@
     "@supabase/supabase-js": "^2.99.1",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.37.0",
+    "@vercel/analytics": "^2.0.1",
     "exceljs": "^4.4.0",
     "i18next": "^26.3.0",
     "i18next-browser-languagedetector": "^8.2.1",

@@ -1,6 +1,7 @@
 import './globals.css'
 import './landing.css'
 import './crm.css'
+import { Analytics } from '@vercel/analytics/next'
 import Providers from '../components/Providers'
 import AnalyticsWrapper from '../components/AnalyticsWrapper'
 
@@ -24,6 +25,7 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <AnalyticsWrapper />
+        <Analytics />
         <Providers>{children}</Providers>
       </body>
     </html>
