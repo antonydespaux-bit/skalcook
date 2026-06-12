@@ -174,13 +174,13 @@ export async function proxy(req: NextRequest) {
       'Content-Security-Policy',
       [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://unpkg.com https://static.axept.io https://axept.io https://www.googletagmanager.com https://vercel.live",
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://fonts.axept.io https://*.axept.io https://vercel.live",
-        "font-src 'self' https://fonts.gstatic.com https://fonts.axept.io https://vercel.live https://assets.vercel.com",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://unpkg.com https://www.googletagmanager.com https://vercel.live",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://vercel.live",
+        "font-src 'self' https://fonts.gstatic.com https://vercel.live https://assets.vercel.com",
         "img-src 'self' data: blob: https:",
         "frame-src 'self' blob: data: https://*.supabase.co https://vercel.live",
         "worker-src 'self' blob:",
-        "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://static.axept.io https://axept.io https://*.axept.io https://cdn.jsdelivr.net https://unpkg.com https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://lottie.host https://vercel.live wss://ws-us3.pusher.com",
+        "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net https://unpkg.com https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://lottie.host https://vercel.live wss://ws-us3.pusher.com",
         "frame-ancestors 'self'",
       ].join('; ')
     )
