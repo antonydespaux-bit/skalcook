@@ -92,6 +92,9 @@ export const createIngredientSchema = z.object({
   // Unité optionnelle : si absente, le service applique une unité par défaut.
   unite:    z.string().max(20).optional().nullable(),
   prix_kg:  z.coerce.number().min(0).nullable().optional().default(0),
+  // Conditionnement : nombre d'unités d'utilisation par achat (défaut 1).
+  // Ex : poulpe vendu par unité de 10 tentacules → conditionnement = 10.
+  conditionnement: z.coerce.number().positive().optional().default(1),
   section:  sectionSchema,
 })
 

@@ -739,6 +739,7 @@
       "colDelta": "Δ Prix",
       "colUpdatePrice": "MAJ prix",
       "ingredientNamePlaceholder": "Nom de l'ingrédient",
+      "soldByPrefix": "Vendu par",
       "create": "Créer",
       "searchIngredient": "Rechercher un ingrédient…",
       "noResult": "Aucun résultat",

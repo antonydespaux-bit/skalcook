@@ -9,6 +9,7 @@ import { useTheme } from '../../../../lib/useTheme'
 import { useRole } from '../../../../lib/useRole'
 import { normDesig, makeLigneId, badgeStyleFor, statutLabel } from '../../../../lib/achatsHelpers'
 import { useFournisseursConnus } from '../../../../lib/useFournisseursConnus'
+import { unitesParSection } from '../../../../lib/constants'
 import Navbar from '../../../../components/Navbar'
 import BackButton from '../../../../components/BackButton'
 import FournisseurAutocomplete from '../../../../components/FournisseurAutocomplete'
@@ -551,12 +552,22 @@ export default function AchatsDetailPage() {
                                     />
                                   </td>
                                   <td style={td}>
-                                    <input
-                                      style={{ ...inputS, fontSize: 13, padding: '6px 8px', width: 60 }}
-                                      value={l.unite}
-                                      placeholder={t('cgAchats.common.kgPlaceholder')}
-                                      onChange={e => updateEditLigne(l._id, 'unite', e.target.value)}
-                                    />
+                                    {(() => {
+                                      const opts = unitesParSection(facture?.section)
+                                      const v = l.unite || ''
+                                      const horsListe = v && !opts.includes(v)
+                                      return (
+                                        <select
+                                          style={{ ...inputS, fontSize: 13, padding: '6px 8px', width: 76 }}
+                                          value={v}
+                                          onChange={e => updateEditLigne(l._id, 'unite', e.target.value)}
+                                        >
+                                          <option value="">—</option>
+                                          {opts.map(u => <option key={u} value={u}>{u}</option>)}
+                                          {horsListe && <option value={v}>{v}</option>}
+                                        </select>
+                                      )
+                                    })()}
                                   </td>
                                   <td style={{ ...td, textAlign: 'right' }}>
                                     <input

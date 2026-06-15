@@ -205,13 +205,31 @@ export async function saveFacture(
   // 6. Update ingredient prices (for checked lines) + audit log + mapping — in parallel
   const toUpdate = lignes.filter((l) => l.updatePrice && l.ingredient_id)
 
+  // Conditionnement de chaque ingrédient concerné : le prix de référence stocké
+  // (prix_kg) est le prix PAR unité d'utilisation = prix de la ligne (qui porte
+  // le prix de l'achat entier) divisé par le conditionnement.
+  const condById: Record<string, number> = {}
+  if (toUpdate.length) {
+    const ids = [...new Set(toUpdate.map((l) => l.ingredient_id!))]
+    const { data: condRows } = await db
+      .from(ingredientTable)
+      .select('id, conditionnement')
+      .in('id', ids)
+      .eq('client_id', clientId)
+    for (const r of condRows ?? []) {
+      const c = Number((r as { conditionnement?: number }).conditionnement)
+      condById[(r as { id: string }).id] = Number.isFinite(c) && c > 0 ? c : 1
+    }
+  }
+
   await Promise.all([
     // Price updates
     ...toUpdate.map((l) => {
       const { prixEffectif } = computeLigneEffective(l)
+      const cond = condById[l.ingredient_id!] || 1
       return db
         .from(ingredientTable)
-        .update({ prix_kg: prixEffectif })
+        .update({ prix_kg: prixEffectif / cond })
         .eq('id', l.ingredient_id!)
         .eq('client_id', clientId)
     }),
@@ -801,6 +819,7 @@ export async function findOrCreateIngredient(
   prix_kg?: number | null,
   section: 'cuisine' | 'bar' = 'cuisine',
   categorieId?: string | null,
+  conditionnement?: number | null,
 ) {
   // Convention skalcook : tous les noms d'ingrédients en MAJUSCULES.
   const nomTrim = nom.trim().toUpperCase()
@@ -817,7 +836,7 @@ export async function findOrCreateIngredient(
   const nomLike = nomTrim.replace(/[\\%_]/g, '\\$&')
   const { data: matches } = await db
     .from(table)
-    .select('id, nom, unite, prix_kg')
+    .select('id, nom, unite, prix_kg, conditionnement')
     .eq('client_id', clientId)
     .ilike('nom', nomLike)
     .limit(1)
@@ -826,18 +845,25 @@ export async function findOrCreateIngredient(
   // 2. Création — on assigne une catégorie par défaut si fournie (les articles
   // créés depuis une facture atterrissent ainsi dans « À classer » plutôt que
   // dans « Sans catégorie », pour être faciles à retrouver et à reclasser.)
+  // Conditionnement : nombre d'unités d'utilisation par achat (défaut 1).
+  // Le prix transmis correspond au prix de l'achat entier → on le ramène au
+  // prix par unité d'utilisation pour rester cohérent avec le calcul de coût
+  // des fiches (prix_kg = prix d'achat / conditionnement).
+  const cond = conditionnement && conditionnement > 0 ? conditionnement : 1
   const insertRow: {
     client_id: string
     nom: string
     unite: string
     prix_kg: number
+    conditionnement: number
     est_sous_fiche: boolean
     categorie_id?: string
   } = {
     client_id: clientId,
     nom: nomTrim,
     unite: unite || defaultUnite,
-    prix_kg: prix_kg ?? 0,
+    prix_kg: (prix_kg ?? 0) / cond,
+    conditionnement: cond,
     est_sous_fiche: false,
   }
   if (categorieId) insertRow.categorie_id = categorieId
@@ -845,7 +871,7 @@ export async function findOrCreateIngredient(
   const { data: created, error } = await db
     .from(table)
     .insert(insertRow)
-    .select('id, nom, unite, prix_kg')
+    .select('id, nom, unite, prix_kg, conditionnement')
     .single()
 
   if (error) {
@@ -864,8 +890,8 @@ export async function createIngredient(
   db: SupabaseClient,
   input: CreateIngredientInput
 ) {
-  const { clientId, nom, unite, prix_kg, section } = input
-  return findOrCreateIngredient(db, clientId, nom, unite, prix_kg, section)
+  const { clientId, nom, unite, prix_kg, conditionnement, section } = input
+  return findOrCreateIngredient(db, clientId, nom, unite, prix_kg, section, null, conditionnement)
 }
 
 export async function getMercuriale(
@@ -1025,7 +1051,7 @@ export async function getReconciliationData(
       .eq('client_id', clientId),
     db
       .from(ingredientTable)
-      .select('id, nom, unite, prix_kg')
+      .select('id, nom, unite, prix_kg, conditionnement')
       .eq('client_id', clientId)
       .eq('est_sous_fiche', false)
       .order('nom'),
