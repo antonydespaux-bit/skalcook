@@ -12,10 +12,9 @@ import Pagination from './Pagination'
 import ChefLoader from './ChefLoader'
 import EmojiPicker from './EmojiPicker'
 import { Badge } from './ui'
+import { unitesParSection } from '../lib/constants'
 
 const PAGE_SIZE = 30
-
-const UNITES = ['kg', 'g', 'L', 'cl', 'ml', 'u', 'botte', 'pièce']
 
 // Configuration par section. La table `categories_ingredients` est partagée
 // entre cuisine et bar (colonne `section` qui filtre).
@@ -56,6 +55,7 @@ const CONFIG = {
 
 export default function IngredientsView({ section = 'cuisine' }) {
   const cfg = CONFIG[section]
+  const UNITES = unitesParSection(section)
   const [ingredients, setIngredients] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
@@ -73,6 +73,7 @@ export default function IngredientsView({ section = 'cuisine' }) {
   const [nouveauNom, setNouveauNom] = useState('')
   const [nouveauPrix, setNouveauPrix] = useState('')
   const [nouvelleUnite, setNouvelleUnite] = useState(cfg.defaultUnit)
+  const [nouveauCond, setNouveauCond] = useState('1')
   const [nouvelleCategorie, setNouvelleCategorie] = useState('')
 
   // Formulaire ajout catégorie
@@ -90,6 +91,7 @@ export default function IngredientsView({ section = 'cuisine' }) {
   const [editionId, setEditionId] = useState(null)
   const [editionNom, setEditionNom] = useState('')
   const [editionUnite, setEditionUnite] = useState('')
+  const [editionCond, setEditionCond] = useState('1')
   const [editionPrix, setEditionPrix] = useState('')
   const [editionCategorie, setEditionCategorie] = useState('')
 
@@ -296,16 +298,18 @@ export default function IngredientsView({ section = 'cuisine' }) {
     try {
       const clientId = await getClientId()
       if (!clientId) return
+      const condNum = parseFloat(String(nouveauCond).replace(',', '.'))
       const { error } = await supabase.from(cfg.table).insert([{
         nom: nouveauNom.trim(),
         prix_kg: nouveauPrix ? parseFloat(nouveauPrix.replace(',', '.')) : null,
         unite: nouvelleUnite,
+        conditionnement: condNum > 0 ? condNum : 1,
         client_id: clientId,
         categorie_id: nouvelleCategorie || null
       }])
       if (error) throw error
       await log({ action: 'CREATION', entite: cfg.logEntite, entite_nom: nouveauNom.trim(), section: cfg.logSection })
-      setNouveauNom(''); setNouveauPrix(''); setNouvelleUnite(cfg.defaultUnit); setNouvelleCategorie('')
+      setNouveauNom(''); setNouveauPrix(''); setNouvelleUnite(cfg.defaultUnit); setNouveauCond('1'); setNouvelleCategorie('')
       setAjoutVisible(false)
       await loadAll()
     } catch (err) {
@@ -342,6 +346,7 @@ export default function IngredientsView({ section = 'cuisine' }) {
     setEditionId(ing.id)
     setEditionNom(ing.nom || '')
     setEditionUnite(ing.unite || '')
+    setEditionCond(ing.conditionnement != null ? String(ing.conditionnement) : '1')
     setEditionPrix(ing.prix_kg ? String(ing.prix_kg) : '')
     setEditionCategorie(ing.categorie_id || '')
   }
@@ -354,9 +359,11 @@ export default function IngredientsView({ section = 'cuisine' }) {
     }
     try {
       const clientId = await getClientId()
+      const condNum = parseFloat(String(editionCond).replace(',', '.'))
       const { error } = await supabase.from(cfg.table).update({
         nom: nomTrim,
         unite: editionUnite.trim() || null,
+        conditionnement: condNum > 0 ? condNum : 1,
         prix_kg: editionPrix ? parseFloat(editionPrix.replace(',', '.')) : null,
         categorie_id: editionCategorie || null
       }).eq('id', id).eq('client_id', clientId)
@@ -587,6 +594,16 @@ export default function IngredientsView({ section = 'cuisine' }) {
                       </select>
                     </div>
                   </div>
+                  <div>
+                    <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Conditionnement (vendu par)</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input type="number" min="0" step="any" value={nouveauCond} onChange={e => setNouveauCond(e.target.value)}
+                        style={{ width: '90px', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc, textAlign: 'right' }}
+                      />
+                      <span style={{ fontSize: '13px', color: c.texteMuted }}>{nouvelleUnite} par achat</span>
+                    </div>
+                    <p style={{ fontSize: '11px', color: c.texteMuted, margin: '4px 0 0' }}>{"Ex : poulpe vendu par unité de 10 tentacules → 10. Laisser 1 si acheté directement à l'unité."}</p>
+                  </div>
                   <button onClick={ajouterIngredient} disabled={saving || !nouveauNom.trim()} style={{
                     width: '100%', padding: '12px', background: saving || !nouveauNom.trim() ? c.texteMuted : c.accent,
                     color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '500',
@@ -704,13 +721,23 @@ export default function IngredientsView({ section = 'cuisine' }) {
                         </td>
                         <td style={{ padding: '10px 16px', textAlign: 'right', color: c.texteMuted }}>
                           {editionId === ing.id ? (
-                            <input type="text" value={editionUnite} onChange={e => setEditionUnite(e.target.value)}
-                              onKeyDown={e => { if (e.key === 'Enter') saveEdition(ing.id); if (e.key === 'Escape') setEditionId(null) }}
-                              placeholder="kg, L, pièce…"
-                              style={{ width: '70px', padding: '4px 8px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', outline: 'none', textAlign: 'right', background: c.blanc, color: c.texte }}
-                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
+                              <select value={editionUnite} onChange={e => setEditionUnite(e.target.value)}
+                                style={{ width: '90px', padding: '4px 8px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', outline: 'none', background: c.blanc, color: c.texte, cursor: 'pointer' }}>
+                                <option value="">—</option>
+                                {UNITES.map(u => <option key={u} value={u}>{u}</option>)}
+                                {editionUnite && !UNITES.includes(editionUnite) && <option value={editionUnite}>{editionUnite}</option>}
+                              </select>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title="Conditionnement : nombre d'unités par achat">
+                                <span style={{ fontSize: '11px', color: c.texteMuted }}>vendu par</span>
+                                <input type="number" min="0" step="any" value={editionCond} onChange={e => setEditionCond(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter') saveEdition(ing.id); if (e.key === 'Escape') setEditionId(null) }}
+                                  style={{ width: '56px', padding: '4px 8px', borderRadius: '6px', border: `0.5px solid ${c.bordure}`, fontSize: '12px', outline: 'none', textAlign: 'right', background: c.blanc, color: c.texte }}
+                                />
+                              </div>
+                            </div>
                           ) : (
-                            <span>{ing.unite || '—'}</span>
+                            <span>{ing.unite || '—'}{ing.conditionnement > 1 ? ` ×${ing.conditionnement}` : ''}</span>
                           )}
                         </td>
                         {peutModifier && (
