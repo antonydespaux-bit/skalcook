@@ -51,6 +51,27 @@ describe('caTtcVsBudget', () => {
     const res = caTtcVsBudget(caRows, budgetRows, '2026-05-01', '2026-05-04')
     expect(res.real).toBe(0)
   })
+
+  it('ne fait pas fuiter le budget d\'un mois précis sur un autre mois', () => {
+    // Cellule définie uniquement pour MAI (mois=5). En JUIN, sans cellule
+    // dédiée ni défaut annuel (mois=null), ce lieu ne doit rien budgéter.
+    const budgetMaiSeul = [
+      { annee: 2026, mois: 5, jour_semaine: 2, lieu_service_id: 'L3', service: 'dinner',
+        couverts_cible: 10, ca_food_cible: 5000, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+    ]
+    // Mardi 2 juin 2026 : aucune cellule juin → budget 0 (avant le fix : 5000).
+    const res = caTtcVsBudget([], budgetMaiSeul, '2026-06-02', '2026-06-02')
+    expect(res.budget).toBe(0)
+  })
+
+  it('utilise bien le défaut annuel (mois=null) comme fallback', () => {
+    const budgetDefaut = [
+      { annee: 2026, mois: null, jour_semaine: 2, lieu_service_id: 'L3', service: 'dinner',
+        couverts_cible: 10, ca_food_cible: 5000, ca_bev_20_cible: 0, ca_bev_10_cible: 0, ca_autre_cible: 0 },
+    ]
+    const res = caTtcVsBudget([], budgetDefaut, '2026-06-02', '2026-06-02')
+    expect(res.budget).toBe(5000)
+  })
 })
 
 describe('caTtcCumulMois', () => {
