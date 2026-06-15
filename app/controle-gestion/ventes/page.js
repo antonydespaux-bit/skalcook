@@ -222,6 +222,10 @@ export default function VentesMensuelPage() {
     const monthNum = Number(mStr)
     const cellMap = new Map() // key = `${jds}_${lieu}_${svc}`
     for (const b of budgetRows) {
+      // Seul le mois courant (override) ou le défaut annuel (mois = null) compte.
+      // Une cellule d'un autre mois précis ne doit jamais servir de fallback,
+      // sinon le budget d'un mois fuite sur un autre (ex : Privat de mai en juin).
+      if (b.mois !== monthNum && b.mois != null) continue
       const key = `${b.jour_semaine}_${b.lieu_service_id}_${b.service}`
       if (b.mois === monthNum) {
         cellMap.set(key, b)
