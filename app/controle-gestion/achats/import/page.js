@@ -1264,10 +1264,10 @@ export default function AchatsImportPage() {
                       <thead>
                         <tr style={{ background: c.fond }}>
                           <th style={{ ...th, width: '30%' }}>{t('cgAchats.import.colDesignation')}</th>
-                          <th style={{ ...th, width: '7%', textAlign: 'right' }}>{t('cgAchats.import.colQty')}</th>
-                          <th style={{ ...th, width: '5%' }}>{t('cgAchats.import.colUnit')}</th>
-                          <th style={{ ...th, width: '7%', textAlign: 'right' }} title={t('cgAchats.import.condTooltip')}>{t('cgAchats.import.colCond')}</th>
-                          <th style={{ ...th, width: '9%', textAlign: 'right' }}>{t('cgAchats.import.colUnitPrice')}</th>
+                          <th style={{ ...th, width: '7%', textAlign: 'right', cursor: 'help', textDecoration: 'underline dotted', textUnderlineOffset: 3 }} title={t('cgAchats.import.qtyTooltip')}>{t('cgAchats.import.colQty')}</th>
+                          <th style={{ ...th, width: '5%', cursor: 'help', textDecoration: 'underline dotted', textUnderlineOffset: 3 }} title={t('cgAchats.import.unitTooltip')}>{t('cgAchats.import.colUnit')}</th>
+                          <th style={{ ...th, width: '7%', textAlign: 'right', cursor: 'help', textDecoration: 'underline dotted', textUnderlineOffset: 3 }} title={t('cgAchats.import.condTooltip')}>{t('cgAchats.import.colCond')}</th>
+                          <th style={{ ...th, width: '9%', textAlign: 'right', cursor: 'help', textDecoration: 'underline dotted', textUnderlineOffset: 3 }} title={t('cgAchats.import.unitPriceTooltip')}>{t('cgAchats.import.colUnitPrice')}</th>
                           <th style={{ ...th, width: '6%', textAlign: 'right' }}>{t('cgAchats.import.colDiscount')}</th>
                           <th style={{ ...th, width: '7%', textAlign: 'right' }}>{t('cgAchats.import.colVat')}</th>
                           <th style={{ ...th, width: '9%', textAlign: 'right' }}>{t('cgAchats.import.colTotalHt')}</th>
@@ -1542,12 +1542,12 @@ export default function AchatsImportPage() {
                           )}
                           {/* Ligne 2 : Qté / Unité / Prix / TVA */}
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
-                            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }}>
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }} title={t('cgAchats.import.qtyTooltip')}>
                               {t('cgAchats.import.quantity')}
                               <input style={inputS} type="number" min="0" step="0.001" value={l.quantite}
                                 onChange={e => updateLigne(l._id, 'quantite', e.target.value)} />
                             </label>
-                            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }}>
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }} title={t('cgAchats.import.unitTooltip')}>
                               {t('cgAchats.import.unit')}
                               <UniteSelect style={inputS} value={l.unite} section={section}
                                 onChange={v => updateLigne(l._id, 'unite', v)} />
@@ -1558,7 +1558,7 @@ export default function AchatsImportPage() {
                                 value={l.conditionnement ?? 1} disabled={l.reconnu}
                                 onChange={e => updateLigne(l._id, 'conditionnement', e.target.value)} />
                             </label>
-                            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }}>
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }} title={t('cgAchats.import.unitPriceTooltip')}>
                               {t('cgAchats.import.unitPrice')}
                               <input style={inputS} type="text" inputMode="decimal" value={l.prix_unitaire_ht ?? ''}
                                 onChange={e => updateLigne(l._id, 'prix_unitaire_ht', e.target.value.replace(',', '.'))} />
