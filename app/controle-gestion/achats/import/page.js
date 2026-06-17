@@ -139,10 +139,6 @@ export default function AchatsImportPage() {
   // Création d'ingrédient inline : _id de la ligne en cours | null
   const [creatingIngFor, setCreatingIngFor] = useState(null)
   const [newIngNom, setNewIngNom] = useState('')
-  // Unité d'utilisation + conditionnement du nouvel ingrédient en cours de création.
-  // conditionnement = nb d'unités d'utilisation par achat (ex: 1 unité = 10 tentacules).
-  const [newIngUnite, setNewIngUnite] = useState('')
-  const [newIngCond, setNewIngCond] = useState('1')
   // Liaison à un ingrédient existant : _id de la ligne en cours | null
   const [linkingIngFor, setLinkingIngFor] = useState(null)
   const [linkSearch, setLinkSearch] = useState('')
@@ -228,6 +224,7 @@ export default function AchatsImportPage() {
       designation: '',
       quantite: 1,
       unite: '',
+      conditionnement: 1,
       prix_unitaire_ht: '',
       remise: 0,
     })])
@@ -251,6 +248,7 @@ export default function AchatsImportPage() {
         designation:      l.designation || '',
         quantite:         Number(l.quantite) || 1,
         unite:            l.unite || '',
+        conditionnement:  Number(l.conditionnement) > 0 ? Number(l.conditionnement) : 1,
         prix_unitaire_ht: Number(l.prix_unitaire_ht) || 0,
         taux_tva:         l.taux_tva != null ? Number(l.taux_tva) : null,
       })
@@ -295,6 +293,7 @@ export default function AchatsImportPage() {
       designation:      l.designation,
       quantite:         l.quantite,
       unite:            l.unite,
+      conditionnement:  l.conditionnement,
       prix_unitaire_ht: l.prix_unitaire_ht,
       taux_tva:         l.taux_tva,
     })),
@@ -457,6 +456,7 @@ export default function AchatsImportPage() {
       designation: '',
       quantite: 1,
       unite: '',
+      conditionnement: 1,
       prix_unitaire_ht: '',
       remise: 0,
     })])
@@ -494,26 +494,22 @@ export default function AchatsImportPage() {
 
   // ─── Sauvegarde ───────────────────────────────────────────────────────────
 
-  // Ouvre le formulaire de création inline en pré-remplissant nom + unité depuis
-  // la ligne, et conditionnement à 1 (acheté directement dans l'unité d'usage).
+  // Ouvre le formulaire de création inline (uniquement le nom : l'unité, le
+  // conditionnement et le prix sont déjà saisis sur la ligne elle-même).
   const openCreateIng = useCallback((ligne) => {
     setCreatingIngFor(ligne._id)
     setNewIngNom(ligne.designation)
-    setNewIngUnite(normUnite(ligne.unite) || '')
-    setNewIngCond('1')
     setLinkingIngFor(null)
   }, [])
 
   const closeCreateIng = useCallback(() => {
     setCreatingIngFor(null)
     setNewIngNom('')
-    setNewIngUnite('')
-    setNewIngCond('1')
   }, [])
 
   const handleCreateIngredient = useCallback(async (ligne) => {
     if (!newIngNom.trim()) return
-    const cond = Number(String(newIngCond).replace(',', '.')) || 1
+    const cond = Number(String(ligne.conditionnement).replace(',', '.')) || 1
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/achats/create-ingredient', {
@@ -525,7 +521,7 @@ export default function AchatsImportPage() {
         body: JSON.stringify({
           clientId,
           nom:     newIngNom.trim(),
-          unite:   newIngUnite || ligne.unite || null,
+          unite:   normUnite(ligne.unite) || ligne.unite || null,
           // Prix de l'achat entier (côté serveur : prix_kg = prix / conditionnement)
           prix_kg: ligne.prix_unitaire_ht || null,
           conditionnement: cond > 0 ? cond : 1,
@@ -545,6 +541,7 @@ export default function AchatsImportPage() {
           ...l,
           ingredient_id:   ing.id,
           ingredient_nom:  ing.nom,
+          conditionnement: Number(ing.conditionnement) > 0 ? Number(ing.conditionnement) : 1,
           // prix_actuel = prix du conditionnement (prix_kg stocké × conditionnement)
           prix_actuel:     ing.prix_kg ? Number(ing.prix_kg) * (Number(ing.conditionnement) > 0 ? Number(ing.conditionnement) : 1) : null,
           deltaPrix:       null,
@@ -556,7 +553,7 @@ export default function AchatsImportPage() {
     } catch (err) {
       setError(err.message)
     }
-  }, [clientId, newIngNom, newIngUnite, newIngCond, section, closeCreateIng])
+  }, [clientId, newIngNom, section, closeCreateIng])
 
   const handleLinkIngredient = useCallback((ligne, ing) => {
     // L'utilisateur avait-il déjà saisi son propre prix / TVA avant le link ?
@@ -1269,6 +1266,7 @@ export default function AchatsImportPage() {
                           <th style={{ ...th, width: '30%' }}>{t('cgAchats.import.colDesignation')}</th>
                           <th style={{ ...th, width: '7%', textAlign: 'right' }}>{t('cgAchats.import.colQty')}</th>
                           <th style={{ ...th, width: '5%' }}>{t('cgAchats.import.colUnit')}</th>
+                          <th style={{ ...th, width: '7%', textAlign: 'right' }} title={t('cgAchats.import.condTooltip')}>{t('cgAchats.import.colCond')}</th>
                           <th style={{ ...th, width: '9%', textAlign: 'right' }}>{t('cgAchats.import.colUnitPrice')}</th>
                           <th style={{ ...th, width: '6%', textAlign: 'right' }}>{t('cgAchats.import.colDiscount')}</th>
                           <th style={{ ...th, width: '7%', textAlign: 'right' }}>{t('cgAchats.import.colVat')}</th>
@@ -1318,6 +1316,16 @@ export default function AchatsImportPage() {
                               </td>
                               <td style={{ ...td, textAlign: 'right' }}>
                                 <input
+                                  style={{ ...inputS, textAlign: 'right', width: 64, ...(l.reconnu ? { background: c.fond, color: c.texteMuted } : null) }}
+                                  type="number" min="0" step="any"
+                                  value={l.conditionnement ?? 1}
+                                  disabled={l.reconnu}
+                                  title={l.reconnu ? t('cgAchats.import.condLockedTooltip') : t('cgAchats.import.condTooltip')}
+                                  onChange={e => updateLigne(l._id, 'conditionnement', e.target.value)}
+                                />
+                              </td>
+                              <td style={{ ...td, textAlign: 'right' }}>
+                                <input
                                   style={{ ...inputS, textAlign: 'right', width: 80 }}
                                   type="text" inputMode="decimal"
                                   value={l.prix_unitaire_ht ?? ''}
@@ -1355,22 +1363,6 @@ export default function AchatsImportPage() {
                                       onChange={e => setNewIngNom(e.target.value)}
                                       onKeyDown={e => { if (e.key === 'Enter') handleCreateIngredient(l); if (e.key === 'Escape') closeCreateIng() }}
                                     />
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: c.texteMuted }}>
-                                      <span>{t('cgAchats.import.soldByPrefix')}</span>
-                                      <input
-                                        type="number" min="0" step="any"
-                                        style={{ ...inputS, fontSize: 12, padding: '3px 6px', width: 56, textAlign: 'right' }}
-                                        value={newIngCond}
-                                        onChange={e => setNewIngCond(e.target.value)}
-                                        onKeyDown={e => { if (e.key === 'Enter') handleCreateIngredient(l) }}
-                                      />
-                                      <UniteSelect
-                                        style={{ ...inputS, fontSize: 12, padding: '3px 6px', width: 72 }}
-                                        value={newIngUnite}
-                                        section={section}
-                                        onChange={setNewIngUnite}
-                                      />
-                                    </div>
                                     <div style={{ display: 'flex', gap: 4 }}>
                                       <button onClick={() => handleCreateIngredient(l)} style={{ flex: 1, padding: '2px 6px', fontSize: 11, background: c.vert, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>{t('cgAchats.import.create')}</button>
                                       <button onClick={closeCreateIng} style={{ padding: '2px 6px', fontSize: 11, background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 4, cursor: 'pointer' }}>✕</button>
@@ -1492,22 +1484,6 @@ export default function AchatsImportPage() {
                                 onChange={e => setNewIngNom(e.target.value)}
                                 onKeyDown={e => { if (e.key === 'Enter') handleCreateIngredient(l); if (e.key === 'Escape') closeCreateIng() }}
                               />
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: c.texteMuted }}>
-                                <span>{t('cgAchats.import.soldByPrefix')}</span>
-                                <input
-                                  type="number" min="0" step="any"
-                                  style={{ ...inputS, width: 70, textAlign: 'right' }}
-                                  value={newIngCond}
-                                  onChange={e => setNewIngCond(e.target.value)}
-                                  onKeyDown={e => { if (e.key === 'Enter') handleCreateIngredient(l) }}
-                                />
-                                <UniteSelect
-                                  style={{ ...inputS, width: 90 }}
-                                  value={newIngUnite}
-                                  section={section}
-                                  onChange={setNewIngUnite}
-                                />
-                              </div>
                               <div style={{ display: 'flex', gap: 6 }}>
                                 <button onClick={() => handleCreateIngredient(l)} style={{ flex: 1, padding: '6px 10px', background: c.vert, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>{t('cgAchats.import.create')}</button>
                                 <button onClick={closeCreateIng} style={{ padding: '6px 8px', background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>✕</button>
@@ -1575,6 +1551,12 @@ export default function AchatsImportPage() {
                               {t('cgAchats.import.unit')}
                               <UniteSelect style={inputS} value={l.unite} section={section}
                                 onChange={v => updateLigne(l._id, 'unite', v)} />
+                            </label>
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }} title={l.reconnu ? t('cgAchats.import.condLockedTooltip') : t('cgAchats.import.condTooltip')}>
+                              {t('cgAchats.import.colCond')}
+                              <input style={{ ...inputS, ...(l.reconnu ? { background: c.fond, color: c.texteMuted } : null) }} type="number" min="0" step="any"
+                                value={l.conditionnement ?? 1} disabled={l.reconnu}
+                                onChange={e => updateLigne(l._id, 'conditionnement', e.target.value)} />
                             </label>
                             <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: c.texteMuted }}>
                               {t('cgAchats.import.unitPrice')}

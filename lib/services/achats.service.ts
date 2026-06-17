@@ -694,6 +694,7 @@ async function autoCreateMissingIngredients<T extends {
   designation: string
   ingredient_id?: string | null
   unite?: string | null
+  conditionnement?: number | null
   prix_unitaire_ht: number | string
 }>(
   db: SupabaseClient,
@@ -741,6 +742,7 @@ async function autoCreateMissingIngredients<T extends {
       Number(src.prix_unitaire_ht) || 0,
       section,
       aClasserCatId,
+      Number(src.conditionnement) > 0 ? Number(src.conditionnement) : 1,
     )
     idByNorm[norm] = ing.id
     autoCreatedCount++
