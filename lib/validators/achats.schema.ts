@@ -11,6 +11,9 @@ const ligneFactureSchema = z.object({
   ingredient_id:    z.string().uuid().nullable().optional(),
   quantite:         z.coerce.number().min(0, 'Quantité invalide'),
   unite:            z.string().nullable().optional(),
+  // Conditionnement : nb d'unités d'utilisation par achat (ex : sac de 3 kg → 3).
+  // Sert à la création de l'article : prix_kg = prix de la ligne / conditionnement.
+  conditionnement:  z.coerce.number().positive().optional().default(1),
   prix_unitaire_ht: z.coerce.number().min(0),
   remise:           z.coerce.number().min(0).max(100).default(0),
   // Taux de TVA spécifique à la ligne (pour factures multi-taux). Si null,
