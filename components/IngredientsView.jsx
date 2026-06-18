@@ -298,12 +298,17 @@ export default function IngredientsView({ section = 'cuisine' }) {
     try {
       const clientId = await getClientId()
       if (!clientId) return
+      // Le prix saisi est celui du conditionnement entier (la boîte/le sac).
+      // On stocke prix_kg = prix par unité d'usage = prix / conditionnement,
+      // cohérent avec l'import de facture et le calcul de coût des fiches.
       const condNum = parseFloat(String(nouveauCond).replace(',', '.'))
+      const cond = condNum > 0 ? condNum : 1
+      const prixBox = nouveauPrix ? parseFloat(nouveauPrix.replace(',', '.')) : null
       const { error } = await supabase.from(cfg.table).insert([{
         nom: nouveauNom.trim(),
-        prix_kg: nouveauPrix ? parseFloat(nouveauPrix.replace(',', '.')) : null,
+        prix_kg: prixBox != null ? prixBox / cond : null,
         unite: nouvelleUnite,
-        conditionnement: condNum > 0 ? condNum : 1,
+        conditionnement: cond,
         client_id: clientId,
         categorie_id: nouvelleCategorie || null
       }])
@@ -346,8 +351,11 @@ export default function IngredientsView({ section = 'cuisine' }) {
     setEditionId(ing.id)
     setEditionNom(ing.nom || '')
     setEditionUnite(ing.unite || '')
-    setEditionCond(ing.conditionnement != null ? String(ing.conditionnement) : '1')
-    setEditionPrix(ing.prix_kg ? String(ing.prix_kg) : '')
+    const cond = ing.conditionnement != null && Number(ing.conditionnement) > 0 ? Number(ing.conditionnement) : 1
+    setEditionCond(String(cond))
+    // On édite le prix du conditionnement entier (= prix_kg × conditionnement),
+    // pour rester cohérent avec la saisie (prix de la boîte / du sac).
+    setEditionPrix(ing.prix_kg ? String(Math.round(Number(ing.prix_kg) * cond * 100) / 100) : '')
     setEditionCategorie(ing.categorie_id || '')
   }
 
@@ -359,12 +367,15 @@ export default function IngredientsView({ section = 'cuisine' }) {
     }
     try {
       const clientId = await getClientId()
+      // Prix saisi = prix du conditionnement entier → prix_kg = prix / cond.
       const condNum = parseFloat(String(editionCond).replace(',', '.'))
+      const cond = condNum > 0 ? condNum : 1
+      const prixBox = editionPrix ? parseFloat(editionPrix.replace(',', '.')) : null
       const { error } = await supabase.from(cfg.table).update({
         nom: nomTrim,
         unite: editionUnite.trim() || null,
-        conditionnement: condNum > 0 ? condNum : 1,
-        prix_kg: editionPrix ? parseFloat(editionPrix.replace(',', '.')) : null,
+        conditionnement: cond,
+        prix_kg: prixBox != null ? prixBox / cond : null,
         categorie_id: editionCategorie || null
       }).eq('id', id).eq('client_id', clientId)
       if (error) {
@@ -572,9 +583,9 @@ export default function IngredientsView({ section = 'cuisine' }) {
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                     <div>
-                      <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>Prix HT (€)</label>
+                      <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }} title="Prix d'achat du conditionnement entier (la boîte / le sac)">Prix HT (du conditionnement)</label>
                       <input type="text" value={nouveauPrix} onChange={e => setNouveauPrix(e.target.value)}
-                        placeholder="Ex : 4.50"
+                        placeholder="Ex : 16.95"
                         style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
                       />
                     </div>
@@ -602,7 +613,7 @@ export default function IngredientsView({ section = 'cuisine' }) {
                       />
                       <span style={{ fontSize: '13px', color: c.texteMuted }}>{nouvelleUnite} par achat</span>
                     </div>
-                    <p style={{ fontSize: '11px', color: c.texteMuted, margin: '4px 0 0' }}>{"Ex : poulpe vendu par unité de 10 tentacules → 10. Laisser 1 si acheté directement à l'unité."}</p>
+                    <p style={{ fontSize: '11px', color: c.texteMuted, margin: '4px 0 0' }}>{"Ex : Philadelphia, boîte de 1,65 kg à 16,95 € → unité « kg », prix 16,95, vendu par 1,65 (= 10,27 €/kg). Laisser 1 si acheté directement à l'unité."}</p>
                   </div>
                   <button onClick={ajouterIngredient} disabled={saving || !nouveauNom.trim()} style={{
                     width: '100%', padding: '12px', background: saving || !nouveauNom.trim() ? c.texteMuted : c.accent,
