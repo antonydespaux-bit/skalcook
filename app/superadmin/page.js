@@ -146,10 +146,16 @@ export default function SuperAdminPage() {
 
   const uploadLogo = async (clientId) => {
     if (!logoFile) return logoExistant
-    const ext = logoFile.name.split('.').pop()
+    const rawExt = (logoFile.name.split('.').pop() || '').toLowerCase()
+    const ext = ['png', 'jpg', 'jpeg', 'webp', 'svg', 'gif'].includes(rawExt) ? rawExt : 'png'
     const path = `${clientId}/logo.${ext}`
-    const { error: errUpload } = await supabase.storage.from('clients-logos').upload(path, logoFile, { upsert: true })
-    if (errUpload) { console.error('Logo upload error:', errUpload); return logoExistant }
+    const { error: errUpload } = await supabase.storage
+      .from('clients-logos')
+      .upload(path, logoFile, { upsert: true, contentType: logoFile.type || undefined })
+    if (errUpload) {
+      console.error('Logo upload error:', errUpload)
+      throw new Error('Upload du logo impossible : ' + (errUpload.message || 'erreur de stockage'))
+    }
     const { data: urlData } = supabase.storage.from('clients-logos').getPublicUrl(path)
     return urlData.publicUrl
   }
@@ -180,16 +186,26 @@ export default function SuperAdminPage() {
       if (!res.ok) { setError('Erreur : ' + (json?.error || 'création impossible')); setSaving(false); return }
       const newClient = json?.client
       if (logoFile && newClient?.id) {
-        const logoUrl = await uploadLogo(newClient.id)
-        await fetch('/api/superadmin/update-client-settings', {
-          method: 'POST', headers: authHeaders,
-          body: JSON.stringify({ id: newClient.id, logo_url: logoUrl }),
-        })
+        try {
+          const logoUrl = await uploadLogo(newClient.id)
+          await fetch('/api/superadmin/update-client-settings', {
+            method: 'POST', headers: authHeaders,
+            body: JSON.stringify({ id: newClient.id, logo_url: logoUrl }),
+          })
+        } catch (e) {
+          await loadClients()
+          setError(`Établissement créé, mais le logo n'a pas pu être ajouté : ${e.message || 'erreur inconnue'}. Réessayez via Modifier.`)
+          setSaving(false)
+          return
+        }
       }
       setSuccess(`✓ Établissement "${nomEtablissement}" créé avec succès !`)
     } else {
       let logoUrl = logoExistant
-      if (logoFile) logoUrl = await uploadLogo(clientSelectionne.id)
+      if (logoFile) {
+        try { logoUrl = await uploadLogo(clientSelectionne.id) }
+        catch (e) { setError(e.message || 'Upload du logo impossible'); setSaving(false); return }
+      }
       const res = await fetch('/api/superadmin/update-client-settings', {
         method: 'POST', headers: authHeaders,
         body: JSON.stringify({ id: clientSelectionne.id, ...payload, logo_url: logoUrl }),
