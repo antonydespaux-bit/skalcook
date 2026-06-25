@@ -88,6 +88,10 @@ export default function AdminPage() {
       setError(t('admin.users.allRequired'))
       return
     }
+    if (newPassword.length < 8) {
+      setError('Le mot de passe doit contenir au moins 8 caractères.')
+      return
+    }
     setCreating(true)
     setError('')
     setSuccess('')
@@ -119,7 +123,7 @@ export default function AdminPage() {
     const data = await res.json()
 
     if (!res.ok || data.error) {
-      setError('Erreur : ' + data.error)
+      setError('Erreur : ' + formatApiError(data, 'Données invalides'))
       setCreating(false)
       return
     }
