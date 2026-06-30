@@ -88,6 +88,15 @@ export default function VentesMensuelPage() {
   // Overrides nb_jours par (mois, jds, service) — utilisé pour aligner le
   // TOTAL du mois sur le Récapitulatif annuel de la page Budgets.
   const [joursOverrideRows, setJoursOverrideRows] = useState([])
+  // Lieux marqués `couverts_indicatifs` (= lieux Privat) : leur CA réel est
+  // lissé sur le mois (cf. enveloppe privatisation ci-dessous).
+  const [privatLieuIds, setPrivatLieuIds] = useState(() => new Set())
+  // Enveloppe budgétaire privatisation du mois (montant forfaitaire global,
+  // null si non saisie). Quand elle existe, le lissage privat est actif.
+  const [privatBudgetMois, setPrivatBudgetMois] = useState(null)
+  // Champ de saisie de l'enveloppe privatisation (string) + état d'envoi.
+  const [privatInput, setPrivatInput] = useState('')
+  const [savingPrivat, setSavingPrivat] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -121,10 +130,10 @@ export default function VentesMensuelPage() {
     try {
       const { debut, fin } = monthRange(mois)
       const [y, m] = mois.split('-').map(Number)
-      const [caRes, budgetRes, overrideRes] = await Promise.all([
+      const [caRes, budgetRes, overrideRes, lieuxRes, privatRes] = await Promise.all([
         supabase
           .from('ca_journalier')
-          .select('jour, service, couverts, ca_food, ca_bev_20, ca_bev_10, ca_autre')
+          .select('jour, lieu_service_id, service, couverts, ca_food, ca_bev_20, ca_bev_10, ca_autre')
           .eq('client_id', clientId)
           .gte('jour', debut)
           .lte('jour', fin),
@@ -143,13 +152,33 @@ export default function VentesMensuelPage() {
           .eq('client_id', clientId)
           .eq('annee', y)
           .eq('mois', m),
+        // Lieux Privat (couverts_indicatifs) : leur CA réel est lissé sur le mois.
+        supabase
+          .from('lieux_service')
+          .select('id')
+          .eq('client_id', clientId)
+          .eq('couverts_indicatifs', true),
+        // Enveloppe budgétaire privatisation du mois (0 ou 1 ligne).
+        supabase
+          .from('ca_budget_privatisations')
+          .select('montant')
+          .eq('client_id', clientId)
+          .eq('annee', y)
+          .eq('mois', m)
+          .maybeSingle(),
       ])
       if (caRes.error) throw caRes.error
       if (budgetRes.error) throw budgetRes.error
       if (overrideRes.error) throw overrideRes.error
+      if (lieuxRes.error) throw lieuxRes.error
+      if (privatRes.error) throw privatRes.error
       setRawRows(caRes.data || [])
       setBudgetRows(budgetRes.data || [])
       setJoursOverrideRows(overrideRes.data || [])
+      setPrivatLieuIds(new Set((lieuxRes.data || []).map((l) => l.id)))
+      // null = pas d'enveloppe saisie → lissage privat inactif (comportement
+      // historique inchangé). Une ligne (même montant 0) active le lissage.
+      setPrivatBudgetMois(privatRes.data ? Number(privatRes.data.montant || 0) : null)
     } catch (e) {
       setError(e.message || t('cgVentes.common.loadError'))
     } finally {
@@ -160,6 +189,49 @@ export default function VentesMensuelPage() {
   useEffect(() => {
     if (authChecked) loadData()
   }, [authChecked, loadData])
+
+  // Synchronise le champ de saisie avec l'enveloppe chargée pour le mois.
+  useEffect(() => {
+    setPrivatInput(privatBudgetMois == null ? '' : String(privatBudgetMois))
+  }, [privatBudgetMois, mois])
+
+  // Enregistre (ou efface) l'enveloppe budgétaire privatisation du mois.
+  // Champ vide → on supprime la ligne (lissage désactivé pour ce mois).
+  const savePrivatBudget = useCallback(async () => {
+    if (!clientId || !mois) return
+    setSavingPrivat(true)
+    setError('')
+    try {
+      const [y, m] = mois.split('-').map(Number)
+      const trimmed = privatInput.trim()
+      if (trimmed === '') {
+        const { error: delErr } = await supabase
+          .from('ca_budget_privatisations')
+          .delete()
+          .eq('client_id', clientId)
+          .eq('annee', y)
+          .eq('mois', m)
+        if (delErr) throw delErr
+      } else {
+        const montant = Number(trimmed.replace(',', '.'))
+        if (!Number.isFinite(montant) || montant < 0) {
+          throw new Error('Montant de privatisation invalide.')
+        }
+        const { error: upErr } = await supabase
+          .from('ca_budget_privatisations')
+          .upsert(
+            { client_id: clientId, annee: y, mois: m, montant },
+            { onConflict: 'client_id,annee,mois' }
+          )
+        if (upErr) throw upErr
+      }
+      await loadData()
+    } catch (e) {
+      setError(e.message || t('cgVentes.common.loadError'))
+    } finally {
+      setSavingPrivat(false)
+    }
+  }, [clientId, mois, privatInput, loadData, t])
 
   const days = useMemo(() => {
     const byDay = new Map()
@@ -173,16 +245,26 @@ export default function VentesMensuelPage() {
           bev_20: 0,
           bev_10: 0,
           autre: 0,
+          // privatReal : CA réel des lieux Privat ce jour-là. Servira à le
+          // retirer du jour réel pour le lisser sur le mois (écart au budget).
+          privatReal: 0,
         })
       }
       const acc = byDay.get(key)
       const cv = Number(r.couverts || 0)
       if (r.service === 'lunch') acc.lunchCouverts += cv
       else acc.dinnerCouverts += cv
-      acc.food += Number(r.ca_food || 0)
-      acc.bev_20 += Number(r.ca_bev_20 || 0)
-      acc.bev_10 += Number(r.ca_bev_10 || 0)
-      acc.autre += Number(r.ca_autre || 0)
+      const rowFood = Number(r.ca_food || 0)
+      const rowBev20 = Number(r.ca_bev_20 || 0)
+      const rowBev10 = Number(r.ca_bev_10 || 0)
+      const rowAutre = Number(r.ca_autre || 0)
+      acc.food += rowFood
+      acc.bev_20 += rowBev20
+      acc.bev_10 += rowBev10
+      acc.autre += rowAutre
+      if (privatLieuIds.has(r.lieu_service_id)) {
+        acc.privatReal += rowFood + rowBev20 + rowBev10 + rowAutre
+      }
     }
     const result = []
     for (const d of eachDay(mois)) {
@@ -193,6 +275,7 @@ export default function VentesMensuelPage() {
         bev_20: 0,
         bev_10: 0,
         autre: 0,
+        privatReal: 0,
       }
       const couvertsTot = agg.lunchCouverts + agg.dinnerCouverts
       const caTot = agg.food + agg.bev_20 + agg.bev_10 + agg.autre
@@ -206,7 +289,30 @@ export default function VentesMensuelPage() {
       })
     }
     return result
-  }, [rawRows, mois])
+  }, [rawRows, mois, privatLieuIds])
+
+  // Lissage des privatisations sur le mois.
+  // Actif uniquement si une enveloppe budgétaire privatisation est saisie pour
+  // le mois (privatBudgetMois != null) — sinon comportement historique.
+  // On répartit également, sur tous les jours calendaires du mois :
+  //   - le budget privatisation (montant forfaitaire / nbJours)
+  //   - le CA réel des lieux Privat (total mois / nbJours)
+  // → l'écart au budget ne fait plus de pic le jour de l'event, et le cumul
+  //   mensuel reste exact.
+  const privatLissage = useMemo(() => {
+    const active = privatBudgetMois != null
+    const nbDays = days.length
+    const realMonth = days.reduce((s, d) => s + (d.privatReal || 0), 0)
+    const budgetMonth = active ? Number(privatBudgetMois || 0) : 0
+    return {
+      active,
+      nbDays,
+      realMonth,
+      budgetMonth,
+      realPerDay: active && nbDays > 0 ? realMonth / nbDays : 0,
+      budgetPerDay: active && nbDays > 0 ? budgetMonth / nbDays : 0,
+    }
+  }, [days, privatBudgetMois])
 
   // Budget journalier par date ISO du mois affiché.
   // Override mensuel (mois = m) prioritaire sur le défaut (mois = NULL) au
@@ -240,6 +346,10 @@ export default function VentesMensuelPage() {
       let total = 0
       for (const cell of cellMap.values()) {
         if (cell.jour_semaine !== isoJds) continue
+        // Lissage actif : les cellules budget des lieux Privat sont ignorées
+        // ici (le budget privat passe par l'enveloppe lissée) pour éviter le
+        // double comptage.
+        if (privatLissage.active && privatLieuIds.has(cell.lieu_service_id)) continue
         if (!isCellElectedForDate(cell, d.iso, annee, monthNum, electedMap)) continue
         total +=
           Number(cell.ca_food_cible || 0) +
@@ -247,14 +357,25 @@ export default function VentesMensuelPage() {
           Number(cell.ca_bev_10_cible || 0) +
           Number(cell.ca_autre_cible || 0)
       }
+      // Part lissée du budget privatisation (0 si lissage inactif).
+      total += privatLissage.budgetPerDay
       out.set(d.iso, total)
     }
     return out
-  }, [budgetRows, joursOverrideRows, mois, days])
+  }, [budgetRows, joursOverrideRows, mois, days, privatLissage, privatLieuIds])
 
   const daysWithBudget = useMemo(() => {
-    return days.map((d) => ({ ...d, budget: budgetByDateIso.get(d.iso) || 0 }))
-  }, [days, budgetByDateIso])
+    return days.map((d) => {
+      // caTotEcart : CA du jour utilisé pour l'écart au budget. Quand le
+      // lissage est actif, on retire le CA privat réel du jour et on le
+      // remplace par la part lissée → plus de pic le jour de l'event.
+      // (La colonne CA total affichée reste, elle, le CA réel honnête.)
+      const caTotEcart = privatLissage.active
+        ? d.caTot - (d.privatReal || 0) + privatLissage.realPerDay
+        : d.caTot
+      return { ...d, budget: budgetByDateIso.get(d.iso) || 0, caTotEcart }
+    })
+  }, [days, budgetByDateIso, privatLissage])
 
   // Budget MENSUEL aligné sur le Récapitulatif annuel de la page Budgets :
   // - Ne prend que les cellules ca_budgets avec mois = monthNum (ignore les
@@ -289,6 +410,9 @@ export default function VentesMensuelPage() {
       // On ignore le fallback mois=NULL : on ne compte que les cellules
       // explicitement définies pour ce mois (cohérent avec /budgets).
       if (b.mois !== monthNum) continue
+      // Lissage actif : budget privat des lieux Privat exclu ici (remplacé par
+      // l'enveloppe ajoutée plus bas) pour éviter le double comptage.
+      if (privatLissage.active && privatLieuIds.has(b.lieu_service_id)) continue
       const cellTotal =
         Number(b.ca_food_cible || 0) +
         Number(b.ca_bev_20_cible || 0) +
@@ -298,8 +422,10 @@ export default function VentesMensuelPage() {
       const nbre = lookupNbre(b.jour_semaine, b.service, b.lieu_service_id)
       total += nbre * cellTotal
     }
+    // Enveloppe privatisation du mois entier (0 si lissage inactif).
+    total += privatLissage.budgetMonth
     return total
-  }, [budgetRows, joursOverrideRows, mois])
+  }, [budgetRows, joursOverrideRows, mois, privatLissage, privatLieuIds])
 
   const monthTotals = useMemo(() => {
     const t = {
@@ -315,6 +441,9 @@ export default function VentesMensuelPage() {
       // date) : l'écart représente la position vs budget sur les seuls
       // jours pour lesquels on a de la data.
       mtdBudget: 0,
+      // caTotEcartMtd : CA réel cumulé "lissé privat" sur les jours saisis.
+      // = caTot tant que le lissage est inactif.
+      caTotEcartMtd: 0,
     }
     for (const d of daysWithBudget) {
       t.lunchCouverts += d.lunchCouverts
@@ -323,7 +452,10 @@ export default function VentesMensuelPage() {
       t.bev_20 += d.bev_20
       t.bev_10 += d.bev_10
       t.autre += d.autre
-      if (d.hasData) t.mtdBudget += d.budget
+      if (d.hasData) {
+        t.mtdBudget += d.budget
+        t.caTotEcartMtd += d.caTotEcart
+      }
     }
     const couvertsTot = t.lunchCouverts + t.dinnerCouverts
     const caTot = t.food + t.bev_20 + t.bev_10 + t.autre
@@ -376,6 +508,48 @@ export default function VentesMensuelPage() {
               fontSize: 13,
             }}
           />
+          <label
+            style={{ fontSize: 13, color: c.texte, marginLeft: 8 }}
+            title="Budget privatisations du mois (lissé sur tous les jours). Vide = lissage désactivé."
+          >
+            Privatisations (budget du mois)
+          </label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            inputMode="decimal"
+            value={privatInput}
+            onChange={(e) => setPrivatInput(e.target.value)}
+            placeholder="€ / mois"
+            style={{
+              width: 110,
+              padding: '7px 10px',
+              borderRadius: 8,
+              border: `1px solid ${c.bordure}`,
+              background: c.blanc,
+              color: c.texte,
+              fontSize: 13,
+            }}
+          />
+          <button
+            onClick={savePrivatBudget}
+            disabled={savingPrivat || privatInput.trim() === String(privatBudgetMois ?? '')}
+            style={{
+              padding: '8px 14px',
+              borderRadius: 8,
+              fontSize: 13,
+              border: 'none',
+              background: c.accent,
+              color: c.texte,
+              fontWeight: 600,
+              cursor: savingPrivat ? 'default' : 'pointer',
+              opacity:
+                savingPrivat || privatInput.trim() === String(privatBudgetMois ?? '') ? 0.5 : 1,
+            }}
+          >
+            {savingPrivat ? '…' : t('cgVentes.common.save', 'Enregistrer')}
+          </button>
           <div style={{ flex: 1 }} />
           <Link
             href="/controle-gestion/ventes/budgets"
@@ -412,6 +586,28 @@ export default function VentesMensuelPage() {
         {error && <p style={{ color: '#B91C1C', fontSize: 14, marginBottom: 16 }}>{error}</p>}
 
         {loading && <p style={{ color: c.texteMuted, fontSize: 14 }}>{t('cgVentes.common.loading')}</p>}
+
+        {!loading && privatLissage.active && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '10px 14px',
+              borderRadius: 10,
+              border: `1px solid ${c.bordure}`,
+              background: c.fond,
+              fontSize: 13,
+              color: c.texteMuted,
+              lineHeight: 1.5,
+            }}
+          >
+            <strong style={{ color: c.texte }}>Privatisations lissées sur le mois.</strong>{' '}
+            Budget {formatEur(privatLissage.budgetMonth, i18n.language || 'fr')} et réel{' '}
+            {formatEur(privatLissage.realMonth, i18n.language || 'fr')} répartis également sur{' '}
+            {privatLissage.nbDays} jours ({formatEur2(privatLissage.budgetPerDay, i18n.language || 'fr')}/jour
+            de budget). Les colonnes <em>Δ</em> sont lissées ; la colonne <em>CA total</em> reste le CA réel
+            du jour.
+          </div>
+        )}
 
         {!loading && (
           <MonthTable
@@ -581,21 +777,22 @@ function tonePalette(tone, c) {
 }
 
 function budgetCellStyle(d, base, c) {
-  const tone = budgetTone(d.caTot, d.budget, d.hasData)
+  // caTotEcart = CA du jour lissé privat (= caTot si lissage inactif).
+  const tone = budgetTone(d.caTotEcart, d.budget, d.hasData)
   const { color, bg } = tonePalette(tone, c)
   return { ...base, color, background: bg, fontWeight: tone === 'none' ? 400 : 600 }
 }
 
 function budgetCellLabel(d, locale = 'fr') {
   if (!d.budget || !d.hasData) return '—'
-  return formatDeltaEur(d.caTot - d.budget, locale)
+  return formatDeltaEur(d.caTotEcart - d.budget, locale)
 }
 
 function budgetCellTitle(d, t, locale = 'fr') {
   if (!d.budget) return t('cgVentes.dashboard.budgetCellNoBudget')
-  const ratio = d.caTot > 0 ? (d.caTot / d.budget) * 100 : 0
+  const ratio = d.caTotEcart > 0 ? (d.caTotEcart / d.budget) * 100 : 0
   return t('cgVentes.dashboard.budgetCellTitle', {
-    real: formatEur(d.caTot, locale),
+    real: formatEur(d.caTotEcart, locale),
     budget: formatEur(d.budget, locale),
     ratio: ratio.toFixed(0),
   })
@@ -606,21 +803,21 @@ function budgetCellTitle(d, t, locale = 'fr') {
 // comparaison contre le mois entier (qui sera toujours très négative tant
 // qu'on n'a pas atteint la fin du mois).
 function mtdCellStyle(totals, base, c) {
-  const tone = budgetTone(totals.caTot, totals.mtdBudget, totals.caTot > 0)
+  const tone = budgetTone(totals.caTotEcartMtd, totals.mtdBudget, totals.caTotEcartMtd > 0)
   const { color, bg } = tonePalette(tone, c)
   return { ...base, color, background: bg, fontWeight: tone === 'none' ? 600 : 700 }
 }
 
 function mtdCellLabel(totals, locale = 'fr') {
-  if (!totals.mtdBudget || totals.caTot === 0) return '—'
-  return formatDeltaEur(totals.caTot - totals.mtdBudget, locale)
+  if (!totals.mtdBudget || totals.caTotEcartMtd === 0) return '—'
+  return formatDeltaEur(totals.caTotEcartMtd - totals.mtdBudget, locale)
 }
 
 function mtdCellTitle(totals, t, locale = 'fr') {
   if (!totals.mtdBudget) return t('cgVentes.dashboard.mtdCellNoBudget')
-  const ratio = totals.caTot > 0 ? (totals.caTot / totals.mtdBudget) * 100 : 0
+  const ratio = totals.caTotEcartMtd > 0 ? (totals.caTotEcartMtd / totals.mtdBudget) * 100 : 0
   return t('cgVentes.dashboard.mtdCellTitle', {
-    real: formatEur(totals.caTot, locale),
+    real: formatEur(totals.caTotEcartMtd, locale),
     budget: formatEur(totals.mtdBudget, locale),
     ratio: ratio.toFixed(0),
   })
