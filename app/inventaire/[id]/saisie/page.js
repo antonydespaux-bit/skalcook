@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import * as XLSX from 'xlsx'
-import { supabase, getClientId } from '../../../../lib/supabase'
+import { supabase, getClientId, fetchAllRows } from '../../../../lib/supabase'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '../../../../lib/useTheme'
 import { useRole } from '../../../../lib/useRole'
@@ -62,13 +62,17 @@ export default function SaisieInventairePage() {
     if (inv.statut === 'valide') { router.push(`/inventaire/${inventaireId}${queryString}`); return }
     setInventaire(inv)
 
-    // Charger les lignes
-    const { data: lig } = await supabase
-      .from('inventaire_lignes')
-      .select('*')
-      .eq('inventaire_id', inventaireId)
-      .eq('client_id', clientId)
-      .order('nom_ingredient')
+    // Charger les lignes (pagination au-delà du plafond PostgREST de 1000)
+    const lig = await fetchAllRows((from, to) =>
+      supabase
+        .from('inventaire_lignes')
+        .select('*')
+        .eq('inventaire_id', inventaireId)
+        .eq('client_id', clientId)
+        .order('nom_ingredient')
+        .order('id')
+        .range(from, to)
+    )
 
     setLignes(lig || [])
 

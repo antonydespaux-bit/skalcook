@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
-import { supabase, getClientId } from '../../../lib/supabase'
+import { supabase, getClientId, fetchAllRows } from '../../../lib/supabase'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '../../../lib/useTheme'
 import { useIsMobile } from '../../../lib/useIsMobile'
@@ -40,9 +40,11 @@ export default function DetailInventairePage() {
     const clientId = await getClientId()
     if (!clientId) { router.push('/'); return }
 
-    const [{ data: inv }, { data: lig }] = await Promise.all([
+    const [{ data: inv }, lig] = await Promise.all([
       supabase.from('inventaires').select('*').eq('id', inventaireId).eq('client_id', clientId).maybeSingle(),
-      supabase.from('inventaire_lignes').select('*').eq('inventaire_id', inventaireId).eq('client_id', clientId).order('nom_ingredient'),
+      fetchAllRows((from, to) =>
+        supabase.from('inventaire_lignes').select('*').eq('inventaire_id', inventaireId).eq('client_id', clientId).order('nom_ingredient').order('id').range(from, to)
+      ),
     ])
 
     if (!inv) { router.push(`/inventaire${queryString}`); return }
