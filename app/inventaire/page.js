@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
-import { supabase, getClientId } from '../../lib/supabase'
+import { supabase, getClientId, fetchAllRows } from '../../lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
@@ -54,11 +54,15 @@ export default function InventairePage() {
     // Charger les lignes du dernier inventaire validé pour le dashboard
     const lastValidated = (data || []).find(i => i.statut === 'valide')
     if (lastValidated) {
-      const { data: lignes } = await supabase
-        .from('inventaire_lignes')
-        .select('nom_ingredient, valeur_stock, ecart, cout_unitaire, quantite_theorique, est_critique')
-        .eq('inventaire_id', lastValidated.id)
-        .eq('client_id', clientId)
+      const lignes = await fetchAllRows((from, to) =>
+        supabase
+          .from('inventaire_lignes')
+          .select('nom_ingredient, valeur_stock, ecart, cout_unitaire, quantite_theorique, est_critique')
+          .eq('inventaire_id', lastValidated.id)
+          .eq('client_id', clientId)
+          .order('id')
+          .range(from, to)
+      )
       setDernierLignes(lignes || [])
     } else {
       setDernierLignes([])
@@ -69,11 +73,15 @@ export default function InventairePage() {
     // bien plus simple qu'un view SQL et largement OK pour ce volume.
     const invIds = (data || []).map(i => i.id)
     if (invIds.length > 0) {
-      const { data: allLignes } = await supabase
-        .from('inventaire_lignes')
-        .select('inventaire_id, valeur_stock')
-        .eq('client_id', clientId)
-        .in('inventaire_id', invIds)
+      const allLignes = await fetchAllRows((from, to) =>
+        supabase
+          .from('inventaire_lignes')
+          .select('inventaire_id, valeur_stock')
+          .eq('client_id', clientId)
+          .in('inventaire_id', invIds)
+          .order('id')
+          .range(from, to)
+      )
       const totals = {}
       for (const l of allLignes || []) {
         const v = Number(l.valeur_stock) || 0
