@@ -884,6 +884,7 @@
       "colCaSoft": "Ventas Refrescos",
       "colOther": "Otros",
       "colCaTotal": "Ventas Total",
+      "colObjectif": "Objetivo día",
       "colMtd": "Acumulado del mes",
       "mtdTooltip": "Celda del día: diferencia real - presupuesto del día. Total: real acumulado - presupuesto acumulado de los días ya registrados.",
       "colFullMonth": "Δ Mes completo",

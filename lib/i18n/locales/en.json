@@ -884,6 +884,7 @@
       "colCaSoft": "Soft drinks revenue",
       "colOther": "Other",
       "colCaTotal": "Total revenue",
+      "colObjectif": "Daily target",
       "colMtd": "Month to date",
       "mtdTooltip": "Day cell: actual vs day budget gap. Total: cumulative actual vs cumulative budget over the days already entered.",
       "colFullMonth": "Δ Full month",

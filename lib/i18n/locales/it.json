@@ -884,6 +884,7 @@
       "colCaSoft": "Ricavi Analcolici",
       "colOther": "Altri",
       "colCaTotal": "Ricavi Totali",
+      "colObjectif": "Obiettivo giorno",
       "colMtd": "Cumulato del mese",
       "mtdTooltip": "Cella del giorno: scarto reale - budget del giorno. Totale: reale cumulato - budget cumulato sui giorni già inseriti.",
       "colFullMonth": "Δ Mese intero",

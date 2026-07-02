@@ -679,6 +679,7 @@ function MonthTable({ days, totals, mois, isMobile, c, t, locale }) {
               <th style={head}>{t('cgVentes.dashboard.colCaSoft')}</th>
               <th style={head}>{t('cgVentes.dashboard.colOther')}</th>
               <th style={head}>{t('cgVentes.dashboard.colCaTotal')}</th>
+              <th style={head}>{t('cgVentes.dashboard.colObjectif')}</th>
               <th style={head} title={t('cgVentes.dashboard.mtdTooltip')}>{t('cgVentes.dashboard.colMtd')}</th>
               <th style={head} title={t('cgVentes.dashboard.fullMonthTooltip')}>{t('cgVentes.dashboard.colFullMonth')}</th>
               <th style={head}>{t('cgVentes.common.tm')}</th>
@@ -707,6 +708,9 @@ function MonthTable({ days, totals, mois, isMobile, c, t, locale }) {
                 <td style={cell}>{formatEur(d.bev_10, locale)}</td>
                 <td style={cell}>{formatEur(d.autre, locale)}</td>
                 <td style={{ ...cell, fontWeight: 600 }}>{formatEur(d.caTot, locale)}</td>
+                <td style={{ ...cell, color: c.texteMuted }}>
+                  {d.budget ? formatEur(d.budget, locale) : '—'}
+                </td>
                 <td style={budgetCellStyle(d, cell, c)} title={budgetCellTitle(d, t, locale)}>
                   {budgetCellLabel(d, locale)}
                 </td>
@@ -743,6 +747,9 @@ function MonthTable({ days, totals, mois, isMobile, c, t, locale }) {
               <td style={cell}>{formatEur(totals.bev_10, locale)}</td>
               <td style={cell}>{formatEur(totals.autre, locale)}</td>
               <td style={{ ...cell, fontWeight: 700 }}>{formatEur(totals.caTot, locale)}</td>
+              <td style={{ ...cell, fontWeight: 700, color: c.texteMuted }}>
+                {totals.budget ? formatEur(totals.budget, locale) : '—'}
+              </td>
               <td style={mtdCellStyle(totals, cell, c)} title={mtdCellTitle(totals, t, locale)}>
                 {mtdCellLabel(totals, locale)}
               </td>
