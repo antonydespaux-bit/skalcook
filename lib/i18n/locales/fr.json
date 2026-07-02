@@ -884,6 +884,7 @@
       "colCaSoft": "CA Soft",
       "colOther": "Autres",
       "colCaTotal": "CA Total",
+      "colObjectif": "Objectif jour",
       "colMtd": "Month to date",
       "mtdTooltip": "Cellule jour : écart réel - budget du jour. Total : cumul réel - cumul budget sur les jours déjà saisis.",
       "colFullMonth": "Δ Mois total",
