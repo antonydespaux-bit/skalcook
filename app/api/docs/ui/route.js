@@ -1,6 +1,15 @@
 export const dynamic = 'force-dynamic'
 
+// Swagger UI : désactivé en prod (voir app/api/docs/route.js). Dispo en dev,
+// réactivable via ENABLE_API_DOCS=true.
+function docsDisabled() {
+  return process.env.NODE_ENV === 'production' && process.env.ENABLE_API_DOCS !== 'true'
+}
+
 export async function GET() {
+  if (docsDisabled()) {
+    return new Response('Not found', { status: 404 })
+  }
   const html = `<!DOCTYPE html>
 <html lang="fr">
 <head>
