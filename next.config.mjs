@@ -37,8 +37,13 @@ export default withSentryConfig(nextConfig, {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   // Route tunnel : les events client passent par notre domaine → compatible
-  // avec la CSP `connect-src 'self'` et invisible aux ad-blockers.
-  tunnelRoute: '/monitoring',
+  // avec la CSP `connect-src 'self'`.
+  // NB: le chemin NE DOIT PAS contenir de mots-clés « tracking » (monitoring,
+  // sentry, telemetry, analytics…) car les filtres ad-block publics
+  // (EasyPrivacy/uBlock) les bloquent → ERR_BLOCKED_BY_CLIENT. On utilise donc
+  // un slug propre à l'app. Il ne doit pas non plus commencer par `/api/`,
+  // sinon les envelopes Sentry seraient soumis au rate limiting (cf. proxy.ts).
+  tunnelRoute: '/skl-relay',
   silent: !process.env.CI,
   widenClientFileUpload: true,
   telemetry: false,
