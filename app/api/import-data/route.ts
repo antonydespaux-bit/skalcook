@@ -59,7 +59,7 @@ export const POST = apiHandler({
       { name: 'ventes_journalieres', rows: p.ventes_journalieres as Row[] },
     ]
 
-    const report: Record<string, { upserted: number; errors: number; lastError?: string }> = {}
+    const report: Record<string, { upserted: number; errors: number; blocked?: number; lastError?: string }> = {}
 
     for (const { name, rows } of tables) {
       if (!rows || rows.length === 0) {
@@ -70,9 +70,41 @@ export const POST = apiHandler({
       const batchSize = 200
       let upserted = 0
       let errors = 0
+      let blocked = 0
       let lastError: string | undefined
       for (let i = 0; i < normalized.length; i += batchSize) {
-        const batch = normalized.slice(i, i + batchSize)
+        let batch = normalized.slice(i, i + batchSize)
+
+        // Sécurité anti-vol cross-tenant : un `id` du fichier peut correspondre
+        // à une ligne EXISTANTE d'un AUTRE établissement. Comme on écrit en
+        // service_role (RLS bypassée) avec onConflict:'id', l'upsert
+        // réassignerait cette ligne à notre client_id (vol + écrasement des
+        // données du voisin). On écarte donc les ids déjà possédés par un autre
+        // tenant. Les nouveaux ids (insert) et ceux du même client (update
+        // légitime, ex. ré-import de ses propres données) passent normalement.
+        const ids = batch
+          .map((r) => (r as Row).id)
+          .filter((id): id is string => typeof id === 'string')
+        if (ids.length > 0) {
+          const { data: foreign, error: checkErr } = await db
+            .from(name)
+            .select('id')
+            .in('id', ids)
+            .neq('client_id', clientId)
+          if (checkErr) {
+            errors += batch.length
+            lastError = checkErr.message
+            continue
+          }
+          if (foreign && foreign.length > 0) {
+            const foreignIds = new Set((foreign as Array<{ id: string }>).map((r) => r.id))
+            const before = batch.length
+            batch = batch.filter((r) => !foreignIds.has((r as Row).id as string))
+            blocked += before - batch.length
+          }
+        }
+        if (batch.length === 0) continue
+
         const { error } = await db.from(name).upsert(batch, { onConflict: 'id' })
         if (error) {
           errors += batch.length
@@ -81,16 +113,18 @@ export const POST = apiHandler({
           upserted += batch.length
         }
       }
-      report[name] = { upserted, errors, ...(lastError ? { lastError } : {}) }
+      report[name] = { upserted, errors, ...(blocked ? { blocked } : {}), ...(lastError ? { lastError } : {}) }
     }
 
     const totalUpserted = Object.values(report).reduce((s, r) => s + r.upserted, 0)
     const totalErrors = Object.values(report).reduce((s, r) => s + r.errors, 0)
+    const totalBlocked = Object.values(report).reduce((s, r) => s + (r.blocked ?? 0), 0)
 
     return Response.json({
       ok: true,
       total_upserted: totalUpserted,
       total_errors: totalErrors,
+      total_blocked: totalBlocked,
       report,
     })
   },
