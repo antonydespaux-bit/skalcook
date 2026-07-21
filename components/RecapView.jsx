@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase, getClientId } from '../lib/supabase'
+import { supabase, getClientId, getParametres } from '../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme } from '../lib/theme.jsx'
 import { SAISONS, getYearsRange, formatSaison } from '../lib/saison'
@@ -8,7 +8,8 @@ import { useIsMobile } from '../lib/useIsMobile'
 import { useTheme } from '../lib/useTheme'
 import { useRole } from '../lib/useRole'
 import { log } from '../lib/useLog'
-import { estSousFiche } from '../lib/foodCost'
+import { estSousFiche, getSeuilsFromParams } from '../lib/foodCost'
+import { DEFAULT_SEUILS } from '../lib/constants'
 import * as XLSX from 'xlsx'
 import Navbar from './Navbar'
 import { Badge } from './ui'
@@ -27,7 +28,6 @@ const SECTION_CONFIG = {
     categoryIcon: '🍽',
     hasMenus: true,
     tvaFn: () => 1.10,
-    fcThresholds: { vert: 30, orange: 40 },
     loadExtraFilter: null,
     costLabel: 'Food cost',
     colors: {
@@ -49,7 +49,6 @@ const SECTION_CONFIG = {
     categoryIcon: '🍷',
     hasMenus: false,
     tvaFn: (fiche) => CATEGORIES_ALCOOL.includes(fiche?.categorie) ? 1.20 : 1.10,
-    fcThresholds: { vert: 22, orange: 28 },
     loadExtraFilter: (q) => q.neq('categorie', 'Sous-fiche'),
     costLabel: 'Bev cost',
     colors: {
@@ -69,6 +68,10 @@ export default function RecapView({ section = 'cuisine' }) {
   const [lieux, setLieux] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
+  // Seuils food cost de l'établissement. Ce tableau note le même food cost/plat
+  // que la fiche : il doit utiliser les mêmes seuils, sinon le même plat reçoit
+  // deux verdicts contradictoires selon l'écran.
+  const [seuils, setSeuils] = useState(DEFAULT_SEUILS[section] ?? DEFAULT_SEUILS.cuisine)
   const [vue, setVue] = useState('lieu')
   const [saisonFiltree, setSaisonFiltree] = useState('toutes')
   const [anneeFiltree, setAnneeFiltree] = useState('toutes')
@@ -103,6 +106,15 @@ export default function RecapView({ section = 'cuisine' }) {
     try {
       const clientId = await getClientId()
       if (!clientId) { router.push('/'); return }
+
+      try {
+        const p = await getParametres()
+        const { seuilVert, seuilOrange } = getSeuilsFromParams(p, section)
+        if (Number.isFinite(seuilVert) && Number.isFinite(seuilOrange)) {
+          setSeuils({ vert: seuilVert, orange: seuilOrange })
+        }
+      } catch { /* seuils par défaut déjà en place */ }
+
       let fichesQuery = supabase.from(cfg.fichesTable)
         .select('*, lieux(id,nom,emoji), categories_plats(id,nom,emoji)')
         .eq('client_id', clientId).eq('archive', false).order('nom')
@@ -152,8 +164,8 @@ export default function RecapView({ section = 'cuisine' }) {
     return { nb: liste.length, coutMoyen: moyenne(couts), prixHTMoyen: moyenne(prixHTs), prixTTCMoyen: moyenne(prixTTCs), beneficeMoyen: moyenne(benefices), ratioMoyen: moyenne(ratios) }
   }
 
-  const fcColor = (fc) => { if (!fc) return c.texteMuted; if (fc < cfg.fcThresholds.vert) return '#3B6D11'; if (fc < cfg.fcThresholds.orange) return '#854F0B'; return '#A32D2D' }
-  const fcBg = (fc) => { if (!fc) return 'transparent'; if (fc < cfg.fcThresholds.vert) return '#EAF3DE'; if (fc < cfg.fcThresholds.orange) return '#FAEEDA'; return '#FCEBEB' }
+  const fcColor = (fc) => { if (!fc) return c.texteMuted; if (fc < seuils.vert) return '#3B6D11'; if (fc < seuils.orange) return '#854F0B'; return '#A32D2D' }
+  const fcBg = (fc) => { if (!fc) return 'transparent'; if (fc < seuils.vert) return '#EAF3DE'; if (fc < seuils.orange) return '#FAEEDA'; return '#FCEBEB' }
 
   const toggleArchive = (id) => setModifArchive(prev => ({ ...prev, [id]: !prev[id] }))
   const nbArchives = Object.values(modifArchive).filter(Boolean).length

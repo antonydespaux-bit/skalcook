@@ -1,5 +1,6 @@
 'use client'
 import { useRouter } from 'next/navigation'
+import { DEFAULT_SEUILS } from '../../lib/constants'
 import { formatSaison } from '../../lib/saison'
 
 const calculerCoutMenu = (menu) => {
@@ -14,7 +15,7 @@ const foodCostMenu = (menu) => {
   return (cout / prixHT * 100).toFixed(1)
 }
 
-export default function MenusGrid({ c, isMobile, menus, onDelete, onCreateClick }) {
+export default function MenusGrid({ c, isMobile, menus, onDelete, onCreateClick, seuils = DEFAULT_SEUILS.cuisine }) {
   const router = useRouter()
 
   if (menus.length === 0) {
@@ -91,10 +92,10 @@ export default function MenusGrid({ c, isMobile, menus, onDelete, onCreateClick 
               {fc && (
                 <div style={{
                   flex: 1, borderRadius: '8px', padding: '8px', textAlign: 'center',
-                  background: fc < 30 ? '#EAF3DE' : fc < 40 ? '#FAEEDA' : '#FCEBEB'
+                  background: fc < seuils.vert ? '#EAF3DE' : fc < seuils.orange ? '#FAEEDA' : '#FCEBEB'
                 }}>
-                  <div style={{ fontSize: '10px', textTransform: 'uppercase', color: fc < 30 ? '#3B6D11' : fc < 40 ? '#854F0B' : '#A32D2D' }}>Food cost</div>
-                  <div style={{ fontSize: '14px', fontWeight: '500', color: fc < 30 ? '#3B6D11' : fc < 40 ? '#854F0B' : '#A32D2D' }}>{fc} %</div>
+                  <div style={{ fontSize: '10px', textTransform: 'uppercase', color: fc < seuils.vert ? '#3B6D11' : fc < seuils.orange ? '#854F0B' : '#A32D2D' }}>Food cost</div>
+                  <div style={{ fontSize: '14px', fontWeight: '500', color: fc < seuils.vert ? '#3B6D11' : fc < seuils.orange ? '#854F0B' : '#A32D2D' }}>{fc} %</div>
                 </div>
               )}
             </div>

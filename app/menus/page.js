@@ -1,11 +1,13 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase, getClientId } from '../../lib/supabase'
+import { supabase, getClientId, getParametres } from '../../lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
 import Navbar from '../../components/Navbar'
 import ChefLoader from '../../components/ChefLoader'
+import { getSeuilsFromParams } from '../../lib/foodCost'
+import { DEFAULT_SEUILS } from '../../lib/constants'
 import MenusGrid from '../../components/contenus/MenusGrid'
 import CartesGrid from '../../components/contenus/CartesGrid'
 
@@ -20,6 +22,9 @@ export default function MenusEtCartesPage() {
 
   const initialTab = searchParams.get('tab') === 'cartes' ? 'cartes' : 'menus'
   const [tab, setTab] = useState(initialTab)
+  // Seuils food cost de l'établissement : les grilles notent le même food cost
+  // que les fiches et doivent donc utiliser les mêmes seuils.
+  const [seuils, setSeuils] = useState(DEFAULT_SEUILS.cuisine)
 
   useEffect(() => {
     checkUser()
@@ -34,6 +39,14 @@ export default function MenusEtCartesPage() {
   const loadAll = async () => {
     const clientId = await getClientId()
     if (!clientId) { setLoading(false); router.push('/'); return }
+
+    try {
+      const { seuilVert, seuilOrange } = getSeuilsFromParams(await getParametres(), 'cuisine')
+      if (Number.isFinite(seuilVert) && Number.isFinite(seuilOrange)) {
+        setSeuils({ vert: seuilVert, orange: seuilOrange })
+      }
+    } catch { /* seuils par défaut déjà en place */ }
+
     const [{ data: menusData }, { data: cartesData }] = await Promise.all([
       supabase.from('menus')
         .select(`*, menu_fiches(id, service, fiches(id, nom, categorie, cout_portion))`)
@@ -114,9 +127,9 @@ export default function MenusEtCartesPage() {
         {loading ? (
           <ChefLoader />
         ) : tab === 'menus' ? (
-          <MenusGrid c={c} isMobile={isMobile} menus={menus} onDelete={handleDeleteMenu} onCreateClick={() => router.push('/menus/nouveau')} />
+          <MenusGrid seuils={seuils} c={c} isMobile={isMobile} menus={menus} onDelete={handleDeleteMenu} onCreateClick={() => router.push('/menus/nouveau')} />
         ) : (
-          <CartesGrid c={c} isMobile={isMobile} cartes={cartes} onDelete={handleDeleteCarte} onCreateClick={() => router.push('/cartes/nouveau')} />
+          <CartesGrid seuils={seuils} c={c} isMobile={isMobile} cartes={cartes} onDelete={handleDeleteCarte} onCreateClick={() => router.push('/cartes/nouveau')} />
         )}
       </div>
     </div>
