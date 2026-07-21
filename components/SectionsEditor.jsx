@@ -32,7 +32,10 @@ export default function SectionsEditor({
 
   const ajouterSection = () => {
     const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-    setSections([...sections, { tempId, nom: '', descriptif: '', sous_fiche_id: null, dose_portion: '', dose_unite: 'g', rendement_portion: '', rendement_unite: 'g' }])
+    // dose_unite / rendement_unite volontairement vides : à la promotion, les
+    // handlers font `s.dose_unite || uniteBase` — un défaut 'g' non vide
+    // court-circuiterait le `||` et écraserait l'unité choisie (ex. L → g).
+    setSections([...sections, { tempId, nom: '', descriptif: '', sous_fiche_id: null, dose_portion: '', dose_unite: '', rendement_portion: '', rendement_unite: '' }])
   }
 
   // Coût unitaire (€ / unité de base) d'une sous-fiche via son ingrédient miroir.
