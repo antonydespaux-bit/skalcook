@@ -47,7 +47,9 @@ const CFG = {
     redirectOnDeny: '/dashboard',
     ficheUrlPrefix: '/bar/fiches',
     newFicheUrl: '/bar/fiches/nouvelle',
-    hasPagination: false,
+    // Paginé comme la cuisine : la-fantaisie a 260 fiches bar, toutes rendues
+    // d'un coup auparavant (2941 nœuds DOM, ~60 ms par frappe dans le filtre).
+    hasPagination: true,
     hasSousFicheFilter: false,
     tvaFn: (fiche) => CATEGORIES_ALCOOL.includes(fiche?.categorie) ? 1.20 : 1.10,
     fcSeuils: { vert: 22, orange: 28 },
