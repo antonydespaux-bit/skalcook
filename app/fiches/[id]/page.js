@@ -29,6 +29,9 @@ export default function FicheDetail() {
   const [sousFicheCout, setSousFicheCout] = useState({}) // { ficheId: cout_portion } pour les sections dosées
   const [formatAffichage, setFormatAffichage] = useState('brasserie')
   const [clientFormatDefaut, setClientFormatDefaut] = useState('brasserie')
+  // Placement des instructions à l'impression (brasserie) : true = page séparée
+  // (verso), false = juste sous les ingrédients. Choix à l'impression, non persisté.
+  const [instructionsAuVerso, setInstructionsAuVerso] = useState(true)
   const router = useRouter()
   const params_route = useParams()
   const isMobile = useIsMobile()
@@ -37,6 +40,20 @@ export default function FicheDetail() {
 
   const peutModifier = role === 'admin' || role === 'cuisine'
   const peutVoirCosts = role === 'admin' || role === 'directeur' || role === 'consultant'
+
+  // Texte lisible sur un fond `c.accent` : l'accent est configurable par
+  // établissement (clair chez Marsan/Commaraine, foncé chez Joia). Du blanc en
+  // dur tombe à 1,8:1 sur les accents clairs — on tranche selon la luminance
+  // pour rester au-dessus du seuil AA (4,5:1) dans les deux cas.
+  const texteSurAccent = (() => {
+    const hex = String(c.accent || '').replace('#', '')
+    if (hex.length !== 6) return 'white'
+    const lin = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
+    const L = 0.2126 * lin(parseInt(hex.slice(0, 2), 16))
+      + 0.7152 * lin(parseInt(hex.slice(2, 4), 16))
+      + 0.0722 * lin(parseInt(hex.slice(4, 6), 16))
+    return L > 0.28 ? c.texte : 'white'
+  })()
 
   useEffect(() => {
     const style = document.createElement('style')
@@ -211,7 +228,11 @@ export default function FicheDetail() {
     return fiche.unite_production
   }
 
-  if (loading) return (
+  // `fiche` reste null quand le chargement échoue (fiche inexistante ou d'un
+  // autre client) : loadFiche déclenche router.push, mais React re-rend avant
+  // que la navigation aboutisse. Sans ce garde, le rendu plante sur
+  // `fiche.description`. On garde le loader affiché pendant la redirection.
+  if (loading || !fiche) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
       <ChefLoader />
     </div>
@@ -331,10 +352,35 @@ export default function FicheDetail() {
                   padding: '6px 14px', borderRadius: '7px', fontSize: '12px', border: 'none', cursor: 'pointer',
                   fontWeight: formatAffichage === opt.value ? '500' : '400',
                   background: formatAffichage === opt.value ? c.accent : 'transparent',
-                  color: formatAffichage === opt.value ? 'white' : c.texteMuted,
+                  color: formatAffichage === opt.value ? texteSurAccent : c.texteMuted,
                 }}
               >{opt.label}</button>
             ))}
+          </div>
+        )}
+
+        {/* Toggle placement des instructions à l'impression (brasserie uniquement) */}
+        {formatAffichage === 'brasserie' && fiche.instructions && (
+          <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '12px', color: c.texteMuted }}>{"Instructions à l'impression :"}</span>
+            <div style={{ display: 'flex', gap: '4px', background: c.blanc, padding: '4px', borderRadius: '10px', border: `0.5px solid ${c.bordure}`, width: 'fit-content' }}>
+              {[
+                { value: true, label: '📄 Au verso' },
+                { value: false, label: '⬇ En dessous' },
+              ].map(opt => (
+                <button
+                  key={String(opt.value)}
+                  type="button"
+                  onClick={() => setInstructionsAuVerso(opt.value)}
+                  style={{
+                    padding: '6px 14px', borderRadius: '7px', fontSize: '12px', border: 'none', cursor: 'pointer',
+                    fontWeight: instructionsAuVerso === opt.value ? '500' : '400',
+                    background: instructionsAuVerso === opt.value ? c.accent : 'transparent',
+                    color: instructionsAuVerso === opt.value ? texteSurAccent : c.texteMuted,
+                  }}
+                >{opt.label}</button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -566,9 +612,16 @@ export default function FicheDetail() {
           <div className="fiche-ingredients-after-header" style={{ marginBottom: '20px', fontFamily: 'sans-serif' }}>
             {sections.map((section, sIdx) => {
               const ingsSection = ingredients.filter(i => i.section_id === section.id)
+              const estDosee = !!(section.dose_portion && (section.sous_fiche_id || section.rendement_portion))
+              const coutSection = coutSectionAffichage(section)
               return (
                 <div key={section.id} style={{ marginBottom: '14px', borderBottom: sIdx < sections.length - 1 ? '0.5px solid #e8e4dc' : 'none', paddingBottom: '10px', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#2C1810', marginBottom: '6px', textDecoration: 'underline', textUnderlineOffset: '2px' }}>{section.nom} :</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#2C1810', textDecoration: 'underline', textUnderlineOffset: '2px' }}>{section.nom} :</span>
+                    {coutSection > 0 && (
+                      <span style={{ fontSize: '11px', color: '#8B7355', fontWeight: '600', whiteSpace: 'nowrap' }}>Coût{estDosee ? '/assiette' : ''} : {coutSection.toFixed(2)} €</span>
+                    )}
+                  </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'flex-start' }}>
                     <div>
                       {ingsSection.length > 0 ? (
@@ -598,6 +651,13 @@ export default function FicheDetail() {
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+            {/* Coût de revient total — toujours imprimé sur l'étoilé */}
+            {cout > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#2C1810', borderRadius: '4px', padding: '8px 12px', marginTop: '6px' }}>
+                <span style={{ fontSize: '11px', color: '#C4956A', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px' }}>Coût de revient total</span>
+                <span style={{ fontSize: '14px', color: '#C4956A', fontWeight: '700' }}>{cout.toFixed(2)} €</span>
               </div>
             )}
           </div>
@@ -637,8 +697,7 @@ export default function FicheDetail() {
         </div>
         )}
 
-        {/* ── RÉCAP FINANCIER — avant instructions (brasserie uniquement) ── */}
-        {formatAffichage === 'brasserie' && (
+        {/* ── RÉCAP FINANCIER — avant instructions (brasserie + étoilé) ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
           {[
             { label: `Coût / ${uniteLabel.slice(0, -1)}`, value: cout && fiche.nb_portions ? `${(cout / fiche.nb_portions).toFixed(2)} €` : '—' },
@@ -656,7 +715,6 @@ export default function FicheDetail() {
             </div>
           ))}
         </div>
-        )}
 
         {/* Allergènes — sur la même page que le récap */}
         {((fiche.allergenes && fiche.allergenes.length > 0) || allergenesCascade.length > 0) && (
@@ -678,10 +736,14 @@ export default function FicheDetail() {
           </div>
         )}
 
-        {/* ── INSTRUCTIONS — page séparée (brasserie uniquement ;
-            en étoilé, la méthode est déjà inline dans chaque section) ── */}
+        {/* ── INSTRUCTIONS (brasserie uniquement ; en étoilé la méthode est déjà
+            inline dans chaque section). Au verso = page séparée (défaut), sinon
+            imprimées juste sous les ingrédients. ── */}
         {formatAffichage === 'brasserie' && fiche.instructions && (
-          <div className="print-instructions" style={{ marginBottom: '20px', pageBreakBefore: 'always', marginTop: '0' }}>
+          <div
+            className={instructionsAuVerso ? 'print-instructions' : undefined}
+            style={{ marginBottom: '20px', ...(instructionsAuVerso ? { pageBreakBefore: 'always', marginTop: '0' } : { marginTop: '20px' }) }}
+          >
             <div style={{ fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase', color: '#8B7355', marginBottom: '10px', fontFamily: 'sans-serif', fontWeight: '600' }}>Instructions de préparation</div>
             <div style={{
               border: '0.5px solid #e8e4dc', borderRadius: '4px', padding: '14px 16px',

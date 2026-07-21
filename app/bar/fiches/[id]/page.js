@@ -183,7 +183,10 @@ const loadFiche = async () => {
     } catch (err) { console.error('Delete error:', err) }
   }
 
-  if (loading) return (
+  // `fiche` reste null quand le chargement échoue (fiche inexistante ou d'un
+  // autre client) : loadFiche déclenche router.push, mais React re-rend avant
+  // que la navigation aboutisse. Sans ce garde, le rendu plante sur `fiche.nom`.
+  if (loading || !fiche) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.fond }}>
       <ChefLoader />
     </div>
