@@ -1,4 +1,5 @@
 import { apiHandler } from '../../../lib/apiHandler'
+import { uniteCoefficient } from '../../../lib/cout'
 import { z } from 'zod'
 
 // Import en masse de fiches techniques (cuisine) depuis un fichier Excel parsé
@@ -162,7 +163,9 @@ export const POST = apiHandler({
       let sum = 0
       for (const l of f.lignes) {
         const ing = ingMap.get(norm(l.ingredient))
-        if (ing?.prix_kg != null) sum += ing.prix_kg * l.quantite
+        // `prix_kg` est rattaché à l'unité de base (kg/L) : sans coefficient,
+        // une ligne en grammes est comptée 1000× trop cher.
+        if (ing?.prix_kg != null) sum += ing.prix_kg * l.quantite * uniteCoefficient(l.unite)
       }
       const coutPortion = f.nb_portions > 0 ? sum / f.nb_portions : null
 
