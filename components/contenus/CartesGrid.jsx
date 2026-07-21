@@ -1,5 +1,6 @@
 'use client'
 import { useRouter } from 'next/navigation'
+import { DEFAULT_SEUILS } from '../../lib/constants'
 import { formatSaison } from '../../lib/saison'
 
 const calculerCouts = (carte, baseOnly = false) => {
@@ -46,15 +47,17 @@ const getRatio = (carte, baseOnly = false) => {
   return (coutMatiere / (prixTotal / 1.10) * 100).toFixed(1)
 }
 
-const fcColor = (fc) => {
+// Seuils passés par la page : ils viennent des paramètres établissement, pour
+// que le même plat ne soit pas noté différemment ici et sur sa fiche.
+const fcColor = (fc, seuils) => {
   if (!fc) return {}
   const n = parseFloat(fc)
-  if (n < 30) return { bg: '#EAF3DE', color: '#3B6D11' }
-  if (n < 40) return { bg: '#FAEEDA', color: '#854F0B' }
+  if (n < seuils.vert) return { bg: '#EAF3DE', color: '#3B6D11' }
+  if (n < seuils.orange) return { bg: '#FAEEDA', color: '#854F0B' }
   return { bg: '#FCEBEB', color: '#A32D2D' }
 }
 
-export default function CartesGrid({ c, isMobile, cartes, onDelete, onCreateClick }) {
+export default function CartesGrid({ c, isMobile, cartes, onDelete, onCreateClick, seuils = DEFAULT_SEUILS.cuisine }) {
   const router = useRouter()
 
   if (cartes.length === 0) {
@@ -85,7 +88,7 @@ export default function CartesGrid({ c, isMobile, cartes, onDelete, onCreateClic
         const ratioBase = getRatio(carte, true)
         const hasSupp = totalSuppPrix > 0
         const ratio = ratioFull
-        const rc = fcColor(ratio)
+        const rc = fcColor(ratio, seuils)
 
         return (
           <div key={carte.id} style={{
@@ -156,13 +159,13 @@ export default function CartesGrid({ c, isMobile, cartes, onDelete, onCreateClic
               <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
                 {hasSupp ? (
                   <>
-                    {ratioBase && (() => { const rb = fcColor(ratioBase); return (
+                    {ratioBase && (() => { const rb = fcColor(ratioBase, seuils); return (
                       <div style={{ flex: 1, borderRadius: '8px', padding: '8px', textAlign: 'center', background: rb.bg }}>
                         <div style={{ fontSize: '10px', textTransform: 'uppercase', color: rb.color }}>Ratio base</div>
                         <div style={{ fontSize: '14px', fontWeight: '500', color: rb.color }}>{ratioBase} %</div>
                       </div>
                     )})()}
-                    {ratioFull && (() => { const rf = fcColor(ratioFull); return (
+                    {ratioFull && (() => { const rf = fcColor(ratioFull, seuils); return (
                       <div style={{ flex: 1, borderRadius: '8px', padding: '8px', textAlign: 'center', background: rf.bg }}>
                         <div style={{ fontSize: '10px', textTransform: 'uppercase', color: rf.color }}>Ratio + suppl.</div>
                         <div style={{ fontSize: '14px', fontWeight: '500', color: rf.color }}>{ratioFull} %</div>
