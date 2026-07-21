@@ -82,6 +82,21 @@ describe('getSeuilsFromParams', () => {
     expect(result.seuilOrange).toBe(28)
   })
 
+  // Régression : les colonnes bar sont `seuil_*_boissons`, pas `seuil_*_bar`.
+  // Interpoler la section faisait retomber sur les défauts en ignorant la
+  // configuration de l'établissement (JOIA : 25/28 lu comme 22/28).
+  it('reads bar thresholds from the seuil_*_boissons columns', () => {
+    const params = {
+      seuil_vert_boissons: '25',
+      seuil_orange_boissons: '30',
+      seuil_vert_cuisine: '28',
+      seuil_orange_cuisine: '35',
+    }
+    const result = getSeuilsFromParams(params, 'bar')
+    expect(result.seuilVert).toBe(25)
+    expect(result.seuilOrange).toBe(30)
+  })
+
   it('defaults to cuisine when section unknown', () => {
     const params = {}
     const result = getSeuilsFromParams(params)
