@@ -377,6 +377,21 @@ export default function VentesMensuelPage() {
     })
   }, [days, budgetByDateIso, privatLissage])
 
+  // Cumul "Month to date" par jour : réel cumulé − budget cumulé sur les jours
+  // déjà saisis, jusqu'à ce jour inclus. Alimente la colonne Month to date
+  // (vrai running total coloré par ligne, distinct de l'écart du jour).
+  const daysWithMtd = useMemo(() => {
+    let cumReal = 0
+    let cumBudget = 0
+    return daysWithBudget.map((d) => {
+      if (d.hasData) {
+        cumReal += d.caTotEcart
+        cumBudget += d.budget
+      }
+      return { ...d, mtdReal: cumReal, mtdBudget: cumBudget }
+    })
+  }, [daysWithBudget])
+
   // Budget MENSUEL aligné sur le Récapitulatif annuel de la page Budgets :
   // - Ne prend que les cellules ca_budgets avec mois = monthNum (ignore les
   //   défauts mois = NULL — la page Budgets non plus ne les affiche pas).
@@ -611,7 +626,7 @@ export default function VentesMensuelPage() {
 
         {!loading && (
           <MonthTable
-            days={daysWithBudget}
+            days={daysWithMtd}
             totals={monthTotals}
             mois={mois}
             isMobile={isMobile}
@@ -680,8 +695,8 @@ function MonthTable({ days, totals, mois, isMobile, c, t, locale }) {
               <th style={head}>{t('cgVentes.dashboard.colOther')}</th>
               <th style={head}>{t('cgVentes.dashboard.colCaTotal')}</th>
               <th style={head}>{t('cgVentes.dashboard.colObjectif')}</th>
+              <th style={head} title={t('cgVentes.dashboard.dayDeltaTooltip')}>{t('cgVentes.dashboard.colDayDelta')}</th>
               <th style={head} title={t('cgVentes.dashboard.mtdTooltip')}>{t('cgVentes.dashboard.colMtd')}</th>
-              <th style={head} title={t('cgVentes.dashboard.fullMonthTooltip')}>{t('cgVentes.dashboard.colFullMonth')}</th>
               <th style={head}>{t('cgVentes.common.tm')}</th>
               <th style={head}></th>
             </tr>
@@ -714,7 +729,9 @@ function MonthTable({ days, totals, mois, isMobile, c, t, locale }) {
                 <td style={budgetCellStyle(d, cell, c)} title={budgetCellTitle(d, t, locale)}>
                   {budgetCellLabel(d, locale)}
                 </td>
-                <td style={{ ...cell, color: c.texteMuted }}>—</td>
+                <td style={mtdRowCellStyle(d, cell, c)} title={mtdRowCellTitle(d, t, locale)}>
+                  {mtdRowCellLabel(d, locale)}
+                </td>
                 <td style={cell}>{formatEur2(d.tm, locale)}</td>
                 <td style={{ ...cell, padding: '4px 8px' }}>
                   <Link
@@ -750,11 +767,9 @@ function MonthTable({ days, totals, mois, isMobile, c, t, locale }) {
               <td style={{ ...cell, fontWeight: 700, color: c.texteMuted }}>
                 {totals.budget ? formatEur(totals.budget, locale) : '—'}
               </td>
+              <td style={{ ...cell, color: c.texteMuted }}>—</td>
               <td style={mtdCellStyle(totals, cell, c)} title={mtdCellTitle(totals, t, locale)}>
                 {mtdCellLabel(totals, locale)}
-              </td>
-              <td style={fullMonthCellStyle(totals, cell, c)} title={fullMonthCellTitle(totals, t, locale)}>
-                {fullMonthCellLabel(totals, locale)}
               </td>
               <td style={cell}>{formatEur2(totals.tm, locale)}</td>
               <td style={cell}></td>
@@ -830,25 +845,25 @@ function mtdCellTitle(totals, t, locale = 'fr') {
   })
 }
 
-// Δ Mois total : compare le réel cumulé au budget projeté du mois entier
-// (overrides nb_jours respectés, aligné avec le Récap annuel des budgets).
-function fullMonthCellStyle(totals, base, c) {
-  const tone = budgetTone(totals.caTot, totals.budget, totals.caTot > 0)
+// Month to date (par jour) : cumul réel − cumul budget jusqu'à ce jour inclus
+// sur les seuls jours saisis. Même code couleur que l'écart au budget.
+function mtdRowCellStyle(d, base, c) {
+  const tone = budgetTone(d.mtdReal, d.mtdBudget, d.hasData)
   const { color, bg } = tonePalette(tone, c)
-  return { ...base, color, background: bg, fontWeight: tone === 'none' ? 600 : 700 }
+  return { ...base, color, background: bg, fontWeight: tone === 'none' ? 400 : 600 }
 }
 
-function fullMonthCellLabel(totals, locale = 'fr') {
-  if (!totals.budget || totals.caTot === 0) return '—'
-  return formatDeltaEur(totals.caTot - totals.budget, locale)
+function mtdRowCellLabel(d, locale = 'fr') {
+  if (!d.hasData || !d.mtdBudget) return '—'
+  return formatDeltaEur(d.mtdReal - d.mtdBudget, locale)
 }
 
-function fullMonthCellTitle(totals, t, locale = 'fr') {
-  if (!totals.budget) return t('cgVentes.dashboard.fullMonthCellNoBudget')
-  const ratio = totals.caTot > 0 ? (totals.caTot / totals.budget) * 100 : 0
-  return t('cgVentes.dashboard.fullMonthCellTitle', {
-    real: formatEur(totals.caTot, locale),
-    budget: formatEur(totals.budget, locale),
+function mtdRowCellTitle(d, t, locale = 'fr') {
+  if (!d.mtdBudget) return t('cgVentes.dashboard.mtdCellNoBudget')
+  const ratio = d.mtdReal > 0 ? (d.mtdReal / d.mtdBudget) * 100 : 0
+  return t('cgVentes.dashboard.mtdCellTitle', {
+    real: formatEur(d.mtdReal, locale),
+    budget: formatEur(d.mtdBudget, locale),
     ratio: ratio.toFixed(0),
   })
 }
