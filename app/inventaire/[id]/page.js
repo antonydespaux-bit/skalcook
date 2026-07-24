@@ -30,6 +30,7 @@ export default function DetailInventairePage() {
 
   const [inventaire, setInventaire] = useState(null)
   const [lignes, setLignes] = useState([])
+  const [recherche, setRecherche] = useState('')
   const [loading, setLoading] = useState(true)
   const [validating, setValidating] = useState(false)
   const [error, setError] = useState('')
@@ -144,6 +145,11 @@ export default function DetailInventairePage() {
 
   const isBrouillon = inventaire?.statut === 'brouillon'
 
+  const rechercheNorm = recherche.trim().toLowerCase()
+  const lignesAffichees = rechercheNorm
+    ? lignes.filter(l => (l.nom_ingredient || '').toLowerCase().includes(rechercheNorm))
+    : lignes
+
   return (
     <div style={{ minHeight: '100vh', background: c.fond }}>
       <Navbar section={navbarSection(inventaire)} />
@@ -225,6 +231,22 @@ export default function DetailInventairePage() {
           </div>
         </div>
 
+        {/* Recherche */}
+        {lignes.length > 0 && (
+          <input
+            type="text"
+            placeholder="Rechercher un ingrédient..."
+            value={recherche}
+            onChange={e => setRecherche(e.target.value)}
+            style={{
+              width: '100%', padding: '10px 14px', borderRadius: '10px',
+              border: `0.5px solid ${c.bordure}`, fontSize: '14px',
+              outline: 'none', color: c.texte, background: c.blanc,
+              marginBottom: '12px', boxSizing: 'border-box'
+            }}
+          />
+        )}
+
         {/* Tableau des lignes */}
         <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
@@ -240,7 +262,14 @@ export default function DetailInventairePage() {
                 </tr>
               </thead>
               <tbody>
-                {lignes.map(l => {
+                {lignesAffichees.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '20px 16px', textAlign: 'center', color: c.texteMuted, fontSize: '13px' }}>
+                      Aucun ingrédient ne correspond à « {recherche} ».
+                    </td>
+                  </tr>
+                )}
+                {lignesAffichees.map(l => {
                   const ecart = l.ecart != null ? Number(l.ecart) : null
                   const ecartPct = ecart != null && l.quantite_theorique
                     ? Math.abs(ecart / Number(l.quantite_theorique)) * 100 : null
