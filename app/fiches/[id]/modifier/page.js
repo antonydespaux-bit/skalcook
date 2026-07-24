@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase, getParametres, getClientId } from '../../../../lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import { theme, Logo } from '../../../../lib/theme.jsx'
@@ -63,6 +63,34 @@ export default function ModifierFiche() {
   const autosaveData = { nom, categoriePlat, lieuId, nbPortions, prixTTC, perte, description, instructions, saison, annee, allergenes, ingredients }
   const annees = getYearsRange()
   const { hasDraft, lastSaved, getDraft, clearDraft } = useAutosave(`modifier-fiche-${params_route.id}`, autosaveData, 60000)
+
+  // Garde-fou "modifications non enregistrées" : on capture une signature du
+  // formulaire une fois les données chargées, puis on marque `isDirty` dès
+  // qu'elle diverge. `savedRef` neutralise le garde-fou après un enregistrement
+  // réussi (la navigation devient volontaire).
+  const [isDirty, setIsDirty] = useState(false)
+  const snapshotRef = useRef(null)
+  const savedRef = useRef(false)
+  const formSignature = JSON.stringify({ ...autosaveData, formatAffichage, sections, unitePortions })
+
+  useEffect(() => {
+    if (loading) return
+    if (snapshotRef.current === null) { snapshotRef.current = formSignature; return }
+    if (!isDirty && formSignature !== snapshotRef.current) setIsDirty(true)
+  }, [formSignature, loading, isDirty])
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (isDirty && !savedRef.current) { e.preventDefault(); e.returnValue = '' }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isDirty])
+
+  const confirmerSortie = () => {
+    if (!isDirty || savedRef.current) return true
+    return window.confirm('Vous avez des modifications non enregistrées. Quitter sans enregistrer ?')
+  }
 
   useEffect(() => {
     checkUser()
@@ -437,7 +465,11 @@ export default function ModifierFiche() {
 
     setSaving(false)
     clearDraft()
-    router.push(`/fiches/${params_route.id}`)
+    // Navigation volontaire post-save : on désactive le garde-fou et on
+    // `replace` (au lieu de `push`) pour sortir l'éditeur de l'historique —
+    // sinon un "Retour" depuis le détail ré-ouvrirait le formulaire (#182).
+    savedRef.current = true
+    router.replace(`/fiches/${params_route.id}`)
   }
 
   const fc = foodCost()
@@ -463,7 +495,7 @@ export default function ModifierFiche() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Logo height={28} couleur="white" nom={nomEtablissement} logoUrl={logoUrl} onClick={() => router.push("/dashboard")} />
-          <BackButton fallback={`/fiches/${params_route.id}`} />
+          <BackButton fallback={`/fiches/${params_route.id}`} onBeforeNavigate={confirmerSortie} />
           {!isMobile && <span style={{ fontSize: '14px', fontWeight: '500', color: 'white' }}>Modifier — {nom}</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
