@@ -18,10 +18,18 @@ export default function BackButton({
   label = '← Retour',
   style,
   className,
+  // Optionnel : appelé avant toute navigation. S'il retourne `false`,
+  // la navigation est annulée (ex. confirmation "modifications non
+  // enregistrées"). Absent = comportement historique inchangé.
+  onBeforeNavigate,
 }) {
   const router = useRouter()
 
   const handleClick = () => {
+    if (typeof onBeforeNavigate === 'function' && onBeforeNavigate() === false) {
+      return
+    }
+
     let hasInternalNav = false
     try {
       hasInternalNav =
