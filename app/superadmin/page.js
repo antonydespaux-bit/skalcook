@@ -160,9 +160,41 @@ export default function SuperAdminPage() {
     return urlData.publicUrl
   }
 
+  // Transforme la réponse d'erreur de l'API en message lisible : si le backend
+  // renvoie des détails de validation Zod (details.fieldErrors), on liste les
+  // champs fautifs au lieu du générique « Données invalides ».
+  const messageErreur = (json, fallback) => {
+    const fieldErrors = json?.details?.fieldErrors
+    if (fieldErrors && typeof fieldErrors === 'object') {
+      const champs = Object.entries(fieldErrors)
+        .filter(([, msgs]) => Array.isArray(msgs) && msgs.length)
+        .map(([champ, msgs]) => `${champ} (${msgs[0]})`)
+      if (champs.length) return `${json.error} — ${champs.join(', ')}`
+    }
+    return json?.error || fallback
+  }
+
   const saveClient = async () => {
     if (!nom || !slug || !nomEtablissement) { setError('Nom, slug et nom établissement sont obligatoires'); return }
+
+    // Couleurs : le backend exige un hex 6 chiffres (#RRGGBB). On bloque tôt
+    // avec un message clair plutôt que de laisser passer un « Données invalides » opaque.
+    const hexOk = (c) => /^#[0-9A-Fa-f]{6}$/.test(c)
+    const couleursInvalides = [
+      ['Couleur principale', couleurPrincipale],
+      ['Couleur accent', couleurAccent],
+      ['Couleur fond', couleurFond],
+    ].filter(([, v]) => !hexOk(v)).map(([label]) => label)
+    if (couleursInvalides.length) {
+      setError(`Format de couleur invalide (attendu #RRGGBB) : ${couleursInvalides.join(', ')}`)
+      return
+    }
+
     setSaving(true); setError(''); setSuccess('')
+
+    // Seuils : un champ vidé donne parseFloat('') = NaN, sérialisé en null par
+    // JSON → rejeté par le schéma. On retombe sur la valeur par défaut.
+    const num = (v, def) => { const n = parseFloat(v); return Number.isFinite(n) ? n : def }
 
     const payload = {
       nom, nom_etablissement: nomEtablissement,
@@ -170,8 +202,8 @@ export default function SuperAdminPage() {
       adresse, actif,
       couleur_principale: couleurPrincipale, couleur_accent: couleurAccent, couleur_fond: couleurFond,
       modules_actifs: modulesActifs,
-      seuil_vert_cuisine: parseFloat(seuilVertCuisine), seuil_orange_cuisine: parseFloat(seuilOrangeCuisine),
-      seuil_vert_boissons: parseFloat(seuilVertBoissons), seuil_orange_boissons: parseFloat(seuilOrangeBoissons),
+      seuil_vert_cuisine: num(seuilVertCuisine, 28), seuil_orange_cuisine: num(seuilOrangeCuisine, 35),
+      seuil_vert_boissons: num(seuilVertBoissons, 22), seuil_orange_boissons: num(seuilOrangeBoissons, 28),
     }
 
     const { data: { session } } = await supabase.auth.getSession()
@@ -183,7 +215,7 @@ export default function SuperAdminPage() {
         method: 'POST', headers: authHeaders, body: JSON.stringify(payload),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) { setError('Erreur : ' + (json?.error || 'création impossible')); setSaving(false); return }
+      if (!res.ok) { setError('Erreur : ' + messageErreur(json, 'création impossible')); setSaving(false); return }
       const newClient = json?.client
       if (logoFile && newClient?.id) {
         try {
@@ -211,7 +243,7 @@ export default function SuperAdminPage() {
         body: JSON.stringify({ id: clientSelectionne.id, ...payload, logo_url: logoUrl }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) { setError('Erreur : ' + (json?.error || 'mise à jour impossible')); setSaving(false); return }
+      if (!res.ok) { setError('Erreur : ' + messageErreur(json, 'mise à jour impossible')); setSaving(false); return }
       setSuccess(`✓ Établissement "${nomEtablissement}" mis à jour !`)
     }
 
