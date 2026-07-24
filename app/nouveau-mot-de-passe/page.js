@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { theme, Logo } from '../../lib/theme.jsx'
 import { Alert } from '../../components/ui'
+import { CGU_VERSION } from '../../lib/constants'
 
 export default function NouveauMotDePassePage() {
   const [password, setPassword] = useState('')
@@ -12,6 +13,11 @@ export default function NouveauMotDePassePage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [sessionReady, setSessionReady] = useState(false)
+  // Acceptation CGU : requise uniquement à la 1re activation (profil sans
+  // cgu_accepted_at). Une simple réinitialisation de mot de passe ne la
+  // redemande pas.
+  const [needsCgu, setNeedsCgu] = useState(false)
+  const [cguAccepted, setCguAccepted] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -64,7 +70,18 @@ export default function NouveauMotDePassePage() {
             return
           }
         }
-        if (!cancelled) setSessionReady(true)
+        if (cancelled) return
+        setSessionReady(true)
+
+        // Le compte a-t-il déjà accepté les CGU ? Si non (1re activation), on
+        // exigera la case ci-dessous. En cas d'échec de lecture, on demande
+        // l'acceptation par prudence (mieux vaut redemander que zapper).
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data: profil } = await supabase
+            .from('profils').select('cgu_accepted_at').eq('id', user.id).maybeSingle()
+          if (!cancelled) setNeedsCgu(!profil?.cgu_accepted_at)
+        }
       } catch (e) {
         if (!cancelled) setError(e?.message || 'Lien invalide ou expiré. Demandez un nouveau lien.')
       }
@@ -76,11 +93,23 @@ export default function NouveauMotDePassePage() {
     e.preventDefault()
     if (password !== confirm) { setError('Les mots de passe ne correspondent pas'); return }
     if (password.length < 6) { setError('Le mot de passe doit faire au moins 6 caractères'); return }
+    if (needsCgu && !cguAccepted) { setError('Vous devez accepter les CGU et la politique de confidentialité pour activer votre compte.'); return }
     setLoading(true)
     setError('')
 
     const { error: errUpdate } = await supabase.auth.updateUser({ password })
     if (errUpdate) { setError('Erreur : ' + errUpdate.message); setLoading(false); return }
+
+    // Traçabilité de l'acceptation (date + version). Best-effort : on ne bloque
+    // pas l'activation si l'écriture échoue, le mot de passe est déjà posé.
+    if (needsCgu) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.from('profils')
+          .update({ cgu_accepted_at: new Date().toISOString(), cgu_version: CGU_VERSION })
+          .eq('id', user.id)
+      }
+    }
 
     setSuccess(true)
     setTimeout(() => router.push('/'), 2000)
@@ -161,11 +190,28 @@ export default function NouveauMotDePassePage() {
                       }}
                     />
                   </div>
-                  <button type="submit" disabled={loading} style={{
+                  {needsCgu && (
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '20px', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={cguAccepted} onChange={e => setCguAccepted(e.target.checked)}
+                        style={{ marginTop: '2px', width: '16px', height: '16px', flexShrink: 0, cursor: 'pointer', accentColor: theme.couleurs.principal }}
+                      />
+                      <span style={{ fontSize: '13px', color: theme.couleurs.texteMuted, lineHeight: '1.5' }}>
+                        J&apos;accepte les{' '}
+                        <a href="/cgu" target="_blank" rel="noopener noreferrer" style={{ color: theme.couleurs.principal, fontWeight: '500' }}>
+                          Conditions Générales d&apos;Utilisation
+                        </a>{' '}et la{' '}
+                        <a href="/politique-confidentialite" target="_blank" rel="noopener noreferrer" style={{ color: theme.couleurs.principal, fontWeight: '500' }}>
+                          Politique de confidentialité
+                        </a>.
+                      </span>
+                    </label>
+                  )}
+
+                  <button type="submit" disabled={loading || (needsCgu && !cguAccepted)} style={{
                     width: '100%', padding: '14px',
-                    background: loading ? theme.couleurs.texteMuted : theme.couleurs.principal,
+                    background: (loading || (needsCgu && !cguAccepted)) ? theme.couleurs.texteMuted : theme.couleurs.principal,
                     color: theme.couleurs.accent, border: 'none', borderRadius: '8px',
-                    fontSize: '14px', fontWeight: '600', cursor: loading ? 'not-allowed' : 'pointer'
+                    fontSize: '14px', fontWeight: '600', cursor: (loading || (needsCgu && !cguAccepted)) ? 'not-allowed' : 'pointer'
                   }}>
                     {loading ? 'Mise à jour...' : 'Définir le mot de passe'}
                   </button>
