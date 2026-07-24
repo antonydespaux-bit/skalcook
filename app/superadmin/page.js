@@ -160,6 +160,16 @@ export default function SuperAdminPage() {
     return urlData.publicUrl
   }
 
+  // Normalise un slug pour respecter le schéma backend (/^[a-z0-9-]+$/) :
+  // translittère les accents (démo → demo), remplace tout le reste par des
+  // tirets, puis nettoie les tirets superflus.
+  const slugify = (s) =>
+    (s || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+
   // Transforme la réponse d'erreur de l'API en message lisible : si le backend
   // renvoie des détails de validation Zod (details.fieldErrors), on liste les
   // champs fautifs au lieu du générique « Données invalides ».
@@ -198,7 +208,7 @@ export default function SuperAdminPage() {
 
     const payload = {
       nom, nom_etablissement: nomEtablissement,
-      slug: slug.toLowerCase().replace(/\s+/g, '-'),
+      slug: slugify(slug),
       adresse, actif,
       couleur_principale: couleurPrincipale, couleur_accent: couleurAccent, couleur_fond: couleurFond,
       modules_actifs: modulesActifs,
@@ -428,7 +438,7 @@ export default function SuperAdminPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
                   <div><label style={labelStyle}>Nom interne *</label><input value={nom} onChange={e => setNom(e.target.value)} placeholder="Ex : hotel-la-fantaisie" style={inputStyle} /><div style={{ fontSize: '11px', color: '#71717A', marginTop: '4px' }}>Identifiant interne</div></div>
                   <div><label style={labelStyle}>Nom affiché *</label><input value={nomEtablissement} onChange={e => setNomEtablissement(e.target.value)} placeholder="Ex : Hôtel La Fantaisie" style={inputStyle} /><div style={{ fontSize: '11px', color: '#71717A', marginTop: '4px' }}>Affiché dans la navbar</div></div>
-                  <div><label style={labelStyle}>Slug * (sous-domaine)</label><input value={slug} onChange={e => setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))} placeholder="Ex : la-fantaisie" style={inputStyle} /><div style={{ fontSize: '11px', color: '#71717A', marginTop: '4px' }}>URL : <code style={{ background: '#F4F4F5', padding: '1px 6px', borderRadius: '4px' }}>{slug || 'votre-slug'}.skalcook.com</code></div></div>
+                  <div><label style={labelStyle}>Slug * (sous-domaine)</label><input value={slug} onChange={e => setSlug(e.target.value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9-]+/g, '-'))} placeholder="Ex : la-fantaisie" style={inputStyle} /><div style={{ fontSize: '11px', color: '#71717A', marginTop: '4px' }}>URL : <code style={{ background: '#F4F4F5', padding: '1px 6px', borderRadius: '4px' }}>{slug || 'votre-slug'}.skalcook.com</code></div></div>
                   <div><label style={labelStyle}>Adresse</label><input value={adresse} onChange={e => setAdresse(e.target.value)} placeholder="Ex : 24 Rue Cadet, Paris 9ème" style={inputStyle} /></div>
                 </div>
                 <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
