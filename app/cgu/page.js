@@ -1,6 +1,9 @@
+import BackToLanding from '../../components/BackToLanding'
+
 export default function CGU() {
   return (
     <div style={{ maxWidth: '720px', margin: '0 auto', padding: '40px 24px', fontFamily: 'sans-serif', color: '#18181B', lineHeight: '1.8' }}>
+      <BackToLanding />
       <h1 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '8px' }}>Conditions Générales d'Utilisation</h1>
       <p style={{ color: '#71717A', fontSize: '13px', marginBottom: '32px' }}>Version 1.0 — Dernière mise à jour : juillet 2026</p>
 
