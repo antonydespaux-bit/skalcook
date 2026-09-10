@@ -363,6 +363,11 @@ export default function ImportView({ section = 'cuisine' }) {
       .from(cfg.table)
       .select(selectCols)
       .eq('client_id', clientId)
+      // Sans .limit, PostgREST plafonne à 1000 lignes : au-delà, les
+      // ingrédients non chargés sont pris pour des nouveaux → INSERT qui viole
+      // la contrainte unique (client_id, nom) → lots entiers en erreur. Le
+      // trigger check_ingredient_quota_per_client borne déjà à 5000 par client.
+      .limit(5000)
     if (errExisting) {
       setLoading(false)
       alert(`Impossible de charger les donn\u00e9es existantes : ${errExisting.message}`)
