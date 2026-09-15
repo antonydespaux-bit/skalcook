@@ -496,6 +496,18 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
             >
               {t('cgAchats.list.volumesByProduct')}
             </button>
+            {defaultSection !== 'bar' && (
+              <button
+                onClick={() => router.push('/controle-gestion/ecarts-conso')}
+                title={t('cgAchats.list.consumptionGapsTitle')}
+                style={{
+                  padding: '8px 14px', borderRadius: 8, fontSize: 13,
+                  border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
+                }}
+              >
+                {t('cgAchats.list.consumptionGaps')}
+              </button>
+            )}
             <button
               onClick={handleExport}
               disabled={exporting || facturesFiltrees.length === 0}

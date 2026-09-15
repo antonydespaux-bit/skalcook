@@ -531,6 +531,8 @@
       "priceComparisonTitle": "Comparer les prix d'achat d'un même article chez plusieurs fournisseurs",
       "volumesByProduct": "📦 Achats par produit",
       "volumesByProductTitle": "Voir les quantités achetées par produit sur une période",
+      "consumptionGaps": "⚖️ Écarts conso",
+      "consumptionGapsTitle": "Rapprocher achats et ventes pour repérer dépassements, perte ou vol",
       "exporting": "Export…",
       "exportExcel": "⬇ Exporter Excel",
       "exportEmptyTitle": "Aucune facture à exporter",

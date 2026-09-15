@@ -531,6 +531,8 @@
       "priceComparisonTitle": "Comparar los precios de compra de un mismo artículo entre varios proveedores",
       "volumesByProduct": "📦 Compras por producto",
       "volumesByProductTitle": "Ver las cantidades compradas por producto en un periodo",
+      "consumptionGaps": "⚖️ Desvíos de consumo",
+      "consumptionGapsTitle": "Conciliar compras y ventas para detectar excesos, pérdidas o robo",
       "exporting": "Exportando…",
       "exportExcel": "⬇ Exportar a Excel",
       "exportEmptyTitle": "Ninguna factura para exportar",

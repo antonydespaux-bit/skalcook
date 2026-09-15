@@ -531,6 +531,8 @@
       "priceComparisonTitle": "Compare purchase prices for the same item across several suppliers",
       "volumesByProduct": "📦 Purchases by product",
       "volumesByProductTitle": "See quantities purchased per product over a period",
+      "consumptionGaps": "⚖️ Usage variance",
+      "consumptionGapsTitle": "Reconcile purchases with sales to spot overuse, loss or theft",
       "exporting": "Exporting…",
       "exportExcel": "⬇ Export to Excel",
       "exportEmptyTitle": "No invoice to export",
