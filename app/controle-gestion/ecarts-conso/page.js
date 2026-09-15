@@ -7,6 +7,7 @@ import { supabase, getClientId } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import Navbar from '../../../components/Navbar'
+import BackButton from '../../../components/BackButton'
 
 function fmtQte(n) {
   if (n == null || Number.isNaN(Number(n))) return '—'
@@ -212,6 +213,12 @@ export default function EcartsConsoPage() {
     <div style={{ minHeight: '100vh', background: c.fond }}>
       <Navbar />
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: isMobile ? '20px 16px' : '32px 32px' }}>
+
+        <BackButton
+          fallback="/controle-gestion/achats"
+          label="← Retour aux achats"
+          style={{ border: `1px solid ${c.bordure}`, color: c.texte, background: c.blanc, marginBottom: 16 }}
+        />
 
         {/* ── En-tête ── */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
