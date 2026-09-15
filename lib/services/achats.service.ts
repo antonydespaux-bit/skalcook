@@ -1109,6 +1109,8 @@ export async function getAchatsParProduit(
   const normUnit = (u: string | null | undefined) => (u ?? '').trim().toLowerCase()
 
   type Groupe = {
+    key: string
+    ingredient_id: string | null
     nom: string
     rattache: boolean
     // Quantité sommée par unité normalisée (garde le libellé d'origine).
@@ -1133,6 +1135,8 @@ export async function getAchatsParProduit(
     let g = groupes.get(key)
     if (!g) {
       g = {
+        key,
+        ingredient_id: rattache ? (l.ingredient_id as string) : null,
         nom,
         rattache,
         unites: new Map(),
@@ -1164,6 +1168,8 @@ export async function getAchatsParProduit(
 
   const rows = [...groupes.values()]
     .map((g) => ({
+      key: g.key,
+      ingredient_id: g.ingredient_id,
       nom: g.nom,
       rattache: g.rattache,
       unites: [...g.unites.values()]
