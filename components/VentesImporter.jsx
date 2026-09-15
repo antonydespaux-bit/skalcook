@@ -577,7 +577,7 @@ export default function VentesImporter() {
       if (parsed.source === 'fiches') {
         if (!(row.quantite > 0)) continue
         const pu = row.montant / row.quantite
-        const prix = Math.round(pu * 100) / 100
+        const prix = Number.isFinite(pu) ? Math.round(pu * 100) / 100 : null
         ventesPayload.push({
           jour: venteJour,
           fiche_id: parsed.id,
@@ -603,15 +603,26 @@ export default function VentesImporter() {
 
     setSaving(true)
     try {
-      if (ventesPayload.length > 0) {
-        const { error: vErr } = await supabase.from('ventes_journalieres').insert(ventesPayload)
-        if (vErr) throw vErr
-      }
-
-      const { error: mapErr } = await supabase.from('mapping_ventes').upsert(mappingRowsToUpsert, {
-        onConflict: 'client_id,designation_norm',
+      // Écriture via l'API service-client : la RLS n'autorise que les membres
+      // du client, or un superadmin qui gère l'établissement n'est pas dans
+      // acces_clients. Le guard serveur, lui, laisse passer les superadmins.
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/ventes/import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          client_id: clientId,
+          ventes: ventesPayload,
+          mappings: mappingRowsToUpsert,
+        }),
       })
-      if (mapErr) throw mapErr
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || j.message || 'Enregistrement des ventes impossible')
+      }
 
       await reloadMappings(clientId)
 
