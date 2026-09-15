@@ -60,6 +60,10 @@ export default function AchatsParProduitPage() {
   const [dateDebut, setDateDebut] = useState(() => moisCourant().debut)
   const [dateFin, setDateFin] = useState(() => moisCourant().fin)
 
+  // ── Sélection multi-produits ─────────────────────────────────────────────────
+  const [selected, setSelected] = useState(() => new Set())
+  const [selectionOnly, setSelectionOnly] = useState(false)
+
   // ─── Auth ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
@@ -133,20 +137,54 @@ export default function AchatsParProduitPage() {
     const matchSearch = !search.trim() || row.nom.toLowerCase().includes(search.toLowerCase())
     const matchFourn = filterFourn === 'all' || (row.fournisseurs || []).includes(filterFourn)
     const matchCat = !horsCatalogueOnly || !row.rattache
-    return matchSearch && matchFourn && matchCat
-  }), [rows, search, filterFourn, horsCatalogueOnly])
+    const matchSel = !selectionOnly || selected.size === 0 || selected.has(row.key)
+    return matchSearch && matchFourn && matchCat && matchSel
+  }), [rows, search, filterFourn, horsCatalogueOnly, selectionOnly, selected])
 
   const totalHt = useMemo(
     () => filteredRows.reduce((s, r) => s + (Number(r.montant_ht) || 0), 0),
     [filteredRows],
   )
 
+  // ─── Sélection ──────────────────────────────────────────────────────────────
+  const toggleSelect = useCallback((key) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
+  const allFilteredSelected = filteredRows.length > 0 && filteredRows.every((r) => selected.has(r.key))
+  const toggleSelectAll = useCallback(() => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      const everySelected = filteredRows.length > 0 && filteredRows.every((r) => next.has(r.key))
+      if (everySelected) filteredRows.forEach((r) => next.delete(r.key))
+      else filteredRows.forEach((r) => next.add(r.key))
+      return next
+    })
+  }, [filteredRows])
+
+  const clearSelection = useCallback(() => { setSelected(new Set()); setSelectionOnly(false) }, [])
+
+  // Lignes retenues pour l'export : la sélection si elle existe, sinon le filtre courant.
+  const selectedRows = useMemo(
+    () => (selected.size > 0 ? filteredRows.filter((r) => selected.has(r.key)) : filteredRows),
+    [filteredRows, selected],
+  )
+  const selectionTotalHt = useMemo(
+    () => filteredRows.filter((r) => selected.has(r.key)).reduce((s, r) => s + (Number(r.montant_ht) || 0), 0),
+    [filteredRows, selected],
+  )
+
   // ─── Export Excel ─────────────────────────────────────────────────────────
   const handleExport = useCallback(() => {
-    if (!filteredRows.length) return
+    if (!selectedRows.length) return
     setExporting(true)
     try {
-      const exportRows = filteredRows.map((row) => ({
+      const exportRows = selectedRows.map((row) => ({
         'Produit':        row.nom,
         'Hors catalogue': row.rattache ? '' : 'Oui',
         'Quantité(s)':    unitesLabel(row.unites),
@@ -172,7 +210,7 @@ export default function AchatsParProduitPage() {
     } finally {
       setExporting(false)
     }
-  }, [filteredRows, totalHt, dateDebut, dateFin])
+  }, [selectedRows, totalHt, dateDebut, dateFin])
 
   // ─── Rendu ────────────────────────────────────────────────────────────────
   if (!authReady) {
@@ -205,16 +243,16 @@ export default function AchatsParProduitPage() {
           </div>
           <button
             onClick={handleExport}
-            disabled={exporting || filteredRows.length === 0}
-            title={filteredRows.length === 0 ? 'Rien à exporter' : 'Exporter en Excel'}
+            disabled={exporting || selectedRows.length === 0}
+            title={selectedRows.length === 0 ? 'Rien à exporter' : (selected.size > 0 ? `Exporter les ${selected.size} produits sélectionnés` : 'Exporter en Excel')}
             style={{
               padding: '8px 14px', borderRadius: 8, fontSize: 13,
               border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte,
-              cursor: exporting || filteredRows.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: exporting || filteredRows.length === 0 ? 0.6 : 1,
+              cursor: exporting || selectedRows.length === 0 ? 'not-allowed' : 'pointer',
+              opacity: exporting || selectedRows.length === 0 ? 0.6 : 1,
             }}
           >
-            {exporting ? 'Export…' : '⬇ Exporter Excel'}
+            {exporting ? 'Export…' : (selected.size > 0 ? `⬇ Exporter (${selected.size})` : '⬇ Exporter Excel')}
           </button>
         </div>
 
@@ -331,6 +369,32 @@ export default function AchatsParProduitPage() {
           )}
         </div>
 
+        {/* ── Barre de sélection ── */}
+        {selected.size > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginBottom: 16, padding: '10px 14px', borderRadius: 10, border: `1px solid ${c.accent}`, background: c.accentClair }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: c.texte }}>
+              {selected.size} produit{selected.size > 1 ? 's' : ''} sélectionné{selected.size > 1 ? 's' : ''}
+            </span>
+            <span style={{ fontSize: 13, color: c.texteMuted }}>{fmtEur(selectionTotalHt)} HT</span>
+            <button
+              onClick={() => setSelectionOnly((v) => !v)}
+              style={{
+                padding: '5px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                border: `1px solid ${selectionOnly ? c.accent : c.bordure}`,
+                background: selectionOnly ? c.blanc : 'transparent', color: c.texte,
+              }}
+            >
+              {selectionOnly ? '☑' : '☐'} Sélection seulement
+            </button>
+            <button
+              onClick={clearSelection}
+              style={{ padding: '5px 10px', borderRadius: 8, fontSize: 12, border: `1px solid ${c.bordure}`, background: 'transparent', color: c.texteMuted, cursor: 'pointer', marginLeft: 'auto' }}
+            >
+              ✕ Vider la sélection
+            </button>
+          </div>
+        )}
+
         {/* ── Tableau ── */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: 40, color: c.texteMuted, fontSize: 14 }}>Chargement…</div>
@@ -343,9 +407,22 @@ export default function AchatsParProduitPage() {
         ) : isMobile ? (
           /* ── Mobile : cards ── */
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {filteredRows.map((row, idx) => (
-              <div key={`${row.nom}-${idx}`} style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 10, padding: '12px 14px' }}>
+            {filteredRows.map((row) => {
+              const isSel = selected.has(row.key)
+              return (
+              <div
+                key={row.key}
+                onClick={() => toggleSelect(row.key)}
+                style={{ background: isSel ? c.accentClair : c.blanc, border: `1px solid ${isSel ? c.accent : c.bordure}`, borderRadius: 10, padding: '12px 14px', cursor: 'pointer' }}
+              >
                 <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: c.texte, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <input
+                    type="checkbox"
+                    checked={isSel}
+                    onChange={() => toggleSelect(row.key)}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ cursor: 'pointer', width: 15, height: 15 }}
+                  />
                   {row.nom}
                   {!row.rattache && badgeHorsCatalogue}
                 </p>
@@ -360,7 +437,8 @@ export default function AchatsParProduitPage() {
                   {(row.fournisseurs || []).join(', ') || '—'} · dernier : {fmtDate(row.date_derniere)}
                 </p>
               </div>
-            ))}
+              )
+            })}
             <div style={{ padding: '4px 2px', color: c.texteMuted, fontSize: 12 }}>
               {filteredRows.length} produit{filteredRows.length > 1 ? 's' : ''} · {fmtEur(totalHt)} HT
             </div>
@@ -372,6 +450,15 @@ export default function AchatsParProduitPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: c.fond, borderBottom: `2px solid ${c.bordure}` }}>
+                    <th style={{ padding: '10px 8px 10px 16px', textAlign: 'center', width: 36 }}>
+                      <input
+                        type="checkbox"
+                        checked={allFilteredSelected}
+                        onChange={toggleSelectAll}
+                        title="Tout sélectionner / désélectionner"
+                        style={{ cursor: 'pointer', width: 15, height: 15 }}
+                      />
+                    </th>
                     {[
                       { label: 'Produit', align: 'left', min: 220 },
                       { label: 'Quantité(s)', align: 'left', min: 140 },
@@ -388,8 +475,20 @@ export default function AchatsParProduitPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows.map((row, idx) => (
-                    <tr key={`${row.nom}-${idx}`} style={{ borderBottom: `1px solid ${c.bordure}`, background: idx % 2 === 0 ? c.blanc : c.fond }}>
+                  {filteredRows.map((row, idx) => {
+                    const isSel = selected.has(row.key)
+                    const bg = isSel ? c.accentClair : (idx % 2 === 0 ? c.blanc : c.fond)
+                    return (
+                    <tr key={row.key} onClick={() => toggleSelect(row.key)} style={{ borderBottom: `1px solid ${c.bordure}`, background: bg, cursor: 'pointer' }}>
+                      <td style={{ padding: '10px 8px 10px 16px', textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={isSel}
+                          onChange={() => toggleSelect(row.key)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ cursor: 'pointer', width: 15, height: 15 }}
+                        />
+                      </td>
                       <td style={{ padding: '10px 16px', fontWeight: 500, color: c.texte }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           {row.nom}
@@ -415,10 +514,12 @@ export default function AchatsParProduitPage() {
                         {fmtDate(row.date_derniere)}
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
                 <tfoot>
                   <tr style={{ borderTop: `2px solid ${c.bordure}`, background: c.fond }}>
+                    <td />
                     <td style={{ padding: '10px 16px', fontWeight: 700, color: c.texte }}>Total</td>
                     <td />
                     <td style={{ padding: '10px 16px', textAlign: 'center', color: c.texteMuted }}>
