@@ -487,6 +487,16 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
               {t('cgAchats.list.priceComparison')}
             </button>
             <button
+              onClick={() => router.push('/controle-gestion/achats-par-produit')}
+              title={t('cgAchats.list.volumesByProductTitle')}
+              style={{
+                padding: '8px 14px', borderRadius: 8, fontSize: 13,
+                border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer',
+              }}
+            >
+              {t('cgAchats.list.volumesByProduct')}
+            </button>
+            <button
               onClick={handleExport}
               disabled={exporting || facturesFiltrees.length === 0}
               title={facturesFiltrees.length === 0 ? t('cgAchats.list.exportEmptyTitle') : t('cgAchats.list.exportTitle')}

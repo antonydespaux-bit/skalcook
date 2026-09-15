@@ -1040,6 +1040,146 @@ export async function getMercuriale(
   return { rows, fournisseurs, allIngredients }
 }
 
+/**
+ * Volumes achetés par produit sur une période.
+ *
+ * Agrège les lignes d'achat (`achats_lignes`) par produit et somme les
+ * quantités. Le regroupement se fait :
+ *   - par ingrédient du catalogue quand la ligne est rattachée (`ingredient_id`),
+ *   - sinon par libellé de facture normalisé (`normDesignation`), signalé
+ *     comme non rattaché pour que rien ne soit perdu.
+ *
+ * Les quantités ne sont additionnées qu'au sein d'une même unité : une même
+ * ligne produit peut donc porter plusieurs unités (ex. 12 kg + 3 caisses).
+ * `montant_ht` et le nombre de lignes sont toujours additifs.
+ */
+export async function getAchatsParProduit(
+  db: SupabaseClient,
+  clientId: string,
+  dateDebut?: string,
+  dateFin?: string,
+  section: 'cuisine' | 'bar' = 'cuisine',
+) {
+  const ingredientTable = section === 'bar' ? 'ingredients_bar' : 'ingredients'
+
+  // Factures de la période pour la section demandée.
+  let facturesQuery = db
+    .from('achats_factures')
+    .select('id, fournisseur, date_facture')
+    .eq('client_id', clientId)
+    .eq('section', section)
+    .is('deleted_at', null)
+  if (dateDebut) facturesQuery = facturesQuery.gte('date_facture', dateDebut)
+  if (dateFin)   facturesQuery = facturesQuery.lte('date_facture', dateFin)
+  const { data: factures } = await facturesQuery
+
+  if (!factures?.length) {
+    return { rows: [], fournisseurs: [] }
+  }
+
+  const factureIds = factures.map((f) => f.id)
+  const factureMap = new Map(
+    factures.map((f) => [f.id, f as { id: string; fournisseur: string | null; date_facture: string }]),
+  )
+
+  // Toutes les lignes des factures de la période.
+  const { data: lignes } = await db
+    .from('achats_lignes')
+    .select('ingredient_id, designation, quantite, unite, montant_ht, facture_id')
+    .in('facture_id', factureIds)
+    .eq('client_id', clientId)
+
+  // Noms canoniques des ingrédients rattachés.
+  const ingredientIds = [
+    ...new Set((lignes ?? []).map((l) => l.ingredient_id).filter(Boolean) as string[]),
+  ]
+  let ingredientsById: Record<string, { id: string; nom: string; unite: string | null }> = {}
+  if (ingredientIds.length) {
+    const { data: ings } = await db
+      .from(ingredientTable)
+      .select('id, nom, unite')
+      .in('id', ingredientIds)
+    if (ings) {
+      ingredientsById = Object.fromEntries(
+        (ings as { id: string; nom: string; unite: string | null }[]).map((i) => [i.id, i]),
+      )
+    }
+  }
+
+  const normUnit = (u: string | null | undefined) => (u ?? '').trim().toLowerCase()
+
+  type Groupe = {
+    nom: string
+    rattache: boolean
+    // Quantité sommée par unité normalisée (garde le libellé d'origine).
+    unites: Map<string, { unite: string; quantite: number }>
+    montant_ht: number
+    nb_lignes: number
+    fournisseurs: Set<string>
+    date_derniere: string
+  }
+  const groupes = new Map<string, Groupe>()
+  const fournisseursSet = new Set<string>()
+
+  for (const l of lignes ?? []) {
+    const f = factureMap.get(l.facture_id)
+    if (!f) continue
+
+    const ing = l.ingredient_id ? ingredientsById[l.ingredient_id] : null
+    const rattache = Boolean(ing)
+    const key = rattache ? `ing:${l.ingredient_id}` : `des:${normDesignation(l.designation) || '?'}`
+    const nom = ing?.nom ?? (l.designation || '—')
+
+    let g = groupes.get(key)
+    if (!g) {
+      g = {
+        nom,
+        rattache,
+        unites: new Map(),
+        montant_ht: 0,
+        nb_lignes: 0,
+        fournisseurs: new Set(),
+        date_derniere: f.date_facture,
+      }
+      groupes.set(key, g)
+    }
+
+    const qte = Number(l.quantite) || 0
+    const uNorm = normUnit(l.unite)
+    const uEntry = g.unites.get(uNorm)
+    if (uEntry) {
+      uEntry.quantite += qte
+    } else {
+      g.unites.set(uNorm, { unite: (l.unite ?? '').trim(), quantite: qte })
+    }
+
+    g.montant_ht += Number(l.montant_ht) || 0
+    g.nb_lignes += 1
+    if (f.fournisseur) {
+      g.fournisseurs.add(f.fournisseur)
+      fournisseursSet.add(f.fournisseur)
+    }
+    if (f.date_facture > g.date_derniere) g.date_derniere = f.date_facture
+  }
+
+  const rows = [...groupes.values()]
+    .map((g) => ({
+      nom: g.nom,
+      rattache: g.rattache,
+      unites: [...g.unites.values()]
+        .map((u) => ({ unite: u.unite, quantite: Math.round(u.quantite * 1000) / 1000 }))
+        .sort((a, b) => b.quantite - a.quantite),
+      montant_ht: Math.round(g.montant_ht * 100) / 100,
+      nb_lignes: g.nb_lignes,
+      fournisseurs: [...g.fournisseurs].sort(),
+      date_derniere: g.date_derniere,
+    }))
+    // Par défaut : plus gros postes de dépense en premier.
+    .sort((a, b) => b.montant_ht - a.montant_ht)
+
+  return { rows, fournisseurs: [...fournisseursSet].sort() }
+}
+
 export async function getReconciliationData(
   db: SupabaseClient,
   clientId: string,
