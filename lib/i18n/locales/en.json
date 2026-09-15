@@ -529,6 +529,8 @@
       "suppliers": "🏢 Suppliers",
       "priceComparison": "📊 Price comparison",
       "priceComparisonTitle": "Compare purchase prices for the same item across several suppliers",
+      "volumesByProduct": "📦 Purchases by product",
+      "volumesByProductTitle": "See quantities purchased per product over a period",
       "exporting": "Exporting…",
       "exportExcel": "⬇ Export to Excel",
       "exportEmptyTitle": "No invoice to export",

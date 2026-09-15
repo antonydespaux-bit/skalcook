@@ -529,6 +529,8 @@
       "suppliers": "🏢 Fournisseurs",
       "priceComparison": "📊 Comparaison prix",
       "priceComparisonTitle": "Comparer les prix d'achat d'un même article chez plusieurs fournisseurs",
+      "volumesByProduct": "📦 Achats par produit",
+      "volumesByProductTitle": "Voir les quantités achetées par produit sur une période",
       "exporting": "Export…",
       "exportExcel": "⬇ Exporter Excel",
       "exportEmptyTitle": "Aucune facture à exporter",
