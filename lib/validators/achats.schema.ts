@@ -138,6 +138,14 @@ export const mercurialeQuerySchema = z.object({
   section:    sectionSchema,
 })
 
+// ── Écarts de consommation (théorique vs réel) ──────────────────────────────
+// Périmètre cuisine ; période obligatoire (le calcul n'a de sens que bornée).
+export const ecartsConsoQuerySchema = z.object({
+  client_id:  clientIdSchema,
+  date_debut: dateIsoSchema,
+  date_fin:   dateIsoSchema,
+})
+
 // ── Reconciliation query ───────────────────────────────────────────────────
 export const reconciliationQuerySchema = z.object({
   client_id: clientIdSchema,
