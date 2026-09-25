@@ -30,6 +30,7 @@ export default function SaisieInventairePage() {
   const [allIngredients, setAllIngredients] = useState([]) // pool pour IngredientSearch
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState({})
+  const [saveErrors, setSaveErrors] = useState({}) // ligneId → valeur non enregistrée
   const [recherche, setRecherche] = useState('')
   const [catFiltre, setCatFiltre] = useState('tous')
   const [showAddPanel, setShowAddPanel] = useState(false)
@@ -38,6 +39,7 @@ export default function SaisieInventairePage() {
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
   const debounceTimers = useRef({})
+  const derniereValeur = useRef({}) // ligneId → dernière valeur envoyée
 
   useEffect(() => {
     if (!role) return
@@ -113,24 +115,38 @@ export default function SaisieInventairePage() {
     setLoading(false)
   }
 
+  // Saisie souvent faite en réserve / chambre froide avec un réseau instable :
+  // on retente quelques fois avant de signaler la ligne comme non enregistrée
+  // (sinon la valeur reste affichée mais n'est jamais persistée).
   const saveLigne = useCallback(async (ligneId, value) => {
+    derniereValeur.current[ligneId] = value
     setSaving(prev => ({ ...prev, [ligneId]: true }))
-    const clientId = await getClientId()
-    const { data: { session } } = await supabase.auth.getSession()
-
-    await fetch('/api/inventaire/save-ligne', {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`
-      },
-      body: JSON.stringify({
-        ligneId,
-        quantite_reelle: value === '' ? null : Number(value),
-        clientId,
-      })
-    })
-
+    let ok = false
+    for (let tentative = 0; tentative < 3 && !ok; tentative++) {
+      if (tentative > 0) await new Promise(r => setTimeout(r, 1000 * 2 ** (tentative - 1)))
+      try {
+        const clientId = await getClientId()
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch('/api/inventaire/save-ligne', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+          },
+          body: JSON.stringify({
+            ligneId,
+            quantite_reelle: value === '' ? null : Number(value),
+            clientId,
+          })
+        })
+        ok = res.ok
+      } catch {
+        // Erreur réseau → nouvelle tentative
+      }
+    }
+    // Une saisie plus récente a pris le relais : c'est elle qui fait foi.
+    if (derniereValeur.current[ligneId] !== value) return
+    setSaveErrors(prev => ({ ...prev, [ligneId]: ok ? undefined : value }))
     setSaving(prev => ({ ...prev, [ligneId]: false }))
   }, [])
 
@@ -148,6 +164,10 @@ export default function SaisieInventairePage() {
   }
 
   const handleValider = async () => {
+    if (Object.values(saveErrors).some(v => v !== undefined)) {
+      alert('Certaines quantités ne sont pas enregistrées (réseau). Réessaie-les avant de valider.')
+      return
+    }
     if (!window.confirm('Valider définitivement cet inventaire ? Cette action est irréversible.')) return
     setValidating(true)
     try {
@@ -477,8 +497,15 @@ export default function SaisieInventairePage() {
                       </span>
                     )}
                   </div>
-                  {saving[ligne.id] && (
+                  {saving[ligne.id] ? (
                     <span style={{ fontSize: '10px', color: c.texteMuted }}>...</span>
+                  ) : saveErrors[ligne.id] !== undefined && (
+                    <button
+                      onClick={() => saveLigne(ligne.id, saveErrors[ligne.id])}
+                      style={{ fontSize: '11px', color: '#DC2626', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                    >
+                      ⚠ Non enregistré — réessayer
+                    </button>
                   )}
                 </div>
 
