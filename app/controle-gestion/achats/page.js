@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import * as XLSX from 'xlsx'
-import { supabase, getClientId } from '../../../lib/supabase'
+import { supabase, getClientId, fetchAllRows } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
@@ -154,34 +154,42 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
     if (!cid) { setLoading(false); return }
     setClientId(cid)
 
-    const { data: rows, error: fErr } = await supabase
-      .from('achats_factures')
-      .select('id, fournisseur, numero_facture, date_facture, total_ht, taux_tva, montant_tva, statut, section, facture_consolidee_id, created_at')
-      .eq('client_id', cid)
-      .is('deleted_at', null)
-      .order('date_facture', { ascending: false })
-
-    if (fErr) {
+    // Paginé : un gros client dépasse le plafond PostgREST de 1000 lignes.
+    // Nb d'articles et TVA calculée viennent de la vue achats_factures_stats
+    // (agrégée en base) plutôt que de toutes les lignes d'achats.
+    let rows, stats
+    try {
+      ;[rows, stats] = await Promise.all([
+        fetchAllRows((from, to) =>
+          supabase
+            .from('achats_factures')
+            .select('id, fournisseur, numero_facture, date_facture, total_ht, taux_tva, montant_tva, statut, section, facture_consolidee_id, created_at')
+            .eq('client_id', cid)
+            .is('deleted_at', null)
+            .order('date_facture', { ascending: false })
+            .order('id')
+            .range(from, to)
+        ),
+        fetchAllRows((from, to) =>
+          supabase
+            .from('achats_factures_stats')
+            .select('facture_id, nb_lignes, tva_calculee')
+            .eq('client_id', cid)
+            .order('facture_id')
+            .range(from, to)
+        ),
+      ])
+    } catch (fErr) {
       setError(fErr.message)
       setLoading(false)
       return
     }
 
-    const ids = (rows || []).map((r) => r.id)
-    let counts = {}
-    let tvaCalculeeByFacture = {}
-    if (ids.length > 0) {
-      const { data: lignes } = await supabase
-        .from('achats_lignes')
-        .select('facture_id, montant_ht, taux_tva')
-        .in('facture_id', ids)
-        .eq('client_id', cid)
-      const tauxGlobalById = Object.fromEntries((rows || []).map(r => [r.id, Number(r.taux_tva) || 0]))
-      for (const l of (lignes || [])) {
-        counts[l.facture_id] = (counts[l.facture_id] || 0) + 1
-        const taux = l.taux_tva != null ? Number(l.taux_tva) : tauxGlobalById[l.facture_id] || 0
-        tvaCalculeeByFacture[l.facture_id] = (tvaCalculeeByFacture[l.facture_id] || 0) + (Number(l.montant_ht) || 0) * taux / 100
-      }
+    const counts = {}
+    const tvaCalculeeByFacture = {}
+    for (const s of stats) {
+      counts[s.facture_id] = s.nb_lignes
+      tvaCalculeeByFacture[s.facture_id] = Number(s.tva_calculee) || 0
     }
     // Si la facture a un montant_tva saisi, il prime sur le calcul.
     const tvaByFacture = {}
