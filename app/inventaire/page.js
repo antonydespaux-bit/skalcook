@@ -68,24 +68,23 @@ export default function InventairePage() {
       setDernierLignes([])
     }
 
-    // Total par inventaire pour l'affichage en liste (somme valeur_stock).
-    // Une seule requête filtrée par client_id puis agrégation client-side —
-    // bien plus simple qu'un view SQL et largement OK pour ce volume.
+    // Total par inventaire pour l'affichage en liste (somme valeur_stock),
+    // agrégé en base par la vue inventaire_totaux : une ligne par inventaire
+    // au lieu de rapatrier toutes les lignes (11 000+ chez un gros client).
     const invIds = (data || []).map(i => i.id)
     if (invIds.length > 0) {
-      const allLignes = await fetchAllRows((from, to) =>
+      const totauxRows = await fetchAllRows((from, to) =>
         supabase
-          .from('inventaire_lignes')
+          .from('inventaire_totaux')
           .select('inventaire_id, valeur_stock')
           .eq('client_id', clientId)
           .in('inventaire_id', invIds)
-          .order('id')
+          .order('inventaire_id')
           .range(from, to)
       )
       const totals = {}
-      for (const l of allLignes || []) {
-        const v = Number(l.valeur_stock) || 0
-        totals[l.inventaire_id] = (totals[l.inventaire_id] || 0) + v
+      for (const t of totauxRows || []) {
+        totals[t.inventaire_id] = Number(t.valeur_stock) || 0
       }
       setValeurParInv(totals)
     } else {
