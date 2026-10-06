@@ -16,7 +16,6 @@ export default function AdminPage() {
   const [profils, setProfils] = useState([])
   const [loading, setLoading] = useState(true)
   const [newEmail, setNewEmail] = useState('')
-  const [newPassword, setNewPassword] = useState('')
   const [newNom, setNewNom] = useState('')
   const [newRole, setNewRole] = useState('cuisine')
   const [creating, setCreating] = useState(false)
@@ -84,12 +83,8 @@ export default function AdminPage() {
   }
 
   const creerUtilisateur = async () => {
-    if (!newEmail || !newPassword || !newNom) {
+    if (!newEmail || !newNom) {
       setError(t('admin.users.allRequired'))
-      return
-    }
-    if (newPassword.length < 8) {
-      setError('Le mot de passe doit contenir au moins 8 caractères.')
       return
     }
     setCreating(true)
@@ -113,7 +108,6 @@ export default function AdminPage() {
       },
       body: JSON.stringify({
         email: newEmail,
-        password: newPassword,
         nom: newNom,
         role: newRole,
         client_id: clientId
@@ -129,7 +123,6 @@ export default function AdminPage() {
     }
 
     setNewEmail('')
-    setNewPassword('')
     setNewNom('')
     setNewRole('cuisine')
     setSuccess(t('admin.users.accountCreated', { name: newNom }))
@@ -339,13 +332,8 @@ export default function AdminPage() {
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
                 />
               </div>
-              <div>
-                <label style={{ fontSize: '12px', color: c.texteMuted, fontWeight: '500', display: 'block', marginBottom: '6px' }}>{t('admin.users.password')}</label>
-                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                  autoComplete="new-password"
-                  placeholder={t('admin.users.passwordPlaceholder')}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `0.5px solid ${c.bordure}`, fontSize: '14px', outline: 'none', color: c.texte, background: c.blanc }}
-                />
+              <div style={{ fontSize: '12px', color: c.texteMuted, alignSelf: 'end', paddingBottom: '10px' }}>
+                {t('admin.users.inviteHint')}
               </div>
             </div>
 

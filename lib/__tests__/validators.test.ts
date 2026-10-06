@@ -176,11 +176,10 @@ describe('saveLigneSchema', () => {
 // ── Admin schemas ──────────────────────────────────────────────────────────
 
 describe('createUserSchema', () => {
-  it('rejects short password', () => {
+  it('rejects missing nom', () => {
     const result = createUserSchema.safeParse({
       email: 'test@example.com',
-      password: 'short',
-      nom: 'John',
+      nom: '',
       client_id: '550e8400-e29b-41d4-a716-446655440000',
     })
     expect(result.success).toBe(false)
@@ -189,7 +188,6 @@ describe('createUserSchema', () => {
   it('rejects invalid email', () => {
     const result = createUserSchema.safeParse({
       email: 'not-an-email',
-      password: 'validpassword123',
       nom: 'John',
       client_id: '550e8400-e29b-41d4-a716-446655440000',
     })
@@ -199,7 +197,6 @@ describe('createUserSchema', () => {
   it('accepts valid input', () => {
     const result = createUserSchema.safeParse({
       email: 'test@example.com',
-      password: 'validpassword123',
       nom: 'John Doe',
       client_id: '550e8400-e29b-41d4-a716-446655440000',
     })
@@ -248,7 +245,6 @@ describe('createGlobalUserSchema', () => {
   it('validates SIRET if provided', () => {
     const result = createGlobalUserSchema.safeParse({
       email: 'test@example.com',
-      password: 'validpassword123',
       nom: 'John',
       siret_personnel: '123', // invalid
     })
@@ -258,7 +254,6 @@ describe('createGlobalUserSchema', () => {
   it('defaults client_ids to empty array', () => {
     const result = createGlobalUserSchema.safeParse({
       email: 'test@example.com',
-      password: 'validpassword123',
       nom: 'John',
     })
     expect(result.success).toBe(true)

@@ -132,8 +132,8 @@ export default function NouveauUtilisateurPage() {
         return
       }
 
-      setSuccess('Utilisateur global créé avec succès.')
-      setCreatedUserId(data.user_id || null)
+      setSuccess(`Invitation envoyée à ${email.trim()} : un email lui permet de choisir son mot de passe.`)
+      setCreatedUserId(data.userId || null)
       setEmail('')
       setNom('')
       setTelephone('')

@@ -7,14 +7,9 @@ export const POST = apiHandler({
   guard: 'adminOrSuperadmin',
   clientIdFrom: 'body.client_id',
   handler: async ({ data, db, request }) => {
-    // Pour le redirectTo : priorité NEXT_PUBLIC_SITE_URL (config explicite),
-    // sinon on utilise l'origin de la requête entrante (couvre preview + prod
-    // sans avoir à tenir l'env var à jour partout).
-    const envOrigin = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
-    const reqOrigin = new URL(request.url).origin
-    const siteOrigin = envOrigin || reqOrigin
-
-    const result = await inviteAdmin(db, data.email, data.nom_complet, data.client_id, siteOrigin)
+    // Lien d'invitation : NEXT_PUBLIC_SITE_URL en priorité (résolu dans le
+    // service), sinon l'origin de la requête (couvre preview + prod).
+    const result = await inviteAdmin(db, data.email, data.nom_complet, data.client_id, new URL(request.url).origin)
     return Response.json(result, { status: 201 })
   },
 })
