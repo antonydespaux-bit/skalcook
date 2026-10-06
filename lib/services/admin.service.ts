@@ -104,126 +104,106 @@ export async function listAllUsers(db: SupabaseClient, roleFilter?: string) {
   }))
 }
 
+// ── Invitation (helper commun aux 3 flux de création) ──────────────────────
+//
+// Toute création de compte passe par inviteUserByEmail : Supabase crée
+// l'utilisateur sans mot de passe et envoie l'email "Invite user" (template
+// Auth) dont le lien ouvre une session sur /nouveau-mot-de-passe.
+//
+// Attention : le trigger `creer_profil` (AFTER INSERT ON auth.users) crée
+// déjà une ligne profils minimale → on UPSERT ensuite, un INSERT partirait
+// en conflit de PK et nom/rôle ne seraient jamais écrits.
+
+function resolveRedirectTo(requestOrigin?: string) {
+  const envOrigin = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || ''
+  const origin = (envOrigin || requestOrigin || '').replace(/\/$/, '')
+  return origin ? `${origin}/nouveau-mot-de-passe` : undefined
+}
+
+async function inviteAuthUser(
+  db: SupabaseClient,
+  email: string,
+  metadata: Record<string, unknown>,
+  siteOrigin?: string,
+) {
+  const { data, error } = await db.auth.admin.inviteUserByEmail(email, {
+    redirectTo: resolveRedirectTo(siteOrigin),
+    data: metadata,
+  })
+  if (error) {
+    if (/already|exist|registered/i.test(error.message || '')) {
+      throw new ConflictError('Un compte existe déjà avec cet email. Demandez à l\'utilisateur de se connecter, ou utilisez une autre adresse.')
+    }
+    throw new Error(error.message)
+  }
+  return data.user.id
+}
+
+async function writeProfilAndAccess(
+  db: SupabaseClient,
+  profil: Record<string, unknown> & { id: string },
+  accesses: { client_id: string; role: string }[],
+) {
+  const { error: profilErr } = await db.from('profils').upsert(profil, { onConflict: 'id' })
+  if (profilErr) throw new Error(`Profil non enregistré : ${profilErr.message}`)
+
+  if (accesses.length > 0) {
+    const { error: accesErr } = await db
+      .from('acces_clients')
+      .upsert(accesses.map((a) => ({ user_id: profil.id, ...a })), { onConflict: 'user_id,client_id' })
+    if (accesErr) throw new Error(`Accès non enregistrés : ${accesErr.message}`)
+  }
+}
+
 // ── Create user ────────────────────────────────────────────────────────────
 
-export async function createUser(db: SupabaseClient, input: CreateUserInput) {
-  const { email, password, nom, role, client_id: clientId } = input
+export async function createUser(db: SupabaseClient, input: CreateUserInput, siteOrigin?: string) {
+  const { email, nom, role, client_id: clientId } = input
 
-  // Create auth user
-  const { data: authData, error: authErr } = await db.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { nom, client_id: clientId },
-  })
+  const userId = await inviteAuthUser(db, email, { nom, client_id: clientId }, siteOrigin)
+  await writeProfilAndAccess(
+    db,
+    { id: userId, email, nom, role, client_id: clientId },
+    [{ client_id: clientId, role }],
+  )
 
-  if (authErr) throw new Error(authErr.message)
-  const userId = authData.user.id
-
-  // Create profile + access in parallel
-  await Promise.all([
-    db.from('profils').insert({
-      id: userId,
-      email,
-      nom,
-      role,
-      client_id: clientId,
-    }),
-    db.from('acces_clients').insert({
-      user_id: userId,
-      client_id: clientId,
-      role,
-    }),
-  ])
-
-  return { userId, email, nom, role }
+  return { userId, email, nom, role, invitationSent: true }
 }
 
 // ── Create global user (superadmin) ────────────────────────────────────────
 
-export async function createGlobalUser(db: SupabaseClient, input: CreateGlobalUserInput) {
-  const { email, password, nom, role, client_ids: clientIds, telephone, site_web, siret_personnel, adresse_pro } = input
-  const finalPassword = password || generateTempPassword()
+export async function createGlobalUser(db: SupabaseClient, input: CreateGlobalUserInput, siteOrigin?: string) {
+  const { email, nom, role, client_ids: clientIds, telephone, site_web, siret_personnel, adresse_pro } = input
 
-  const { data: authData, error: authErr } = await db.auth.admin.createUser({
-    email,
-    password: finalPassword,
-    email_confirm: true,
-    user_metadata: { nom },
-  })
-
-  if (authErr) throw new Error(authErr.message)
-  const userId = authData.user.id
-
-  // Create profile
-  await db.from('profils').insert({
-    id: userId,
-    email,
-    nom,
-    role,
-    client_id: null,
-    telephone: telephone || null,
-    site_web: site_web || null,
-    siret_personnel: siret_personnel || null,
-    adresse_pro: adresse_pro || null,
-  })
-
-  // Create accesses
-  if (clientIds && clientIds.length > 0) {
-    const accesses = clientIds.map((cId) => ({
-      user_id: userId,
-      client_id: cId,
+  const userId = await inviteAuthUser(db, email, { nom }, siteOrigin)
+  await writeProfilAndAccess(
+    db,
+    {
+      id: userId,
+      email,
+      nom,
       role,
-    }))
-    await db.from('acces_clients').insert(accesses)
-  }
+      client_id: null,
+      telephone: telephone || null,
+      site_web: site_web || null,
+      siret_personnel: siret_personnel || null,
+      adresse_pro: adresse_pro || null,
+    },
+    (clientIds ?? []).map((cId) => ({ client_id: cId, role })),
+  )
 
-  return { userId, email, nom, role }
+  return { userId, email, nom, role, invitationSent: true }
 }
 
 // ── Invite admin ───────────────────────────────────────────────────────────
 
 export async function inviteAdmin(db: SupabaseClient, email: string, nom: string, clientId: string, siteOrigin?: string) {
-  // On utilise inviteUserByEmail : Supabase crée l'utilisateur sans mot de
-  // passe et envoie un email d'invitation (template Auth → "Invite user")
-  // avec un lien qui ouvre une session authentifiée sur /nouveau-mot-de-passe
-  // où l'utilisateur définit son mot de passe.
-  // siteOrigin est passé par la route handler (fallback sur l'origin de la
-  // requête si l'env var n'est pas configurée — voir app/api/invite-admin).
-  const envOrigin = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
-  const origin = siteOrigin || envOrigin
-  const redirectTo = origin ? `${origin.replace(/\/$/, '')}/nouveau-mot-de-passe` : undefined
-
-  const { data: authData, error: authErr } = await db.auth.admin.inviteUserByEmail(email, {
-    redirectTo,
-    data: { nom, client_id: clientId },
-  })
-  if (authErr) {
-    const msg = authErr.message || ''
-    if (/already|exist|registered/i.test(msg)) {
-      throw new ConflictError('Un compte existe déjà avec cet email. Demandez à l\'utilisateur de se connecter, ou utilisez une autre adresse.')
-    }
-    throw new Error(msg)
-  }
-  const userId = authData.user.id
-
-  // On upsert les lignes profils + acces_clients pour être tolérant à un
-  // re-invite partiel (ex: auth user créé mais rows applicatives manquantes
-  // suite à un crash précédent).
-  await Promise.all([
-    db.from('profils').upsert({
-      id: userId,
-      email,
-      nom,
-      role: 'admin',
-      client_id: clientId,
-    }, { onConflict: 'id' }),
-    db.from('acces_clients').upsert({
-      user_id: userId,
-      client_id: clientId,
-      role: 'admin',
-    }, { onConflict: 'user_id,client_id' }),
-  ])
+  const userId = await inviteAuthUser(db, email, { nom, client_id: clientId }, siteOrigin)
+  await writeProfilAndAccess(
+    db,
+    { id: userId, email, nom, role: 'admin', client_id: clientId },
+    [{ client_id: clientId, role: 'admin' }],
+  )
 
   return {
     userId,
@@ -485,15 +465,4 @@ function parseUserAgent(ua: string | null | undefined): { device: string; browse
   else if (/Safari/i.test(ua)) browser = 'Safari'
 
   return { device, browser }
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function generateTempPassword(): string {
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%'
-  let password = ''
-  for (let i = 0; i < 16; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return password
 }
