@@ -98,9 +98,10 @@ export default function Navbar({ section = 'cuisine' }) {
 
   useEffect(() => {
     let alive = true
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    // Session locale : simple affichage d'un bouton, pas besoin d'aller-retour réseau.
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (!alive) return
-      setShowReturnSuperAdmin(isSuperadminEmail((user?.email || '').toLowerCase().trim()))
+      setShowReturnSuperAdmin(isSuperadminEmail((session?.user?.email || '').toLowerCase().trim()))
     }).catch(() => { if (!alive) return; setShowReturnSuperAdmin(false) })
     return () => { alive = false }
   }, [])
