@@ -379,7 +379,7 @@ export async function getActivityLogs(
     .from('logs')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(50)
+    .limit(timespan === '24h' ? 100 : 200)
 
   if (clientId) query = query.eq('client_id', clientId)
   if (userId) query = query.eq('user_id', userId)
@@ -390,10 +390,19 @@ export async function getActivityLogs(
 
   const allLogs = logs ?? []
 
+  // logs.created_at est un « timestamp without time zone » rempli en UTC :
+  // sans suffixe, le navigateur le lirait comme une heure locale (−2 h en
+  // été à Paris) et les comparaisons de chaînes avec des ISO « …Z » seraient
+  // fausses. On le normalise en ISO UTC.
+  const isoUtc = (v: string | null) => {
+    if (!v) return v
+    return /([zZ]|[+-]\d\d:?\d\d)$/.test(v) ? new Date(v).toISOString() : new Date(v.replace(' ', 'T') + 'Z').toISOString()
+  }
+
   // Enrich logs with parsed device/browser from user_agent
   const enrichedLogs = allLogs.map(l => {
     const { device: d, browser: b } = parseUserAgent(l.user_agent)
-    return { ...l, device: d, browser: b }
+    return { ...l, created_at: isoUtc(l.created_at), device: d, browser: b }
   })
 
   // Device filter (applied after enrichment since it's derived from user_agent)
@@ -417,7 +426,7 @@ export async function getActivityLogs(
   // Load clients + users for dropdowns, + dernières connexions (auth.users)
   const [clientsRes, profilsRes, accesRes, authRes] = await Promise.all([
     db.from('clients').select('id, nom_etablissement').order('nom_etablissement'),
-    db.from('profils').select('id, nom, email').order('nom'),
+    db.from('profils').select('id, nom, email, is_superadmin').order('nom'),
     db.from('acces_clients').select('user_id, client_id'),
     db.auth.admin.listUsers({ page: 1, perPage: 1000 }),
   ])
@@ -427,7 +436,8 @@ export async function getActivityLogs(
 
   // Chart data: group by day (last 7 days)
   const chartMap: Record<string, number> = {}
-  for (let i = 6; i >= 0; i--) {
+  const nbJours = timespan === '30d' || timespan === 'all' ? 30 : 7
+  for (let i = nbJours - 1; i >= 0; i--) {
     const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000)
     chartMap[d.toISOString().slice(0, 10)] = 0
   }
@@ -466,7 +476,8 @@ export async function getActivityLogs(
       user_nom: profilMap.get(u.id)?.nom || u.email || u.id.slice(0, 8),
       email: u.email ?? null,
       dernier_login: u.last_sign_in_at ?? null,
-      etablissements: etabsParUser.get(u.id) ?? [],
+      etablissements: etabsParUser.get(u.id)
+        ?? ((profilMap.get(u.id) as { is_superadmin?: boolean } | undefined)?.is_superadmin ? ['Superadmin (tous)'] : []),
     }))
     .sort((a, b) => (b.dernier_login ?? '').localeCompare(a.dernier_login ?? ''))
   const il7j = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()

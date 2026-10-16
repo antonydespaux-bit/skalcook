@@ -8,6 +8,9 @@ const ENTITE_LABELS = {
   achats_factures: 'Facture',
   inventaires: 'Inventaire',
   ventes_journalieres: 'Import des ventes',
+  clients: 'Établissement',
+  groupes: 'Groupe',
+  session: 'Ouverture de l\u2019application',
 }
 
 function depuis(iso) {
@@ -24,22 +27,25 @@ export default function ActivityDashboard({ activityData, activityLoading, activ
   const [filterClient, setFilterClient] = useState('')
   const [filterUser, setFilterUser] = useState('')
   const [filterDevice, setFilterDevice] = useState('')
+  const [periode, setPeriode] = useState('7d')
 
-  const handleFilterChange = (client, user, device) => {
+  const handleFilterChange = (client, user, device, p = periode) => {
     setFilterClient(client)
     setFilterUser(user)
     setFilterDevice(device)
-    onLoadActivity(client, user, device)
+    setPeriode(p)
+    onLoadActivity(client, user, device, p)
   }
+  const PERIODES = { '24h': '24 dernières heures', '7d': '7 derniers jours', '30d': '30 derniers jours', all: 'Tout l\u2019historique' }
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: 'clamp(1.3rem, 4vw, 2rem)', fontWeight: '600', color: '#18181B', marginBottom: '4px' }}>Activité Réelle</h1>
-          <p style={{ fontSize: '14px', color: '#71717A' }}>Journal d'audit & métriques des 7 derniers jours</p>
+          <p style={{ fontSize: '14px', color: '#71717A' }}>{`Journal d'audit et connexions — ${PERIODES[periode].toLowerCase()}`}</p>
         </div>
-        <button onClick={() => onLoadActivity(filterClient, filterUser, filterDevice)} style={{
+        <button onClick={() => onLoadActivity(filterClient, filterUser, filterDevice, periode)} style={{
           background: '#6366F1', color: 'white', border: 'none', borderRadius: '8px',
           padding: '8px 16px', fontSize: '13px', cursor: 'pointer', fontWeight: '500'
         }}>↻ Actualiser</button>
@@ -114,6 +120,13 @@ export default function ActivityDashboard({ activityData, activityLoading, activ
                 {['iOS', 'Android', 'Windows', 'Mac', 'Linux', 'Autre'].map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
+            <div style={{ flex: 1, minWidth: '160px' }}>
+              <div style={{ fontSize: '11px', color: '#71717A', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Période</div>
+              <select value={periode} onChange={e => handleFilterChange(filterClient, filterUser, filterDevice, e.target.value)}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '0.5px solid #E4E4E7', fontSize: '13px', background: 'white', color: '#18181B', outline: 'none' }}>
+                {Object.entries(PERIODES).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+              </select>
+            </div>
             {(filterClient || filterUser || filterDevice) && (
               <button onClick={() => handleFilterChange('', '', '')}
                 style={{ padding: '8px 14px', borderRadius: '8px', border: '0.5px solid #E4E4E7', background: '#F4F4F5', color: '#71717A', fontSize: '13px', cursor: 'pointer' }}>
@@ -124,7 +137,7 @@ export default function ActivityDashboard({ activityData, activityLoading, activ
 
           {/* Chart */}
           <div style={{ background: 'white', borderRadius: '12px', border: '0.5px solid #E4E4E7', padding: '20px 24px', marginBottom: '16px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#18181B', marginBottom: '4px' }}>Volume d'actions — 7 derniers jours</div>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#18181B', marginBottom: '4px' }}>{`Volume d'actions — ${periode === '30d' || periode === 'all' ? '30' : '7'} derniers jours`}</div>
             <div style={{ fontSize: '12px', color: '#71717A', marginBottom: '20px' }}>Toutes actions confondues</div>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={chartData} margin={{ top: 4, right: 16, left: -20, bottom: 0 }}>
@@ -197,11 +210,11 @@ export default function ActivityDashboard({ activityData, activityLoading, activ
                       IMPORT: { bg: '#EEEDFE', color: '#3C3489' },
                       VALIDATION: { bg: '#DCFCE7', color: '#166534' },
                       FUSION: { bg: '#E0F2FE', color: '#075985' },
-                      CONNEXION: { bg: '#F0E8E0', color: '#2C1810' },
+                      CONNEXION: { bg: '#E0F2FE', color: '#0369A1' },
                     }
                     const deviceIcons = { iOS: '📱', Android: '🤖', Windows: '🖥', Mac: '🍎', Linux: '🐧', Inconnu: '❓', Autre: '💻' }
                     const ac = actionColors[log.action] || { bg: '#F4F4F5', color: '#71717A' }
-                    const clientNom = clients.find(c => c.id === log.client_id)?.nom_etablissement || log.client_id?.slice(0, 8) || '—'
+                    const clientNom = !log.client_id ? 'Superadmin' : (clients.find(c => c.id === log.client_id)?.nom_etablissement || log.client_id.slice(0, 8))
                     const heure = new Date(log.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
                     return (
                       <tr key={log.id || i} style={{ borderBottom: '0.5px solid #F4F4F5' }}>
