@@ -72,6 +72,21 @@ export default function SuperAdminPage() {
 
   useEffect(() => { checkAuth() }, [])
 
+  // Connexion du superadmin : une entrée par jour dans le journal, hors
+  // établissement (visible seulement dans Superadmin › Activité).
+  useEffect(() => {
+    if (!authorized) return
+    const cle = `skalcook_connexion_superadmin_${new Date().toISOString().slice(0, 10)}`
+    try {
+      if (localStorage.getItem(cle)) return
+      localStorage.setItem(cle, '1')
+    } catch { return }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.access_token) return
+      fetch('/api/superadmin/log-connexion', { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` } }).catch(() => {})
+    })
+  }, [authorized])
+
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { router.push('/'); return }
@@ -127,7 +142,7 @@ export default function SuperAdminPage() {
 
   const handleNavigation = (url) => { setIsNavigating(true); router.push(url) }
 
-  const loadActivity = async (clientFilter, userFilter, deviceFilter) => {
+  const loadActivity = async (clientFilter, userFilter, deviceFilter, timespan = '7d') => {
     setActivityLoading(true); setActivityError('')
     // Au-delà de 30 s on abandonne avec un message, plutôt qu'un chargement sans fin.
     const controller = new AbortController()
@@ -138,6 +153,7 @@ export default function SuperAdminPage() {
       if (clientFilter) params.set('clientId', clientFilter)
       if (userFilter) params.set('userId', userFilter)
       if (deviceFilter) params.set('device', deviceFilter)
+      params.set('timespan', timespan)
       const res = await fetch(`/api/superadmin/activity-logs?${params}`, {
         headers: { Authorization: `Bearer ${session?.access_token}` },
         signal: controller.signal,

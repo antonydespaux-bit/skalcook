@@ -9,13 +9,15 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // Ne lève jamais : un échec de journalisation ne doit pas faire échouer
 // l'action de l'utilisateur.
 
-type Action = 'CREATION' | 'MODIFICATION' | 'SUPPRESSION' | 'IMPORT' | 'VALIDATION' | 'FUSION'
+type Action = 'CREATION' | 'MODIFICATION' | 'SUPPRESSION' | 'IMPORT' | 'VALIDATION' | 'FUSION' | 'CONNEXION'
 
 export async function logServeur(
   db: SupabaseClient,
   params: {
     user: { id: string; email?: string } | null
-    clientId: string
+    /** null uniquement pour une action du superadmin hors établissement. */
+    clientId: string | null
+    sansEtablissement?: boolean
     action: Action
     entite: string
     entiteId?: string | null
@@ -25,13 +27,13 @@ export async function logServeur(
     request?: Request
   },
 ): Promise<void> {
-  const { user, clientId, action, entite, entiteId, entiteNom, section, details, request } = params
-  if (!user?.id || !clientId) return
+  const { user, clientId, action, entite, entiteId, entiteNom, section, details, request, sansEtablissement } = params
+  if (!user?.id || (!clientId && !sansEtablissement)) return
   try {
     const { data: profil } = await db.from('profils').select('nom, role').eq('id', user.id).maybeSingle()
     const p = profil as { nom?: string | null; role?: string | null } | null
     const { error } = await db.from('logs').insert([{
-      client_id: clientId,
+      client_id: clientId || null,
       user_id: user.id,
       user_nom: p?.nom || user.email || null,
       user_role: p?.role || 'inconnu',

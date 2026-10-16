@@ -38,6 +38,12 @@ describe('logServeur', () => {
     expect(inserts).toHaveLength(0)
   })
 
+  it('superadmin hors établissement : client_id null si explicitement autorisé', async () => {
+    const { db, inserts } = fakeDb()
+    await logServeur(db, { user: { id: 'sa' }, clientId: null, sansEtablissement: true, action: 'CONNEXION', entite: 'session' })
+    expect(inserts).toEqual([expect.objectContaining({ client_id: null, action: 'CONNEXION' })])
+  })
+
   it("ne lève jamais, même si l'insertion échoue", async () => {
     const { db } = fakeDb('boom')
     await expect(logServeur(db, { user: { id: 'u1' }, clientId: 'c1', action: 'IMPORT', entite: 'inventaires' })).resolves.toBeUndefined()
