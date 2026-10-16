@@ -53,6 +53,7 @@ export default function SuperAdminPage() {
   const [groupes, setGroupes] = useState([])
   const [groupeId, setGroupeId] = useState('')
   const [creatingGroupe, setCreatingGroupe] = useState(false)
+  const [nouveauGroupe, setNouveauGroupe] = useState('')
 
   // Invite modal state
   const [showInviteModal, setShowInviteModal] = useState(false)
@@ -98,7 +99,7 @@ export default function SuperAdminPage() {
   // Crée un groupe (ex. un groupe hôtelier) puis le sélectionne pour
   // l'établissement en cours d'édition.
   const creerGroupe = async () => {
-    const nomGroupe = (window.prompt('Nom du nouveau groupe ?') || '').trim()
+    const nomGroupe = nouveauGroupe.trim()
     if (!nomGroupe) return
     setCreatingGroupe(true); setError('')
     try {
@@ -113,6 +114,7 @@ export default function SuperAdminPage() {
       if (!res.ok || !json?.groupe) { setError('Erreur : ' + messageErreur(json, 'création du groupe impossible')); return }
       setGroupes(prev => [...prev, json.groupe].sort((a, b) => a.nom.localeCompare(b.nom)))
       setGroupeId(json.groupe.id)
+      setNouveauGroupe('')
     } finally { setCreatingGroupe(false) }
   }
 
@@ -555,8 +557,10 @@ export default function SuperAdminPage() {
                     <option value="">Aucun groupe</option>
                     {groupes.map(g => <option key={g.id} value={g.id}>{g.nom}</option>)}
                   </select>
-                  <button onClick={creerGroupe} disabled={creatingGroupe} style={{ padding: '10px 14px', borderRadius: '8px', border: '0.5px solid #6366F1', background: '#EEF2FF', color: '#4338CA', fontSize: '13px', fontWeight: '500', cursor: creatingGroupe ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
-                    {creatingGroupe ? 'Création…' : '+ Nouveau groupe'}
+                  <input value={nouveauGroupe} onChange={e => setNouveauGroupe(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); creerGroupe() } }}
+                    placeholder="Nouveau groupe" style={{ ...inputStyle, flex: 1, minWidth: '160px' }} />
+                  <button onClick={creerGroupe} disabled={creatingGroupe || !nouveauGroupe.trim()} style={{ padding: '10px 14px', borderRadius: '8px', border: '0.5px solid #6366F1', background: '#EEF2FF', color: '#4338CA', fontSize: '13px', fontWeight: '500', cursor: creatingGroupe ? 'wait' : 'pointer', whiteSpace: 'nowrap', opacity: nouveauGroupe.trim() ? 1 : 0.5 }}>
+                    {creatingGroupe ? 'Création…' : '+ Créer'}
                   </button>
                 </div>
                 <div style={{ fontSize: '11px', color: '#71717A', marginTop: '6px' }}>{"La vue groupe consolide les établissements d'un même groupe auxquels l'utilisateur a accès. Activez aussi le module « Vue groupe » ci-dessous."}</div>

@@ -118,6 +118,16 @@ describe('calculerIndicateurs', () => {
   })
 })
 
+describe('ratio sans achats', () => {
+  it("pas d'achats sur la section : ratio null (pas 0 %)", () => {
+    const r = calculerIndicateurs(brut('A', { ca_food_ttc: 1100, ca_bev_20_ttc: 1200, achats_cuisine_ht: 300 }), meta('A', 'A'))
+    expect(r.ratioCuisine).toBeCloseTo(30)
+    expect(r.ratioBoissons).toBeNull()
+    expect(r.statutBoissons).toBeNull()
+    expect(calculerTotaux([r]).ratioBoissons).toBeNull()
+  })
+})
+
 describe('calculerTotaux', () => {
   it('pondère les ratios par le CA (somme des achats / somme du CA)', () => {
     const a = calculerIndicateurs(brut('A', { ca_food_ttc: 11000, achats_cuisine_ht: 2000, couverts: 50 }), meta('A', 'A'))

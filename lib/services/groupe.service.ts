@@ -92,7 +92,9 @@ const n = (v: unknown): number => {
   return Number.isFinite(x) ? x : 0
 }
 const nOrNull = (v: unknown): number | null => (v == null ? null : n(v))
-const ratio = (num: number, den: number): number | null => (den > 0 ? (num / den) * 100 : null)
+// Pas d'achats sur la section = rien de saisi (ex. achats bar classés en
+// cuisine), pas un ratio parfait : on renvoie null plutôt que 0 %.
+const ratio = (num: number, den: number): number | null => (den > 0 && num !== 0 ? (num / den) * 100 : null)
 
 /** Statut couleur d'un ratio selon les seuils de l'établissement (≤ vert, ≤ orange, sinon rouge). */
 export function statutRatio(valeur: number | null, seuilVert: number | null, seuilOrange: number | null): Statut {
