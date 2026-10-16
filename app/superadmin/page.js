@@ -68,6 +68,7 @@ export default function SuperAdminPage() {
   const [onglet, setOnglet] = useState('gestion')
   const [activityData, setActivityData] = useState(null)
   const [activityLoading, setActivityLoading] = useState(false)
+  const [activityError, setActivityError] = useState('')
 
   useEffect(() => { checkAuth() }, [])
 
@@ -127,7 +128,10 @@ export default function SuperAdminPage() {
   const handleNavigation = (url) => { setIsNavigating(true); router.push(url) }
 
   const loadActivity = async (clientFilter, userFilter, deviceFilter) => {
-    setActivityLoading(true)
+    setActivityLoading(true); setActivityError('')
+    // Au-delà de 30 s on abandonne avec un message, plutôt qu'un chargement sans fin.
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 30000)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const params = new URLSearchParams()
@@ -135,12 +139,18 @@ export default function SuperAdminPage() {
       if (userFilter) params.set('userId', userFilter)
       if (deviceFilter) params.set('device', deviceFilter)
       const res = await fetch(`/api/superadmin/activity-logs?${params}`, {
-        headers: { Authorization: `Bearer ${session?.access_token}` }
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+        signal: controller.signal,
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (res.ok) setActivityData(data)
-    } catch (err) { console.error('loadActivity error:', err) }
-    finally { setActivityLoading(false) }
+      else setActivityError(data?.error || `Erreur ${res.status} lors du chargement de l'activité.`)
+    } catch (err) {
+      console.error('loadActivity error:', err)
+      setActivityError(err?.name === 'AbortError'
+        ? "Le chargement a dépassé 30 secondes. Réessayez avec « Actualiser »."
+        : "Impossible de charger l'activité (connexion interrompue).")
+    } finally { clearTimeout(timer); setActivityLoading(false) }
   }
 
   const basculerOnglet = (nouvelOnglet) => {
@@ -627,6 +637,7 @@ export default function SuperAdminPage() {
           <ActivityDashboard
             activityData={activityData}
             activityLoading={activityLoading}
+            activityError={activityError}
             isMobile={isMobile}
             onLoadActivity={loadActivity}
           />
