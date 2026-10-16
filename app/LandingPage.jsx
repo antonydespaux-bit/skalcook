@@ -397,6 +397,7 @@ export default function LandingPage() {
           <div>
             <div className="sk-footer__col-title">{t('landing.footer.legal')}</div>
             <a className="sk-footer__link" href="/cgu">{t('landing.footer.cgu')}</a>
+            <a className="sk-footer__link" href="/cgv">{t('landing.footer.cgv')}</a>
             <a className="sk-footer__link" href="/mentions-legales">{t('landing.footer.legalNotice')}</a>
             <a className="sk-footer__link" href="/politique-confidentialite">{t('landing.footer.privacy')}</a>
           </div>

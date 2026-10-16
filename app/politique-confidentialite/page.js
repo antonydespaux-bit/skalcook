@@ -58,10 +58,11 @@ export default function PolitiqueConfidentialite() {
         <p>Vos données sont transmises aux sous-traitants techniques suivants, liés par un accord de traitement des données (DPA) conforme à l'article 28 du RGPD :</p>
         <ul>
           <li><strong>Supabase Inc.</strong> — hébergement de la base de données et authentification. Données stockées dans l'Union européenne (région eu-west).</li>
-          <li><strong>Vercel Inc.</strong> — hébergement de l'application web. Transfert vers les États-Unis (voir §7).</li>
+          <li><strong>Vercel Inc.</strong> — hébergement de l'application web, exécutée dans l'Union européenne (Paris) ; mesure d'audience anonyme. Société établie aux États-Unis (voir §7).</li>
           <li><strong>Resend, Inc.</strong> — envoi d'e-mails transactionnels. Transfert vers les États-Unis (voir §7).</li>
           <li><strong>Upstash, Inc.</strong> — limitation de débit (anti-abus). Données de connexion traitées en Europe.</li>
-          <li><strong>Anthropic, PBC</strong> — fonctionnalités d'assistance par intelligence artificielle (uniquement si l'utilisateur y a recours). Transfert vers les États-Unis (voir §7).</li>
+          <li><strong>Functional Software, Inc. (Sentry)</strong> — suivi des erreurs techniques. Données traitées dans l'Union européenne.</li>
+          <li><strong>Anthropic, PBC</strong> — fonctionnalités d'assistance par intelligence artificielle, dont la lecture automatique des factures (uniquement si l'utilisateur y a recours). Transfert vers les États-Unis (voir §7).</li>
         </ul>
         <p>Nous ne vendons ni ne louons vos données à des tiers.</p>
       </section>

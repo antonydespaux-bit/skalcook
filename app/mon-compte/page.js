@@ -355,6 +355,7 @@ export default function MonCompte() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {[
                   { label: "Conditions générales d'utilisation (CGU)", href: '/cgu' },
+                  { label: 'Conditions générales de vente (CGV)', href: '/cgv' },
                   { label: 'Mentions légales', href: '/mentions-legales' },
                   { label: 'Politique de confidentialité (RGPD)', href: '/politique-confidentialite' },
                 ].map(({ label, href }) => (
