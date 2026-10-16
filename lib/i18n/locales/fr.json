@@ -61,7 +61,8 @@
       "salesTracking": "Suivi CA",
       "weeklyReport": "Rapport hebdo",
       "salesBudgets": "Budgets CA",
-      "salesImport": "Import ventes"
+      "salesImport": "Import ventes",
+      "groupView": "Vue groupe"
     }
   },
   "auth": {
@@ -982,5 +983,46 @@
         "tableDePartage": "Table de partage"
       }
     }
+  },
+  "groupe": {
+    "title": "Vue groupe",
+    "subtitle": "Comparer les établissements du groupe sur la même période",
+    "groupLabel": "Groupe",
+    "from": "Du",
+    "to": "au",
+    "presets": {
+      "prevMonth": "Mois préc.",
+      "thisMonth": "Ce mois",
+      "d90": "90 j",
+      "year": "Année"
+    },
+    "loading": "Chargement…",
+    "errorLoad": "Erreur de chargement",
+    "noGroup": "Aucun groupe accessible. La vue groupe doit être activée sur vos établissements, avec un rôle admin ou directeur.",
+    "empty": "Aucun établissement accessible dans ce groupe.",
+    "kpi": {
+      "caHt": "CA HT",
+      "covers": "Couverts",
+      "avgTicket": "Ticket moyen TTC",
+      "purchasesKitchen": "Achats cuisine HT",
+      "ratioKitchen": "Ratio cuisine",
+      "ratioBev": "Ratio boissons"
+    },
+    "cols": {
+      "establishment": "Établissement",
+      "caHt": "CA HT",
+      "covers": "Couverts",
+      "avgTicket": "Ticket moyen",
+      "purchasesKitchen": "Achats cuisine",
+      "ratioKitchen": "Ratio cuisine",
+      "purchasesBar": "Achats bar",
+      "ratioBev": "Ratio boissons",
+      "stockKitchen": "Stock cuisine",
+      "invoices": "Factures"
+    },
+    "total": "Total groupe",
+    "chartTitle": "Achats cuisine / CA food, par établissement",
+    "stockAt": "au {{date}}",
+    "method": "Ratio = achats HT de la période ÷ CA HT de la période, sans variation de stock : fiable surtout sur un mois complet. Couleurs selon les seuils food cost de chaque établissement."
   }
 }

@@ -61,7 +61,8 @@
       "salesTracking": "Sales tracking",
       "weeklyReport": "Weekly report",
       "salesBudgets": "Sales budgets",
-      "salesImport": "Import sales"
+      "salesImport": "Import sales",
+      "groupView": "Group view"
     }
   },
   "auth": {
@@ -982,5 +983,46 @@
         "tableDePartage": "Sharing table"
       }
     }
+  },
+  "groupe": {
+    "title": "Group view",
+    "subtitle": "Compare the group's venues over the same period",
+    "groupLabel": "Group",
+    "from": "From",
+    "to": "to",
+    "presets": {
+      "prevMonth": "Last month",
+      "thisMonth": "This month",
+      "d90": "90 d",
+      "year": "Year"
+    },
+    "loading": "Loading…",
+    "errorLoad": "Loading error",
+    "noGroup": "No group available. The group view must be enabled on your venues, with an admin or manager role.",
+    "empty": "No accessible venue in this group.",
+    "kpi": {
+      "caHt": "Revenue excl. VAT",
+      "covers": "Covers",
+      "avgTicket": "Average spend incl. VAT",
+      "purchasesKitchen": "Kitchen purchases excl. VAT",
+      "ratioKitchen": "Kitchen ratio",
+      "ratioBev": "Beverage ratio"
+    },
+    "cols": {
+      "establishment": "Venue",
+      "caHt": "Revenue excl. VAT",
+      "covers": "Covers",
+      "avgTicket": "Avg. spend",
+      "purchasesKitchen": "Kitchen purchases",
+      "ratioKitchen": "Kitchen ratio",
+      "purchasesBar": "Bar purchases",
+      "ratioBev": "Beverage ratio",
+      "stockKitchen": "Kitchen stock",
+      "invoices": "Invoices"
+    },
+    "total": "Group total",
+    "chartTitle": "Kitchen purchases / food revenue, by venue",
+    "stockAt": "as of {{date}}",
+    "method": "Ratio = purchases excl. VAT for the period ÷ revenue excl. VAT for the period, without stock variation: most reliable over a full month. Colours follow each venue's food cost thresholds."
   }
 }
