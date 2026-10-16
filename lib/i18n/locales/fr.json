@@ -1023,6 +1023,24 @@
     "total": "Total groupe",
     "chartTitle": "Achats cuisine / CA food, par établissement",
     "stockAt": "au {{date}}",
-    "method": "Ratio = achats HT de la période ÷ CA HT de la période, sans variation de stock : fiable surtout sur un mois complet. Couleurs selon les seuils food cost de chaque établissement."
+    "method": "Ratio = achats HT de la période ÷ CA HT de la période, sans variation de stock : fiable surtout sur un mois complet. Couleurs selon les seuils food cost de chaque établissement.",
+    "prix": {
+      "title": "Prix d'achat comparés",
+      "summary": "{{count}} produits achetés par plusieurs établissements · économie possible au meilleur prix du groupe : {{economie}}",
+      "summary_one": "{{count}} produit acheté par plusieurs établissements · économie possible au meilleur prix du groupe : {{economie}}",
+      "search": "🔍 Rechercher un produit…",
+      "empty": "Aucun produit acheté par au moins deux établissements sur la période (les produits sont rapprochés par nom et unité).",
+      "cols": {
+        "product": "Produit",
+        "best": "Meilleur prix",
+        "highest": "Plus cher",
+        "gap": "Écart",
+        "saving": "Économie possible"
+      },
+      "check": "à vérifier",
+      "checkHint": "Écart très élevé : souvent un conditionnement, une unité ou une qualité différente.",
+      "more": "Afficher plus ({{count}} restants)",
+      "method": "Prix moyen pondéré de la période par unité d'utilisation (prix de la ligne ÷ conditionnement), achats cuisine hors avoirs. Produits rapprochés par nom (sans accents ni casse) et unité. Économie possible = ce que chaque établissement aurait payé en moins au meilleur prix du groupe."
+    }
   }
 }
