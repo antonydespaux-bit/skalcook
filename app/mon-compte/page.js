@@ -355,6 +355,7 @@ export default function MonCompte() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {[
                   { label: "Conditions générales d'utilisation (CGU)", href: '/cgu' },
+                  { label: 'Conditions générales de vente (CGV)', href: '/cgv' },
                   { label: 'Mentions légales', href: '/mentions-legales' },
                   { label: 'Politique de confidentialité (RGPD)', href: '/politique-confidentialite' },
                 ].map(({ label, href }) => (
@@ -409,7 +410,7 @@ export default function MonCompte() {
               <h2 style={{ fontSize: '16px', fontWeight: '600', color: c.texte, marginBottom: '8px' }}>Responsable du traitement</h2>
               <div style={{ fontSize: '13px', color: c.texteMuted, lineHeight: '1.8' }}>
                 <div><strong style={{ color: c.texte }}>Éditeur :</strong> Skalcook SAS</div>
-                <div><strong style={{ color: c.texte }}>Contact DPO :</strong> <a href="mailto:contact@skalcook.fr" style={{ color: c.accent }}>contact@skalcook.fr</a></div>
+                <div><strong style={{ color: c.texte }}>Contact DPO :</strong> <a href="mailto:antony@skalcook.com" style={{ color: c.accent }}>antony@skalcook.com</a></div>
                 <div><strong style={{ color: c.texte }}>Délai de réponse :</strong> 30 jours maximum (RGPD)</div>
               </div>
               <a href="/politique-confidentialite" target="_blank" rel="noopener noreferrer" style={{ color: c.accent, fontSize: '13px', textDecoration: 'none', fontWeight: '500', display: 'inline-block', marginTop: '12px' }}>Politique de confidentialité →</a>

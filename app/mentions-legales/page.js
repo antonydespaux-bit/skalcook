@@ -12,7 +12,7 @@ export default function MentionsLegales() {
         <p><strong>Code APE :</strong> 70.22Z — Conseil pour les affaires et autres conseils de gestion</p>
         <p><strong>N° TVA intracommunautaire :</strong> non applicable — franchise en base de TVA (art. 293 B du CGI)</p>
         <p><strong>Adresse :</strong> 30B rue de Paris, 92190 Meudon, France</p>
-        <p><strong>E-mail de contact :</strong> <a href="mailto:contact@skalcook.fr">contact@skalcook.fr</a></p>
+        <p><strong>E-mail de contact :</strong> <a href="mailto:antony@skalcook.com">antony@skalcook.com</a></p>
       </section>
 
       <section>
@@ -36,7 +36,7 @@ export default function MentionsLegales() {
       <section>
         <h2>Données personnelles</h2>
         <p>Conformément au Règlement Général sur la Protection des Données (RGPD) et à la loi Informatique et Libertés, vous disposez d'un droit d'accès, de rectification, d'effacement et de portabilité de vos données personnelles.</p>
-        <p>Pour exercer ces droits, écrivez à : <a href="mailto:contact@skalcook.fr">contact@skalcook.fr</a>. Les modalités complètes sont détaillées dans notre <a href="/politique-confidentialite">Politique de confidentialité</a>.</p>
+        <p>Pour exercer ces droits, écrivez à : <a href="mailto:antony@skalcook.com">antony@skalcook.com</a>. Les modalités complètes sont détaillées dans notre <a href="/politique-confidentialite">Politique de confidentialité</a>.</p>
       </section>
 
       <section>

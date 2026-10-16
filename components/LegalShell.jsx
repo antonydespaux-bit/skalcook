@@ -60,12 +60,13 @@ export default function LegalShell({ eyebrow, title, updated, children }) {
           <div>
             <div className="sk-footer__col-title">Légal</div>
             <Link className="sk-footer__link" href="/cgu">CGU</Link>
+            <Link className="sk-footer__link" href="/cgv">CGV</Link>
             <Link className="sk-footer__link" href="/mentions-legales">Mentions légales</Link>
             <Link className="sk-footer__link" href="/politique-confidentialite">Confidentialité</Link>
           </div>
           <div>
             <div className="sk-footer__col-title">Contact</div>
-            <a className="sk-footer__link" href="mailto:contact@skalcook.fr">contact@skalcook.fr</a>
+            <a className="sk-footer__link" href="mailto:antony@skalcook.com">antony@skalcook.com</a>
           </div>
         </div>
         <div className="sk-footer__bottom">

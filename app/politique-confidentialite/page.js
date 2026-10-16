@@ -6,7 +6,7 @@ export default function PolitiqueConfidentialite() {
       <section>
         <h2>1. Responsable du traitement</h2>
         <p><strong>AD Consulting</strong>, entreprise individuelle (micro-entrepreneur) exploitée par Antony Despaux, domiciliée au 30B rue de Paris, 92190 Meudon (SIREN 884 072 687), est responsable du traitement des données personnelles collectées via l'application Skalcook.</p>
-        <p><strong>Contact :</strong> <a href="mailto:contact@skalcook.fr">contact@skalcook.fr</a></p>
+        <p><strong>Contact :</strong> <a href="mailto:antony@skalcook.com">antony@skalcook.com</a></p>
         <p>AD Consulting n'a pas désigné de Délégué à la Protection des Données (DPO), cette désignation n'étant pas obligatoire au regard de la nature et du volume des traitements (art. 37 RGPD). Les demandes relatives aux données personnelles sont traitées directement par le responsable de traitement.</p>
       </section>
 
@@ -58,10 +58,11 @@ export default function PolitiqueConfidentialite() {
         <p>Vos données sont transmises aux sous-traitants techniques suivants, liés par un accord de traitement des données (DPA) conforme à l'article 28 du RGPD :</p>
         <ul>
           <li><strong>Supabase Inc.</strong> — hébergement de la base de données et authentification. Données stockées dans l'Union européenne (région eu-west).</li>
-          <li><strong>Vercel Inc.</strong> — hébergement de l'application web. Transfert vers les États-Unis (voir §7).</li>
+          <li><strong>Vercel Inc.</strong> — hébergement de l'application web, exécutée dans l'Union européenne (Paris) ; mesure d'audience anonyme. Société établie aux États-Unis (voir §7).</li>
           <li><strong>Resend, Inc.</strong> — envoi d'e-mails transactionnels. Transfert vers les États-Unis (voir §7).</li>
           <li><strong>Upstash, Inc.</strong> — limitation de débit (anti-abus). Données de connexion traitées en Europe.</li>
-          <li><strong>Anthropic, PBC</strong> — fonctionnalités d'assistance par intelligence artificielle (uniquement si l'utilisateur y a recours). Transfert vers les États-Unis (voir §7).</li>
+          <li><strong>Functional Software, Inc. (Sentry)</strong> — suivi des erreurs techniques. Données traitées dans l'Union européenne.</li>
+          <li><strong>Anthropic, PBC</strong> — fonctionnalités d'assistance par intelligence artificielle, dont la lecture automatique des factures (uniquement si l'utilisateur y a recours). Transfert vers les États-Unis (voir §7).</li>
         </ul>
         <p>Nous ne vendons ni ne louons vos données à des tiers.</p>
       </section>
@@ -73,7 +74,7 @@ export default function PolitiqueConfidentialite() {
           <li><strong>EU-US Data Privacy Framework (DPF)</strong> — décision d'adéquation de la Commission européenne du 10 juillet 2023, lorsque le prestataire y est certifié ;</li>
           <li><strong>Clauses Contractuelles Types (CCT)</strong> adoptées par la Commission européenne le 4 juin 2021, à défaut.</li>
         </ul>
-        <p>Vous pouvez obtenir une copie de ces garanties en écrivant à <a href="mailto:contact@skalcook.fr">contact@skalcook.fr</a>.</p>
+        <p>Vous pouvez obtenir une copie de ces garanties en écrivant à <a href="mailto:antony@skalcook.com">antony@skalcook.com</a>.</p>
       </section>
 
       <section>
@@ -86,7 +87,7 @@ export default function PolitiqueConfidentialite() {
           <li><strong>Droit d'opposition (art. 21) :</strong> vous opposer à certains traitements</li>
           <li><strong>Droit de définir des directives post-mortem</strong> (art. 85 loi Informatique et Libertés)</li>
         </ul>
-        <p>Contact : <a href="mailto:contact@skalcook.fr">contact@skalcook.fr</a> — Délai de réponse : 30 jours maximum.</p>
+        <p>Contact : <a href="mailto:antony@skalcook.com">antony@skalcook.com</a> — Délai de réponse : 30 jours maximum.</p>
         <p>En cas de réclamation non traitée, vous pouvez saisir la <strong>CNIL</strong> (<a href="https://www.cnil.fr" target="_blank" rel="noopener noreferrer">www.cnil.fr</a>).</p>
       </section>
 
