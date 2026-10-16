@@ -1,4 +1,5 @@
 import { apiHandler } from '../../../../lib/apiHandler'
+import { logServeur } from '../../../../lib/serverLog'
 import { ventesImportSchema } from '../../../../lib/validators/ventes.schema'
 
 // Import des ventes : écrit via le service client (bypass RLS) après contrôle
@@ -8,7 +9,7 @@ export const POST = apiHandler({
   schema: ventesImportSchema,
   guard: 'memberOfClient',
   clientIdFrom: 'body.client_id',
-  handler: async ({ data, db }) => {
+  handler: async ({ data, user, db, request }) => {
     const { client_id, ventes, mappings } = data
 
     // client_id forcé côté serveur (jamais celui, potentiellement falsifié, des lignes).
@@ -36,6 +37,10 @@ export const POST = apiHandler({
       .upsert(mapRows, { onConflict: 'client_id,designation_norm' })
     if (mErr) throw new Error(mErr.message)
 
+    await logServeur(db, {
+      user, clientId: client_id, action: 'IMPORT', entite: 'ventes_journalieres', request,
+      details: { ventes: ventes.length, mappings: mappings.length },
+    })
     return Response.json({ ok: true, ventes: ventes.length, mappings: mappings.length })
   },
 })

@@ -414,10 +414,12 @@ export async function getActivityLogs(
   }
   const topClientId = Object.entries(clientCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
 
-  // Load clients + users for dropdowns
-  const [clientsRes, profilsRes] = await Promise.all([
+  // Load clients + users for dropdowns, + dernières connexions (auth.users)
+  const [clientsRes, profilsRes, accesRes, authRes] = await Promise.all([
     db.from('clients').select('id, nom_etablissement').order('nom_etablissement'),
     db.from('profils').select('id, nom, email').order('nom'),
+    db.from('acces_clients').select('user_id, client_id'),
+    db.auth.admin.listUsers({ page: 1, perPage: 1000 }),
   ])
 
   const clientsList = clientsRes.data ?? []
@@ -445,14 +447,41 @@ export async function getActivityLogs(
     user_nom: l.user_nom || profilMap.get(l.user_id)?.nom || profilMap.get(l.user_id)?.email || l.user_id?.slice(0, 8) || '—',
   }))
 
+  // Dernières connexions : le journal ne trace que des actions ; un
+  // utilisateur qui consulte sans rien modifier n'y apparaît pas.
+  const nomsClients = new Map(clientsList.map(c => [c.id, c.nom_etablissement]))
+  const etabsParUser = new Map<string, string[]>()
+  for (const a of (accesRes.data ?? []) as { user_id: string; client_id: string }[]) {
+    if (clientId && a.client_id !== clientId) continue
+    const nom = nomsClients.get(a.client_id)
+    if (!nom) continue
+    etabsParUser.set(a.user_id, [...(etabsParUser.get(a.user_id) ?? []), nom])
+  }
+  const authUsers = authRes.data?.users ?? []
+  const connexions = authUsers
+    .filter(u => !clientId || etabsParUser.has(u.id))
+    .filter(u => !userId || u.id === userId)
+    .map(u => ({
+      user_id: u.id,
+      user_nom: profilMap.get(u.id)?.nom || u.email || u.id.slice(0, 8),
+      email: u.email ?? null,
+      dernier_login: u.last_sign_in_at ?? null,
+      etablissements: etabsParUser.get(u.id) ?? [],
+    }))
+    .sort((a, b) => (b.dernier_login ?? '').localeCompare(a.dernier_login ?? ''))
+  const il7j = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const connectes7j = connexions.filter(c => c.dernier_login && c.dernier_login >= il7j).length
+
   return {
     kpis: {
       activeUsers24h,
       modificationsToday,
       topClient: topClientName || '—',
+      connectes7j,
     },
     chartData,
     recentLogs,
+    connexions,
     clients: clientsList,
     users: (profilsRes.data ?? []).map(p => ({ user_id: p.id, user_nom: p.nom || p.email })),
   }

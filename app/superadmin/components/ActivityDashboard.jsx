@@ -3,7 +3,24 @@ import { useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import ChefLoader from '../../../components/ChefLoader'
 
-export default function ActivityDashboard({ activityData, activityLoading, isMobile, onLoadActivity }) {
+// Libellés des ressources journalisées côté serveur (lib/serverLog.ts).
+const ENTITE_LABELS = {
+  achats_factures: 'Facture',
+  inventaires: 'Inventaire',
+  ventes_journalieres: 'Import des ventes',
+}
+
+function depuis(iso) {
+  if (!iso) return 'Jamais connecté'
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+  if (min < 60) return `il y a ${Math.max(min, 1)} min`
+  const h = Math.round(min / 60)
+  if (h < 24) return `il y a ${h} h`
+  const j = Math.round(h / 24)
+  return j === 1 ? 'hier' : `il y a ${j} jours`
+}
+
+export default function ActivityDashboard({ activityData, activityLoading, activityError, isMobile, onLoadActivity }) {
   const [filterClient, setFilterClient] = useState('')
   const [filterUser, setFilterUser] = useState('')
   const [filterDevice, setFilterDevice] = useState('')
@@ -34,6 +51,12 @@ export default function ActivityDashboard({ activityData, activityLoading, isMob
         </div>
       )}
 
+      {!activityLoading && activityError && (
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '10px', padding: '14px 16px', marginBottom: '20px', fontSize: '14px', color: '#DC2626' }}>
+          {activityError}
+        </div>
+      )}
+
       {!activityLoading && activityData && (() => {
         // Normalize: service may return { logs } or { kpis, recentLogs, chartData, ... }
         const logs = activityData.recentLogs || activityData.logs || []
@@ -41,13 +64,15 @@ export default function ActivityDashboard({ activityData, activityLoading, isMob
         const chartData = activityData.chartData || []
         const clients = activityData.clients || []
         const users = activityData.users || []
+        const connexions = activityData.connexions || []
 
         return (
         <>
           {/* KPI Cards */}
           {kpis && (
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
             {[
+              { label: 'Connectés (7 jours)', value: kpis.connectes7j ?? '—', icon: '🔑', color: '#0EA5E9', bg: '#E0F2FE' },
               { label: 'Utilisateurs actifs (24h)', value: kpis.activeUsers24h ?? '—', icon: '👤', color: '#6366F1', bg: '#EEF2FF' },
               { label: 'Modifications aujourd\'hui', value: kpis.modificationsToday ?? '—', icon: '✏️', color: '#D97706', bg: '#FEF3C7' },
               { label: 'Établissement le plus actif', value: kpis.topClient || '—', icon: '🏆', color: '#16A34A', bg: '#DCFCE7' },
@@ -112,6 +137,39 @@ export default function ActivityDashboard({ activityData, activityLoading, isMob
             </ResponsiveContainer>
           </div>
 
+          {/* Dernières connexions */}
+          <div style={{ background: 'white', borderRadius: '12px', border: '0.5px solid #E4E4E7', overflow: 'hidden', marginBottom: '20px' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '0.5px solid #E4E4E7', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '13px', fontWeight: '600', color: '#18181B' }}>Dernières connexions</div>
+              <span style={{ fontSize: '12px', color: '#71717A' }}>{connexions.length} utilisateurs</span>
+            </div>
+            <div style={{ overflowX: 'auto', maxHeight: '360px', overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? '520px' : 'auto' }}>
+                <thead>
+                  <tr style={{ background: '#F4F4F5' }}>
+                    {['Utilisateur', 'Dernière connexion', 'Établissements'].map(h => (
+                      <th key={h} style={{ padding: '10px 14px', fontSize: '11px', color: '#71717A', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {connexions.map((u) => (
+                    <tr key={u.user_id} style={{ borderBottom: '0.5px solid #F4F4F5' }}>
+                      <td style={{ padding: '10px 14px', fontSize: '13px', color: '#18181B', fontWeight: '500' }}>
+                        {u.user_nom}
+                        {u.email && u.email !== u.user_nom && <div style={{ fontSize: '11px', color: '#71717A', fontWeight: '400' }}>{u.email}</div>}
+                      </td>
+                      <td style={{ padding: '10px 14px', fontSize: '12px', color: u.dernier_login ? '#18181B' : '#A1A1AA', whiteSpace: 'nowrap' }} title={u.dernier_login ? new Date(u.dernier_login).toLocaleString('fr-FR') : ''}>
+                        {depuis(u.dernier_login)}
+                      </td>
+                      <td style={{ padding: '10px 14px', fontSize: '12px', color: '#71717A' }}>{u.etablissements.join(', ') || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           {/* Audit log table */}
           <div style={{ background: 'white', borderRadius: '12px', border: '0.5px solid #E4E4E7', overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: '0.5px solid #E4E4E7', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -137,6 +195,8 @@ export default function ActivityDashboard({ activityData, activityLoading, isMob
                       MODIFICATION: { bg: '#FAEEDA', color: '#854F0B' },
                       SUPPRESSION: { bg: '#FCEBEB', color: '#A32D2D' },
                       IMPORT: { bg: '#EEEDFE', color: '#3C3489' },
+                      VALIDATION: { bg: '#DCFCE7', color: '#166534' },
+                      FUSION: { bg: '#E0F2FE', color: '#075985' },
                       CONNEXION: { bg: '#F0E8E0', color: '#2C1810' },
                     }
                     const deviceIcons = { iOS: '📱', Android: '🤖', Windows: '🖥', Mac: '🍎', Linux: '🐧', Inconnu: '❓', Autre: '💻' }
@@ -151,7 +211,7 @@ export default function ActivityDashboard({ activityData, activityLoading, isMob
                           <span style={{ fontSize: '11px', fontWeight: '600', padding: '3px 8px', borderRadius: '20px', background: ac.bg, color: ac.color }}>{log.action}</span>
                         </td>
                         <td style={{ padding: '10px 14px', fontSize: '12px', color: '#18181B', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {log.entite_nom || log.entite || '—'}
+                          {log.entite_nom || ENTITE_LABELS[log.entite] || log.entite || '—'}
                         </td>
                         <td style={{ padding: '10px 14px', fontSize: '12px', color: '#71717A', whiteSpace: 'nowrap' }}>
                           {deviceIcons[log.device] || '💻'} {log.device} · {log.browser}
