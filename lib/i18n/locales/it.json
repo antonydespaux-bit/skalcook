@@ -61,7 +61,8 @@
       "salesTracking": "Andamento vendite",
       "weeklyReport": "Report settimanale",
       "salesBudgets": "Budget vendite",
-      "salesImport": "Importa vendite"
+      "salesImport": "Importa vendite",
+      "groupView": "Vista gruppo"
     }
   },
   "auth": {
@@ -982,5 +983,46 @@
         "tableDePartage": "Tavolo condiviso"
       }
     }
+  },
+  "groupe": {
+    "title": "Vista gruppo",
+    "subtitle": "Confrontare le strutture del gruppo sullo stesso periodo",
+    "groupLabel": "Gruppo",
+    "from": "Dal",
+    "to": "al",
+    "presets": {
+      "prevMonth": "Mese prec.",
+      "thisMonth": "Questo mese",
+      "d90": "90 g",
+      "year": "Anno"
+    },
+    "loading": "Caricamento…",
+    "errorLoad": "Errore di caricamento",
+    "noGroup": "Nessun gruppo accessibile. La vista gruppo deve essere attivata sulle vostre strutture, con un ruolo di amministratore o direttore.",
+    "empty": "Nessuna struttura accessibile in questo gruppo.",
+    "kpi": {
+      "caHt": "Fatturato IVA esclusa",
+      "covers": "Coperti",
+      "avgTicket": "Scontrino medio IVA inclusa",
+      "purchasesKitchen": "Acquisti cucina IVA esclusa",
+      "ratioKitchen": "Rapporto cucina",
+      "ratioBev": "Rapporto bevande"
+    },
+    "cols": {
+      "establishment": "Struttura",
+      "caHt": "Fatturato IVA escl.",
+      "covers": "Coperti",
+      "avgTicket": "Scontrino medio",
+      "purchasesKitchen": "Acquisti cucina",
+      "ratioKitchen": "Rapporto cucina",
+      "purchasesBar": "Acquisti bar",
+      "ratioBev": "Rapporto bevande",
+      "stockKitchen": "Stock cucina",
+      "invoices": "Fatture"
+    },
+    "total": "Totale gruppo",
+    "chartTitle": "Acquisti cucina / fatturato food, per struttura",
+    "stockAt": "al {{date}}",
+    "method": "Rapporto = acquisti IVA esclusa del periodo ÷ fatturato IVA escluso del periodo, senza variazione di stock: più affidabile su un mese intero. Colori secondo le soglie di food cost di ogni struttura."
   }
 }

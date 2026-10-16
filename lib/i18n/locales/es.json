@@ -61,7 +61,8 @@
       "salesTracking": "Seguimiento de ventas",
       "weeklyReport": "Informe semanal",
       "salesBudgets": "Presupuestos de ventas",
-      "salesImport": "Importar ventas"
+      "salesImport": "Importar ventas",
+      "groupView": "Vista de grupo"
     }
   },
   "auth": {
@@ -982,5 +983,46 @@
         "tableDePartage": "Mesa compartida"
       }
     }
+  },
+  "groupe": {
+    "title": "Vista de grupo",
+    "subtitle": "Comparar los establecimientos del grupo en el mismo periodo",
+    "groupLabel": "Grupo",
+    "from": "Del",
+    "to": "al",
+    "presets": {
+      "prevMonth": "Mes ant.",
+      "thisMonth": "Este mes",
+      "d90": "90 d",
+      "year": "Año"
+    },
+    "loading": "Cargando…",
+    "errorLoad": "Error de carga",
+    "noGroup": "Ningún grupo accesible. La vista de grupo debe estar activada en sus establecimientos, con un rol de administrador o director.",
+    "empty": "Ningún establecimiento accesible en este grupo.",
+    "kpi": {
+      "caHt": "Ventas sin IVA",
+      "covers": "Cubiertos",
+      "avgTicket": "Ticket medio con IVA",
+      "purchasesKitchen": "Compras cocina sin IVA",
+      "ratioKitchen": "Ratio cocina",
+      "ratioBev": "Ratio bebidas"
+    },
+    "cols": {
+      "establishment": "Establecimiento",
+      "caHt": "Ventas sin IVA",
+      "covers": "Cubiertos",
+      "avgTicket": "Ticket medio",
+      "purchasesKitchen": "Compras cocina",
+      "ratioKitchen": "Ratio cocina",
+      "purchasesBar": "Compras bar",
+      "ratioBev": "Ratio bebidas",
+      "stockKitchen": "Stock cocina",
+      "invoices": "Facturas"
+    },
+    "total": "Total grupo",
+    "chartTitle": "Compras cocina / ventas comida, por establecimiento",
+    "stockAt": "al {{date}}",
+    "method": "Ratio = compras sin IVA del periodo ÷ ventas sin IVA del periodo, sin variación de stock: más fiable en un mes completo. Colores según los umbrales de food cost de cada establecimiento."
   }
 }

@@ -216,7 +216,7 @@ export default function Navbar({ section = 'cuisine' }) {
         ...(hasModule('gestion') ? [{
           id: 'management',
           label: t('nav.groups.management'),
-          paths: ['/inventaire', '/controle-gestion'],
+          paths: ['/inventaire', '/controle-gestion', '/groupe'],
           items: [
             { label: t('nav.items.inventory'),       path: '/inventaire' },
             { label: t('nav.items.purchases'),        path: '/controle-gestion/achats' },
@@ -228,6 +228,7 @@ export default function Navbar({ section = 'cuisine' }) {
             ...(role === 'admin' || role === 'directeur' ? [{ label: t('nav.items.weeklyReport'),  path: '/controle-gestion/ventes/rapport-hebdo' }] : []),
             { label: t('nav.items.salesBudgets'),    path: '/controle-gestion/ventes/budgets' },
             ...(role === 'admin' ? [{ label: t('nav.items.salesImport'), path: '/controle-gestion/import' }] : []),
+            ...(hasModule('groupe') && (role === 'admin' || role === 'directeur') ? [{ label: t('nav.items.groupView'), path: '/groupe' }] : []),
           ]
         }] : []),
       ].filter(g => g.items.length > 0)
