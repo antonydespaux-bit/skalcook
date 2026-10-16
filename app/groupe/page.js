@@ -44,6 +44,9 @@ export default function GroupePage() {
   const [dateDebut, setDateDebut] = useState(() => moisPrecedent().debut)
   const [dateFin, setDateFin] = useState(() => moisPrecedent().fin)
   const [data, setData] = useState(null)
+  const [prix, setPrix] = useState(null)
+  const [recherchePrix, setRecherchePrix] = useState('')
+  const [nbPrixAffiches, setNbPrixAffiches] = useState(30)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -91,9 +94,15 @@ export default function GroupePage() {
     setLoading(true); setError('')
     try {
       const params = new URLSearchParams({ groupeId, debut: dateDebut, fin: dateFin })
-      setData(await apiGet(`/api/groupe/synthese?${params}`))
+      const [synthese, prixRes] = await Promise.all([
+        apiGet(`/api/groupe/synthese?${params}`),
+        apiGet(`/api/groupe/prix?${params}`),
+      ])
+      setData(synthese)
+      setPrix(prixRes)
+      setNbPrixAffiches(30)
     } catch (e) {
-      setData(null); setError(e.message || t('groupe.errorLoad'))
+      setData(null); setPrix(null); setError(e.message || t('groupe.errorLoad'))
     } finally {
       setLoading(false)
     }
@@ -110,6 +119,11 @@ export default function GroupePage() {
   }, [])
 
   const etabs = useMemo(() => data?.etablissements ?? [], [data])
+  const produitsFiltres = useMemo(() => {
+    const q = recherchePrix.trim().toLowerCase()
+    const liste = prix?.produits ?? []
+    return q ? liste.filter((p) => p.nom.toLowerCase().includes(q)) : liste
+  }, [prix, recherchePrix])
   const totaux = data?.totaux
   // Échelle commune des barres de ratio : le plus haut ratio (au moins 40 %).
   const ratioMax = useMemo(
@@ -320,6 +334,94 @@ export default function GroupePage() {
                 )}
 
                 <p style={{ marginTop: 12, fontSize: 12, color: c.texteMuted, lineHeight: 1.5 }}>{t('groupe.method')}</p>
+
+                {/* ── Prix d'achat comparés ── */}
+                {prix && (
+                  <div style={{ marginTop: 28 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+                      <div>
+                        <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 20, fontWeight: 700, color: c.texte }}>{t('groupe.prix.title')}</h2>
+                        <p style={{ margin: '4px 0 0', fontSize: 14, color: c.texteMuted }}>
+                          {t('groupe.prix.summary', { count: prix.nbProduitsCompares, economie: fmtEur(prix.economieTotale) })}
+                        </p>
+                      </div>
+                      {prix.nbProduitsCompares > 0 && (
+                        <input value={recherchePrix} onChange={(e) => { setRecherchePrix(e.target.value); setNbPrixAffiches(30) }}
+                          placeholder={t('groupe.prix.search')} style={{ ...inputStyle, minWidth: 220 }} />
+                      )}
+                    </div>
+
+                    {prix.nbProduitsCompares === 0 ? (
+                      <div style={{ textAlign: 'center', padding: 32, color: c.texteMuted, fontSize: 14, background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 12 }}>
+                        {t('groupe.prix.empty')}
+                      </div>
+                    ) : (
+                      <div style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 12, overflow: 'hidden' }}>
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                            <thead>
+                              <tr style={{ background: c.fond, borderBottom: `2px solid ${c.bordure}` }}>
+                                {[
+                                  { k: 'p', label: t('groupe.prix.cols.product'), align: 'left' },
+                                  { k: 'min', label: t('groupe.prix.cols.best') },
+                                  { k: 'max', label: t('groupe.prix.cols.highest') },
+                                  { k: 'ecart', label: t('groupe.prix.cols.gap') },
+                                  { k: 'eco', label: t('groupe.prix.cols.saving') },
+                                ].map((col) => (
+                                  <th key={col.k} style={{ padding: '10px 14px', textAlign: col.align || 'right', fontWeight: 600, color: c.texteMuted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                                    {col.label}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {produitsFiltres.slice(0, nbPrixAffiches).map((p, idx) => {
+                                const moinsCher = p.etablissements[0]
+                                const plusCher = p.etablissements[p.etablissements.length - 1]
+                                return (
+                                  <tr key={p.cle} style={{ borderBottom: `1px solid ${c.bordure}`, background: idx % 2 === 0 ? c.blanc : c.fond }}>
+                                    <td style={{ ...td('left'), whiteSpace: 'normal', minWidth: 200 }}>
+                                      <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                        {p.nom} <span style={{ color: c.texteMuted, fontWeight: 400 }}>/ {p.unite || '—'}</span>
+                                        {p.aVerifier && (
+                                          <span title={t('groupe.prix.checkHint')} style={{ fontSize: 10, color: c.orange, background: c.orangeClair, padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>
+                                            {t('groupe.prix.check')}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div style={{ fontSize: 11, color: c.texteMuted, marginTop: 2 }}>
+                                        {p.etablissements.map((e) => `${e.nom} ${fmtEur2(e.prixMoyen)}`).join(' · ')}
+                                      </div>
+                                    </td>
+                                    <td style={td()}>
+                                      <span style={{ color: c.vert, fontWeight: 600 }}>{fmtEur2(p.prixMin)}</span>
+                                      <div style={{ fontSize: 11, color: c.texteMuted }}>{moinsCher.nom}</div>
+                                    </td>
+                                    <td style={td()}>
+                                      {fmtEur2(p.prixMax)}
+                                      <div style={{ fontSize: 11, color: c.texteMuted }}>{plusCher.nom}</div>
+                                    </td>
+                                    <td style={td()}>+{fmtPct(p.ecartPct)}</td>
+                                    <td style={{ ...td(), fontWeight: 600 }}>{fmtEur(p.economiePotentielle)}</td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        {produitsFiltres.length > nbPrixAffiches && (
+                          <div style={{ padding: 12, textAlign: 'center', borderTop: `1px solid ${c.bordure}` }}>
+                            <button onClick={() => setNbPrixAffiches((n) => n + 50)}
+                              style={{ padding: '6px 14px', borderRadius: 8, fontSize: 13, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}>
+                              {t('groupe.prix.more', { count: produitsFiltres.length - nbPrixAffiches })}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <p style={{ marginTop: 12, fontSize: 12, color: c.texteMuted, lineHeight: 1.5 }}>{t('groupe.prix.method')}</p>
+                  </div>
+                )}
               </div>
             )}
           </>

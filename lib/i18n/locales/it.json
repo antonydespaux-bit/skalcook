@@ -1023,6 +1023,24 @@
     "total": "Totale gruppo",
     "chartTitle": "Acquisti cucina / fatturato food, per struttura",
     "stockAt": "al {{date}}",
-    "method": "Rapporto = acquisti IVA esclusa del periodo ÷ fatturato IVA escluso del periodo, senza variazione di stock: più affidabile su un mese intero. Colori secondo le soglie di food cost di ogni struttura."
+    "method": "Rapporto = acquisti IVA esclusa del periodo ÷ fatturato IVA escluso del periodo, senza variazione di stock: più affidabile su un mese intero. Colori secondo le soglie di food cost di ogni struttura.",
+    "prix": {
+      "title": "Prezzi d'acquisto a confronto",
+      "summary": "{{count}} prodotti acquistati da più strutture · risparmio possibile al miglior prezzo del gruppo: {{economie}}",
+      "summary_one": "{{count}} prodotto acquistato da più strutture · risparmio possibile al miglior prezzo del gruppo: {{economie}}",
+      "search": "🔍 Cerca un prodotto…",
+      "empty": "Nessun prodotto acquistato da almeno due strutture nel periodo (i prodotti sono abbinati per nome e unità).",
+      "cols": {
+        "product": "Prodotto",
+        "best": "Miglior prezzo",
+        "highest": "Più caro",
+        "gap": "Scarto",
+        "saving": "Risparmio possibile"
+      },
+      "check": "da verificare",
+      "checkHint": "Scarto molto alto: spesso un formato, un'unità o una qualità diversa.",
+      "more": "Mostra altri ({{count}} rimanenti)",
+      "method": "Prezzo medio ponderato del periodo per unità d'uso (prezzo della riga ÷ formato), acquisti cucina escluse le note di credito. Prodotti abbinati per nome (senza accenti né maiuscole) e unità. Risparmio possibile = quanto ogni struttura avrebbe risparmiato al miglior prezzo del gruppo."
+    }
   }
 }

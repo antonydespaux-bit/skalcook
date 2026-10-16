@@ -12,7 +12,11 @@ import {
   etablissementsAccessibles,
   getSyntheseGroupe,
   listGroupesAccessibles,
+  comparerPrix,
+  cleProduit,
+  getPrixGroupe,
   type IndicateursBruts,
+  type PrixProduitBrut,
   type EtablissementMeta,
 } from '../services/groupe.service'
 
@@ -211,5 +215,99 @@ describe('listGroupesAccessibles', () => {
   it('rôle cuisine : aucun groupe', async () => {
     const { db } = fakeDb(tables)
     expect((await listGroupesAccessibles(db, { id: 'u4' })).groupes).toEqual([])
+  })
+})
+
+// ── Comparaison des prix ──────────────────────────────────────────────────
+
+const pb = (client_id: string, nom: string, unite: string, qte: number, montant: number, extra: Partial<PrixProduitBrut> = {}): PrixProduitBrut => ({
+  client_id, ingredient_id: `${client_id}-${nom}`, nom, unite, qte, montant, nb_achats: 1, dernier_achat: '2026-09-15', ...extra,
+})
+
+describe('cleProduit', () => {
+  it('ignore accents, casse, ponctuation et alias d\'unité', () => {
+    expect(cleProduit('Crème  fraîche 35%', 'Kg.')).toBe(cleProduit('CREME FRAICHE 35 %', 'kg'))
+  })
+  it("distingue les unités", () => {
+    expect(cleProduit('Citron', 'kg')).not.toBe(cleProduit('Citron', 'u'))
+  })
+})
+
+describe('comparerPrix', () => {
+  const noms = new Map([['A', 'Hôtel A'], ['B', 'Hôtel B'], ['C', 'Hôtel C']])
+
+  it('rapproche un même produit et calcule écart et économie potentielle', () => {
+    const r = comparerPrix([
+      pb('A', 'Beurre doux', 'kg', 10, 100),   // 10 €/kg
+      pb('B', 'BEURRE DOUX', 'kg', 20, 240),   // 12 €/kg
+      pb('C', 'Beurre doux', 'kg', 5, 75),     // 15 €/kg
+    ], noms)
+    expect(r).toHaveLength(1)
+    const p = r[0]
+    expect(p.prixMin).toBeCloseTo(10)
+    expect(p.prixMax).toBeCloseTo(15)
+    expect(p.ecartPct).toBeCloseTo(50)
+    // B : (12 − 10) × 20 = 40 ; C : (15 − 10) × 5 = 25
+    expect(p.economiePotentielle).toBeCloseTo(65)
+    expect(p.etablissements.map((e) => e.clientId)).toEqual(['A', 'B', 'C'])
+    expect(p.etablissements[0].surcout).toBe(0)
+  })
+
+  it('écarte les lignes génériques et signale les écarts suspects', () => {
+    const r = comparerPrix([
+      pb('A', 'Divers 20%', 'u', 1, 35), pb('B', 'DIVERS 20 %', 'u', 1, 97),
+      pb('A', 'Mirabelle', 'kg', 1, 6.9), pb('B', 'Mirabelle', 'kg', 1, 25.6),
+      pb('A', 'Citron', 'kg', 1, 3), pb('B', 'Citron', 'kg', 1, 4),
+    ], noms)
+    expect(r.map((p) => p.nom).sort()).toEqual(['Citron', 'Mirabelle'])
+    expect(r.find((p) => p.nom === 'Mirabelle')!.aVerifier).toBe(true)
+    expect(r.find((p) => p.nom === 'Citron')!.aVerifier).toBe(false)
+  })
+
+  it("ignore un produit acheté par un seul établissement", () => {
+    expect(comparerPrix([pb('A', 'Truffe', 'kg', 1, 900), pb('B', 'Beurre', 'kg', 1, 10)], noms)).toEqual([])
+  })
+
+  it("cumule deux fiches au même nom dans un établissement (prix pondéré)", () => {
+    const r = comparerPrix([
+      pb('A', 'Oeufs', 'u', 60, 18, { ingredient_id: 'a1' }),
+      pb('A', 'oeufs', 'u', 40, 14, { ingredient_id: 'a2' }),
+      pb('B', 'Oeufs', 'u', 100, 30),
+    ], noms)
+    const a = r[0].etablissements.find((e) => e.clientId === 'A')!
+    expect(a.prixMoyen).toBeCloseTo(32 / 100)
+    expect(a.qte).toBe(100)
+  })
+
+  it("trie par économie potentielle décroissante", () => {
+    const r = comparerPrix([
+      pb('A', 'Sel', 'kg', 1, 1), pb('B', 'Sel', 'kg', 1, 2),
+      pb('A', 'Boeuf', 'kg', 10, 300), pb('B', 'Boeuf', 'kg', 10, 400),
+    ], noms)
+    expect(r.map((p) => p.nom)).toEqual(['Boeuf', 'Sel'])
+  })
+})
+
+describe('getPrixGroupe (isolation)', () => {
+  const tables = { clients, groupes, acces_clients, profils }
+  const rows = [pb('A', 'Beurre', 'kg', 10, 100), pb('B', 'Beurre', 'kg', 10, 120), pb('C', 'Beurre', 'kg', 10, 50)]
+
+  it("n'interroge et ne compare que les établissements autorisés", async () => {
+    const calls: Record<string, unknown>[] = []
+    const { db } = fakeDb(tables)
+    ;(db as unknown as { rpc: unknown }).rpc = async (_fn: string, args: Record<string, unknown>) => {
+      calls.push(args)
+      return { data: rows, error: null } // la fonction renverrait C si on la lui demandait : le service doit l'écarter
+    }
+    const r = await getPrixGroupe(db, { id: 'u1' }, { groupeId: G, debut: '2026-09-01', fin: '2026-09-30' })
+    expect((calls[0].p_client_ids as string[]).sort()).toEqual(['A', 'B'])
+    expect(r.produits[0].etablissements.map((e) => e.clientId)).toEqual(['A', 'B'])
+    expect(r.economieTotale).toBeCloseTo(20)
+  })
+
+  it('refuse un rôle cuisine', async () => {
+    const { db } = fakeDb(tables)
+    await expect(getPrixGroupe(db, { id: 'u4' }, { groupeId: G, debut: '2026-09-01', fin: '2026-09-30' }))
+      .rejects.toMatchObject({ name: 'ForbiddenError' })
   })
 })

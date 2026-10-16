@@ -1023,6 +1023,24 @@
     "total": "Total grupo",
     "chartTitle": "Compras cocina / ventas comida, por establecimiento",
     "stockAt": "al {{date}}",
-    "method": "Ratio = compras sin IVA del periodo ÷ ventas sin IVA del periodo, sin variación de stock: más fiable en un mes completo. Colores según los umbrales de food cost de cada establecimiento."
+    "method": "Ratio = compras sin IVA del periodo ÷ ventas sin IVA del periodo, sin variación de stock: más fiable en un mes completo. Colores según los umbrales de food cost de cada establecimiento.",
+    "prix": {
+      "title": "Precios de compra comparados",
+      "summary": "{{count}} productos comprados por varios establecimientos · ahorro posible al mejor precio del grupo: {{economie}}",
+      "summary_one": "{{count}} producto comprado por varios establecimientos · ahorro posible al mejor precio del grupo: {{economie}}",
+      "search": "🔍 Buscar un producto…",
+      "empty": "Ningún producto comprado por al menos dos establecimientos en el periodo (los productos se emparejan por nombre y unidad).",
+      "cols": {
+        "product": "Producto",
+        "best": "Mejor precio",
+        "highest": "Más caro",
+        "gap": "Diferencia",
+        "saving": "Ahorro posible"
+      },
+      "check": "a revisar",
+      "checkHint": "Diferencia muy alta: a menudo un formato, una unidad o una calidad distinta.",
+      "more": "Mostrar más (quedan {{count}})",
+      "method": "Precio medio ponderado del periodo por unidad de uso (precio de la línea ÷ formato), compras de cocina sin abonos. Productos emparejados por nombre (sin acentos ni mayúsculas) y unidad. Ahorro posible = lo que cada establecimiento habría pagado de menos al mejor precio del grupo."
+    }
   }
 }

@@ -1023,6 +1023,24 @@
     "total": "Group total",
     "chartTitle": "Kitchen purchases / food revenue, by venue",
     "stockAt": "as of {{date}}",
-    "method": "Ratio = purchases excl. VAT for the period ÷ revenue excl. VAT for the period, without stock variation: most reliable over a full month. Colours follow each venue's food cost thresholds."
+    "method": "Ratio = purchases excl. VAT for the period ÷ revenue excl. VAT for the period, without stock variation: most reliable over a full month. Colours follow each venue's food cost thresholds.",
+    "prix": {
+      "title": "Purchase prices compared",
+      "summary": "{{count}} products bought by several venues · possible saving at the group's best price: {{economie}}",
+      "summary_one": "{{count}} product bought by several venues · possible saving at the group's best price: {{economie}}",
+      "search": "🔍 Search a product…",
+      "empty": "No product bought by at least two venues over the period (products are matched by name and unit).",
+      "cols": {
+        "product": "Product",
+        "best": "Best price",
+        "highest": "Highest",
+        "gap": "Gap",
+        "saving": "Possible saving"
+      },
+      "check": "check",
+      "checkHint": "Very large gap: often a different pack size, unit or quality.",
+      "more": "Show more ({{count}} left)",
+      "method": "Weighted average price over the period per usage unit (line price ÷ pack size), kitchen purchases excluding credit notes. Products matched by name (ignoring accents and case) and unit. Possible saving = what each venue would have saved at the group's best price."
+    }
   }
 }

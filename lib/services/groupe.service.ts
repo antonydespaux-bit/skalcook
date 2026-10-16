@@ -18,6 +18,8 @@ import type { GroupeSyntheseInput } from '../validators/groupe.schema'
 import { ForbiddenError, NotFoundError } from '../errors'
 import { TVA_FOOD, TVA_BEV_20, TVA_BEV_10, TVA_AUTRE } from '../caAnalyses'
 import { isSuperadminEmail } from '../superadmin'
+import { normUnite } from '../constants'
+import { normDesignation } from './achats.service'
 
 export const MODULE_GROUPE = 'groupe'
 /** Rôles qui voient la vue groupe (CA, marges) — comme les pages d'analyses. */
@@ -273,4 +275,145 @@ export async function listGroupesAccessibles(db: SupabaseClient, user: { id: str
   const { data: groupes, error: gErr } = await db.from('groupes').select('id, nom').in('id', groupeIds).order('nom')
   if (gErr) throw new Error(gErr.message)
   return { groupes: groupes ?? [] }
+}
+
+// ── Comparaison des prix d'un même produit entre établissements ────────────
+
+export interface PrixProduitBrut {
+  client_id: string
+  ingredient_id: string
+  nom: string
+  unite: string | null
+  qte: number | string
+  montant: number | string
+  nb_achats: number | string
+  dernier_achat: string | null
+}
+
+export interface PrixEtablissement {
+  clientId: string
+  nom: string
+  ingredientNom: string
+  prixMoyen: number
+  qte: number
+  montant: number
+  nbAchats: number
+  dernierAchat: string | null
+  /** Surcoût vs le meilleur prix du groupe : (prix − min) × quantité achetée. */
+  surcout: number
+}
+
+export interface ProduitCompare {
+  cle: string
+  nom: string
+  unite: string
+  prixMin: number
+  prixMax: number
+  /** (max − min) / min, en %. */
+  ecartPct: number
+  /** Σ des surcoûts : ce que le groupe aurait économisé au meilleur prix. */
+  economiePotentielle: number
+  /** Écart si grand qu'il trahit souvent une erreur de conditionnement ou d'unité. */
+  aVerifier: boolean
+  etablissements: PrixEtablissement[]
+}
+
+/** Au-delà, l'écart est signalé « à vérifier » (conditionnement, unité, qualité différente). */
+export const SEUIL_ECART_A_VERIFIER = 150
+
+// Lignes fourre-tout des factures (« Divers 20 % », frais de port…) : leur
+// nom ne désigne pas un produit, les comparer n'a pas de sens.
+const NOM_GENERIQUE = /^(divers|frais|transport|port|livraison|consigne|remise|emballage|taxe|eco)\b/
+
+/** Clé de rapprochement : nom normalisé (sans accents, casse, ponctuation) + unité canonique. */
+export function cleProduit(nom: string | null | undefined, unite: string | null | undefined): string {
+  return `${normDesignation(nom)}|${normUnite(unite)}`
+}
+
+/**
+ * Rapproche les ingrédients de plusieurs établissements par nom + unité et
+ * garde les produits achetés par au moins deux établissements. Tri par
+ * économie potentielle décroissante.
+ */
+export function comparerPrix(bruts: PrixProduitBrut[], nomsEtab: Map<string, string>): ProduitCompare[] {
+  const parCle = new Map<string, Map<string, { noms: string[]; unite: string; qte: number; montant: number; nb: number; dernier: string | null }>>()
+  for (const b of bruts) {
+    const qte = n(b.qte), montant = n(b.montant)
+    if (qte <= 0 || montant <= 0 || !normDesignation(b.nom) || NOM_GENERIQUE.test(normDesignation(b.nom))) continue
+    const cle = cleProduit(b.nom, b.unite)
+    if (!parCle.has(cle)) parCle.set(cle, new Map())
+    const parEtab = parCle.get(cle)!
+    // Un établissement peut avoir deux fiches ingrédient au même nom : on cumule.
+    const cur = parEtab.get(b.client_id) ?? { noms: [] as string[], unite: normUnite(b.unite), qte: 0, montant: 0, nb: 0, dernier: null }
+    cur.noms.push(b.nom)
+    cur.qte += qte
+    cur.montant += montant
+    cur.nb += n(b.nb_achats)
+    if (b.dernier_achat && (!cur.dernier || b.dernier_achat > cur.dernier)) cur.dernier = b.dernier_achat
+    parEtab.set(b.client_id, cur)
+  }
+
+  const produits: ProduitCompare[] = []
+  for (const [cle, parEtab] of parCle) {
+    if (parEtab.size < 2) continue
+    const lignes = [...parEtab.entries()].map(([clientId, v]) => ({ clientId, ...v, prix: v.montant / v.qte }))
+    const prixMin = Math.min(...lignes.map((l) => l.prix))
+    const prixMax = Math.max(...lignes.map((l) => l.prix))
+    const etablissements: PrixEtablissement[] = lignes
+      .map((l) => ({
+        clientId: l.clientId,
+        nom: nomsEtab.get(l.clientId) ?? '—',
+        ingredientNom: l.noms[0],
+        prixMoyen: l.prix,
+        qte: l.qte,
+        montant: l.montant,
+        nbAchats: l.nb,
+        dernierAchat: l.dernier,
+        surcout: (l.prix - prixMin) * l.qte,
+      }))
+      .sort((a, b) => a.prixMoyen - b.prixMoyen)
+    produits.push({
+      cle,
+      nom: etablissements[0].ingredientNom,
+      unite: lignes[0].unite,
+      prixMin,
+      prixMax,
+      ecartPct: prixMin > 0 ? ((prixMax - prixMin) / prixMin) * 100 : 0,
+      economiePotentielle: etablissements.reduce((s, e) => s + e.surcout, 0),
+      aVerifier: prixMin > 0 && ((prixMax - prixMin) / prixMin) * 100 > SEUIL_ECART_A_VERIFIER,
+      etablissements,
+    })
+  }
+  return produits.sort((a, b) => b.economiePotentielle - a.economiePotentielle)
+}
+
+export async function getPrixGroupe(
+  db: SupabaseClient,
+  user: { id: string; email?: string },
+  input: GroupeSyntheseInput,
+) {
+  const { groupeId, debut, fin } = input
+  const etabs = await etablissementsAccessibles(db, user, groupeId)
+  if (etabs.length === 0) throw new ForbiddenError('Aucun établissement de ce groupe accessible avec la vue groupe.')
+
+  const { data, error } = await db.rpc('groupe_prix_produits', {
+    p_client_ids: etabs.map((e) => e.id),
+    p_debut: debut,
+    p_fin: fin,
+  })
+  if (error) throw new Error(error.message)
+
+  const autorises = new Set(etabs.map((e) => e.id))
+  const bruts = ((data ?? []) as PrixProduitBrut[]).filter((b) => autorises.has(b.client_id))
+  const nomsEtab = new Map(etabs.map((e) => [e.id, e.nom_etablissement || e.nom || '—']))
+  const produits = comparerPrix(bruts, nomsEtab)
+
+  return {
+    periode: { debut, fin },
+    nbEtablissements: etabs.length,
+    nbProduitsCompares: produits.length,
+    economieTotale: produits.reduce((s, p) => s + p.economiePotentielle, 0),
+    // Les 200 premiers suffisent à l'écran ; le total reste juste.
+    produits: produits.slice(0, 200),
+  }
 }
