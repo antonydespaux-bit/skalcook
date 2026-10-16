@@ -67,13 +67,15 @@ const clients = [
   { id: 'E', nom: 'E', nom_etablissement: 'Autre', groupe_id: 'autre', actif: true, modules_actifs: ['groupe'] },
 ]
 const groupes = [{ id: G, nom: 'Groupe G' }, { id: 'autre', nom: 'Autre groupe' }]
-// u1 a accès à A et B (pas C) + D (sans module) + E (autre groupe).
+// u1 (admin/directeur) a accès à A et B (pas C) + D (sans module) + E (autre groupe).
+// u4 a accès à A mais en rôle cuisine : pas de vue groupe.
 const acces_clients = [
-  { user_id: 'u1', client_id: 'A' }, { user_id: 'u1', client_id: 'B' },
-  { user_id: 'u1', client_id: 'D' }, { user_id: 'u1', client_id: 'E' },
-  { user_id: 'u2', client_id: 'C' },
+  { user_id: 'u1', client_id: 'A', role: 'admin' }, { user_id: 'u1', client_id: 'B', role: 'directeur' },
+  { user_id: 'u1', client_id: 'D', role: 'admin' }, { user_id: 'u1', client_id: 'E', role: 'admin' },
+  { user_id: 'u2', client_id: 'C', role: 'admin' },
+  { user_id: 'u4', client_id: 'A', role: 'cuisine' }, { user_id: 'u4', client_id: 'B', role: 'bar' },
 ]
-const profils = [{ id: 'u1', is_superadmin: false }, { id: 'u2', is_superadmin: false }, { id: 'u3', is_superadmin: false }]
+const profils = [{ id: 'u1', is_superadmin: false }, { id: 'u2', is_superadmin: false }, { id: 'u3', is_superadmin: false }, { id: 'u4', is_superadmin: false }]
 
 describe('statutRatio', () => {
   it('classe selon les seuils (bornes incluses)', () => {
@@ -142,6 +144,11 @@ describe('isolation : etablissementsAccessibles', () => {
     expect(await etablissementsAccessibles(db, { id: 'u3', email: 'u3@x.fr' }, G)).toEqual([])
   })
 
+  it('rôle cuisine ou bar : pas de vue groupe (CA, marges)', async () => {
+    const { db } = fakeDb(tables)
+    expect(await etablissementsAccessibles(db, { id: 'u4', email: 'u4@x.fr' }, G)).toEqual([])
+  })
+
   it('superadmin : tous les établissements du groupe ayant le module', async () => {
     const { db } = fakeDb(tables)
     const r = await etablissementsAccessibles(db, { id: 'sa', email: 'boss@skalcook.com' }, G)
@@ -189,5 +196,10 @@ describe('listGroupesAccessibles', () => {
   it('membre sans accès : aucun groupe', async () => {
     const { db } = fakeDb(tables)
     expect((await listGroupesAccessibles(db, { id: 'u3' })).groupes).toEqual([])
+  })
+
+  it('rôle cuisine : aucun groupe', async () => {
+    const { db } = fakeDb(tables)
+    expect((await listGroupesAccessibles(db, { id: 'u4' })).groupes).toEqual([])
   })
 })
