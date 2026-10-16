@@ -403,7 +403,7 @@ export default function LandingPage() {
           </div>
           <div>
             <div className="sk-footer__col-title">{t('landing.footer.contact')}</div>
-            <a className="sk-footer__link" href="mailto:contact@skalcook.fr">contact@skalcook.fr</a>
+            <a className="sk-footer__link" href="mailto:antony@skalcook.com">antony@skalcook.com</a>
             <a className="sk-footer__link" href="#contact" onClick={e => { e.preventDefault(); scrollTo('contact') }}>{t('landing.footer.demo')}</a>
           </div>
         </div>

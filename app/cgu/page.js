@@ -82,7 +82,7 @@ export default function CGU() {
       </section>
 
       <div className="sk-legal__callout">
-        <strong>Contact :</strong> Pour toute question relative aux présentes CGU, contactez-nous à <a href="mailto:contact@skalcook.fr">contact@skalcook.fr</a>
+        <strong>Contact :</strong> Pour toute question relative aux présentes CGU, contactez-nous à <a href="mailto:antony@skalcook.com">antony@skalcook.com</a>
       </div>
     </LegalShell>
   )
