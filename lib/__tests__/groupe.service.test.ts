@@ -15,6 +15,8 @@ import {
   comparerPrix,
   cleProduit,
   getPrixGroupe,
+  cleFournisseur,
+  fournisseursGroupe,
   type IndicateursBruts,
   type PrixProduitBrut,
   type EtablissementMeta,
@@ -295,19 +297,62 @@ describe('getPrixGroupe (isolation)', () => {
   it("n'interroge et ne compare que les établissements autorisés", async () => {
     const calls: Record<string, unknown>[] = []
     const { db } = fakeDb(tables)
-    ;(db as unknown as { rpc: unknown }).rpc = async (_fn: string, args: Record<string, unknown>) => {
+    const fourn = [
+      { client_id: 'A', fournisseur: 'Metro', montant: 100, nb_factures: 1, dernier_achat: null },
+      { client_id: 'C', fournisseur: 'Metro', montant: 999, nb_factures: 1, dernier_achat: null },
+    ]
+    ;(db as unknown as { rpc: unknown }).rpc = async (fn: string, args: Record<string, unknown>) => {
       calls.push(args)
-      return { data: rows, error: null } // la fonction renverrait C si on la lui demandait : le service doit l'écarter
+      // Les fonctions renverraient C si on le leur demandait : le service doit l'écarter.
+      return { data: fn === 'groupe_fournisseurs' ? fourn : rows, error: null }
     }
     const r = await getPrixGroupe(db, { id: 'u1' }, { groupeId: G, debut: '2026-09-01', fin: '2026-09-30' })
     expect((calls[0].p_client_ids as string[]).sort()).toEqual(['A', 'B'])
     expect(r.produits[0].etablissements.map((e) => e.clientId)).toEqual(['A', 'B'])
     expect(r.economieTotale).toBeCloseTo(20)
+    expect(r.fournisseurs).toHaveLength(1)
+    expect(r.fournisseurs[0].montantTotal).toBe(100) // pas les 999 € de C
   })
 
   it('refuse un rôle cuisine', async () => {
     const { db } = fakeDb(tables)
     await expect(getPrixGroupe(db, { id: 'u4' }, { groupeId: G, debut: '2026-09-01', fin: '2026-09-30' }))
       .rejects.toMatchObject({ name: 'ForbiddenError' })
+  })
+})
+
+describe('fournisseurs', () => {
+  const noms = new Map([['A', 'Hôtel A'], ['B', 'Hôtel B']])
+
+  it('cleFournisseur rapproche variantes, formes juridiques et espaces', () => {
+    expect(cleFournisseur('FOOD FLOW')).toBe(cleFournisseur('Foodflow'))
+    expect(cleFournisseur('ECREVISSE SAS')).toBe(cleFournisseur('Écrevisse'))
+    expect(cleFournisseur('Ets Dupont & Fils')).toBe(cleFournisseur('DUPONT'))
+    expect(cleFournisseur('Metro')).not.toBe(cleFournisseur('Metzger'))
+  })
+
+  it("prix comparés : fournisseur principal, prix par fournisseur et meilleur prix du groupe", () => {
+    const r = comparerPrix([
+      pb('A', 'Beurre', 'kg', 10, 100, { fournisseurs: [{ fournisseur: 'Metro', qte: 6, montant: 54 }, { fournisseur: 'Kore', qte: 4, montant: 46 }] }),
+      pb('B', 'Beurre', 'kg', 10, 120, { fournisseurs: [{ fournisseur: 'METRO SAS', qte: 10, montant: 120 }] }),
+    ], noms)
+    const a = r[0].etablissements.find((e) => e.clientId === 'A')!
+    expect(a.fournisseurPrincipal).toBe('Metro')
+    expect(a.fournisseurs.map((f) => f.fournisseur)).toEqual(['Metro', 'Kore']) // 9 €/kg puis 11,5 €/kg
+    expect(r[0].meilleurFournisseur).toMatchObject({ clientId: 'A', fournisseur: 'Metro' })
+    expect(r[0].meilleurFournisseur!.prix).toBeCloseTo(9)
+  })
+
+  it('regroupe par fournisseur, communs en premier puis par montant', () => {
+    const f = fournisseursGroupe([
+      { client_id: 'A', fournisseur: 'Kaviari', montant: 50000, nb_factures: 30, dernier_achat: '2026-09-01' },
+      { client_id: 'A', fournisseur: 'FOOD FLOW', montant: 2000, nb_factures: 5, dernier_achat: '2026-09-02' },
+      { client_id: 'B', fournisseur: 'FOODFLOW', montant: 800, nb_factures: 2, dernier_achat: '2026-09-10' },
+      { client_id: 'B', fournisseur: 'Foodflow', montant: 100, nb_factures: 1, dernier_achat: '2026-08-01' },
+    ], noms)
+    expect(f.map((x) => x.nom)).toEqual(['FOOD FLOW', 'Kaviari'])
+    expect(f[0].nbEtablissements).toBe(2)
+    expect(f[0].montantTotal).toBe(2900)
+    expect(f[0].etablissements.find((e) => e.clientId === 'B')).toMatchObject({ montant: 900, nbFactures: 3, dernierAchat: '2026-09-10' })
   })
 })

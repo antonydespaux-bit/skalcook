@@ -47,6 +47,8 @@ export default function GroupePage() {
   const [prix, setPrix] = useState(null)
   const [recherchePrix, setRecherchePrix] = useState('')
   const [nbPrixAffiches, setNbPrixAffiches] = useState(30)
+  const [rechercheFourn, setRechercheFourn] = useState('')
+  const [nbFournAffiches, setNbFournAffiches] = useState(30)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -101,6 +103,7 @@ export default function GroupePage() {
       setData(synthese)
       setPrix(prixRes)
       setNbPrixAffiches(30)
+      setNbFournAffiches(30)
     } catch (e) {
       setData(null); setPrix(null); setError(e.message || t('groupe.errorLoad'))
     } finally {
@@ -124,6 +127,11 @@ export default function GroupePage() {
     const liste = prix?.produits ?? []
     return q ? liste.filter((p) => p.nom.toLowerCase().includes(q)) : liste
   }, [prix, recherchePrix])
+  const fournFiltres = useMemo(() => {
+    const q = rechercheFourn.trim().toLowerCase()
+    const liste = prix?.fournisseurs ?? []
+    return q ? liste.filter((f) => f.nom.toLowerCase().includes(q)) : liste
+  }, [prix, rechercheFourn])
   const totaux = data?.totaux
   // Échelle commune des barres de ratio : le plus haut ratio (au moins 40 %).
   const ratioMax = useMemo(
@@ -390,16 +398,23 @@ export default function GroupePage() {
                                         )}
                                       </div>
                                       <div style={{ fontSize: 11, color: c.texteMuted, marginTop: 2 }}>
-                                        {p.etablissements.map((e) => `${e.nom} ${fmtEur2(e.prixMoyen)}`).join(' · ')}
+                                        {p.etablissements.map((e) => `${e.nom} ${fmtEur2(e.prixMoyen)}${e.fournisseurPrincipal ? ` (${e.fournisseurPrincipal})` : ''}`).join(' · ')}
                                       </div>
+                                      {p.meilleurFournisseur && p.meilleurFournisseur.prix < p.prixMin - 0.005 && (
+                                        <div style={{ fontSize: 11, color: c.vert, marginTop: 2 }}>
+                                          {t('groupe.prix.bestSupplier', { fournisseur: p.meilleurFournisseur.fournisseur, prix: fmtEur2(p.meilleurFournisseur.prix), etablissement: p.meilleurFournisseur.etablissement })}
+                                        </div>
+                                      )}
                                     </td>
                                     <td style={td()}>
                                       <span style={{ color: c.vert, fontWeight: 600 }}>{fmtEur2(p.prixMin)}</span>
                                       <div style={{ fontSize: 11, color: c.texteMuted }}>{moinsCher.nom}</div>
+                                      {moinsCher.fournisseurPrincipal && <div style={{ fontSize: 11, color: c.texteMuted }}>{moinsCher.fournisseurPrincipal}</div>}
                                     </td>
                                     <td style={td()}>
                                       {fmtEur2(p.prixMax)}
                                       <div style={{ fontSize: 11, color: c.texteMuted }}>{plusCher.nom}</div>
+                                      {plusCher.fournisseurPrincipal && <div style={{ fontSize: 11, color: c.texteMuted }}>{plusCher.fournisseurPrincipal}</div>}
                                     </td>
                                     <td style={td()}>+{fmtPct(p.ecartPct)}</td>
                                     <td style={{ ...td(), fontWeight: 600 }}>{fmtEur(p.economiePotentielle)}</td>
@@ -420,6 +435,79 @@ export default function GroupePage() {
                       </div>
                     )}
                     <p style={{ marginTop: 12, fontSize: 12, color: c.texteMuted, lineHeight: 1.5 }}>{t('groupe.prix.method')}</p>
+                  </div>
+                )}
+
+                {/* ── Fournisseurs du groupe ── */}
+                {prix && (
+                  <div style={{ marginTop: 28 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+                      <div>
+                        <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 20, fontWeight: 700, color: c.texte }}>{t('groupe.fournisseurs.title')}</h2>
+                        <p style={{ margin: '4px 0 0', fontSize: 14, color: c.texteMuted }}>
+                          {t('groupe.fournisseurs.summary', { communs: prix.nbFournisseursCommuns, total: prix.nbFournisseurs, montant: fmtEur(prix.montantFournisseursCommuns) })}
+                        </p>
+                      </div>
+                      {prix.nbFournisseurs > 0 && (
+                        <input value={rechercheFourn} onChange={(e) => { setRechercheFourn(e.target.value); setNbFournAffiches(30) }}
+                          placeholder={t('groupe.fournisseurs.search')} style={{ ...inputStyle, minWidth: 220 }} />
+                      )}
+                    </div>
+
+                    {prix.nbFournisseurs === 0 ? (
+                      <div style={{ textAlign: 'center', padding: 32, color: c.texteMuted, fontSize: 14, background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 12 }}>
+                        {t('groupe.fournisseurs.empty')}
+                      </div>
+                    ) : (
+                      <div style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 12, overflow: 'hidden' }}>
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                            <thead>
+                              <tr style={{ background: c.fond, borderBottom: `2px solid ${c.bordure}` }}>
+                                <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: c.texteMuted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('groupe.fournisseurs.cols.supplier')}</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: c.texteMuted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{t('groupe.fournisseurs.cols.total')}</th>
+                                {etabs.map((e) => (
+                                  <th key={e.clientId} style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: c.texteMuted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{e.nom}</th>
+                                ))}
+                                <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: c.texteMuted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('groupe.fournisseurs.cols.invoices')}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {fournFiltres.slice(0, nbFournAffiches).map((f, idx) => {
+                                const parEtab = new Map(f.etablissements.map((e) => [e.clientId, e]))
+                                return (
+                                  <tr key={f.cle} style={{ borderBottom: `1px solid ${c.bordure}`, background: idx % 2 === 0 ? c.blanc : c.fond }}>
+                                    <td style={{ ...td('left'), fontWeight: 500 }}>
+                                      {f.nom}
+                                      {f.nbEtablissements > 1 && (
+                                        <span style={{ marginLeft: 6, fontSize: 10, color: c.accent, background: c.accentClair, padding: '1px 6px', borderRadius: 4 }}>
+                                          {t('groupe.fournisseurs.shared', { count: f.nbEtablissements })}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td style={{ ...td(), fontWeight: 600 }}>{fmtEur(f.montantTotal)}</td>
+                                    {etabs.map((e) => {
+                                      const v = parEtab.get(e.clientId)
+                                      return <td key={e.clientId} style={{ ...td(), color: v ? c.texte : c.texteMuted }}>{v ? fmtEur(v.montant) : '—'}</td>
+                                    })}
+                                    <td style={td()}>{fmtInt(f.etablissements.reduce((s, e) => s + e.nbFactures, 0))}</td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        {fournFiltres.length > nbFournAffiches && (
+                          <div style={{ padding: 12, textAlign: 'center', borderTop: `1px solid ${c.bordure}` }}>
+                            <button onClick={() => setNbFournAffiches((n) => n + 50)}
+                              style={{ padding: '6px 14px', borderRadius: 8, fontSize: 13, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}>
+                              {t('groupe.prix.more', { count: fournFiltres.length - nbFournAffiches })}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <p style={{ marginTop: 12, fontSize: 12, color: c.texteMuted, lineHeight: 1.5 }}>{t('groupe.fournisseurs.method')}</p>
                   </div>
                 )}
               </div>

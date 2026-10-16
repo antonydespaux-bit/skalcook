@@ -288,6 +288,14 @@ export interface PrixProduitBrut {
   montant: number | string
   nb_achats: number | string
   dernier_achat: string | null
+  /** Détail par fournisseur (nom saisi sur la facture), montant décroissant. */
+  fournisseurs?: { fournisseur: string; qte: number | string; montant: number | string }[]
+}
+
+export interface PrixFournisseur {
+  fournisseur: string
+  prix: number
+  qte: number
 }
 
 export interface PrixEtablissement {
@@ -301,6 +309,10 @@ export interface PrixEtablissement {
   dernierAchat: string | null
   /** Surcoût vs le meilleur prix du groupe : (prix − min) × quantité achetée. */
   surcout: number
+  /** Fournisseur chez qui l'établissement achète le plus ce produit (en €). */
+  fournisseurPrincipal: string | null
+  /** Prix moyen par fournisseur, du moins cher au plus cher. */
+  fournisseurs: PrixFournisseur[]
 }
 
 export interface ProduitCompare {
@@ -315,6 +327,8 @@ export interface ProduitCompare {
   economiePotentielle: number
   /** Écart si grand qu'il trahit souvent une erreur de conditionnement ou d'unité. */
   aVerifier: boolean
+  /** Meilleur prix observé dans le groupe, tous fournisseurs confondus. */
+  meilleurFournisseur: { clientId: string; etablissement: string; fournisseur: string; prix: number } | null
   etablissements: PrixEtablissement[]
 }
 
@@ -336,7 +350,8 @@ export function cleProduit(nom: string | null | undefined, unite: string | null 
  * économie potentielle décroissante.
  */
 export function comparerPrix(bruts: PrixProduitBrut[], nomsEtab: Map<string, string>): ProduitCompare[] {
-  const parCle = new Map<string, Map<string, { noms: string[]; unite: string; qte: number; montant: number; nb: number; dernier: string | null }>>()
+  type Cumul = { noms: string[]; unite: string; qte: number; montant: number; nb: number; dernier: string | null; fourn: Map<string, { nom: string; qte: number; montant: number }> }
+  const parCle = new Map<string, Map<string, Cumul>>()
   for (const b of bruts) {
     const qte = n(b.qte), montant = n(b.montant)
     if (qte <= 0 || montant <= 0 || !normDesignation(b.nom) || NOM_GENERIQUE.test(normDesignation(b.nom))) continue
@@ -344,8 +359,15 @@ export function comparerPrix(bruts: PrixProduitBrut[], nomsEtab: Map<string, str
     if (!parCle.has(cle)) parCle.set(cle, new Map())
     const parEtab = parCle.get(cle)!
     // Un établissement peut avoir deux fiches ingrédient au même nom : on cumule.
-    const cur = parEtab.get(b.client_id) ?? { noms: [] as string[], unite: normUnite(b.unite), qte: 0, montant: 0, nb: 0, dernier: null }
+    const cur: Cumul = parEtab.get(b.client_id) ?? { noms: [], unite: normUnite(b.unite), qte: 0, montant: 0, nb: 0, dernier: null, fourn: new Map() }
     cur.noms.push(b.nom)
+    for (const f of b.fournisseurs ?? []) {
+      const k = cleFournisseur(f.fournisseur)
+      const fc = cur.fourn.get(k) ?? { nom: f.fournisseur, qte: 0, montant: 0 }
+      fc.qte += n(f.qte)
+      fc.montant += n(f.montant)
+      cur.fourn.set(k, fc)
+    }
     cur.qte += qte
     cur.montant += montant
     cur.nb += n(b.nb_achats)
@@ -370,8 +392,16 @@ export function comparerPrix(bruts: PrixProduitBrut[], nomsEtab: Map<string, str
         nbAchats: l.nb,
         dernierAchat: l.dernier,
         surcout: (l.prix - prixMin) * l.qte,
+        fournisseurPrincipal: [...l.fourn.values()].sort((a, b) => b.montant - a.montant)[0]?.nom ?? null,
+        fournisseurs: [...l.fourn.values()]
+          .filter((f) => f.qte > 0 && f.montant > 0)
+          .map((f) => ({ fournisseur: f.nom, prix: f.montant / f.qte, qte: f.qte }))
+          .sort((a, b) => a.prix - b.prix),
       }))
       .sort((a, b) => a.prixMoyen - b.prixMoyen)
+    const meilleur = etablissements
+      .flatMap((e) => e.fournisseurs.map((f) => ({ clientId: e.clientId, etablissement: e.nom, fournisseur: f.fournisseur, prix: f.prix })))
+      .sort((a, b) => a.prix - b.prix)[0] ?? null
     produits.push({
       cle,
       nom: etablissements[0].ingredientNom,
@@ -381,10 +411,77 @@ export function comparerPrix(bruts: PrixProduitBrut[], nomsEtab: Map<string, str
       ecartPct: prixMin > 0 ? ((prixMax - prixMin) / prixMin) * 100 : 0,
       economiePotentielle: etablissements.reduce((s, e) => s + e.surcout, 0),
       aVerifier: prixMin > 0 && ((prixMax - prixMin) / prixMin) * 100 > SEUIL_ECART_A_VERIFIER,
+      meilleurFournisseur: meilleur,
       etablissements,
     })
   }
   return produits.sort((a, b) => b.economiePotentielle - a.economiePotentielle)
+}
+
+// ── Fournisseurs du groupe ─────────────────────────────────────────────────
+
+export interface FournisseurBrut {
+  client_id: string
+  fournisseur: string
+  montant: number | string
+  nb_factures: number | string
+  dernier_achat: string | null
+}
+
+export interface FournisseurGroupe {
+  cle: string
+  nom: string
+  montantTotal: number
+  nbEtablissements: number
+  etablissements: { clientId: string; nom: string; montant: number; nbFactures: number; dernierAchat: string | null }[]
+}
+
+// Formes juridiques et mots vides retirés pour rapprocher « ECREVISSE SAS » et
+// « Ecrevisse », « FOOD FLOW » et « FOODFLOW ».
+const MOTS_JURIDIQUES = /\b(sas|sasu|sarl|eurl|sa|snc|sca|ets|etablissements|societe|ste|cie|et|fils)\b/g
+
+/** Clé de rapprochement d'un fournisseur : nom sans accents, casse, ponctuation, forme juridique ni espaces. */
+export function cleFournisseur(nom: string | null | undefined): string {
+  const base = normDesignation(nom).replace(MOTS_JURIDIQUES, ' ').replace(/\s+/g, '')
+  return base || normDesignation(nom).replace(/\s+/g, '')
+}
+
+/**
+ * Regroupe les achats par fournisseur (rapproché par nom) et par établissement.
+ * Les fournisseurs communs à plusieurs établissements passent en premier
+ * (levier de négociation), puis par montant total.
+ */
+export function fournisseursGroupe(bruts: FournisseurBrut[], nomsEtab: Map<string, string>): FournisseurGroupe[] {
+  const parCle = new Map<string, { noms: Map<string, number>; parEtab: Map<string, { montant: number; nb: number; dernier: string | null }> }>()
+  for (const b of bruts) {
+    const montant = n(b.montant)
+    const cle = cleFournisseur(b.fournisseur)
+    if (!cle || montant === 0) continue
+    const g = parCle.get(cle) ?? { noms: new Map(), parEtab: new Map() }
+    g.noms.set(b.fournisseur, (g.noms.get(b.fournisseur) ?? 0) + montant)
+    const e = g.parEtab.get(b.client_id) ?? { montant: 0, nb: 0, dernier: null }
+    e.montant += montant
+    e.nb += n(b.nb_factures)
+    if (b.dernier_achat && (!e.dernier || b.dernier_achat > e.dernier)) e.dernier = b.dernier_achat
+    g.parEtab.set(b.client_id, e)
+    parCle.set(cle, g)
+  }
+  return [...parCle.entries()]
+    .map(([cle, g]) => {
+      const etablissements = [...g.parEtab.entries()]
+        .map(([clientId, e]) => ({ clientId, nom: nomsEtab.get(clientId) ?? '—', montant: e.montant, nbFactures: e.nb, dernierAchat: e.dernier }))
+        .sort((a, b) => b.montant - a.montant)
+      return {
+        cle,
+        // Orthographe la plus utilisée (en €) parmi les variantes saisies.
+        nom: [...g.noms.entries()].sort((a, b) => b[1] - a[1])[0][0],
+        montantTotal: etablissements.reduce((s, e) => s + e.montant, 0),
+        nbEtablissements: etablissements.length,
+        etablissements,
+      }
+    })
+    .filter((f) => f.montantTotal > 0)
+    .sort((a, b) => (Number(b.nbEtablissements > 1) - Number(a.nbEtablissements > 1)) || b.montantTotal - a.montantTotal)
 }
 
 export async function getPrixGroupe(
@@ -396,17 +493,23 @@ export async function getPrixGroupe(
   const etabs = await etablissementsAccessibles(db, user, groupeId)
   if (etabs.length === 0) throw new ForbiddenError('Aucun établissement de ce groupe accessible avec la vue groupe.')
 
-  const { data, error } = await db.rpc('groupe_prix_produits', {
-    p_client_ids: etabs.map((e) => e.id),
-    p_debut: debut,
-    p_fin: fin,
-  })
+  const args = { p_client_ids: etabs.map((e) => e.id), p_debut: debut, p_fin: fin }
+  const [{ data, error }, { data: dataFourn, error: errFourn }] = await Promise.all([
+    db.rpc('groupe_prix_produits', args),
+    db.rpc('groupe_fournisseurs', args),
+  ])
   if (error) throw new Error(error.message)
+  if (errFourn) throw new Error(errFourn.message)
 
   const autorises = new Set(etabs.map((e) => e.id))
   const bruts = ((data ?? []) as PrixProduitBrut[]).filter((b) => autorises.has(b.client_id))
   const nomsEtab = new Map(etabs.map((e) => [e.id, e.nom_etablissement || e.nom || '—']))
   const produits = comparerPrix(bruts, nomsEtab)
+  const fournisseurs = fournisseursGroupe(
+    ((dataFourn ?? []) as FournisseurBrut[]).filter((f) => autorises.has(f.client_id)),
+    nomsEtab,
+  )
+  const communs = fournisseurs.filter((f) => f.nbEtablissements > 1)
 
   return {
     periode: { debut, fin },
@@ -415,5 +518,9 @@ export async function getPrixGroupe(
     economieTotale: produits.reduce((s, p) => s + p.economiePotentielle, 0),
     // Les 200 premiers suffisent à l'écran ; le total reste juste.
     produits: produits.slice(0, 200),
+    nbFournisseurs: fournisseurs.length,
+    nbFournisseursCommuns: communs.length,
+    montantFournisseursCommuns: communs.reduce((s, f) => s + f.montantTotal, 0),
+    fournisseurs: fournisseurs.slice(0, 200),
   }
 }

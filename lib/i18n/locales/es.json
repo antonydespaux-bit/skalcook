@@ -1040,7 +1040,21 @@
       "check": "a revisar",
       "checkHint": "Diferencia muy alta: a menudo un formato, una unidad o una calidad distinta.",
       "more": "Mostrar más (quedan {{count}})",
+      "bestSupplier": "Mejor precio del grupo: {{fournisseur}} a {{prix}} ({{etablissement}})",
       "method": "Precio medio ponderado del periodo por unidad de uso (precio de la línea ÷ formato), compras de cocina sin abonos. Productos emparejados por nombre (sin acentos ni mayúsculas) y unidad. Ahorro posible = lo que cada establecimiento habría pagado de menos al mejor precio del grupo."
+    },
+    "fournisseurs": {
+      "title": "Proveedores del grupo",
+      "summary": "{{communs}} proveedores comunes a varios establecimientos de {{total}} · {{montant}} comprados a estos proveedores comunes",
+      "search": "🔍 Buscar un proveedor…",
+      "empty": "Ninguna compra en el periodo.",
+      "cols": {
+        "supplier": "Proveedor",
+        "total": "Total sin IVA",
+        "invoices": "Facturas"
+      },
+      "shared": "común · {{count}} establ.",
+      "method": "Importe sin IVA de facturas y albaranes del periodo (cocina y bar). Proveedores emparejados por nombre, sin acentos, espacios ni forma jurídica. Los proveedores comunes son una palanca para negociar una tarifa de grupo."
     }
   }
 }

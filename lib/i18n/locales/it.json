@@ -1040,7 +1040,21 @@
       "check": "da verificare",
       "checkHint": "Scarto molto alto: spesso un formato, un'unità o una qualità diversa.",
       "more": "Mostra altri ({{count}} rimanenti)",
+      "bestSupplier": "Miglior prezzo del gruppo: {{fournisseur}} a {{prix}} ({{etablissement}})",
       "method": "Prezzo medio ponderato del periodo per unità d'uso (prezzo della riga ÷ formato), acquisti cucina escluse le note di credito. Prodotti abbinati per nome (senza accenti né maiuscole) e unità. Risparmio possibile = quanto ogni struttura avrebbe risparmiato al miglior prezzo del gruppo."
+    },
+    "fournisseurs": {
+      "title": "Fornitori del gruppo",
+      "summary": "{{communs}} fornitori comuni a più strutture su {{total}} · {{montant}} di acquisti presso questi fornitori comuni",
+      "search": "🔍 Cerca un fornitore…",
+      "empty": "Nessun acquisto nel periodo.",
+      "cols": {
+        "supplier": "Fornitore",
+        "total": "Totale IVA escl.",
+        "invoices": "Fatture"
+      },
+      "shared": "comune · {{count}} strutt.",
+      "method": "Importo IVA esclusa di fatture e DDT del periodo (cucina e bar). Fornitori abbinati per nome, senza accenti, spazi né forma giuridica. I fornitori comuni sono una leva per negoziare una tariffa di gruppo."
     }
   }
 }

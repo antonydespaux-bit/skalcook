@@ -1040,7 +1040,21 @@
       "check": "à vérifier",
       "checkHint": "Écart très élevé : souvent un conditionnement, une unité ou une qualité différente.",
       "more": "Afficher plus ({{count}} restants)",
+      "bestSupplier": "Meilleur prix du groupe : {{fournisseur}} à {{prix}} ({{etablissement}})",
       "method": "Prix moyen pondéré de la période par unité d'utilisation (prix de la ligne ÷ conditionnement), achats cuisine hors avoirs. Produits rapprochés par nom (sans accents ni casse) et unité. Économie possible = ce que chaque établissement aurait payé en moins au meilleur prix du groupe."
+    },
+    "fournisseurs": {
+      "title": "Fournisseurs du groupe",
+      "summary": "{{communs}} fournisseurs communs à plusieurs établissements sur {{total}} · {{montant}} d'achats chez ces fournisseurs communs",
+      "search": "🔍 Rechercher un fournisseur…",
+      "empty": "Aucun achat sur la période.",
+      "cols": {
+        "supplier": "Fournisseur",
+        "total": "Total HT",
+        "invoices": "Factures"
+      },
+      "shared": "commun · {{count}} établ.",
+      "method": "Montant HT des factures et BL de la période (cuisine et bar). Fournisseurs rapprochés par nom, sans accents, espaces ni forme juridique (SAS, SARL…). Les fournisseurs communs sont un levier pour négocier un tarif groupe."
     }
   }
 }

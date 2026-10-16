@@ -1040,7 +1040,21 @@
       "check": "check",
       "checkHint": "Very large gap: often a different pack size, unit or quality.",
       "more": "Show more ({{count}} left)",
+      "bestSupplier": "Group's best price: {{fournisseur}} at {{prix}} ({{etablissement}})",
       "method": "Weighted average price over the period per usage unit (line price ÷ pack size), kitchen purchases excluding credit notes. Products matched by name (ignoring accents and case) and unit. Possible saving = what each venue would have saved at the group's best price."
+    },
+    "fournisseurs": {
+      "title": "Group suppliers",
+      "summary": "{{communs}} suppliers shared by several venues out of {{total}} · {{montant}} purchased from these shared suppliers",
+      "search": "🔍 Search a supplier…",
+      "empty": "No purchases over the period.",
+      "cols": {
+        "supplier": "Supplier",
+        "total": "Total excl. VAT",
+        "invoices": "Invoices"
+      },
+      "shared": "shared · {{count}} venues",
+      "method": "Amount excl. VAT of invoices and delivery notes for the period (kitchen and bar). Suppliers matched by name, ignoring accents, spaces and legal form. Shared suppliers are leverage to negotiate a group rate."
     }
   }
 }
