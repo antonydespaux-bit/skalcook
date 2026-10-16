@@ -12,6 +12,7 @@ const MODULES_DISPONIBLES = [
   { id: 'cartes', label: 'Cartes', emoji: '🍽️' },
   { id: 'gestion', label: 'Gestion', emoji: '📦' },
   { id: 'crm', label: 'CRM traiteur', emoji: '👥' },
+  { id: 'groupe', label: 'Vue groupe', emoji: '🏢' },
 ]
 
 export default function ClientsList({

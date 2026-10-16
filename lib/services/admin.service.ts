@@ -4,7 +4,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { CreateUserInput, CreateGlobalUserInput, UpdateUserInput, UpdateClientInput, CreateClientInput, UpdateClientSettingsInput } from '../validators/admin.schema'
+import type { CreateUserInput, CreateGlobalUserInput, UpdateUserInput, UpdateClientInput, CreateClientInput, UpdateClientSettingsInput, CreateGroupeInput } from '../validators/admin.schema'
 import { ValidationError, NotFoundError, ConflictError, ForbiddenError } from '../errors'
 
 // ── List users for a client ────────────────────────────────────────────────
@@ -342,6 +342,18 @@ export async function updateClientSettings(db: SupabaseClient, input: UpdateClie
   }
 
   return { updated: true }
+}
+
+// ── Groupes d'établissements ───────────────────────────────────────────────
+
+export async function createGroupe(db: SupabaseClient, input: CreateGroupeInput) {
+  const { data, error } = await db
+    .from('groupes')
+    .insert([{ nom: input.nom }])
+    .select('id, nom')
+    .single()
+  if (error) throw new Error(error.message)
+  return { groupe: data }
 }
 
 // ── Activity logs ──────────────────────────────────────────────────────────

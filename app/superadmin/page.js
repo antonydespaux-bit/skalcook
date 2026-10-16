@@ -50,6 +50,9 @@ export default function SuperAdminPage() {
   const [seuilOrangeCuisine, setSeuilOrangeCuisine] = useState('35')
   const [seuilVertBoissons, setSeuilVertBoissons] = useState('22')
   const [seuilOrangeBoissons, setSeuilOrangeBoissons] = useState('28')
+  const [groupes, setGroupes] = useState([])
+  const [groupeId, setGroupeId] = useState('')
+  const [creatingGroupe, setCreatingGroupe] = useState(false)
 
   // Invite modal state
   const [showInviteModal, setShowInviteModal] = useState(false)
@@ -83,9 +86,34 @@ export default function SuperAdminPage() {
   }
 
   const loadClients = async () => {
-    const { data } = await supabase.from('clients').select('*').order('created_at', { ascending: false })
+    const [{ data }, { data: groupesData }] = await Promise.all([
+      supabase.from('clients').select('*').order('created_at', { ascending: false }),
+      supabase.from('groupes').select('id, nom').order('nom'),
+    ])
     setClients(data || [])
+    setGroupes(groupesData || [])
     setLoading(false)
+  }
+
+  // Crée un groupe (ex. un groupe hôtelier) puis le sélectionne pour
+  // l'établissement en cours d'édition.
+  const creerGroupe = async () => {
+    const nomGroupe = (window.prompt('Nom du nouveau groupe ?') || '').trim()
+    if (!nomGroupe) return
+    setCreatingGroupe(true); setError('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) { setError('Session expirée. Reconnectez-vous.'); return }
+      const res = await fetch('/api/superadmin/create-groupe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ nom: nomGroupe }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json?.groupe) { setError('Erreur : ' + messageErreur(json, 'création du groupe impossible')); return }
+      setGroupes(prev => [...prev, json.groupe].sort((a, b) => a.nom.localeCompare(b.nom)))
+      setGroupeId(json.groupe.id)
+    } finally { setCreatingGroupe(false) }
   }
 
   const handleLogout = async () => {
@@ -124,6 +152,7 @@ export default function SuperAdminPage() {
     setPresetCouleur(0); setCouleurPrincipale('#18181B'); setCouleurAccent('#6366F1'); setCouleurFond('#F4F4F5')
     setLogoFile(null); setLogoPreview(null); setLogoExistant(null); setActif(true)
     setSeuilVertCuisine('28'); setSeuilOrangeCuisine('35'); setSeuilVertBoissons('22'); setSeuilOrangeBoissons('28')
+    setGroupeId('')
     setError(''); setSuccess('')
   }
 
@@ -141,6 +170,7 @@ export default function SuperAdminPage() {
     setSeuilOrangeCuisine(String(client.seuil_orange_cuisine || '35'))
     setSeuilVertBoissons(String(client.seuil_vert_boissons || '22'))
     setSeuilOrangeBoissons(String(client.seuil_orange_boissons || '28'))
+    setGroupeId(client.groupe_id || '')
     setError(''); setSuccess(''); setVue('modifier')
   }
 
@@ -214,6 +244,7 @@ export default function SuperAdminPage() {
       modules_actifs: modulesActifs,
       seuil_vert_cuisine: num(seuilVertCuisine, 28), seuil_orange_cuisine: num(seuilOrangeCuisine, 35),
       seuil_vert_boissons: num(seuilVertBoissons, 22), seuil_orange_boissons: num(seuilOrangeBoissons, 28),
+      groupe_id: groupeId || null,
     }
 
     const { data: { session } } = await supabase.auth.getSession()
@@ -514,6 +545,21 @@ export default function SuperAdminPage() {
                   </div>
                   <div style={{ background: couleurFond, padding: '12px 16px' }}><span style={{ fontSize: '12px', color: '#71717A' }}>Aperçu navbar</span></div>
                 </div>
+              </div>
+
+              {/* Groupe */}
+              <div style={{ background: 'white', borderRadius: '12px', border: '0.5px solid #E4E4E7', padding: '24px' }}>
+                <div style={{ fontSize: '12px', fontWeight: '600', color: '#71717A', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '20px' }}>Groupe</div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <select value={groupeId} onChange={e => setGroupeId(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: '200px' }}>
+                    <option value="">Aucun groupe</option>
+                    {groupes.map(g => <option key={g.id} value={g.id}>{g.nom}</option>)}
+                  </select>
+                  <button onClick={creerGroupe} disabled={creatingGroupe} style={{ padding: '10px 14px', borderRadius: '8px', border: '0.5px solid #6366F1', background: '#EEF2FF', color: '#4338CA', fontSize: '13px', fontWeight: '500', cursor: creatingGroupe ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                    {creatingGroupe ? 'Création…' : '+ Nouveau groupe'}
+                  </button>
+                </div>
+                <div style={{ fontSize: '11px', color: '#71717A', marginTop: '6px' }}>{"La vue groupe consolide les établissements d'un même groupe auxquels l'utilisateur a accès. Activez aussi le module « Vue groupe » ci-dessous."}</div>
               </div>
 
               {/* Modules */}

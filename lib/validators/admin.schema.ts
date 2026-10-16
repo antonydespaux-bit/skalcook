@@ -89,6 +89,7 @@ const clientSettingsFields = {
   seuil_vert_boissons:   z.number(),
   seuil_orange_boissons: z.number(),
   logo_url:            emptyToNull.optional().nullable(),
+  groupe_id:           uuidSchema.nullable(),
 }
 
 export const createClientSchema = z.object({
@@ -105,6 +106,7 @@ export const createClientSchema = z.object({
   seuil_orange_cuisine:  clientSettingsFields.seuil_orange_cuisine.default(35),
   seuil_vert_boissons:   clientSettingsFields.seuil_vert_boissons.default(22),
   seuil_orange_boissons: clientSettingsFields.seuil_orange_boissons.default(28),
+  groupe_id:           clientSettingsFields.groupe_id.default(null),
 })
 
 export type CreateClientInput = z.infer<typeof createClientSchema>
@@ -125,9 +127,17 @@ export const updateClientSettingsSchema = z.object({
   seuil_vert_boissons:   clientSettingsFields.seuil_vert_boissons.optional(),
   seuil_orange_boissons: clientSettingsFields.seuil_orange_boissons.optional(),
   logo_url:            clientSettingsFields.logo_url,
+  groupe_id:           clientSettingsFields.groupe_id.optional(),
 })
 
 export type UpdateClientSettingsInput = z.infer<typeof updateClientSettingsSchema>
+
+// ── Groupes d'établissements (vue groupe) ──────────────────────────────────
+export const createGroupeSchema = z.object({
+  nom: z.string().trim().min(1, 'Nom du groupe obligatoire').max(255),
+})
+
+export type CreateGroupeInput = z.infer<typeof createGroupeSchema>
 
 // ── Update client (legal info) ─────────────────────────────────────────────
 // Treat empty strings as "unset" so the page can send blank optional fields
