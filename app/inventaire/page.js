@@ -4,6 +4,7 @@ import { supabase, getClientId, fetchAllRows } from '../../lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
+import { usePermissions } from '../../lib/usePermissions'
 import { useIsMobile } from '../../lib/useIsMobile'
 import Navbar from '../../components/Navbar'
 import ChefLoader from '../../components/ChefLoader'
@@ -23,6 +24,7 @@ export default function InventairePage() {
   const searchParams = useSearchParams()
   const { c } = useTheme()
   const { role } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
   const isMobile = useIsMobile()
 
   // ?section=bar (depuis la navbar bar) ou ?section=cuisine filtre la liste
@@ -174,7 +176,7 @@ export default function InventairePage() {
               {hasDashboardData ? `Dernier inventaire validé · ${formatDate(inventaires.find(i => i.statut === 'valide')?.date_inventaire)}` : 'Aucun inventaire validé'}
             </p>
           </div>
-          {(role === 'admin' || role === 'cuisine' || role === 'bar') && (
+          {peutModif('inventaire') && (
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 onClick={() => router.push(`/inventaire/comparaison${queryString}`)}
@@ -363,7 +365,7 @@ export default function InventairePage() {
                       <div style={{ fontSize: '10px', color: c.texteMuted, marginTop: '2px' }}>Valeur</div>
                     </div>
                   )}
-                  {(role === 'admin' || role === 'cuisine' || role === 'bar') && inv.statut === 'brouillon' && (
+                  {peutModif('inventaire') && inv.statut === 'brouillon' && (
                     <button
                       onClick={(e) => { e.stopPropagation(); router.push(`/inventaire/${inv.id}/saisie${queryString}`) }}
                       style={{

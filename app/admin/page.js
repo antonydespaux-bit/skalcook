@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
+import { usePermissions } from '../../lib/usePermissions'
 import { isSuperadminEmail } from '../../lib/superadmin'
 import Navbar from '../../components/Navbar'
 import ChefLoader from '../../components/ChefLoader'
@@ -31,10 +32,11 @@ export default function AdminPage() {
   const { c } = useTheme()
   const isMobile = useIsMobile()
   const { role, loading: roleLoading } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
 
   useEffect(() => {
-    if (!roleLoading && role !== 'admin' && !isSuperadmin) router.push('/dashboard')
-  }, [role, roleLoading, isSuperadmin])
+    if (!permLoading && !peutVoir('administration') && !isSuperadmin) router.push('/dashboard')
+  }, [permLoading, peutVoir, isSuperadmin])
 
   useEffect(() => {
     checkSuperadmin()

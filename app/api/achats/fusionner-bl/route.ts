@@ -5,7 +5,8 @@ import { fusionnerBls } from '../../../../lib/services/achats.service'
 
 export const POST = apiHandler({
   schema: fusionnerBlsSchema,
-  guard: 'adminOrSuperadmin',
+  guard: 'permission',
+  permission: { fonctionnalite: 'achats', niveau: 'modification' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, user, db, request }) => {
     const result = await fusionnerBls(db, data, user!.id)

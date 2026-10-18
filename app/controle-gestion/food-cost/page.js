@@ -6,6 +6,7 @@ import { supabase, getClientId } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
+import { usePermissions } from '../../../lib/usePermissions'
 import Navbar from '../../../components/Navbar'
 import { getPeriodDates } from '../../../lib/caAnalyses'
 import {
@@ -66,6 +67,7 @@ export default function FoodCostPage() {
   const { c } = useTheme()
   const isMobile = useIsMobile()
   const { role, loading: roleLoading } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
 
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
@@ -136,9 +138,9 @@ export default function FoodCostPage() {
   }, [router])
 
   useEffect(() => {
-    if (roleLoading || !role) return
-    if (role !== 'admin' && role !== 'directeur') router.replace('/dashboard')
-  }, [role, roleLoading, router])
+    if (permLoading || !role) return
+    if (!peutVoir('food_cost')) router.replace('/dashboard')
+  }, [role, permLoading, peutVoir, router])
 
   // Helper : headers authentifiés
   const authHeaders = useCallback(async () => {

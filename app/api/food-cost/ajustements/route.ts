@@ -7,7 +7,8 @@ import { listAllAjustements } from '../../../../lib/services/foodCost.service'
 //         ajustements" sur la page food cost.
 export const GET = apiHandler({
   schema: listRapportsSchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'food_cost', niveau: 'lecture' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, db }) => {
     const result = await listAllAjustements(db, data)

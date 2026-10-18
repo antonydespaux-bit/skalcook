@@ -6,6 +6,7 @@ import { supabase, getClientId } from '../lib/supabase'
 import { isSuperadminEmail } from '../lib/superadmin'
 import { useTheme } from '../lib/useTheme'
 import { useRole } from '../lib/useRole'
+import { usePermissions } from '../lib/usePermissions'
 import { useIsMobile } from '../lib/useIsMobile'
 import { useTenant } from '../lib/useTenant'
 import LanguageSwitcher from './LanguageSwitcher'
@@ -30,6 +31,8 @@ export default function Navbar({ section = 'cuisine' }) {
   const { c, nomEtablissement, logoUrl } = useTheme()
   const { tenant } = useTenant()
   const { role } = useRole()
+  // Menus et boutons selon les droits de l'établissement (Superadmin › Droits).
+  const { peutVoir, peutModifier: peutModif } = usePermissions()
   const isMobile = useIsMobile()
   const [menuOuvert, setMenuOuvert] = useState(false)
   const [groupeOuvert, setGroupeOuvert] = useState(null)
@@ -77,7 +80,7 @@ export default function Navbar({ section = 'cuisine' }) {
   const modules     = tenant?.modules_actifs || (isBar ? ['fiches', 'sous-fiches', 'recap', 'ingredients'] : DEFAULT_CUISINE_MODULES)
   const hasModule   = (id) => modules.includes(id)
   const hasBar      = typeof tenant?.has_bar === 'boolean' ? tenant.has_bar : hasModule('bar')
-  const peutModifier = isBar ? (role === 'admin' || role === 'bar') : (role === 'admin' || role === 'cuisine')
+  const peutModifier = peutModif(isBar ? 'fiches_bar' : 'fiches_cuisine')
 
   const pushWithClient = (path) => {
     const finalPath = hrefWithClient(path, navClientId)
@@ -143,9 +146,9 @@ export default function Navbar({ section = 'cuisine' }) {
           label: t('nav.groups.barSheets'),
           paths: ['/bar/fiches', '/bar/sous-fiches', '/bar/archives'],
           items: [
-            ...(hasModule('fiches')      ? [{ label: t('nav.items.allSheets'), path: '/bar/fiches' }]   : []),
-            ...(hasModule('sous-fiches') ? [{ label: t('nav.items.subSheets'), path: '/bar/sous-fiches' }] : []),
-            { label: t('nav.items.archives'), path: '/bar/archives' },
+            ...(hasModule('fiches') && peutVoir('fiches_bar')      ? [{ label: t('nav.items.allSheets'), path: '/bar/fiches' }]   : []),
+            ...(hasModule('sous-fiches') && peutVoir('fiches_bar') ? [{ label: t('nav.items.subSheets'), path: '/bar/sous-fiches' }] : []),
+            ...(peutVoir('fiches_bar') ? [{ label: t('nav.items.archives'), path: '/bar/archives' }] : []),
           ]
         },
         {
@@ -153,8 +156,8 @@ export default function Navbar({ section = 'cuisine' }) {
           label: t('nav.groups.content'),
           paths: ['/bar/recap', '/bar/ingredients', '/bar/import'],
           items: [
-            ...(hasModule('recap')                     ? [{ label: t('nav.items.recapBev'), path: '/bar/recap' }]       : []),
-            ...(hasModule('ingredients') && peutModifier ? [{ label: t('nav.items.ingredients'),  path: '/bar/ingredients' }] : []),
+            ...(hasModule('recap') && peutVoir('fiches_bar')       ? [{ label: t('nav.items.recapBev'), path: '/bar/recap' }]       : []),
+            ...(hasModule('ingredients') && peutVoir('ingredients') ? [{ label: t('nav.items.ingredients'),  path: '/bar/ingredients' }] : []),
           ]
         },
         ...(hasModule('gestion') ? [{
@@ -162,8 +165,8 @@ export default function Navbar({ section = 'cuisine' }) {
           label: t('nav.groups.management'),
           paths: ['/inventaire', '/bar/achats'],
           items: [
-            { label: t('nav.items.inventory'), path: '/inventaire?section=bar' },
-            { label: t('nav.items.purchases'), path: '/bar/achats' },
+            ...(peutVoir('inventaire') ? [{ label: t('nav.items.inventory'), path: '/inventaire?section=bar' }] : []),
+            ...(peutVoir('achats') ? [{ label: t('nav.items.purchases'), path: '/bar/achats' }] : []),
           ]
         }] : []),
       ].filter(g => g.items.length > 0)
@@ -173,9 +176,9 @@ export default function Navbar({ section = 'cuisine' }) {
           label: t('nav.groups.sheets'),
           paths: ['/fiches', '/sous-fiches', '/archives'],
           items: [
-            ...(hasModule('fiches')      ? [{ label: t('nav.items.allSheets'), path: '/fiches' }]     : []),
-            ...(hasModule('sous-fiches') ? [{ label: t('nav.items.subSheets'), path: '/sous-fiches' }] : []),
-            { label: t('nav.items.archives'), path: '/archives' },
+            ...(hasModule('fiches') && peutVoir('fiches_cuisine')      ? [{ label: t('nav.items.allSheets'), path: '/fiches' }]     : []),
+            ...(hasModule('sous-fiches') && peutVoir('fiches_cuisine') ? [{ label: t('nav.items.subSheets'), path: '/sous-fiches' }] : []),
+            ...(peutVoir('fiches_cuisine') ? [{ label: t('nav.items.archives'), path: '/archives' }] : []),
           ]
         },
         {
@@ -183,15 +186,15 @@ export default function Navbar({ section = 'cuisine' }) {
           label: t('nav.groups.content'),
           paths: ['/menus', '/cartes', '/recap', '/ingredients', '/import', '/avis'],
           items: [
-            ...(hasModule('menus') || hasModule('cartes')
+            ...((hasModule('menus') || hasModule('cartes')) && peutVoir('menus_cartes')
               ? [{ label: t('nav.items.menusCartes'), path: '/menus' }]
               : []),
-            ...(hasModule('recap')                     ? [{ label: t('nav.items.recapFood'), path: '/recap' }]        : []),
-            ...(hasModule('ingredients') && peutModifier ? [{ label: t('nav.items.ingredients'),  path: '/ingredients' }] : []),
-            ...(hasModule('avis')                      ? [{ label: t('nav.items.reviews'),    path: '/avis' }]         : []),
+            ...(hasModule('recap') && peutVoir('fiches_cuisine')    ? [{ label: t('nav.items.recapFood'), path: '/recap' }]        : []),
+            ...(hasModule('ingredients') && peutVoir('ingredients') ? [{ label: t('nav.items.ingredients'),  path: '/ingredients' }] : []),
+            ...(hasModule('avis') && peutVoir('avis')               ? [{ label: t('nav.items.reviews'),    path: '/avis' }]         : []),
           ]
         },
-        ...(hasModule('crm') && (role === 'admin' || role === 'directeur') ? [{
+        ...(hasModule('crm') && peutVoir('crm') ? [{
           id: 'crm',
           label: t('nav.groups.crm'),
           paths: ['/crm'],
@@ -202,7 +205,7 @@ export default function Navbar({ section = 'cuisine' }) {
             { label: t('nav.items.quotes'),       path: '/crm/devis' },
           ]
         }] : []),
-        ...(role === 'admin' ? [{
+        ...(peutVoir('administration') ? [{
           id: 'admin',
           label: t('nav.groups.admin'),
           paths: ['/parametres', '/admin', '/admin/logs', '/admin/ardoise'],
@@ -218,17 +221,17 @@ export default function Navbar({ section = 'cuisine' }) {
           label: t('nav.groups.management'),
           paths: ['/inventaire', '/controle-gestion', '/groupe'],
           items: [
-            { label: t('nav.items.inventory'),       path: '/inventaire' },
-            { label: t('nav.items.purchases'),        path: '/controle-gestion/achats' },
-            { label: t('nav.items.suppliers'),  path: '/controle-gestion/fournisseurs' },
-            ...(role === 'admin' || role === 'directeur' ? [{ label: t('nav.items.foodCost'),     path: '/controle-gestion/food-cost' }] : []),
-            ...(role === 'admin' || role === 'directeur' ? [{ label: t('nav.items.analytics'),      path: '/controle-gestion/analyses' }] : []),
-            ...(role === 'admin' || role === 'directeur' ? [{ label: `${t('nav.items.analytics')} ✨ (nouveau)`, path: '/controle-gestion/analyses-v2' }] : []),
-            { label: t('nav.items.salesTracking'),      path: '/controle-gestion/ventes' },
-            ...(role === 'admin' || role === 'directeur' ? [{ label: t('nav.items.weeklyReport'),  path: '/controle-gestion/ventes/rapport-hebdo' }] : []),
-            { label: t('nav.items.salesBudgets'),    path: '/controle-gestion/ventes/budgets' },
-            ...(role === 'admin' ? [{ label: t('nav.items.salesImport'), path: '/controle-gestion/import' }] : []),
-            ...(hasModule('groupe') && (role === 'admin' || role === 'directeur') ? [{ label: t('nav.items.groupView'), path: '/groupe' }] : []),
+            ...(peutVoir('inventaire') ? [{ label: t('nav.items.inventory'),       path: '/inventaire' }] : []),
+            ...(peutVoir('achats') ? [{ label: t('nav.items.purchases'),        path: '/controle-gestion/achats' }] : []),
+            ...(peutVoir('fournisseurs') ? [{ label: t('nav.items.suppliers'),  path: '/controle-gestion/fournisseurs' }] : []),
+            ...(peutVoir('food_cost') ? [{ label: t('nav.items.foodCost'),     path: '/controle-gestion/food-cost' }] : []),
+            ...(peutVoir('analyses') ? [{ label: t('nav.items.analytics'),      path: '/controle-gestion/analyses' }] : []),
+            ...(peutVoir('analyses') ? [{ label: `${t('nav.items.analytics')} ✨ (nouveau)`, path: '/controle-gestion/analyses-v2' }] : []),
+            ...(peutVoir('ventes') ? [{ label: t('nav.items.salesTracking'),      path: '/controle-gestion/ventes' }] : []),
+            ...(peutVoir('rapport_hebdo') ? [{ label: t('nav.items.weeklyReport'),  path: '/controle-gestion/ventes/rapport-hebdo' }] : []),
+            ...(peutVoir('budgets') ? [{ label: t('nav.items.salesBudgets'),    path: '/controle-gestion/ventes/budgets' }] : []),
+            ...(peutVoir('import_ventes') ? [{ label: t('nav.items.salesImport'), path: '/controle-gestion/import' }] : []),
+            ...(hasModule('groupe') && peutVoir('vue_groupe') ? [{ label: t('nav.items.groupView'), path: '/groupe' }] : []),
           ]
         }] : []),
       ].filter(g => g.items.length > 0)

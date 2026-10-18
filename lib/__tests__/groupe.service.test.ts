@@ -165,6 +165,16 @@ describe('isolation : etablissementsAccessibles', () => {
     expect(await etablissementsAccessibles(db, { id: 'u4', email: 'u4@x.fr' }, G)).toEqual([])
   })
 
+  it('la matrice de droits de chaque établissement prime : cuisine autorisé sur A seulement', async () => {
+    const { db } = fakeDb({ ...tables, permissions_roles: [{ client_id: 'A', role: 'cuisine', fonctionnalite: 'vue_groupe', niveau: 'lecture' }] })
+    expect((await etablissementsAccessibles(db, { id: 'u4', email: 'u4@x.fr' }, G)).map((c) => c.id)).toEqual(['A'])
+  })
+
+  it("un directeur privé de vue groupe sur B ne voit plus B", async () => {
+    const { db } = fakeDb({ ...tables, permissions_roles: [{ client_id: 'B', role: 'directeur', fonctionnalite: 'vue_groupe', niveau: 'aucun' }] })
+    expect((await etablissementsAccessibles(db, { id: 'u1', email: 'u1@x.fr' }, G)).map((c) => c.id)).toEqual(['A'])
+  })
+
   it('superadmin : tous les établissements du groupe ayant le module', async () => {
     const { db } = fakeDb(tables)
     const r = await etablissementsAccessibles(db, { id: 'sa', email: 'boss@skalcook.com' }, G)

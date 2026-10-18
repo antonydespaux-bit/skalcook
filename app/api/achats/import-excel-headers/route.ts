@@ -4,7 +4,8 @@ import { bulkImportHeaders } from '../../../../lib/services/achats.service'
 
 export const POST = apiHandler({
   schema: bulkImportHeadersSchema,
-  guard: 'adminOrSuperadmin',
+  guard: 'permission',
+  permission: { fonctionnalite: 'achats', niveau: 'modification' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, user, db }) => {
     const result = await bulkImportHeaders(db, data, user!.id)

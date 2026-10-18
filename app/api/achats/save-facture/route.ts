@@ -6,7 +6,8 @@ import { ConflictError } from '../../../../lib/errors'
 
 export const POST = apiHandler({
   schema: saveFactureSchema,
-  guard: 'adminOrSuperadmin',
+  guard: 'permission',
+  permission: { fonctionnalite: 'achats', niveau: 'modification' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, user, db, request }) => {
     try {

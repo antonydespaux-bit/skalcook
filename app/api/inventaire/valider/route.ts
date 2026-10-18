@@ -5,7 +5,8 @@ import { validerInventaire } from '../../../../lib/services/inventaire.service'
 
 export const POST = apiHandler({
   schema: validerInventaireSchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'inventaire', niveau: 'modification' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, user, db, request }) => {
     const result = await validerInventaire(db, data.inventaireId, data.clientId, user!.id)

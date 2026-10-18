@@ -55,7 +55,8 @@ async function batchInsert<T>(
 
 export const POST = apiHandler({
   schema: importFichesSchema,
-  guard: 'adminOrSuperadmin',
+  guard: 'permission',
+  permission: { fonctionnalite: 'fiches_cuisine', niveau: 'modification' },
   clientIdFrom: 'body.client_id',
   handler: async ({ data, db }) => {
     const clientId = data.client_id

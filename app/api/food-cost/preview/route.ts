@@ -6,7 +6,8 @@ import { previewPeriode } from '../../../../lib/services/foodCost.service'
 //         sauvegardé. Permet de visualiser un ratio avant de cliquer Sauvegarder.
 export const GET = apiHandler({
   schema: previewPeriodeSchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'food_cost', niveau: 'lecture' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, db }) => {
     const result = await previewPeriode(db, data)

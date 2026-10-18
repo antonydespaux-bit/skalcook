@@ -166,3 +166,15 @@ export const activityLogsQuerySchema = z.object({
   device:   z.string().optional(),
   timespan: z.enum(['24h', '7d', '30d', 'all']).default('7d'),
 })
+
+// ── Droits par établissement (matrice Rôle × Fonctionnalité) ──────────────
+const niveauSchema = z.enum(['aucun', 'lecture', 'modification'])
+export const permissionsQuerySchema = z.object({ clientId: clientIdSchema })
+export const savePermissionsSchema = z.object({
+  clientId: clientIdSchema,
+  // { role: { fonctionnalite: niveau } } ; les clés inconnues sont ignorées.
+  matrice: z.record(z.string(), z.record(z.string(), niveauSchema)),
+  // Applique aussi la matrice aux autres établissements du même groupe.
+  copierVersGroupe: z.boolean().optional(),
+})
+export type SavePermissionsInput = z.infer<typeof savePermissionsSchema>

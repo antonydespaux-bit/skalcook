@@ -20,10 +20,10 @@
  */
 
 import { type ZodType } from 'zod'
-import { requireAuthenticated, requireSuperAdmin, requireAdminOrSuperadmin, requireDirectionOrSuperadmin, requireMemberOfClient, getServiceClient } from './apiGuards'
+import { requireAuthenticated, requireSuperAdmin, requireAdminOrSuperadmin, requireDirectionOrSuperadmin, requireMemberOfClient, requirePermission, getServiceClient } from './apiGuards'
 import { ApiError, ValidationError, AuthError, ForbiddenError } from './errors'
 
-type GuardType = 'authenticated' | 'superadmin' | 'adminOrSuperadmin' | 'directionOrSuperadmin' | 'memberOfClient' | 'none'
+type GuardType = 'authenticated' | 'superadmin' | 'adminOrSuperadmin' | 'directionOrSuperadmin' | 'memberOfClient' | 'permission' | 'none'
 
 interface HandlerContext<T = unknown> {
   data: T
@@ -38,6 +38,8 @@ interface ApiHandlerOptions<T = unknown> {
   querySchema?: ZodType<T>
   guard?: GuardType
   clientIdFrom?: string
+  /** Pour guard 'permission' : fonctionnalité du catalogue (lib/permissions.js) et niveau requis. */
+  permission?: { fonctionnalite: string; niveau: 'lecture' | 'modification' }
   handler: (ctx: HandlerContext<T>) => Promise<Response>
 }
 
@@ -146,6 +148,16 @@ export function apiHandler<T>(options: ApiHandlerOptions<T>) {
             return Response.json({ error: 'clientId requis pour l\'autorisation.' }, { status: 400 })
           }
           const result = await requireDirectionOrSuperadmin(request, clientId) as { user?: { id: string; email?: string }; response?: Response }
+          if (result.response) return result.response
+          user = result.user ?? null
+        } else if (options.guard === 'permission') {
+          const clientId = options.clientIdFrom
+            ? getNestedValue(data as Record<string, unknown>, options.clientIdFrom.replace('body.', ''))
+            : undefined
+          if (!clientId || !options.permission) {
+            return Response.json({ error: 'clientId requis pour l\'autorisation.' }, { status: 400 })
+          }
+          const result = await requirePermission(request, clientId, options.permission.fonctionnalite, options.permission.niveau) as { user?: { id: string; email?: string }; response?: Response }
           if (result.response) return result.response
           user = result.user ?? null
         } else if (options.guard === 'memberOfClient') {

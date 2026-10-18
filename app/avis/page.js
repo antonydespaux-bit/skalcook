@@ -6,6 +6,7 @@ import { theme, Logo } from '../../lib/theme.jsx'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
+import { usePermissions } from '../../lib/usePermissions'
 import Navbar from '../../components/Navbar'
 import ChefLoader from '../../components/ChefLoader'
 
@@ -21,6 +22,7 @@ export default function AvisPage() {
   const isMobile = useIsMobile()
   const { c } = useTheme()
   const { role } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
 
   useEffect(() => {
     checkUser()
@@ -126,7 +128,7 @@ export default function AvisPage() {
   }
 
   const platformEmoji = { Google: '🔵', TripAdvisor: '🟠', Yelp: '🔴', TheFork: '🟢', Autre: '⚪' }
-  const peutModifier = role === 'admin' || role === 'cuisine'
+  const peutModifier = peutModif('avis')
 
 
   const AvisCard = ({ unAvis, compact = false }) => {

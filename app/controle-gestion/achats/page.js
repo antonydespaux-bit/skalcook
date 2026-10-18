@@ -8,6 +8,7 @@ import { supabase, getClientId, fetchAllRows } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
+import { usePermissions } from '../../../lib/usePermissions'
 import { badgeStyleFor, statutLabel, SECTION_BAR_BADGE_STYLE } from '../../../lib/achatsHelpers'
 import Navbar from '../../../components/Navbar'
 
@@ -66,6 +67,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
   const { t, i18n } = useTranslation()
 
   const { role, loading: roleLoading } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
   const [factures, setFactures] = useState([])
@@ -145,7 +147,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
   }, [router])
 
   // Section consultable par tous les membres de l'établissement.
-  // Les actions de modification sont gardees par `role === 'admin'` ci-dessous.
+  // Les actions de modification sont gardees par `peutModif('achats')` ci-dessous.
 
   const loadFactures = useCallback(async () => {
     setLoading(true)
@@ -529,7 +531,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
             >
               {exporting ? t('cgAchats.list.exporting') : t('cgAchats.list.exportExcel')}
             </button>
-            {role === 'admin' && (() => {
+            {peutModif('achats') && (() => {
               // Le filtre section sert aussi d'indicateur pour les boutons d'import :
               // - "bar"     → on cible la section bar (badge "Bar" sur les boutons + ?section=bar)
               // - "cuisine" → cible la section cuisine
@@ -725,7 +727,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                   const ttc = ht + tva
                   const nb = nbLignesByFacture[f.id] ?? 0
                   const badgeStyle = badgeStyleFor(f.statut)
-                  const isSelectableBl = role === 'admin' && f.statut === 'bl' && !f.facture_consolidee_id
+                  const isSelectableBl = peutModif('achats') && f.statut === 'bl' && !f.facture_consolidee_id
                   const isSelected = selectedBlIds.has(f.id)
                   return (
                     <div
@@ -773,7 +775,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                           <div style={{ fontSize: 16, fontWeight: 600, color: c.texte }}>{formatEuro(ttc)} <span style={{ fontSize: 11, color: c.texteMuted, fontWeight: 400 }}>{t('cgAchats.list.ttcSuffix')}</span></div>
                         </div>
                       </div>
-                      {role === 'admin' && (
+                      {peutModif('achats') && (
                         <div style={{ marginTop: 10, textAlign: 'right' }} onClick={e => e.stopPropagation()}>
                           <button
                             onClick={(e) => handleDelete(f, e)}
@@ -803,7 +805,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: c.fond }}>
-                        {role === 'admin' && <th style={{ ...th, width: 32, padding: '11px 8px' }} aria-label={t('cgAchats.list.selectionAria')} />}
+                        {peutModif('achats') && <th style={{ ...th, width: 32, padding: '11px 8px' }} aria-label={t('cgAchats.list.selectionAria')} />}
                         <SortHeader col="fournisseur"    label={t('cgAchats.list.colFournisseur')} titleText={t('cgAchats.list.sortHeaderTitle', { label: t('cgAchats.list.colFournisseur') })} baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
                         <SortHeader col="numero_facture" label={t('cgAchats.list.colNumero')} titleText={t('cgAchats.list.sortHeaderTitle', { label: t('cgAchats.list.colNumero') })} baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
                         <SortHeader col="date_facture"   label={t('cgAchats.list.colDate')} titleText={t('cgAchats.list.sortHeaderTitle', { label: t('cgAchats.list.colDate') })} baseStyle={th}  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} />
@@ -812,7 +814,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                         <SortHeader col="ht"             label={t('cgAchats.list.colHt')} titleText={t('cgAchats.list.sortHeaderTitle', { label: t('cgAchats.list.colHt') })} baseStyle={thR} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} right />
                         <SortHeader col="tva"            label={t('cgAchats.list.colTva')} titleText={t('cgAchats.list.sortHeaderTitle', { label: t('cgAchats.list.colTva') })} baseStyle={thR} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} right />
                         <SortHeader col="ttc"            label={t('cgAchats.list.colTtc')} titleText={t('cgAchats.list.sortHeaderTitle', { label: t('cgAchats.list.colTtc') })} baseStyle={thR} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} c={c} right />
-                        {role === 'admin' && <th style={th} />}
+                        {peutModif('achats') && <th style={th} />}
                       </tr>
                     </thead>
                     <tbody>
@@ -821,7 +823,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                         const tva = tvaByFacture[f.id] || 0
                         const ttc = ht + tva
                         const nb = nbLignesByFacture[f.id] ?? 0
-                        const isSelectableBl = role === 'admin' && f.statut === 'bl' && !f.facture_consolidee_id
+                        const isSelectableBl = peutModif('achats') && f.statut === 'bl' && !f.facture_consolidee_id
                         const isSelected = selectedBlIds.has(f.id)
                         return (
                           <tr
@@ -835,7 +837,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                             onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = c.accentClair }}
                             onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = i % 2 === 0 ? c.blanc : c.fond }}
                           >
-                            {role === 'admin' && (
+                            {peutModif('achats') && (
                               <td style={{ ...td, padding: '11px 8px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                                 {isSelectableBl ? (
                                   <input
@@ -865,7 +867,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                             <td style={tdR}>{formatEuro(ht)}</td>
                             <td style={tdR}>{formatEuro(tva)}</td>
                             <td style={tdR}>{formatEuro(ttc)}</td>
-                            {role === 'admin' && (
+                            {peutModif('achats') && (
                               <td style={{ ...td, textAlign: 'right' }} onClick={e => e.stopPropagation()}>
                                 <button
                                   onClick={(e) => handleDelete(f, e)}
@@ -882,7 +884,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                     </tbody>
                     <tfoot>
                       <tr style={{ fontWeight: 600, background: c.fond }}>
-                        {role === 'admin' && <td style={td} />}
+                        {peutModif('achats') && <td style={td} />}
                         <td style={{ ...td, color: c.texte }}>
                           {t('cgAchats.list.invoices', { count: facturesFiltrees.length })}
                         </td>
@@ -890,7 +892,7 @@ export default function AchatsListPage({ defaultSection = 'tout' } = {}) {
                         <td style={{ ...tdR, color: c.texte }}>{formatEuro(totalHT)}</td>
                         <td style={{ ...tdR, color: c.texte }}>{formatEuro(totalTVA)}</td>
                         <td style={{ ...tdR, color: c.texte }}>{formatEuro(totalTTC)}</td>
-                        {role === 'admin' && <td style={td} />}
+                        {peutModif('achats') && <td style={td} />}
                       </tr>
                     </tfoot>
                   </table>

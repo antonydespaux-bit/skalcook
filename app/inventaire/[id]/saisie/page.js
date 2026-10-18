@@ -5,6 +5,7 @@ import { supabase, getClientId, fetchAllRows } from '../../../../lib/supabase'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '../../../../lib/useTheme'
 import { useRole } from '../../../../lib/useRole'
+import { usePermissions } from '../../../../lib/usePermissions'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import Navbar from '../../../../components/Navbar'
 import IngredientSearch from '../../../../components/IngredientSearch'
@@ -17,6 +18,7 @@ export default function SaisieInventairePage() {
   const searchParams = useSearchParams()
   const { c } = useTheme()
   const { role } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
   const isMobile = useIsMobile()
 
   // Préserve le contexte ?section= (bar / cuisine) entre les pages
@@ -42,9 +44,9 @@ export default function SaisieInventairePage() {
   const derniereValeur = useRef({}) // ligneId → dernière valeur envoyée
 
   useEffect(() => {
-    if (!role) return
-    if (role !== 'admin' && role !== 'cuisine' && role !== 'bar') router.replace('/inventaire')
-  }, [role, router])
+    if (!role || permLoading) return
+    if (!peutModif('inventaire')) router.replace('/inventaire')
+  }, [role, permLoading, peutModif, router])
 
   useEffect(() => { loadData() }, [])
 

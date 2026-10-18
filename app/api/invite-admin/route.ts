@@ -4,7 +4,8 @@ import { inviteAdmin } from '../../../lib/services/admin.service'
 
 export const POST = apiHandler({
   schema: inviteAdminSchema,
-  guard: 'adminOrSuperadmin',
+  guard: 'permission',
+  permission: { fonctionnalite: 'administration', niveau: 'modification' },
   clientIdFrom: 'body.client_id',
   handler: async ({ data, db, request }) => {
     // Lien d'invitation : NEXT_PUBLIC_SITE_URL en priorité (résolu dans le

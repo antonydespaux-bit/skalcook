@@ -8,6 +8,7 @@ import { theme, Logo } from '../../../lib/theme.jsx'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
+import { usePermissions } from '../../../lib/usePermissions'
 import Navbar from '../../../components/Navbar'
 import ChefLoader from '../../../components/ChefLoader'
 import { Badge } from '../../../components/ui'
@@ -23,10 +24,11 @@ export default function LogsPage() {
   const isMobile = useIsMobile()
   const { c } = useTheme()
   const { role, loading: roleLoading } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
 
   useEffect(() => {
-    if (!roleLoading && role !== 'admin') router.push('/dashboard')
-  }, [role, roleLoading])
+    if (!permLoading && !peutVoir('administration')) router.push('/dashboard')
+  }, [permLoading, peutVoir])
 
   useEffect(() => {
     loadLogs()

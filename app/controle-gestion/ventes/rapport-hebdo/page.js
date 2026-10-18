@@ -7,6 +7,7 @@ import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import { useTheme } from '../../../../lib/useTheme'
 import { useRole } from '../../../../lib/useRole'
+import { usePermissions } from '../../../../lib/usePermissions'
 import Navbar from '../../../../components/Navbar'
 import RapportSections from '../../../../components/rapport-hebdo/RapportSections'
 import ArticlesModal from '../../../../components/rapport-hebdo/ArticlesModal'
@@ -27,6 +28,7 @@ export default function RapportHebdoPage() {
   const { c } = useTheme()
   const isMobile = useIsMobile()
   const { role, loading: roleLoading } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
   const { t } = useTranslation()
 
   const [authReady, setAuthReady] = useState(false)
@@ -94,9 +96,9 @@ export default function RapportHebdoPage() {
 
   // Restreint l'accès aux profils admin / directeur
   useEffect(() => {
-    if (roleLoading || !role) return
-    if (role !== 'admin' && role !== 'directeur') router.replace('/dashboard')
-  }, [role, roleLoading, router])
+    if (permLoading || !role) return
+    if (!peutVoir('rapport_hebdo')) router.replace('/dashboard')
+  }, [role, permLoading, peutVoir, router])
 
   // ── Chargement des données pour la période ──────────────────────────────
   const loadData = useCallback(async () => {

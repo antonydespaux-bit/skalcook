@@ -6,6 +6,7 @@ import { supabase, getClientId } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
+import { usePermissions } from '../../../lib/usePermissions'
 import Navbar from '../../../components/Navbar'
 
 const CHAMPS = [
@@ -25,6 +26,7 @@ export default function FournisseursPage() {
   const { c } = useTheme()
 
   const { role, loading: roleLoading } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
 
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
@@ -58,7 +60,7 @@ export default function FournisseursPage() {
     return () => { cancelled = true }
   }, [router])
 
-  // Section consultable par tous les membres. Modifications gardees par `role === 'admin'`.
+  // Section consultable par tous les membres. Modifications gardees par `peutModif('fournisseurs')`.
 
   const loadFournisseurs = useCallback(async () => {
     setLoading(true)
@@ -185,7 +187,7 @@ export default function FournisseursPage() {
             >
               ← Achats
             </button>
-            {role === 'admin' && (
+            {peutModif('fournisseurs') && (
               <button
                 onClick={openCreate}
                 style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, border: 'none', background: c.accent, color: '#fff', cursor: 'pointer', fontWeight: 500 }}
@@ -197,7 +199,7 @@ export default function FournisseursPage() {
         </div>
 
         {/* Formulaire création (top-of-page uniquement pour le mode create) */}
-        {mode === 'create' && role === 'admin' && (
+        {mode === 'create' && peutModif('fournisseurs') && (
           <div style={{
             background: c.blanc, borderRadius: 12, border: `0.5px solid ${c.accent}`,
             padding: isMobile ? 16 : 24, marginBottom: 20,
@@ -295,7 +297,7 @@ export default function FournisseursPage() {
                         <div style={{ marginTop: 6, fontSize: 12, color: c.texteMuted, fontStyle: 'italic' }}>{f.notes}</div>
                       )}
                     </div>
-                    {role === 'admin' && (
+                    {peutModif('fournisseurs') && (
                       <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                         <button
                           onClick={() => mode === 'edit' && editId === f.id ? closeForm() : openEdit(f)}
@@ -337,7 +339,7 @@ export default function FournisseursPage() {
                   </div>
 
                   {/* Accordéon édition inline */}
-                  {mode === 'edit' && editId === f.id && role === 'admin' && (
+                  {mode === 'edit' && editId === f.id && peutModif('fournisseurs') && (
                     <div style={{
                       marginTop: 14, paddingTop: 14, borderTop: `1px solid ${c.bordure}`,
                     }}>

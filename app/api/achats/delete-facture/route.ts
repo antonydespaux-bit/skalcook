@@ -5,7 +5,8 @@ import { deleteFacture } from '../../../../lib/services/achats.service'
 
 export const DELETE = apiHandler({
   schema: deleteFactureSchema,
-  guard: 'adminOrSuperadmin',
+  guard: 'permission',
+  permission: { fonctionnalite: 'achats', niveau: 'modification' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, user, db, request }) => {
     const result = await deleteFacture(db, data.factureId, data.clientId, user?.id)

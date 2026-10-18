@@ -7,6 +7,7 @@ import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useTenant } from '../../../lib/useTenant'
 import { useRole } from '../../../lib/useRole'
+import { usePermissions } from '../../../lib/usePermissions'
 import { getSeuilsFromParams } from '../../../lib/foodCost'
 import {
   getPeriodDates,
@@ -76,6 +77,7 @@ export default function AnalysesPage() {
   const { c } = useTheme()
   const { tenant } = useTenant()
   const { role, loading: roleLoading } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
   const modulesActifs = tenant?.modules_actifs || []
 
   const [authReady, setAuthReady] = useState(false)
@@ -137,9 +139,9 @@ export default function AnalysesPage() {
   }, [router])
 
   useEffect(() => {
-    if (roleLoading || !role) return
-    if (role !== 'admin' && role !== 'directeur') router.replace('/dashboard')
-  }, [role, roleLoading, router])
+    if (permLoading || !role) return
+    if (!peutVoir('analyses')) router.replace('/dashboard')
+  }, [role, permLoading, peutVoir, router])
 
   // ── Récup tenant client_id + lieux + layout (une seule fois) ─────────────
   useEffect(() => {

@@ -16,7 +16,8 @@ import {
 //         sa date).
 export const POST = apiHandler({
   schema: createAjustementSchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'food_cost', niveau: 'modification' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, user, db }) => {
     const result = await createAjustement(db, data, user!.id)
@@ -27,7 +28,8 @@ export const POST = apiHandler({
 // PATCH : met à jour date / libellé / montant / commentaire
 export const PATCH = apiHandler({
   schema: patchAjustementSchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'food_cost', niveau: 'modification' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, db }) => {
     const result = await patchAjustement(db, data)
@@ -38,7 +40,8 @@ export const PATCH = apiHandler({
 // DELETE : suppression définitive d'une ligne d'ajustement
 export const DELETE = apiHandler({
   schema: deleteAjustementSchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'food_cost', niveau: 'modification' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, db }) => {
     const result = await deleteAjustement(db, data)
