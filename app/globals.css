@@ -57,6 +57,17 @@ body {
     grid-template-columns: 1fr !important;
   }
 
+  /* Vue groupe : même contrainte de largeur que la page Analyses ; les
+     grands tableaux (prix comparés, fournisseurs) se répartissent sur
+     plusieurs pages avec l'en-tête répété (règles .sk-print-section). */
+  .sk-groupe-page > div {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .sk-groupe-page table { font-size: 10px !important; }
+  .sk-groupe-page td, .sk-groupe-page th { padding: 4px 6px !important; }
+
   /* Éviter de couper un petit widget (KPI / graphe) en plein milieu. */
   .sk-print-section {
     page-break-inside: avoid;

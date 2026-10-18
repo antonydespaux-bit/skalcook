@@ -1056,6 +1056,15 @@
       },
       "shared": "comune · {{count}} strutt.",
       "method": "Importo IVA esclusa di fatture e DDT del periodo (cucina e bar). Fornitori abbinati per nome, senza accenti, spazi né forma giuridica. I fornitori comuni sono una leva per negoziare una tariffa di gruppo."
+    },
+    "export": {
+      "excel": "Excel",
+      "excelTitle": "Esporta in Excel (sintesi, prezzi a confronto, fornitori)",
+      "print": "Stampa / PDF",
+      "printTitle": "Stampa o salva in PDF"
+    },
+    "print": {
+      "periode": "Periodo dal {{debut}} al {{fin}} · stampato il {{date}}"
     }
   }
 }
