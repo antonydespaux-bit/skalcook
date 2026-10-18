@@ -1065,6 +1065,13 @@
     },
     "print": {
       "periode": "Period {{debut}} to {{fin}} · printed on {{date}}"
+    },
+    "blocs": {
+      "label": "Show:",
+      "indicateurs": "Key figures",
+      "synthese": "Detail by venue",
+      "prix": "Compared prices",
+      "fournisseurs": "Suppliers"
     }
   }
 }

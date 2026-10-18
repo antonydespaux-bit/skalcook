@@ -9,6 +9,7 @@ import { useTheme } from '../../lib/useTheme'
 import * as XLSX from 'xlsx'
 import Navbar from '../../components/Navbar'
 import { buildGroupeWorkbook, nomFichierGroupe } from '../../lib/groupeExport'
+import { BLOCS_GROUPE, loadBlocsGroupe, saveBlocsGroupe, reconcileBlocsGroupe } from '../../lib/groupePreferences'
 
 // Vue groupe : compare les établissements d'un même groupe sur une période.
 // Données : GET /api/groupe/liste puis /api/groupe/synthese (l'API ne renvoie
@@ -52,6 +53,17 @@ export default function GroupePage() {
   const [rechercheFourn, setRechercheFourn] = useState('')
   // Pendant l'impression on affiche toutes les lignes (pas de pagination).
   const [impression, setImpression] = useState(false)
+  // Blocs affichés (et donc imprimés / exportés), mémorisés par utilisateur.
+  const [blocs, setBlocs] = useState(() => reconcileBlocsGroupe(null).blocs)
+  useEffect(() => { loadBlocsGroupe().then((l) => setBlocs(l.blocs)) }, [])
+  const basculerBloc = useCallback((id) => {
+    setBlocs((prev) => {
+      const suivant = { ...prev, [id]: !prev[id] }
+      if (!Object.values(suivant).some(Boolean)) return prev // au moins un bloc
+      saveBlocsGroupe({ blocs: suivant })
+      return suivant
+    })
+  }, [])
   const [nbFournAffiches, setNbFournAffiches] = useState(30)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -136,9 +148,9 @@ export default function GroupePage() {
 
   const exporterExcel = useCallback(() => {
     if (!data) return
-    const wb = buildGroupeWorkbook({ synthese: data, prix })
+    const wb = buildGroupeWorkbook({ synthese: data, prix, blocs })
     XLSX.writeFile(wb, nomFichierGroupe(data.groupe?.nom, dateDebut, dateFin))
-  }, [data, prix, dateDebut, dateFin])
+  }, [data, prix, blocs, dateDebut, dateFin])
 
   const etabs = useMemo(() => data?.etablissements ?? [], [data])
   const produitsFiltres = useMemo(() => {
@@ -265,6 +277,21 @@ export default function GroupePage() {
               ))}
             </div>
 
+            {/* ── Blocs affichés ── */}
+            <div className="no-print" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <span style={{ fontSize: 12, color: c.texteMuted }}>{t('groupe.blocs.label')}</span>
+              {BLOCS_GROUPE.map((id) => {
+                const actif = blocs[id]
+                return (
+                  <button key={id} onClick={() => basculerBloc(id)} aria-pressed={actif}
+                    style={{ padding: '6px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                      border: `1px solid ${actif ? c.accent : c.bordure}`, background: actif ? c.accentClair : c.blanc, color: c.texte }}>
+                    {actif ? '☑' : '☐'} {t(`groupe.blocs.${id}`)}
+                  </button>
+                )
+              })}
+            </div>
+
             {error && (
               <div style={{ background: c.rougeClair, border: `1px solid ${c.rouge}`, borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 14, color: c.rouge }}>
                 {error}
@@ -278,6 +305,7 @@ export default function GroupePage() {
             ) : (
               <div style={{ opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s' }}>
                 {/* ── Indicateurs du groupe ── */}
+                {blocs.indicateurs && (<>
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(6, 1fr)', gap: 12, marginBottom: 20 }}>
                   {kpis.map((k) => (
                     <div key={k.label} style={{ background: c.blanc, border: `1px solid ${c.bordure}`, borderRadius: 12, padding: '14px 16px' }}>
@@ -307,7 +335,10 @@ export default function GroupePage() {
                   </div>
                 </div>
 
+                </>)}
+
                 {/* ── Détail par établissement ── */}
+                {blocs.synthese && (<>
                 {isMobile ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {etabs.map((e) => (
@@ -379,10 +410,14 @@ export default function GroupePage() {
                   </div>
                 )}
 
-                <p style={{ marginTop: 12, fontSize: 12, color: c.texteMuted, lineHeight: 1.5 }}>{t('groupe.method')}</p>
+                </>)}
+
+                {(blocs.indicateurs || blocs.synthese) && (
+                  <p style={{ marginTop: 12, fontSize: 12, color: c.texteMuted, lineHeight: 1.5 }}>{t('groupe.method')}</p>
+                )}
 
                 {/* ── Prix d'achat comparés ── */}
-                {prix && (
+                {prix && blocs.prix && (
                   <div className="sk-print-section" style={{ marginTop: 28 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
                       <div>
@@ -477,7 +512,7 @@ export default function GroupePage() {
                 )}
 
                 {/* ── Fournisseurs du groupe ── */}
-                {prix && (
+                {prix && blocs.fournisseurs && (
                   <div className="sk-print-section" style={{ marginTop: 28 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
                       <div>

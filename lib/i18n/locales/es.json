@@ -1065,6 +1065,13 @@
     },
     "print": {
       "periode": "Periodo del {{debut}} al {{fin}} · impreso el {{date}}"
+    },
+    "blocs": {
+      "label": "Mostrar:",
+      "indicateurs": "Indicadores",
+      "synthese": "Detalle por establecimiento",
+      "prix": "Precios comparados",
+      "fournisseurs": "Proveedores"
     }
   }
 }

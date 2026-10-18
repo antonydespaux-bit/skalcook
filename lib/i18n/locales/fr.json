@@ -1065,6 +1065,13 @@
     },
     "print": {
       "periode": "Période du {{debut}} au {{fin}} · imprimé le {{date}}"
+    },
+    "blocs": {
+      "label": "Afficher :",
+      "indicateurs": "Indicateurs",
+      "synthese": "Détail par établissement",
+      "prix": "Prix comparés",
+      "fournisseurs": "Fournisseurs"
     }
   }
 }

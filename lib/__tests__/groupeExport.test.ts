@@ -63,3 +63,12 @@ describe('groupeExport', () => {
     expect(nomFichierGroupe('Hélène Darroze', '2026-09-01', '2026-09-30')).toBe('vue-groupe-helene-darroze-2026-09-01_2026-09-30.xlsx')
   })
 })
+
+describe('blocs choisis', () => {
+  it("le classeur ne contient que les onglets des blocs cochés (Période toujours)", () => {
+    const seulementPrix = buildGroupeWorkbook({ synthese, prix, blocs: { indicateurs: false, synthese: false, prix: true, fournisseurs: false } })
+    expect(seulementPrix.SheetNames).toEqual(['Période', 'Prix comparés'])
+    const indicateursSeuls = buildGroupeWorkbook({ synthese, prix, blocs: { indicateurs: true, synthese: false, prix: false, fournisseurs: false } })
+    expect(indicateursSeuls.SheetNames).toEqual(['Période', 'Synthèse'])
+  })
+})
