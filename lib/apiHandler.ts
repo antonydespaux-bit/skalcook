@@ -20,10 +20,10 @@
  */
 
 import { type ZodType } from 'zod'
-import { requireAuthenticated, requireSuperAdmin, requireAdminOrSuperadmin, requireMemberOfClient, getServiceClient } from './apiGuards'
+import { requireAuthenticated, requireSuperAdmin, requireAdminOrSuperadmin, requireDirectionOrSuperadmin, requireMemberOfClient, getServiceClient } from './apiGuards'
 import { ApiError, ValidationError, AuthError, ForbiddenError } from './errors'
 
-type GuardType = 'authenticated' | 'superadmin' | 'adminOrSuperadmin' | 'memberOfClient' | 'none'
+type GuardType = 'authenticated' | 'superadmin' | 'adminOrSuperadmin' | 'directionOrSuperadmin' | 'memberOfClient' | 'none'
 
 interface HandlerContext<T = unknown> {
   data: T
@@ -136,6 +136,16 @@ export function apiHandler<T>(options: ApiHandlerOptions<T>) {
             return Response.json({ error: 'clientId requis pour l\'autorisation.' }, { status: 400 })
           }
           const result = await requireAdminOrSuperadmin(request, clientId) as { user?: { id: string; email?: string }; response?: Response }
+          if (result.response) return result.response
+          user = result.user ?? null
+        } else if (options.guard === 'directionOrSuperadmin') {
+          const clientId = options.clientIdFrom
+            ? getNestedValue(data as Record<string, unknown>, options.clientIdFrom.replace('body.', ''))
+            : undefined
+          if (!clientId) {
+            return Response.json({ error: 'clientId requis pour l\'autorisation.' }, { status: 400 })
+          }
+          const result = await requireDirectionOrSuperadmin(request, clientId) as { user?: { id: string; email?: string }; response?: Response }
           if (result.response) return result.response
           user = result.user ?? null
         } else if (options.guard === 'memberOfClient') {
