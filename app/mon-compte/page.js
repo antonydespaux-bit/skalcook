@@ -149,7 +149,11 @@ export default function MonCompte() {
       const res = await fetch(`/api/export-data?client_id=${clientId}`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
-      if (!res.ok) { showToast('err', 'Erreur export.'); return }
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        showToast('err', res.status === 403 ? (j.error || 'Export réservé aux administrateurs et directeurs.') : 'Erreur export.')
+        return
+      }
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
