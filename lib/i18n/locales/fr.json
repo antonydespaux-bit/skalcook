@@ -1056,6 +1056,15 @@
       },
       "shared": "commun · {{count}} établ.",
       "method": "Montant HT des factures et BL de la période (cuisine et bar). Fournisseurs rapprochés par nom, sans accents, espaces ni forme juridique (SAS, SARL…). Les fournisseurs communs sont un levier pour négocier un tarif groupe."
+    },
+    "export": {
+      "excel": "Excel",
+      "excelTitle": "Exporter en Excel (synthèse, prix comparés, fournisseurs)",
+      "print": "Imprimer / PDF",
+      "printTitle": "Imprimer ou enregistrer en PDF"
+    },
+    "print": {
+      "periode": "Période du {{debut}} au {{fin}} · imprimé le {{date}}"
     }
   }
 }

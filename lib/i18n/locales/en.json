@@ -1056,6 +1056,15 @@
       },
       "shared": "shared · {{count}} venues",
       "method": "Amount excl. VAT of invoices and delivery notes for the period (kitchen and bar). Suppliers matched by name, ignoring accents, spaces and legal form. Shared suppliers are leverage to negotiate a group rate."
+    },
+    "export": {
+      "excel": "Excel",
+      "excelTitle": "Export to Excel (summary, compared prices, suppliers)",
+      "print": "Print / PDF",
+      "printTitle": "Print or save as PDF"
+    },
+    "print": {
+      "periode": "Period {{debut}} to {{fin}} · printed on {{date}}"
     }
   }
 }

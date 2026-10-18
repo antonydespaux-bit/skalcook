@@ -6,7 +6,9 @@ import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { useTheme } from '../../lib/useTheme'
+import * as XLSX from 'xlsx'
 import Navbar from '../../components/Navbar'
+import { buildGroupeWorkbook, nomFichierGroupe } from '../../lib/groupeExport'
 
 // Vue groupe : compare les établissements d'un même groupe sur une période.
 // Données : GET /api/groupe/liste puis /api/groupe/synthese (l'API ne renvoie
@@ -48,6 +50,8 @@ export default function GroupePage() {
   const [recherchePrix, setRecherchePrix] = useState('')
   const [nbPrixAffiches, setNbPrixAffiches] = useState(30)
   const [rechercheFourn, setRechercheFourn] = useState('')
+  // Pendant l'impression on affiche toutes les lignes (pas de pagination).
+  const [impression, setImpression] = useState(false)
   const [nbFournAffiches, setNbFournAffiches] = useState(30)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -121,6 +125,21 @@ export default function GroupePage() {
     else if (preset === 'annee') { setDateDebut(`${today.getFullYear()}-01-01`); setDateFin(iso(today)) }
   }, [])
 
+  useEffect(() => {
+    if (!impression) return
+    const fin = () => setImpression(false)
+    window.addEventListener('afterprint', fin)
+    // Laisse React afficher toutes les lignes avant d'ouvrir la boîte d'impression.
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => window.print()))
+    return () => { cancelAnimationFrame(id); window.removeEventListener('afterprint', fin) }
+  }, [impression])
+
+  const exporterExcel = useCallback(() => {
+    if (!data) return
+    const wb = buildGroupeWorkbook({ synthese: data, prix })
+    XLSX.writeFile(wb, nomFichierGroupe(data.groupe?.nom, dateDebut, dateFin))
+  }, [data, prix, dateDebut, dateFin])
+
   const etabs = useMemo(() => data?.etablissements ?? [], [data])
   const produitsFiltres = useMemo(() => {
     const q = recherchePrix.trim().toLowerCase()
@@ -176,8 +195,10 @@ export default function GroupePage() {
   const td = (align = 'right') => ({ padding: '10px 14px', textAlign: align, color: c.texte, whiteSpace: 'nowrap' })
 
   return (
-    <div style={{ minHeight: '100vh', background: c.fond }}>
-      <Navbar />
+    <div className="sk-groupe-page" style={{ minHeight: '100vh', background: c.fond }}>
+      <div className="no-print">
+        <Navbar />
+      </div>
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: isMobile ? '20px 16px' : '32px 32px' }}>
 
         {/* ── En-tête ── */}
@@ -186,8 +207,24 @@ export default function GroupePage() {
             <h1 style={{ margin: 0, fontSize: isMobile ? 22 : 28, fontWeight: 700, color: c.texte }}>
               {data?.groupe?.nom ? `${t('groupe.title')} · ${data.groupe.nom}` : t('groupe.title')}
             </h1>
-            <p style={{ margin: '4px 0 0', fontSize: 14, color: c.texteMuted }}>{t('groupe.subtitle')}</p>
+            <p className="no-print" style={{ margin: '4px 0 0', fontSize: 14, color: c.texteMuted }}>{t('groupe.subtitle')}</p>
+            <p className="print-only" style={{ margin: '4px 0 0', fontSize: 13, color: c.texteMuted }}>
+              {t('groupe.print.periode', { debut: fmtDate(dateDebut), fin: fmtDate(dateFin), date: new Date().toLocaleDateString(locale) })}
+            </p>
           </div>
+          <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {data && etabs.length > 0 && (
+              <>
+                <button onClick={exporterExcel} title={t('groupe.export.excelTitle')}
+                  style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}>
+                  📥 {t('groupe.export.excel')}
+                </button>
+                <button onClick={() => setImpression(true)} title={t('groupe.export.printTitle')}
+                  style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}>
+                  🖨 {t('groupe.export.print')}
+                </button>
+              </>
+            )}
           {groupes.length > 1 && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: c.texteMuted }}>
               {t('groupe.groupLabel')}
@@ -196,6 +233,7 @@ export default function GroupePage() {
               </select>
             </label>
           )}
+          </div>
         </div>
 
         {groupes.length === 0 ? (
@@ -205,7 +243,7 @@ export default function GroupePage() {
         ) : (
           <>
             {/* ── Période ── */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <div className="no-print" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 16 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: c.texteMuted }}>
                 {t('groupe.from')}
                 <input type="date" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} style={inputStyle} />
@@ -345,7 +383,7 @@ export default function GroupePage() {
 
                 {/* ── Prix d'achat comparés ── */}
                 {prix && (
-                  <div style={{ marginTop: 28 }}>
+                  <div className="sk-print-section" style={{ marginTop: 28 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
                       <div>
                         <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 20, fontWeight: 700, color: c.texte }}>{t('groupe.prix.title')}</h2>
@@ -354,7 +392,7 @@ export default function GroupePage() {
                         </p>
                       </div>
                       {prix.nbProduitsCompares > 0 && (
-                        <input value={recherchePrix} onChange={(e) => { setRecherchePrix(e.target.value); setNbPrixAffiches(30) }}
+                        <input className="no-print" value={recherchePrix} onChange={(e) => { setRecherchePrix(e.target.value); setNbPrixAffiches(30) }}
                           placeholder={t('groupe.prix.search')} style={{ ...inputStyle, minWidth: 220 }} />
                       )}
                     </div>
@@ -383,7 +421,7 @@ export default function GroupePage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {produitsFiltres.slice(0, nbPrixAffiches).map((p, idx) => {
+                              {(impression ? produitsFiltres : produitsFiltres.slice(0, nbPrixAffiches)).map((p, idx) => {
                                 const moinsCher = p.etablissements[0]
                                 const plusCher = p.etablissements[p.etablissements.length - 1]
                                 return (
@@ -424,8 +462,8 @@ export default function GroupePage() {
                             </tbody>
                           </table>
                         </div>
-                        {produitsFiltres.length > nbPrixAffiches && (
-                          <div style={{ padding: 12, textAlign: 'center', borderTop: `1px solid ${c.bordure}` }}>
+                        {!impression && produitsFiltres.length > nbPrixAffiches && (
+                          <div className="no-print" style={{ padding: 12, textAlign: 'center', borderTop: `1px solid ${c.bordure}` }}>
                             <button onClick={() => setNbPrixAffiches((n) => n + 50)}
                               style={{ padding: '6px 14px', borderRadius: 8, fontSize: 13, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}>
                               {t('groupe.prix.more', { count: produitsFiltres.length - nbPrixAffiches })}
@@ -440,7 +478,7 @@ export default function GroupePage() {
 
                 {/* ── Fournisseurs du groupe ── */}
                 {prix && (
-                  <div style={{ marginTop: 28 }}>
+                  <div className="sk-print-section" style={{ marginTop: 28 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
                       <div>
                         <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 20, fontWeight: 700, color: c.texte }}>{t('groupe.fournisseurs.title')}</h2>
@@ -449,7 +487,7 @@ export default function GroupePage() {
                         </p>
                       </div>
                       {prix.nbFournisseurs > 0 && (
-                        <input value={rechercheFourn} onChange={(e) => { setRechercheFourn(e.target.value); setNbFournAffiches(30) }}
+                        <input className="no-print" value={rechercheFourn} onChange={(e) => { setRechercheFourn(e.target.value); setNbFournAffiches(30) }}
                           placeholder={t('groupe.fournisseurs.search')} style={{ ...inputStyle, minWidth: 220 }} />
                       )}
                     </div>
@@ -473,7 +511,7 @@ export default function GroupePage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {fournFiltres.slice(0, nbFournAffiches).map((f, idx) => {
+                              {(impression ? fournFiltres : fournFiltres.slice(0, nbFournAffiches)).map((f, idx) => {
                                 const parEtab = new Map(f.etablissements.map((e) => [e.clientId, e]))
                                 return (
                                   <tr key={f.cle} style={{ borderBottom: `1px solid ${c.bordure}`, background: idx % 2 === 0 ? c.blanc : c.fond }}>
@@ -497,8 +535,8 @@ export default function GroupePage() {
                             </tbody>
                           </table>
                         </div>
-                        {fournFiltres.length > nbFournAffiches && (
-                          <div style={{ padding: 12, textAlign: 'center', borderTop: `1px solid ${c.bordure}` }}>
+                        {!impression && fournFiltres.length > nbFournAffiches && (
+                          <div className="no-print" style={{ padding: 12, textAlign: 'center', borderTop: `1px solid ${c.bordure}` }}>
                             <button onClick={() => setNbFournAffiches((n) => n + 50)}
                               style={{ padding: '6px 14px', borderRadius: 8, fontSize: 13, border: `1px solid ${c.bordure}`, background: c.blanc, color: c.texte, cursor: 'pointer' }}>
                               {t('groupe.prix.more', { count: fournFiltres.length - nbFournAffiches })}

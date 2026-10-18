@@ -1056,6 +1056,15 @@
       },
       "shared": "común · {{count}} establ.",
       "method": "Importe sin IVA de facturas y albaranes del periodo (cocina y bar). Proveedores emparejados por nombre, sin acentos, espacios ni forma jurídica. Los proveedores comunes son una palanca para negociar una tarifa de grupo."
+    },
+    "export": {
+      "excel": "Excel",
+      "excelTitle": "Exportar a Excel (resumen, precios comparados, proveedores)",
+      "print": "Imprimir / PDF",
+      "printTitle": "Imprimir o guardar en PDF"
+    },
+    "print": {
+      "periode": "Periodo del {{debut}} al {{fin}} · impreso el {{date}}"
     }
   }
 }
