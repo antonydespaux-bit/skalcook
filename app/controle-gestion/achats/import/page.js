@@ -7,6 +7,7 @@ import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import { useTheme } from '../../../../lib/useTheme'
 import { useRole } from '../../../../lib/useRole'
+import { usePermissions } from '../../../../lib/usePermissions'
 import Navbar from '../../../../components/Navbar'
 import BackButton from '../../../../components/BackButton'
 import IngredientAutocomplete from '../../../../components/IngredientAutocomplete'
@@ -45,6 +46,7 @@ export default function AchatsImportPage() {
   const { c } = useTheme()
   const isMobile = useIsMobile()
   const { role, loading: roleLoading } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
 
   // ── Layout ───────────────────────────────────────────────────────────────
   // Mode OCR desktop : PDF à gauche, metadonnées + lignes en cartes à droite (Option A).
@@ -176,11 +178,11 @@ export default function AchatsImportPage() {
     return () => { cancelled = true }
   }, [router])
 
-  // Import facture = action de modification → admin uniquement.
+  // Import facture = modification des achats (droits de l'établissement).
   useEffect(() => {
-    if (roleLoading || !role) return
-    if (role !== 'admin') router.replace('/controle-gestion/achats')
-  }, [role, roleLoading, router])
+    if (permLoading || !role) return
+    if (!peutModif('achats')) router.replace('/controle-gestion/achats')
+  }, [role, permLoading, peutModif, router])
 
   // Chargement mapping fournisseur + ingrédients une fois authentifié
   const loadReconciliation = useCallback(async () => {

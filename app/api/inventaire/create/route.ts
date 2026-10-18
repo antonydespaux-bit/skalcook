@@ -5,7 +5,8 @@ import { createInventaire } from '../../../../lib/services/inventaire.service'
 
 export const POST = apiHandler({
   schema: createInventaireSchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'inventaire', niveau: 'modification' },
   clientIdFrom: 'body.client_id',
   handler: async ({ data, user, db, request }) => {
     const result = await createInventaire(db, data.client_id, data.type, data.section, data.categorie_ids, data.date_inventaire)

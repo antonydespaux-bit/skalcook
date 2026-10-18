@@ -5,7 +5,8 @@ import { updateFacture } from '../../../../lib/services/achats.service'
 
 export const PATCH = apiHandler({
   schema: updateFactureSchema,
-  guard: 'adminOrSuperadmin',
+  guard: 'permission',
+  permission: { fonctionnalite: 'achats', niveau: 'modification' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, user, db, request }) => {
     const { factureId, clientId, ...updates } = data

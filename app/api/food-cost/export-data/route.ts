@@ -7,7 +7,8 @@ import { getExportData } from '../../../../lib/services/foodCost.service'
 //         les ajustements, et les totaux CA HT + achats HT pour la période.
 export const GET = apiHandler({
   schema: previewPeriodeSchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'food_cost', niveau: 'lecture' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, db }) => {
     const result = await getExportData(db, data)

@@ -7,7 +7,8 @@ import { ventesImportSchema } from '../../../../lib/validators/ventes.schema'
 // pas dans acces_clients mais gèrent les établissements.
 export const POST = apiHandler({
   schema: ventesImportSchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'import_ventes', niveau: 'modification' },
   clientIdFrom: 'body.client_id',
   handler: async ({ data, user, db, request }) => {
     const { client_id, ventes, mappings } = data

@@ -41,7 +41,8 @@ function buildFromHeader(tenantName) {
 
 export const POST = apiHandler({
   schema: bodySchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'crm', niveau: 'modification' },
   clientIdFrom: 'body.client_id',
   handler: async ({ data, db, params, user }) => {
     const devisId = params?.id

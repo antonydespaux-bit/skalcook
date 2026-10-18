@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx'
 import { useIsMobile } from '../lib/useIsMobile'
 import { useTheme } from '../lib/useTheme'
 import { useRole } from '../lib/useRole'
+import { usePermissions } from '../lib/usePermissions'
 import { log } from '../lib/useLog'
 import Navbar from './Navbar'
 import Pagination from './Pagination'
@@ -99,8 +100,9 @@ export default function IngredientsView({ section = 'cuisine' }) {
   const isMobile = useIsMobile()
   const { c } = useTheme()
   const { role, loading: roleLoading } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
 
-  const peutModifier = cfg.rolesModif.includes(role)
+  const peutModifier = peutModif('ingredients')
 
   useEffect(() => {
     checkUser()
@@ -109,11 +111,11 @@ export default function IngredientsView({ section = 'cuisine' }) {
   }, [])
 
   useEffect(() => {
-    if (!roleLoading && role && !cfg.roles.includes(role)) {
+    if (!roleLoading && !permLoading && role && !peutVoir('ingredients')) {
       router.push(cfg.redirectOnWrongRole(role))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, roleLoading])
+  }, [role, roleLoading, permLoading])
 
   const checkUser = async () => {
     try {

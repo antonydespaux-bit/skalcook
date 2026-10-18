@@ -25,7 +25,8 @@ type Row = Record<string, unknown>
 
 export const POST = apiHandler({
   schema: importSchema,
-  guard: 'adminOrSuperadmin',
+  guard: 'permission',
+  permission: { fonctionnalite: 'fiches_cuisine', niveau: 'modification' },
   clientIdFrom: 'body.client_id',
   handler: async ({ data, db }) => {
     const clientId = data.client_id

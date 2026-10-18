@@ -5,6 +5,7 @@ import { supabase, getClientId } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
+import { usePermissions } from '../../lib/usePermissions'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { INVENTAIRE_FREQUENCES, JOURS_SEMAINE } from '../../lib/constants'
 import Navbar from '../../components/Navbar'
@@ -36,8 +37,12 @@ export default function SettingsPage() {
 
   const { c } = useTheme()
   const { role } = useRole()
+  const { loading: permLoading, peutVoir } = usePermissions()
   const isMobile = useIsMobile()
   const router = useRouter()
+  useEffect(() => {
+    if (!permLoading && role && !peutVoir('administration')) router.push('/dashboard')
+  }, [permLoading, role, peutVoir, router])
 
   useEffect(() => {
     checkAuth()
@@ -47,7 +52,6 @@ export default function SettingsPage() {
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { router.push('/'); return }
-    if (role && role !== 'admin') { router.push('/dashboard'); return }
   }
 
   const loadAll = async () => {

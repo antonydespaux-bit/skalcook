@@ -4,7 +4,8 @@
  * Un groupe (table `groupes`) rassemble des établissements (`clients.groupe_id`).
  * Le groupe ne donne AUCUN accès : la synthèse ne porte que sur les
  * établissements du groupe auxquels l'utilisateur a déjà accès
- * (acces_clients) avec un rôle admin ou directeur, et qui ont le module
+ * (acces_clients) avec le droit « Vue groupe » (matrice de droits de chaque
+ * établissement, par défaut admin et directeur), et qui ont le module
  * « groupe » actif. Superadmin : tous les établissements du groupe ayant le
  * module.
  *
@@ -20,10 +21,9 @@ import { TVA_FOOD, TVA_BEV_20, TVA_BEV_10, TVA_AUTRE } from '../caAnalyses'
 import { isSuperadminEmail } from '../superadmin'
 import { normUnite } from '../constants'
 import { normDesignation } from './achats.service'
+import { niveauEffectif, atteint } from '../permissions'
 
 export const MODULE_GROUPE = 'groupe'
-/** Rôles qui voient la vue groupe (CA, marges) — comme les pages d'analyses. */
-export const ROLES_VUE_GROUPE = ['admin', 'directeur']
 
 export type Statut = 'vert' | 'orange' | 'rouge' | null
 
@@ -177,8 +177,8 @@ async function estSuperadmin(db: SupabaseClient, user: { id: string; email?: str
 
 /**
  * Établissements du groupe visibles par l'utilisateur : rattachés au groupe,
- * module « groupe » actif, et accessibles via acces_clients avec un rôle
- * admin ou directeur (sauf superadmin).
+ * module « groupe » actif, et accessibles via acces_clients avec le droit
+ * « Vue groupe » dans cet établissement (sauf superadmin).
  * `db` est le client service_role : c'est CE filtre qui fait l'isolation.
  */
 export async function etablissementsAccessibles(
@@ -201,14 +201,19 @@ export async function etablissementsAccessibles(
 
   if (await estSuperadmin(db, user)) return avecModule
 
-  const { data: acces, error: accErr } = await db
-    .from('acces_clients')
-    .select('client_id, role')
-    .eq('user_id', user.id)
-    .in('client_id', avecModule.map((c) => c.id))
-    .in('role', ROLES_VUE_GROUPE)
+  const ids = avecModule.map((c) => c.id)
+  const [{ data: acces, error: accErr }, { data: lignes, error: pErr }] = await Promise.all([
+    db.from('acces_clients').select('client_id, role').eq('user_id', user.id).in('client_id', ids),
+    db.from('permissions_roles').select('client_id, role, fonctionnalite, niveau').in('client_id', ids).eq('fonctionnalite', 'vue_groupe'),
+  ])
   if (accErr) throw new Error(accErr.message)
-  const autorises = new Set((acces ?? []).map((a) => (a as { client_id: string }).client_id))
+  if (pErr) throw new Error(pErr.message)
+  // Droit « Vue groupe » de son rôle dans CHAQUE établissement (matrice par établissement).
+  const autorises = new Set(((acces ?? []) as { client_id: string; role: string }[])
+    .filter((a) => atteint(niveauEffectif(
+      ((lignes ?? []) as { client_id: string; role: string; fonctionnalite: string; niveau: string }[]).filter((l) => l.client_id === a.client_id),
+      a.role, 'vue_groupe'), 'lecture'))
+    .map((a) => a.client_id))
   return avecModule.filter((c) => autorises.has(c.id))
 }
 
@@ -258,10 +263,18 @@ export async function listGroupesAccessibles(db: SupabaseClient, user: { id: str
   const superadmin = await estSuperadmin(db, user)
   let query = db.from('clients').select('groupe_id, modules_actifs').not('groupe_id', 'is', null).eq('actif', true)
   if (!superadmin) {
-    const { data: acces, error } = await db.from('acces_clients').select('client_id')
-      .eq('user_id', user.id).in('role', ROLES_VUE_GROUPE)
+    const { data: acces, error } = await db.from('acces_clients').select('client_id, role').eq('user_id', user.id)
     if (error) throw new Error(error.message)
-    const ids = (acces ?? []).map((a) => (a as { client_id: string }).client_id)
+    const tous = (acces ?? []) as { client_id: string; role: string }[]
+    const { data: lignes } = tous.length
+      ? await db.from('permissions_roles').select('client_id, role, fonctionnalite, niveau')
+        .in('client_id', tous.map((a) => a.client_id)).eq('fonctionnalite', 'vue_groupe')
+      : { data: [] }
+    const ids = tous
+      .filter((a) => atteint(niveauEffectif(
+        ((lignes ?? []) as { client_id: string; role: string; fonctionnalite: string; niveau: string }[]).filter((l) => l.client_id === a.client_id),
+        a.role, 'vue_groupe'), 'lecture'))
+      .map((a) => a.client_id)
     if (ids.length === 0) return { groupes: [] }
     query = query.in('id', ids)
   }

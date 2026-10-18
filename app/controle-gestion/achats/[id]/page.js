@@ -7,6 +7,7 @@ import { supabase, getClientId } from '../../../../lib/supabase'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import { useTheme } from '../../../../lib/useTheme'
 import { useRole } from '../../../../lib/useRole'
+import { usePermissions } from '../../../../lib/usePermissions'
 import { normDesig, makeLigneId, badgeStyleFor, statutLabel } from '../../../../lib/achatsHelpers'
 import { useFournisseursConnus } from '../../../../lib/useFournisseursConnus'
 import { unitesParSection } from '../../../../lib/constants'
@@ -34,6 +35,7 @@ export default function AchatsDetailPage() {
   const isMobile = useIsMobile()
   const { c } = useTheme()
   const { role, loading: roleLoading } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
 
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
@@ -339,7 +341,7 @@ export default function AchatsDetailPage() {
             label={t('cgAchats.common.backToAchats')}
             style={{ background: 'transparent', border: 'none', color: c.texteMuted, fontSize: 13, padding: 0 }}
           />
-          {role === 'admin' && !loading && facture && (
+          {peutModif('achats') && !loading && facture && (
             <div style={{ display: 'flex', gap: 8 }}>
               {isBl && !estFusionne && (
                 <button onClick={handleConfirmFacture} disabled={saving}

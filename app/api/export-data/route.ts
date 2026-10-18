@@ -8,7 +8,8 @@ const querySchema = z.object({
 export const GET = apiHandler({
   schema: querySchema,
   // Export complet (CA, achats, inventaires) : admins et directeurs seulement.
-  guard: 'directionOrSuperadmin',
+  guard: 'permission',
+  permission: { fonctionnalite: 'export_donnees', niveau: 'lecture' },
   clientIdFrom: 'body.client_id',
   handler: async ({ data, db }) => {
     const clientId = data.client_id

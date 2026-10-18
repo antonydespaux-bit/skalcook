@@ -15,7 +15,8 @@ const schema = z.object({
 
 export const POST = apiHandler({
   schema,
-  guard: 'adminOrSuperadmin',
+  guard: 'permission',
+  permission: { fonctionnalite: 'administration', niveau: 'modification' },
   clientIdFrom: 'body.client_id',
   handler: async ({ data, db }) => {
     const { error } = await db

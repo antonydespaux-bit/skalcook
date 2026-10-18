@@ -4,7 +4,8 @@ import { checkDuplicateFacture } from '../../../../lib/services/achats.service'
 
 export const GET = apiHandler({
   schema: checkDuplicateSchema,
-  guard: 'adminOrSuperadmin',
+  guard: 'permission',
+  permission: { fonctionnalite: 'achats', niveau: 'modification' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, db }) => {
     const existing = await checkDuplicateFacture(db, data.clientId, data.numeroFacture)

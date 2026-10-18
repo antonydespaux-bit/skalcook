@@ -133,6 +133,11 @@ export default function ClientsList({
                 padding: isMobile ? '6px 10px' : '7px 12px', fontSize: isMobile ? '11px' : '12px', cursor: 'pointer', fontWeight: '500',
                 width: isMobile ? '100%' : 'auto'
               }}>KYC & Légal</button>
+              <button onClick={() => onNavigate(`/superadmin/droits/${client.id}`)} style={{
+                background: '#F8FAFC', color: '#0F172A', border: '0.5px solid #CBD5E1', borderRadius: '8px',
+                padding: isMobile ? '6px 10px' : '7px 12px', fontSize: isMobile ? '11px' : '12px', cursor: 'pointer', fontWeight: '500',
+                width: isMobile ? '100%' : 'auto'
+              }}>🔐 Droits</button>
               <button onClick={() => {
                 window.localStorage.removeItem('client_id')
                 window.localStorage.removeItem('tenant')

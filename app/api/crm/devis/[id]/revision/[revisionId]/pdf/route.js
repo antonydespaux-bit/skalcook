@@ -15,7 +15,8 @@ const querySchema = z.object({
 
 export const GET = apiHandler({
   schema: querySchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'crm', niveau: 'lecture' },
   clientIdFrom: 'body.client_id',
   handler: async ({ data, db, params }) => {
     const devisId = params?.id

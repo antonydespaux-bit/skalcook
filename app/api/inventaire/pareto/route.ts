@@ -4,7 +4,8 @@ import { computePareto } from '../../../../lib/services/inventaire.service'
 
 export const GET = apiHandler({
   schema: paretoQuerySchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'inventaire', niveau: 'lecture' },
   clientIdFrom: 'body.client_id',
   handler: async ({ data, db }) => {
     const result = await computePareto(db, data.client_id, data.section)

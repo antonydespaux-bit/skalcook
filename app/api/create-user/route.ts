@@ -4,7 +4,8 @@ import { createUser } from '../../../lib/services/admin.service'
 
 export const POST = apiHandler({
   schema: createUserSchema,
-  guard: 'adminOrSuperadmin',
+  guard: 'permission',
+  permission: { fonctionnalite: 'administration', niveau: 'modification' },
   clientIdFrom: 'body.client_id',
   handler: async ({ data, db, request }) => {
     // Origin de la requête = fallback du lien d'invitation si

@@ -182,7 +182,8 @@ Règles CRITIQUES :
 
 export const POST = apiHandler({
   schema,
-  guard: 'adminOrSuperadmin',
+  guard: 'permission',
+  permission: { fonctionnalite: 'achats', niveau: 'modification' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data }) => {
     const { fileBase64, mimeType } = data

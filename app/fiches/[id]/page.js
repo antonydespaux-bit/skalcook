@@ -6,6 +6,7 @@ import { Logo } from '../../../lib/theme.jsx'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
+import { usePermissions } from '../../../lib/usePermissions'
 import { log } from '../../../lib/useLog'
 import { ALLERGENES } from '../../../lib/allergenes'
 import { formatSaison } from '../../../lib/saison'
@@ -37,9 +38,10 @@ export default function FicheDetail() {
   const isMobile = useIsMobile()
   const { c, logoUrl, nomEtablissement } = useTheme()
   const { role } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
 
-  const peutModifier = role === 'admin' || role === 'cuisine'
-  const peutVoirCosts = role === 'admin' || role === 'directeur' || role === 'consultant'
+  const peutModifier = peutModif('fiches_cuisine')
+  const peutVoirCosts = peutVoir('couts_fiches')
 
   // Texte lisible sur un fond `c.accent` : l'accent est configurable par
   // établissement (clair chez Marsan/Commaraine, foncé chez Joia). Du blanc en

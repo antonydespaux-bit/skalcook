@@ -5,7 +5,8 @@ import { listRapports } from '../../../../lib/services/foodCost.service'
 // GET   : liste des rapports food cost sauvegardés du client
 export const GET = apiHandler({
   schema: listRapportsSchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'food_cost', niveau: 'lecture' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, db }) => {
     const result = await listRapports(db, data)

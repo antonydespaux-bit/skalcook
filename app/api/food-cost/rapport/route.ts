@@ -15,7 +15,8 @@ import {
 // POST  : crée explicitement un rapport sauvegardé pour une période
 export const POST = apiHandler({
   schema: createRapportSchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'food_cost', niveau: 'modification' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, user, db }) => {
     const result = await createRapport(db, data, user!.id)
@@ -26,7 +27,8 @@ export const POST = apiHandler({
 // GET   : récupère un rapport + ajustements + totaux calculés live
 export const GET = apiHandler({
   schema: getRapportSchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'food_cost', niveau: 'lecture' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, db }) => {
     const result = await getRapport(db, data)
@@ -38,7 +40,8 @@ export const GET = apiHandler({
 // PATCH : maj inventaires + notes + période
 export const PATCH = apiHandler({
   schema: patchRapportSchema,
-  guard: 'memberOfClient',
+  guard: 'permission',
+  permission: { fonctionnalite: 'food_cost', niveau: 'modification' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, db }) => {
     const result = await patchRapport(db, data)
@@ -49,7 +52,8 @@ export const PATCH = apiHandler({
 // DELETE : soft-delete du rapport
 export const DELETE = apiHandler({
   schema: deleteRapportSchema,
-  guard: 'adminOrSuperadmin',
+  guard: 'permission',
+  permission: { fonctionnalite: 'food_cost', niveau: 'modification' },
   clientIdFrom: 'body.clientId',
   handler: async ({ data, db }) => {
     const result = await deleteRapport(db, data)

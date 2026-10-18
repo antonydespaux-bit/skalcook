@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
+import { usePermissions } from '../../../lib/usePermissions'
 import Navbar from '../../../components/Navbar'
 import { ALLERGENES } from '../../../lib/allergenes'
 import { formatSaison } from '../../../lib/saison'
@@ -21,7 +22,8 @@ export default function BarSousFichesPage() {
   const isMobile = useIsMobile()
   const { c } = useTheme()
   const { role } = useRole()
-  const peutModifier = role === 'admin' || role === 'bar'
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
+  const peutModifier = peutModif('fiches_bar')
 
   useEffect(() => {
     checkUser()

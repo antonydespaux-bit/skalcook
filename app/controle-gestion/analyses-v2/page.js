@@ -6,6 +6,7 @@ import { supabase, getClientId } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
 import { useRole } from '../../../lib/useRole'
+import { usePermissions } from '../../../lib/usePermissions'
 import { getPeriodDates, fromIsoDate } from '../../../lib/caAnalyses'
 import { useAnalysesData } from '../../../lib/useAnalysesData'
 import Navbar from '../../../components/Navbar'
@@ -21,6 +22,7 @@ export default function AnalysesV2Page() {
   const isMobile = useIsMobile()
   const { c } = useTheme()
   const { role, loading: roleLoading } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
 
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
@@ -49,9 +51,9 @@ export default function AnalysesV2Page() {
   }, [router])
 
   useEffect(() => {
-    if (roleLoading || !role) return
-    if (role !== 'admin' && role !== 'directeur') router.replace('/dashboard')
-  }, [role, roleLoading, router])
+    if (permLoading || !role) return
+    if (!peutVoir('analyses')) router.replace('/dashboard')
+  }, [role, permLoading, peutVoir, router])
 
   useEffect(() => {
     if (!authReady) return

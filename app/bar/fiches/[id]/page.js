@@ -7,6 +7,7 @@ import { Logo } from '../../../../lib/theme.jsx'
 import { useIsMobile } from '../../../../lib/useIsMobile'
 import { useTheme } from '../../../../lib/useTheme'
 import { useRole } from '../../../../lib/useRole'
+import { usePermissions } from '../../../../lib/usePermissions'
 import { log } from '../../../../lib/useLog'
 import { ALLERGENES } from '../../../../lib/allergenes'
 import { formatSaison } from '../../../../lib/saison'
@@ -27,8 +28,9 @@ export default function BarFicheDetail() {
   const isMobile = useIsMobile()
   const { c, logoUrl, nomEtablissement } = useTheme()
   const { role } = useRole()
+  const { loading: permLoading, peutVoir, peutModifier: peutModif } = usePermissions()
 
-  const peutModifier = role === 'admin' || role === 'bar'
+  const peutModifier = peutModif('fiches_bar')
 
   useEffect(() => {
     const style = document.createElement('style')

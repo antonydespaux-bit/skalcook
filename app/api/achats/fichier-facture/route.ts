@@ -1,4 +1,4 @@
-import { requireMemberOfClient, getServiceClient } from '../../../../lib/apiGuards'
+import { requirePermission, getServiceClient } from '../../../../lib/apiGuards'
 
 /**
  * GET /api/achats/fichier-facture?clientId=...&factureId=...&token=...
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
       authRequest = new Request(request.url, { headers, method: request.method })
     }
 
-    const authResult = await requireMemberOfClient(authRequest, clientId) as { user?: unknown; response?: Response }
+    const authResult = await requirePermission(authRequest, clientId, 'achats', 'lecture') as { user?: unknown; response?: Response }
     if (authResult.response) return authResult.response
 
     const db = getServiceClient()
