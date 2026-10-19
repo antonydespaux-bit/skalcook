@@ -1183,7 +1183,9 @@
       "noService": "You are not part of any department. Ask an administrator to assign you to your department (Settings › Departments).",
       "empty": "No requisitions yet.",
       "lines_one": "{{count}} line",
-      "lines_other": "{{count}} lines"
+      "lines_other": "{{count}} lines",
+      "toValidate": "To approve",
+      "emptyToValidate": "No request awaiting approval."
     },
     "nouvelle": {
       "title": "New request",
@@ -1226,7 +1228,17 @@
       "product": "Product",
       "requested": "Requested",
       "delivered": "Delivered",
-      "addedByPreparer": "added during preparation"
+      "addedByPreparer": "added during preparation",
+      "validate": "Approve",
+      "refuse": "Refuse",
+      "confirmRefuse": "Confirm refusal",
+      "close": "Close",
+      "refusalReasonLabel": "Reason for refusal (visible to the requester)",
+      "refusalPlaceholder": "E.g. quantity too large, check with the chef",
+      "validated": "Request approved: it goes to {{service}} for preparation.",
+      "refused": "Request refused.",
+      "validatedBy": "Approved by",
+      "refusedBy": "Refused by"
     }
   }
 }

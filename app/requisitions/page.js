@@ -61,6 +61,8 @@ export default function RequisitionsPage() {
   const formatDate = (iso) => new Date(iso).toLocaleString(i18n.language || 'fr', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
   const peutDemander = !!contexte?.peut_commander && (contexte?.demandeurs?.length ?? 0) > 0
+  // Responsable d'au moins un service (ou administration) : onglet « À valider ».
+  const valideur = !!contexte?.peut_commander && (contexte?.valide_pour?.length ?? 0) > 0
 
   const onglet = (id, label) => {
     const actif = vue === id
@@ -86,10 +88,11 @@ export default function RequisitionsPage() {
           )}
         </div>
 
-        {contexte?.voit_tout && (
-          <div style={{ display: 'flex', gap: '6px', background: c.blanc, padding: '4px', borderRadius: '10px', border: `0.5px solid ${c.bordure}`, width: 'fit-content' }}>
+        {(contexte?.voit_tout || valideur) && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', background: c.blanc, padding: '4px', borderRadius: '10px', border: `0.5px solid ${c.bordure}`, width: 'fit-content' }}>
             {onglet('mes_demandes', t('requisitions.liste.mine'))}
-            {onglet('toutes', t('requisitions.liste.all'))}
+            {valideur && onglet('a_valider', t('requisitions.liste.toValidate'))}
+            {contexte?.voit_tout && onglet('toutes', t('requisitions.liste.all'))}
           </div>
         )}
 
@@ -104,7 +107,9 @@ export default function RequisitionsPage() {
         {chargement ? <ChefLoader /> : (
           <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
             {liste.requisitions.length === 0 ? (
-              <div style={{ padding: '20px', fontSize: '13px', color: c.texteMuted, fontStyle: 'italic' }}>{t('requisitions.liste.empty')}</div>
+              <div style={{ padding: '20px', fontSize: '13px', color: c.texteMuted, fontStyle: 'italic' }}>
+                {vue === 'a_valider' ? t('requisitions.liste.emptyToValidate') : t('requisitions.liste.empty')}
+              </div>
             ) : liste.requisitions.map((r) => (
               <button key={r.id} onClick={() => router.push(`/requisitions/${r.id}`)} style={{
                 display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: isMobile ? '6px 12px' : '16px', width: '100%',

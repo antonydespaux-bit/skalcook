@@ -16,8 +16,11 @@ import {
   annulerRequisition,
   listerRequisitions,
   contexteUtilisateur,
+  peutValider,
+  validerRequisition,
+  refuserRequisition,
 } from '../services/requisitionsDemandes.service'
-import { createRequisitionSchema } from '../validators/requisitions.schema'
+import { createRequisitionSchema, refusRequisitionSchema } from '../validators/requisitions.schema'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../errors'
 
 const CLIENT = '11111111-1111-4111-8111-111111111111'
@@ -255,6 +258,74 @@ describe('annulerRequisition', () => {
       service_membres: [{ client_id: CLIENT, service_id: CUISINE, user_id: MOI }],
     })
     await expect(annulerRequisition(db, CLIENT, MOI, N(), REQ)).rejects.toThrow(ForbiddenError)
+  })
+})
+
+// ── Validation ───────────────────────────────────────────────────────────────
+
+describe('validation des demandes', () => {
+  const responsable = { client_id: CLIENT, service_id: ETAGES, user_id: MOI, responsable: true }
+  const tables = (over: Row = {}, membres: Row[] = [responsable]) => ({
+    ...base(true), service_membres: membres, requisitions: [bon({ statut: 'a_valider', demandeur_id: AUTRE, ...over })],
+  })
+
+  it('peutValider : responsable du service demandeur ou administration', () => {
+    const r = { statut: 'a_valider' as const, service_demandeur_id: ETAGES }
+    expect(peutValider(r, new Set([ETAGES]), N())).toBe(true)
+    expect(peutValider(r, new Set([CUISINE]), N())).toBe(false)
+    expect(peutValider(r, new Set(), N({ administration: 'modification' }))).toBe(true)
+    expect(peutValider(r, new Set([ETAGES]), N({ requisitions: 'lecture' }))).toBe(false)
+    expect(peutValider({ ...r, statut: 'a_preparer' }, new Set([ETAGES]), N())).toBe(false)
+  })
+
+  it('le responsable contexte : valide_pour', async () => {
+    const { db } = fakeDb(tables())
+    expect((await contexteUtilisateur(db, CLIENT, MOI, N())).valide_pour).toEqual([ETAGES])
+  })
+
+  it('vue « à valider » : demandes en attente de mes services', async () => {
+    const { db, appels } = fakeDb(tables())
+    const r = await listerRequisitions(db, CLIENT, MOI, N(), 'a_valider')
+    const lecture = appels.find((a) => a.table === 'requisitions')!
+    expect(lecture.filtres).toContainEqual(['eq', 'statut', 'a_valider'])
+    expect(lecture.filtres).toContainEqual(['in', 'service_demandeur_id', [ETAGES]])
+    expect(r.requisitions[0].peut_valider).toBe(true)
+  })
+
+  it("vue « à valider » vide pour un simple membre", async () => {
+    const { db, appels } = fakeDb(tables({}, [{ ...responsable, responsable: false }]))
+    expect((await listerRequisitions(db, CLIENT, MOI, N(), 'a_valider')).requisitions).toEqual([])
+    // Retour anticipé : la requête n'est ni restreinte aux services ni exécutée.
+    expect(appels.find((a) => a.table === 'requisitions')!.filtres.some((f) => (f as unknown[])[0] === 'in')).toBe(false)
+  })
+
+  it('valider : passe en préparation, sous condition de statut', async () => {
+    const { db, appels } = fakeDb(tables())
+    await validerRequisition(db, CLIENT, MOI, N(), REQ)
+    const maj = appels.find((a) => a.op === 'update')!
+    expect(maj.payload).toMatchObject({ statut: 'a_preparer', valideur_id: MOI })
+    expect(maj.filtres).toContainEqual(['eq', 'statut', 'a_valider'])
+  })
+
+  it('refuser : statut refusée et motif', async () => {
+    const { db, appels } = fakeDb(tables())
+    await refuserRequisition(db, CLIENT, MOI, N(), REQ, '  trop  ')
+    expect(appels.find((a) => a.op === 'update')!.payload).toMatchObject({ statut: 'refusee', refusee_par: MOI, motif_refus: 'trop' })
+  })
+
+  it("un simple membre ne valide pas", async () => {
+    const { db } = fakeDb(tables({}, [{ ...responsable, responsable: false }]))
+    await expect(validerRequisition(db, CLIENT, MOI, N(), REQ)).rejects.toThrow(ForbiddenError)
+  })
+
+  it("une demande déjà en préparation ne se valide plus", async () => {
+    const { db } = fakeDb(tables({ statut: 'a_preparer' }))
+    await expect(refuserRequisition(db, CLIENT, MOI, N(), REQ, 'non')).rejects.toThrow(ConflictError)
+  })
+
+  it('le refus exige un motif', () => {
+    expect(refusRequisitionSchema.safeParse({ client_id: CLIENT, id: REQ, motif: '  ' }).success).toBe(false)
+    expect(refusRequisitionSchema.safeParse({ client_id: CLIENT, id: REQ, motif: 'stock' }).success).toBe(true)
   })
 })
 

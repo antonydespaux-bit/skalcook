@@ -150,7 +150,7 @@ export const createRequisitionSchema = z.object({
   path: ['service_preparateur_id'],
 })
 
-export const VUES_REQUISITIONS = ['mes_demandes', 'toutes'] as const
+export const VUES_REQUISITIONS = ['mes_demandes', 'a_valider', 'toutes'] as const
 
 export const listRequisitionsQuerySchema = z.object({
   client_id: clientIdSchema,
@@ -160,4 +160,10 @@ export const listRequisitionsQuerySchema = z.object({
 export const requisitionIdSchema = z.object({
   client_id: clientIdSchema,
   id:        uuidSchema,
+})
+
+export const refusRequisitionSchema = z.object({
+  client_id: clientIdSchema,
+  id:        uuidSchema,
+  motif:     z.string().trim().min(1, 'Motif requis').max(500),
 })

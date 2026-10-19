@@ -1183,7 +1183,9 @@
       "noService": "Non fate parte di alcun reparto. Chiedete a un amministratore di assegnarvi al vostro reparto (Impostazioni › Reparti).",
       "empty": "Nessuna requisizione per ora.",
       "lines_one": "{{count}} riga",
-      "lines_other": "{{count}} righe"
+      "lines_other": "{{count}} righe",
+      "toValidate": "Da approvare",
+      "emptyToValidate": "Nessuna richiesta in attesa di approvazione."
     },
     "nouvelle": {
       "title": "Nuova richiesta",
@@ -1226,7 +1228,17 @@
       "product": "Prodotto",
       "requested": "Richiesto",
       "delivered": "Consegnato",
-      "addedByPreparer": "aggiunto in preparazione"
+      "addedByPreparer": "aggiunto in preparazione",
+      "validate": "Approva",
+      "refuse": "Rifiuta",
+      "confirmRefuse": "Conferma il rifiuto",
+      "close": "Chiudi",
+      "refusalReasonLabel": "Motivo del rifiuto (visibile al richiedente)",
+      "refusalPlaceholder": "Es.: quantità eccessiva, verificare con lo chef",
+      "validated": "Richiesta approvata: passa in preparazione presso {{service}}.",
+      "refused": "Richiesta rifiutata.",
+      "validatedBy": "Approvata da",
+      "refusedBy": "Rifiutata da"
     }
   }
 }

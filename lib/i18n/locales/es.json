@@ -1183,7 +1183,9 @@
       "noService": "No pertenece a ningún servicio. Pida a un administrador que le asigne a su servicio (Ajustes › Servicios).",
       "empty": "Todavía no hay requisiciones.",
       "lines_one": "{{count}} línea",
-      "lines_other": "{{count}} líneas"
+      "lines_other": "{{count}} líneas",
+      "toValidate": "Por validar",
+      "emptyToValidate": "Ningún pedido pendiente de validación."
     },
     "nouvelle": {
       "title": "Nuevo pedido",
@@ -1226,7 +1228,17 @@
       "product": "Producto",
       "requested": "Pedido",
       "delivered": "Entregado",
-      "addedByPreparer": "añadido en la preparación"
+      "addedByPreparer": "añadido en la preparación",
+      "validate": "Validar",
+      "refuse": "Rechazar",
+      "confirmRefuse": "Confirmar el rechazo",
+      "close": "Cerrar",
+      "refusalReasonLabel": "Motivo del rechazo (visible para el solicitante)",
+      "refusalPlaceholder": "Ej.: cantidad demasiado grande, consultar con el chef",
+      "validated": "Pedido validado: pasa a preparación en {{service}}.",
+      "refused": "Pedido rechazado.",
+      "validatedBy": "Validada por",
+      "refusedBy": "Rechazada por"
     }
   }
 }

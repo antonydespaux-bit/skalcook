@@ -1183,7 +1183,9 @@
       "noService": "Vous ne faites partie d'aucun service. Demandez à un administrateur de vous rattacher à votre service (Paramètres › Services).",
       "empty": "Aucune réquisition pour l'instant.",
       "lines_one": "{{count}} ligne",
-      "lines_other": "{{count}} lignes"
+      "lines_other": "{{count}} lignes",
+      "toValidate": "À valider",
+      "emptyToValidate": "Aucune demande en attente de validation."
     },
     "nouvelle": {
       "title": "Nouvelle demande",
@@ -1226,7 +1228,17 @@
       "product": "Produit",
       "requested": "Demandé",
       "delivered": "Livré",
-      "addedByPreparer": "ajouté à la préparation"
+      "addedByPreparer": "ajouté à la préparation",
+      "validate": "Valider",
+      "refuse": "Refuser",
+      "confirmRefuse": "Confirmer le refus",
+      "close": "Fermer",
+      "refusalReasonLabel": "Motif du refus (visible par le demandeur)",
+      "refusalPlaceholder": "Ex : quantité trop importante, voir avec le chef",
+      "validated": "Demande validée : elle part en préparation chez {{service}}.",
+      "refused": "Demande refusée.",
+      "validatedBy": "Validée par",
+      "refusedBy": "Refusée par"
     }
   }
 }
