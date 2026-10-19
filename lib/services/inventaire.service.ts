@@ -6,6 +6,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { convertirUnite } from '../constants'
 import { ValidationError, ConflictError, NotFoundError } from '../errors'
+import { sortiesRequisitions } from './requisitionsStock.service'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -59,11 +60,13 @@ export async function calculateStockTheorique(
   const dernierInv = dernierInvRes.data
   const periodeDebut = dernierInv?.date_inventaire ?? null
 
-  // Load starting stock, purchases, and sales in parallel
-  const [stockDepart, achats, conso] = await Promise.all([
+  // Load starting stock, purchases, sales and requisition exits in parallel
+  const [stockDepart, achats, conso, sorties] = await Promise.all([
     loadStockDepart(db, dernierInv, section),
     loadAchats(db, clientId, periodeDebut, ingredients),
     loadConsommation(db, clientId, periodeDebut, ficheTable, ficheIngTable, ficheFK, ingredients),
+    // Réquisitions livrées vers un autre service (étages, spa…) : sorties de stock.
+    sortiesRequisitions(db, clientId, section, periodeDebut, ingredients),
   ])
 
   // Calculate theoretical stock per ingredient
@@ -71,6 +74,7 @@ export async function calculateStockTheorique(
     const sd = stockDepart[ing.id] || 0
     const a = achats[ing.id] || 0
     const co = conso[ing.id] || 0
+    const so = sorties[ing.id] || 0
     return {
       ingredient_id: ing.id,
       nom: ing.nom,
@@ -80,7 +84,8 @@ export async function calculateStockTheorique(
       stock_depart: round3(sd),
       achats: round3(a),
       consommation: round3(co),
-      quantite_theorique: round3(sd + a - co),
+      sorties_requisitions: round3(so),
+      quantite_theorique: round3(sd + a - co - so),
     }
   })
 }

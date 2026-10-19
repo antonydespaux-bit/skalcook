@@ -1307,6 +1307,9 @@
       },
       "reason": "Motivo: {{motif}}",
       "open": "Apri la requisizione"
+    },
+    "foodCost": {
+      "cessions": "− cessioni interne (requisizioni): {{montant}}"
     }
   }
 }

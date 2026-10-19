@@ -1307,6 +1307,9 @@
       },
       "reason": "Reason: {{motif}}",
       "open": "Open the requisition"
+    },
+    "foodCost": {
+      "cessions": "− internal transfers (requisitions): {{montant}}"
     }
   }
 }

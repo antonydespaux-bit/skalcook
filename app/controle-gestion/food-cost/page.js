@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslation } from 'react-i18next'
 import { supabase, getClientId } from '../../../lib/supabase'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useTheme } from '../../../lib/useTheme'
@@ -63,6 +64,7 @@ function useDebouncedCallback(fn, delay) {
 // ─── Composant ──────────────────────────────────────────────────────────────
 
 export default function FoodCostPage() {
+  const { t } = useTranslation()
   const router = useRouter()
   const { c } = useTheme()
   const isMobile = useIsMobile()
@@ -92,6 +94,8 @@ export default function FoodCostPage() {
   // Totaux calculés serveur
   const [caFoodHt, setCaFoodHt] = useState(0)
   const [achatsHt, setAchatsHt] = useState(0)
+  // Réquisitions livrées depuis la cuisine vers un autre service (cessions internes).
+  const [cessionsHt, setCessionsHt] = useState(0)
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -165,6 +169,7 @@ export default function FoodCostPage() {
       setAjustements(json.ajustements ?? [])
       setCaFoodHt(json.totaux.ca_food_ht)
       setAchatsHt(json.totaux.achats_ht)
+      setCessionsHt(json.totaux.cessions_ht ?? 0)
     } catch (e) {
       setError(`Chargement impossible : ${e.message}`)
     } finally {
@@ -196,6 +201,7 @@ export default function FoodCostPage() {
       setAjustements(json.ajustements ?? [])
       setCaFoodHt(json.totaux.ca_food_ht)
       setAchatsHt(json.totaux.achats_ht)
+      setCessionsHt(json.totaux.cessions_ht ?? 0)
     } catch (e) {
       setError(`Chargement impossible : ${e.message}`)
     } finally {
@@ -536,6 +542,7 @@ export default function FoodCostPage() {
         periodeFin,
         caFoodHt: data.totaux.ca_food_ht,
         achatsHt: data.totaux.achats_ht,
+        cessionsHt: data.totaux.cessions_ht ?? 0,
         inventaireDebut,
         inventaireFin,
         notes,
@@ -562,6 +569,7 @@ export default function FoodCostPage() {
         periodeFin,
         caFoodHt: data.totaux.ca_food_ht,
         achatsHt: data.totaux.achats_ht,
+        cessionsHt: data.totaux.cessions_ht ?? 0,
         inventaireDebut,
         inventaireFin,
         notes,
@@ -589,10 +597,10 @@ export default function FoodCostPage() {
     const invD = inventaireDebut === '' || inventaireDebut == null ? 0 : Number(inventaireDebut)
     const invF = inventaireFin === '' || inventaireFin == null ? 0 : Number(inventaireFin)
     const sumAjust = ajustements.reduce((s, a) => s + (Number(a.montant) || 0), 0)
-    const coutMatiere = invD + achatsHt - invF + sumAjust
+    const coutMatiere = invD + achatsHt - invF + sumAjust - (cessionsHt || 0)
     const ratio = caFoodHt > 0 ? (coutMatiere / caFoodHt) * 100 : null
     return { invD, invF, sumAjust, coutMatiere, ratio }
-  }, [inventaireDebut, inventaireFin, ajustements, achatsHt, caFoodHt])
+  }, [inventaireDebut, inventaireFin, ajustements, achatsHt, caFoodHt, cessionsHt])
 
   const hasInventaires = inventaireDebut !== '' && inventaireFin !== ''
 
@@ -741,6 +749,9 @@ export default function FoodCostPage() {
               <KpiCard label="Coût matière" value={formatEuro(totaux.coutMatiere)} c={c} sub={
                 <span style={{ fontSize: 11, color: c.texteMuted }}>
                   inv. début + achats − inv. fin + Σ ajust.
+                  {cessionsHt > 0 && (
+                    <span style={{ display: 'block' }}>{t('requisitions.foodCost.cessions', { montant: formatEuro(cessionsHt) })}</span>
+                  )}
                 </span>
               } />
               <KpiCard
