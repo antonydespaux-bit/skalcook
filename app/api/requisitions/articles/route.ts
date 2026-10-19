@@ -1,6 +1,6 @@
 import { apiHandler } from '../../../../lib/apiHandler'
 import { logServeur } from '../../../../lib/serverLog'
-import { niveauUtilisateur } from '../../../../lib/apiGuards'
+import { niveauxRequisitions as niveaux } from '../../../../lib/requisitions/droits'
 import {
   listArticlesQuerySchema,
   createArticleSchema,
@@ -22,14 +22,6 @@ import {
 // est membre du service ou a « administration » en modification.
 
 type Utilisateur = { id: string; email?: string }
-
-async function niveaux(user: Utilisateur, clientId: string) {
-  const [administration, requisitions] = await Promise.all([
-    niveauUtilisateur(user, clientId, 'administration'),
-    niveauUtilisateur(user, clientId, 'requisitions'),
-  ])
-  return { administration, requisitions }
-}
 
 export const GET = apiHandler({
   schema: listArticlesQuerySchema,

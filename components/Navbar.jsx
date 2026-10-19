@@ -145,6 +145,7 @@ export default function Navbar({ section = 'cuisine' }) {
     label: t('nav.groups.requisitions'),
     paths: ['/requisitions'],
     items: [
+      { label: t('nav.items.requisitionsList'), path: '/requisitions' },
       { label: t('nav.items.articlesCatalog'), path: '/requisitions/articles' },
     ],
   }] : []

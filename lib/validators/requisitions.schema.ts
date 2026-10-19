@@ -115,3 +115,49 @@ export const deleteArticleSchema = z.object({
   client_id: clientIdSchema,
   id:        uuidSchema,
 })
+
+// ── Demandes ───────────────────────────────────────────────────────────────
+
+const dateIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date attendue au format YYYY-MM-DD')
+const quantite = z.coerce.number().positive('Quantité > 0').max(100_000)
+
+export const contexteQuerySchema = z.object({
+  client_id: clientIdSchema,
+})
+
+export const catalogueQuerySchema = z.object({
+  client_id:  clientIdSchema,
+  service_id: uuidSchema,
+  q:          z.string().trim().max(80).optional(),
+})
+
+export const createRequisitionSchema = z.object({
+  client_id:              clientIdSchema,
+  service_demandeur_id:   uuidSchema,
+  service_preparateur_id: uuidSchema,
+  date_souhaitee:         dateIso.nullable().optional(),
+  commentaire:            z.string().trim().max(1000).nullable().optional(),
+  lignes: z.array(z.object({
+    produit_id:  uuidSchema,
+    quantite,
+    commentaire: z.string().trim().max(300).nullable().optional(),
+  })).min(1, 'Ajoutez au moins un produit.').max(200).refine(
+    (l) => new Set(l.map((x) => x.produit_id)).size === l.length,
+    'Un produit figure deux fois.',
+  ),
+}).refine((d) => d.service_demandeur_id !== d.service_preparateur_id, {
+  message: 'Le service destinataire doit être différent du service demandeur.',
+  path: ['service_preparateur_id'],
+})
+
+export const VUES_REQUISITIONS = ['mes_demandes', 'toutes'] as const
+
+export const listRequisitionsQuerySchema = z.object({
+  client_id: clientIdSchema,
+  vue:       z.enum(VUES_REQUISITIONS).default('mes_demandes'),
+})
+
+export const requisitionIdSchema = z.object({
+  client_id: clientIdSchema,
+  id:        uuidSchema,
+})

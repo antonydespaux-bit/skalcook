@@ -51,7 +51,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!roleLoading && role && !['admin', 'cuisine', 'directeur'].includes(role)) {
-      router.push(role === 'bar' ? '/bar/dashboard' : '/dashboard')
+      // Rôle « service » : pas de tableau de bord, il arrive sur ses réquisitions.
+      router.push(role === 'bar' ? '/bar/dashboard' : role === 'service' ? '/requisitions' : '/dashboard')
     }
   }, [role, roleLoading])
 
