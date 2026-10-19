@@ -11,7 +11,7 @@ import { FONCTIONNALITES, ROLES, matriceComplete, niveauParDefaut } from '../../
 // Superadmin › Établissement › Droits : matrice Rôle × Fonctionnalité à
 // 3 niveaux. Seul le superadmin la modifie (levier commercial).
 
-const ROLE_LABELS = { admin: 'Admin', directeur: 'Directeur', cuisine: 'Cuisine', bar: 'Bar', consultant: 'Consultant' }
+const ROLE_LABELS = { admin: 'Admin', directeur: 'Directeur', cuisine: 'Cuisine', bar: 'Bar', consultant: 'Consultant', service: 'Service' }
 const NIVEAUX_UI = [
   { id: 'aucun', label: 'Non', bg: '#FEE2E2', color: '#B91C1C' },
   { id: 'lecture', label: 'Voir', bg: '#FEF3C7', color: '#92400E' },

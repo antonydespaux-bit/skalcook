@@ -189,13 +189,14 @@
       "roleUpdated": "Ruolo aggiornato.",
       "roleChangeError": "Errore durante il cambio di ruolo.",
       "removeError": "Errore durante la rimozione dell'accesso.",
-      "roles": { "admin": "Amministratore", "cuisine": "Cucina", "bar": "Bar", "directeur": "Direttore", "undefined": "Non definito" },
-      "createOptions": { "cuisine": "Cucina", "bar": "Bar", "directeurZone": "Direttore di zona", "admin": "Amministratore" },
+      "roles": { "admin": "Amministratore", "cuisine": "Cucina", "bar": "Bar", "directeur": "Direttore", "service": "Servizio", "undefined": "Non definito" },
+      "createOptions": { "cuisine": "Cucina", "bar": "Bar", "directeurZone": "Direttore di zona", "service": "Servizio (requisizioni)", "admin": "Amministratore" },
       "rights": {
         "admin": "⚙️ Accesso completo — Cucina, Bar, impostazioni e gestione utenti",
         "cuisine": "👨‍🍳 Cucina — può creare, modificare ed eliminare schede cucina",
         "bar": "🍸 Bar — può creare, modificare ed eliminare schede bar",
         "directeur": "👔 Sola lettura — può vedere ed esportare Cucina + Bar ma non modificare",
+        "service": "🛎️ Servizio — crea e segue le requisizioni dei propri servizi, nient'altro",
         "none": "—"
       }
     },

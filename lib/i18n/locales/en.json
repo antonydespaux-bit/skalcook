@@ -189,13 +189,14 @@
       "roleUpdated": "Role updated.",
       "roleChangeError": "Error while changing the role.",
       "removeError": "Error while removing access.",
-      "roles": { "admin": "Administrator", "cuisine": "Kitchen", "bar": "Bar", "directeur": "Manager", "undefined": "Undefined" },
-      "createOptions": { "cuisine": "Kitchen", "bar": "Bar", "directeurZone": "Area manager", "admin": "Administrator" },
+      "roles": { "admin": "Administrator", "cuisine": "Kitchen", "bar": "Bar", "directeur": "Manager", "service": "Service", "undefined": "Undefined" },
+      "createOptions": { "cuisine": "Kitchen", "bar": "Bar", "directeurZone": "Area manager", "service": "Service (requisitions)", "admin": "Administrator" },
       "rights": {
         "admin": "⚙️ Full access — Kitchen, Bar, settings and user management",
         "cuisine": "👨‍🍳 Kitchen — can create, edit and delete kitchen sheets",
         "bar": "🍸 Bar — can create, edit and delete bar sheets",
         "directeur": "👔 Read-only — can view and export Kitchen + Bar but not edit",
+        "service": "🛎️ Service — places and tracks requisitions for their services, nothing else",
         "none": "—"
       }
     },

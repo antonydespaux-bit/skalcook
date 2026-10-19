@@ -24,6 +24,31 @@ describe('catalogue', () => {
   })
 })
 
+describe('rôle service et réquisitions', () => {
+  it("le rôle service n'a accès qu'aux réquisitions par défaut", () => {
+    const ouvertes = FONCTIONNALITES.filter((f) => niveauParDefaut(f.id, 'service') !== 'aucun').map((f) => f.id)
+    expect(ouvertes).toEqual(['requisitions'])
+    expect(niveauParDefaut('requisitions', 'service')).toBe('modification')
+  })
+
+  it('les rôles existants gardent leurs défauts et reçoivent les réquisitions', () => {
+    for (const role of ['admin', 'directeur', 'cuisine', 'bar']) {
+      expect(niveauParDefaut('requisitions', role), role).toBe('modification')
+    }
+    expect(niveauParDefaut('requisitions', 'consultant')).toBe('lecture')
+    expect(niveauParDefaut('requisitions_analyses', 'admin')).toBe('modification')
+    expect(niveauParDefaut('requisitions_analyses', 'directeur')).toBe('modification')
+    expect(niveauParDefaut('requisitions_analyses', 'cuisine')).toBe('aucun')
+    expect(niveauParDefaut('requisitions_analyses', 'service')).toBe('aucun')
+  })
+
+  it('les chemins des réquisitions sont gouvernés par la matrice', () => {
+    expect(fonctionnalitePourChemin('/requisitions')).toBe('requisitions')
+    expect(fonctionnalitePourChemin('/requisitions/nouvelle')).toBe('requisitions')
+    expect(fonctionnalitePourChemin('/requisitions/analyses')).toBe('requisitions_analyses')
+  })
+})
+
 describe('niveauEffectif', () => {
   it("une ligne stockée remplace le défaut, pour ce rôle et cette fonctionnalité seulement", () => {
     const lignes = [{ role: 'directeur', fonctionnalite: 'achats', niveau: 'aucun' }]

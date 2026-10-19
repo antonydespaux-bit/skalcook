@@ -253,6 +253,7 @@ export default function AdminPage() {
       case 'cuisine': return { label: t('admin.users.roles.cuisine'), color: '#3B6D11', bg: '#EAF3DE' }
       case 'bar': return { label: t('admin.users.roles.bar'), color: '#3C3489', bg: '#EEEDFE' }
       case 'directeur': return { label: t('admin.users.roles.directeur'), color: '#854F0B', bg: '#FAEEDA' }
+      case 'service': return { label: t('admin.users.roles.service'), color: '#155E75', bg: '#ECFEFF' }
       default: return { label: t('admin.users.roles.undefined'), color: '#8B7355', bg: '#FAF9F6' }
     }
   }
@@ -263,6 +264,7 @@ export default function AdminPage() {
       case 'cuisine': return t('admin.users.rights.cuisine')
       case 'bar': return t('admin.users.rights.bar')
       case 'directeur': return t('admin.users.rights.directeur')
+      case 'service': return t('admin.users.rights.service')
       default: return t('admin.users.rights.none')
     }
   }
@@ -321,6 +323,7 @@ export default function AdminPage() {
                   <option value="cuisine">{t('admin.users.createOptions.cuisine')}</option>
                   <option value="bar">{t('admin.users.createOptions.bar')}</option>
                   <option value="directeur">{t('admin.users.createOptions.directeurZone')}</option>
+                  <option value="service">{t('admin.users.createOptions.service')}</option>
                   <option value="admin">{t('admin.users.createOptions.admin')}</option>
                 </select>
               </div>
@@ -458,6 +461,7 @@ export default function AdminPage() {
                       <option value="cuisine">{t('admin.users.roles.cuisine')}</option>
                       <option value="bar">{t('admin.users.roles.bar')}</option>
                       <option value="directeur">{t('admin.users.roles.directeur')}</option>
+                      <option value="service">{t('admin.users.roles.service')}</option>
                       <option value="admin">{t('admin.logs.admin')}</option>
                     </select>
                     {profil.id !== currentUserId && (

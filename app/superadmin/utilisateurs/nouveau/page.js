@@ -6,7 +6,7 @@ import { supabase } from '../../../../lib/supabase'
 import { isSuperadminEmail } from '../../../../lib/superadmin'
 import { theme, Logo, LogoBand } from '../../../../lib/theme.jsx'
 import ChefLoader from '../../../../components/ChefLoader'
-const ROLES = ['admin', 'consultant', 'directeur', 'cuisine', 'bar']
+const ROLES = ['admin', 'consultant', 'directeur', 'cuisine', 'bar', 'service']
 
 export default function NouveauUtilisateurPage() {
   const router = useRouter()
