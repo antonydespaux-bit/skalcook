@@ -1185,7 +1185,12 @@
       "lines_one": "{{count}} line",
       "lines_other": "{{count}} lines",
       "toValidate": "To approve",
-      "emptyToValidate": "No request awaiting approval."
+      "emptyToValidate": "No request awaiting approval.",
+      "toPrepare": "To prepare",
+      "emptyToPrepare": "No order to prepare.",
+      "directExit": "Direct issue",
+      "directExitBadge": "Direct issue",
+      "wantedOn": "for {{date}}"
     },
     "nouvelle": {
       "title": "New request",
@@ -1238,7 +1243,36 @@
       "validated": "Request approved: it goes to {{service}} for preparation.",
       "refused": "Request refused.",
       "validatedBy": "Approved by",
-      "refusedBy": "Refused by"
+      "refusedBy": "Refused by",
+      "type": "Type",
+      "exitFrom": "Issued from",
+      "exitTo": "To"
+    },
+    "preparation": {
+      "title": "Preparation",
+      "help": "Enter the quantities actually served (0 if the product is missing). Add products requested verbally.",
+      "take": "Take over",
+      "taken": "Order taken over: the requester can no longer cancel it.",
+      "deliveredQty": "Delivered quantity of {{nom}}",
+      "added": "added",
+      "addProduct": "Add a product requested verbally",
+      "deliver": "Confirm delivery",
+      "deliverHelp": "Delivery locks quantities and prices, and takes the products out of stock.",
+      "confirmDeliver": "Confirm delivery of R-{{numero}}? Quantities can no longer be changed.",
+      "delivered": "Delivery recorded.",
+      "preparedBy": "Prepared by"
+    },
+    "sortie": {
+      "title": "Direct issue",
+      "subtitle": "Stock issued without an order, to a department (e.g. fruit for room welcomes). It is recorded as delivered.",
+      "noSource": "You are not part of any department that holds stock.",
+      "from": "Issue from the stock of",
+      "to": "For the department",
+      "noLine": "Click a product to add it to the issue.",
+      "commentPlaceholder": "E.g. today's VIP welcomes",
+      "confirmChangeSource": "Changing stock clears the product list. Continue?",
+      "save_one": "Record the issue ({{count}} product)",
+      "save_other": "Record the issue ({{count}} products)"
     }
   }
 }

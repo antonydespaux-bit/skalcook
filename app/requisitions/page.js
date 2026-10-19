@@ -63,6 +63,8 @@ export default function RequisitionsPage() {
   const peutDemander = !!contexte?.peut_commander && (contexte?.demandeurs?.length ?? 0) > 0
   // Responsable d'au moins un service (ou administration) : onglet « À valider ».
   const valideur = !!contexte?.peut_commander && (contexte?.valide_pour?.length ?? 0) > 0
+  // Membre d'un service qui prépare (ou administration) : onglet « À préparer » et sorties directes.
+  const preparateur = !!contexte?.peut_commander && (contexte?.prepare_pour?.length ?? 0) > 0
 
   const onglet = (id, label) => {
     const actif = vue === id
@@ -80,6 +82,12 @@ export default function RequisitionsPage() {
       <div style={{ padding: isMobile ? '14px' : '24px', maxWidth: '1100px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '18px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px' }}>
           <h1 style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: '600', color: c.texte, margin: 0, flex: '1 1 auto' }}>{t('requisitions.liste.title')}</h1>
+          {preparateur && (
+            <button onClick={() => router.push('/requisitions/sortie')} style={{
+              padding: '10px 18px', borderRadius: '10px', border: `0.5px solid ${c.bordure}`, background: c.blanc, color: c.texte,
+              fontSize: '14px', cursor: 'pointer',
+            }}>{t('requisitions.liste.directExit')}</button>
+          )}
           {peutDemander && (
             <button onClick={() => router.push('/requisitions/nouvelle')} style={{
               padding: '10px 18px', borderRadius: '10px', border: 'none', background: c.accent, color: surAccent,
@@ -88,9 +96,10 @@ export default function RequisitionsPage() {
           )}
         </div>
 
-        {(contexte?.voit_tout || valideur) && (
+        {(contexte?.voit_tout || valideur || preparateur) && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', background: c.blanc, padding: '4px', borderRadius: '10px', border: `0.5px solid ${c.bordure}`, width: 'fit-content' }}>
             {onglet('mes_demandes', t('requisitions.liste.mine'))}
+            {preparateur && onglet('a_preparer', t('requisitions.liste.toPrepare'))}
             {valideur && onglet('a_valider', t('requisitions.liste.toValidate'))}
             {contexte?.voit_tout && onglet('toutes', t('requisitions.liste.all'))}
           </div>
@@ -108,7 +117,9 @@ export default function RequisitionsPage() {
           <div style={{ background: c.blanc, borderRadius: '12px', border: `0.5px solid ${c.bordure}`, overflow: 'hidden' }}>
             {liste.requisitions.length === 0 ? (
               <div style={{ padding: '20px', fontSize: '13px', color: c.texteMuted, fontStyle: 'italic' }}>
-                {vue === 'a_valider' ? t('requisitions.liste.emptyToValidate') : t('requisitions.liste.empty')}
+                {vue === 'a_valider' ? t('requisitions.liste.emptyToValidate')
+                  : vue === 'a_preparer' ? t('requisitions.liste.emptyToPrepare')
+                  : t('requisitions.liste.empty')}
               </div>
             ) : liste.requisitions.map((r) => (
               <button key={r.id} onClick={() => router.push(`/requisitions/${r.id}`)} style={{
@@ -117,8 +128,14 @@ export default function RequisitionsPage() {
                 padding: '12px 16px', cursor: 'pointer', fontSize: '13px', color: c.texte,
               }}>
                 <span style={{ fontWeight: '600', minWidth: '56px' }}>R-{r.numero}</span>
+                {r.type === 'sortie_directe' && <span style={{ fontSize: '11px', color: c.texteMuted }}>{t('requisitions.liste.directExitBadge')}</span>}
                 <span style={{ color: c.texteMuted, minWidth: '96px' }}>{formatDate(r.envoyee_at)}</span>
-                <span style={{ flex: '1 1 260px' }}>{nomService(r.service_demandeur_id)} → {nomService(r.service_preparateur_id)}</span>
+                <span style={{ flex: '1 1 260px' }}>
+                  {r.type === 'sortie_directe'
+                    ? <>{nomService(r.service_preparateur_id)} → {nomService(r.service_demandeur_id)}</>
+                    : <>{nomService(r.service_demandeur_id)} → {nomService(r.service_preparateur_id)}</>}
+                  {r.date_souhaitee && <span style={{ color: c.texteMuted }}> · {t('requisitions.liste.wantedOn', { date: new Date(`${r.date_souhaitee}T12:00:00`).toLocaleDateString(i18n.language || 'fr', { day: '2-digit', month: '2-digit' }) })}</span>}
+                </span>
                 <span style={{ color: c.texteMuted }}>{t('requisitions.liste.lines', { count: r.nb_lignes })}</span>
                 {r.demandeur_nom && <span style={{ color: c.texteMuted }}>{r.demandeur_nom}</span>}
                 <StatutBadge statut={r.statut} />

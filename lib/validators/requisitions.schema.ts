@@ -150,7 +150,7 @@ export const createRequisitionSchema = z.object({
   path: ['service_preparateur_id'],
 })
 
-export const VUES_REQUISITIONS = ['mes_demandes', 'a_valider', 'toutes'] as const
+export const VUES_REQUISITIONS = ['mes_demandes', 'a_valider', 'a_preparer', 'toutes'] as const
 
 export const listRequisitionsQuerySchema = z.object({
   client_id: clientIdSchema,
@@ -166,4 +166,42 @@ export const refusRequisitionSchema = z.object({
   client_id: clientIdSchema,
   id:        uuidSchema,
   motif:     z.string().trim().min(1, 'Motif requis').max(500),
+})
+
+// ── Préparation et livraison ───────────────────────────────────────────────
+
+const quantiteLivree = z.coerce.number().min(0, 'Quantité ≥ 0').max(100_000)
+
+export const livraisonSchema = z.object({
+  client_id: clientIdSchema,
+  id:        uuidSchema,
+  // Quantité livrée de chaque ligne du bon (0 si le stock manque).
+  lignes: z.array(z.object({
+    id:              uuidSchema,
+    quantite_livree: quantiteLivree,
+  })).max(300),
+  // Produits sortis en plus, demandés « à la voix ».
+  ajouts: z.array(z.object({
+    produit_id:      uuidSchema,
+    quantite_livree: quantite,
+    commentaire:     z.string().trim().max(300).nullable().optional(),
+  })).max(100).default([]),
+})
+
+export const sortieDirecteSchema = z.object({
+  client_id:              clientIdSchema,
+  service_preparateur_id: uuidSchema,
+  service_receveur_id:    uuidSchema,
+  commentaire:            z.string().trim().max(1000).nullable().optional(),
+  lignes: z.array(z.object({
+    produit_id:  uuidSchema,
+    quantite,
+    commentaire: z.string().trim().max(300).nullable().optional(),
+  })).min(1, 'Ajoutez au moins un produit.').max(200).refine(
+    (l) => new Set(l.map((x) => x.produit_id)).size === l.length,
+    'Un produit figure deux fois.',
+  ),
+}).refine((d) => d.service_preparateur_id !== d.service_receveur_id, {
+  message: 'Le service receveur doit être différent du service qui sort le stock.',
+  path: ['service_receveur_id'],
 })

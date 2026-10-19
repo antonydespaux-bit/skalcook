@@ -1185,7 +1185,12 @@
       "lines_one": "{{count}} ligne",
       "lines_other": "{{count}} lignes",
       "toValidate": "À valider",
-      "emptyToValidate": "Aucune demande en attente de validation."
+      "emptyToValidate": "Aucune demande en attente de validation.",
+      "toPrepare": "À préparer",
+      "emptyToPrepare": "Aucune commande à préparer.",
+      "directExit": "Sortie directe",
+      "directExitBadge": "Sortie directe",
+      "wantedOn": "pour le {{date}}"
     },
     "nouvelle": {
       "title": "Nouvelle demande",
@@ -1238,7 +1243,36 @@
       "validated": "Demande validée : elle part en préparation chez {{service}}.",
       "refused": "Demande refusée.",
       "validatedBy": "Validée par",
-      "refusedBy": "Refusée par"
+      "refusedBy": "Refusée par",
+      "type": "Type",
+      "exitFrom": "Sortie de",
+      "exitTo": "Vers"
+    },
+    "preparation": {
+      "title": "Préparation",
+      "help": "Saisissez les quantités réellement servies (0 si le produit manque). Ajoutez les produits demandés à la voix.",
+      "take": "Prendre en charge",
+      "taken": "Commande prise en charge : le demandeur ne peut plus l'annuler.",
+      "deliveredQty": "Quantité livrée de {{nom}}",
+      "added": "ajouté",
+      "addProduct": "Ajouter un produit demandé à la voix",
+      "deliver": "Valider la livraison",
+      "deliverHelp": "La livraison fige les quantités et les prix, et sort les produits du stock.",
+      "confirmDeliver": "Valider la livraison de R-{{numero}} ? Les quantités ne pourront plus être modifiées.",
+      "delivered": "Livraison enregistrée.",
+      "preparedBy": "Préparée par"
+    },
+    "sortie": {
+      "title": "Sortie directe",
+      "subtitle": "Sortie de stock sans commande, vers un service (ex. fruits pour les accueils chambre). Elle est enregistrée comme livrée.",
+      "noSource": "Vous ne faites partie d'aucun service qui tient un stock.",
+      "from": "Sortie du stock de",
+      "to": "Pour le service",
+      "noLine": "Cliquez sur un produit pour l'ajouter à la sortie.",
+      "commentPlaceholder": "Ex : accueils VIP du jour",
+      "confirmChangeSource": "Changer de stock vide la liste des produits. Continuer ?",
+      "save_one": "Enregistrer la sortie ({{count}} produit)",
+      "save_other": "Enregistrer la sortie ({{count}} produits)"
     }
   }
 }

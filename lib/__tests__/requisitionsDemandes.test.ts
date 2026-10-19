@@ -320,7 +320,9 @@ describe('validation des demandes', () => {
 
   it("une demande déjà en préparation ne se valide plus", async () => {
     const { db } = fakeDb(tables({ statut: 'a_preparer' }))
-    await expect(refuserRequisition(db, CLIENT, MOI, N(), REQ, 'non')).rejects.toThrow(ConflictError)
+    await expect(validerRequisition(db, CLIENT, MOI, N(), REQ)).rejects.toThrow(ConflictError)
+    // Le refus passe alors au service préparateur, pas au responsable demandeur.
+    await expect(refuserRequisition(db, CLIENT, MOI, N(), REQ, 'non')).rejects.toThrow(ForbiddenError)
   })
 
   it('le refus exige un motif', () => {

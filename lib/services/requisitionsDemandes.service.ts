@@ -28,6 +28,8 @@ export interface Requisition {
   valideur_id: string | null
   validee_at: string | null
   refusee_par: string | null
+  preparateur_id: string | null
+  prise_en_charge_at: string | null
   livree_at: string | null
   refusee_at: string | null
   motif_refus: string | null
@@ -35,11 +37,14 @@ export interface Requisition {
 }
 
 const COLONNES_SERVICE = 'id, client_id, nom, emoji, ordre, actif, peut_demander, peut_preparer, stock'
-const COLONNES_REQ = 'id, client_id, numero, type, statut, service_demandeur_id, service_preparateur_id, stock, demandeur_id, date_souhaitee, commentaire, envoyee_at, valideur_id, validee_at, livree_at, refusee_par, refusee_at, motif_refus, annulee_at'
+const COLONNES_REQ = 'id, client_id, numero, type, statut, service_demandeur_id, service_preparateur_id, stock, demandeur_id, date_souhaitee, commentaire, envoyee_at, valideur_id, validee_at, preparateur_id, prise_en_charge_at, livree_at, refusee_par, refusee_at, motif_refus, annulee_at'
 const COLONNES_LIGNE = 'id, ordre, ingredient_id, article_id, nom, unite, quantite_demandee, quantite_livree, prix_unitaire, valeur, ajoutee_par_preparateur, commentaire'
 
 /** Statuts où le demandeur peut encore annuler (préparation pas commencée). */
 export const STATUTS_ANNULABLES: Statut[] = ['a_valider', 'a_preparer']
+
+/** Statuts où le préparateur peut encore servir (ou refuser) le bon. */
+export const STATUTS_A_PREPARER: Statut[] = ['a_preparer', 'en_preparation']
 
 // ── Règles pures (testées dans lib/__tests__/requisitionsDemandes.test.ts) ──
 
@@ -53,6 +58,14 @@ export const voitTout = (n: NiveauxRequisitions) =>
 
 /** Passe des commandes au nom de n'importe quel service (administrateur). */
 export const commandePourTous = (n: NiveauxRequisitions) => n.administration === 'modification'
+
+/** Prépare (prend en charge, livre, refuse) : membre du service préparateur, ou administration. */
+export const peutPreparer = (
+  r: Pick<Requisition, 'statut' | 'service_preparateur_id'>,
+  mesIds: Set<string>,
+  n: NiveauxRequisitions,
+) => STATUTS_A_PREPARER.includes(r.statut) && n.requisitions === 'modification'
+  && (commandePourTous(n) || mesIds.has(r.service_preparateur_id))
 
 /** Table et colonne de ligne correspondant au stock d'un service préparateur. */
 export function sourceCatalogue(stock: string): { table: string; colonne: 'ingredient_id' | 'article_id' } {
@@ -98,7 +111,7 @@ export function construireLignes(
 
 // ── Accès aux données ──────────────────────────────────────────────────────
 
-async function servicesEtablissement(db: SupabaseClient, clientId: string): Promise<ServiceInterne[]> {
+export async function servicesEtablissement(db: SupabaseClient, clientId: string): Promise<ServiceInterne[]> {
   const { data, error } = await db.from('services_internes').select(COLONNES_SERVICE)
     .eq('client_id', clientId).order('ordre').order('nom')
   if (error) throw new Error(error.message)
@@ -106,7 +119,7 @@ async function servicesEtablissement(db: SupabaseClient, clientId: string): Prom
 }
 
 /** Services dont l'utilisateur est membre, et ceux dont il est responsable. */
-async function appartenances(db: SupabaseClient, clientId: string, userId: string): Promise<{ ids: Set<string>; responsables: Set<string> }> {
+export async function appartenances(db: SupabaseClient, clientId: string, userId: string): Promise<{ ids: Set<string>; responsables: Set<string> }> {
   const { data, error } = await db.from('service_membres').select('service_id, responsable')
     .eq('client_id', clientId).eq('user_id', userId)
   if (error) throw new Error(error.message)
@@ -133,6 +146,8 @@ export async function contexteUtilisateur(db: SupabaseClient, clientId: string, 
     valide_pour: pourTous ? actifs.map((s) => s.id) : actifs.filter((s) => responsables.has(s.id)).map((s) => s.id),
     demandeurs: actifs.filter((s) => s.peut_demander && (pourTous || mesIds.has(s.id))).map((s) => s.id),
     destinataires: actifs.filter((s) => s.peut_preparer && s.stock !== 'aucun').map((s) => s.id),
+    // Services dont l'utilisateur prépare les commandes (tous pour l'administration).
+    prepare_pour: actifs.filter((s) => s.peut_preparer && s.stock !== 'aucun' && (pourTous || mesIds.has(s.id))).map((s) => s.id),
     validation: !!clientRes.data?.requisitions_validation,
     voit_tout: voitTout(n),
     peut_commander: n.requisitions === 'modification',
@@ -206,7 +221,7 @@ export async function creerDemande(
   return { id: cree.id, numero: cree.numero, statut, demandeur: demandeur!, preparateur: preparateur! }
 }
 
-async function nomsUtilisateurs(db: SupabaseClient, ids: string[]): Promise<Map<string, string>> {
+export async function nomsUtilisateurs(db: SupabaseClient, ids: string[]): Promise<Map<string, string>> {
   const uniques = [...new Set(ids.filter(Boolean))]
   if (uniques.length === 0) return new Map()
   const { data } = await db.from('profils').select('id, nom, email').in('id', uniques)
@@ -240,7 +255,7 @@ export async function listerRequisitions(
   clientId: string,
   userId: string,
   n: NiveauxRequisitions,
-  vue: 'mes_demandes' | 'a_valider' | 'toutes',
+  vue: 'mes_demandes' | 'a_valider' | 'a_preparer' | 'toutes',
 ) {
   const [services, a] = await Promise.all([servicesEtablissement(db, clientId), appartenances(db, clientId, userId)])
 
@@ -254,6 +269,14 @@ export async function listerRequisitions(
       const ids = [...a.responsables]
       if (ids.length === 0) return { services, requisitions: [] }
       req = req.in('service_demandeur_id', ids)
+    }
+  } else if (vue === 'a_preparer') {
+    // Commandes à servir par mes services préparateurs (tous pour l'administration).
+    req = req.in('statut', STATUTS_A_PREPARER)
+    if (!commandePourTous(n)) {
+      const ids = [...a.ids]
+      if (ids.length === 0) return { services, requisitions: [] }
+      req = req.in('service_preparateur_id', ids)
     }
   } else {
     // Mes demandes : bons de mes services demandeurs, ou que j'ai passés.
@@ -283,11 +306,12 @@ export async function listerRequisitions(
       demandeur_nom: r.demandeur_id ? noms.get(r.demandeur_id) ?? null : null,
       peut_annuler: peutAnnulerBon(r, userId, a, n),
       peut_valider: peutValider(r, a.responsables, n),
+      peut_preparer: peutPreparer(r, a.ids, n),
     })),
   }
 }
 
-async function chargerVisible(db: SupabaseClient, clientId: string, userId: string, n: NiveauxRequisitions, id: string) {
+export async function chargerVisible(db: SupabaseClient, clientId: string, userId: string, n: NiveauxRequisitions, id: string) {
   const [{ data, error }, a] = await Promise.all([
     db.from('requisitions').select(COLONNES_REQ).eq('client_id', clientId).eq('id', id).maybeSingle(),
     appartenances(db, clientId, userId),
@@ -305,7 +329,7 @@ export async function detailRequisition(db: SupabaseClient, clientId: string, us
     servicesEtablissement(db, clientId),
   ])
   if (error) throw new Error(error.message)
-  const noms = await nomsUtilisateurs(db, [r.demandeur_id || '', r.valideur_id || '', r.refusee_par || ''])
+  const noms = await nomsUtilisateurs(db, [r.demandeur_id || '', r.valideur_id || '', r.refusee_par || '', r.preparateur_id || ''])
   const nom = (uid?: string | null) => (uid ? noms.get(uid) ?? null : null)
   return {
     requisition: {
@@ -315,6 +339,8 @@ export async function detailRequisition(db: SupabaseClient, clientId: string, us
       refusee_par_nom: nom(r.refusee_par),
       peut_annuler: peutAnnulerBon(r, userId, a, n),
       peut_valider: peutValider(r, a.responsables, n),
+      peut_preparer: peutPreparer(r, a.ids, n),
+      preparateur_nom: nom(r.preparateur_id),
     },
     lignes: lignes ?? [],
     services: services.filter((s) => s.id === r.service_demandeur_id || s.id === r.service_preparateur_id),
@@ -361,12 +387,23 @@ export async function validerRequisition(db: SupabaseClient, clientId: string, u
   return { id, numero: r.numero, service_preparateur_id: r.service_preparateur_id }
 }
 
-/** Refuse la demande avec un motif. */
+/**
+ * Refuse la demande avec un motif : le valideur tant qu'elle attend sa
+ * validation, le préparateur tant qu'elle n'est pas livrée.
+ */
 export async function refuserRequisition(db: SupabaseClient, clientId: string, userId: string, n: NiveauxRequisitions, id: string, motif: string) {
-  const r = await chargerAValider(db, clientId, userId, n, id)
+  const { r, a } = await chargerVisible(db, clientId, userId, n, id)
+  const commeValideur = peutValider(r, a.responsables, n)
+  const commePreparateur = peutPreparer(r, a.ids, n)
+  if (!commeValideur && !commePreparateur) {
+    if (r.statut === 'a_valider' || STATUTS_A_PREPARER.includes(r.statut)) {
+      throw new ForbiddenError('Seul le valideur ou le service préparateur peut refuser cette demande.')
+    }
+    throw new ConflictError('Cette réquisition ne peut plus être refusée.')
+  }
   const { data, error } = await db.from('requisitions')
     .update({ statut: 'refusee', refusee_par: userId, refusee_at: new Date().toISOString(), motif_refus: motif.trim() })
-    .eq('client_id', clientId).eq('id', id).eq('statut', 'a_valider')
+    .eq('client_id', clientId).eq('id', id).in('statut', commeValideur ? ['a_valider'] : STATUTS_A_PREPARER)
     .select('id, numero')
   if (error) throw new Error(error.message)
   if (!data || data.length === 0) throw new ConflictError('Cette réquisition a changé entre-temps : rechargez la page.')

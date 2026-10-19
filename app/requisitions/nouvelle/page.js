@@ -1,6 +1,6 @@
 'use client'
 export const dynamic = 'force-dynamic'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { getClientId } from '../../../lib/supabase'
@@ -11,6 +11,7 @@ import { texteSurAccent } from '../../../lib/theme.jsx'
 import Navbar from '../../../components/Navbar'
 import ChefLoader from '../../../components/ChefLoader'
 import BackButton from '../../../components/BackButton'
+import RechercheProduits from '../../../components/requisitions/RechercheProduits'
 
 // Nouvelle réquisition : le service demandeur (reconnu par l'appartenance de
 // l'utilisateur), le service destinataire, puis les produits de son
@@ -36,9 +37,6 @@ export default function NouvelleRequisitionPage() {
   const [dateSouhaitee, setDateSouhaitee] = useState('')
   const [commentaire, setCommentaire] = useState('')
   const [lignes, setLignes] = useState([])        // { produit_id, nom, unite, quantite, commentaire }
-  const [recherche, setRecherche] = useState('')
-  const [resultats, setResultats] = useState([])
-  const [cherche, setCherche] = useState(false)
   const [envoi, setEnvoi] = useState(false)
 
   useEffect(() => {
@@ -65,32 +63,13 @@ export default function NouvelleRequisitionPage() {
   const destinataires = (ctx?.destinataires || []).filter((id) => id !== demandeurId).map((id) => services.get(id)).filter(Boolean)
   const preparateur = services.get(preparateurId) || null
 
-  // Recherche dans le catalogue du destinataire (différée pendant la frappe).
-  useEffect(() => {
-    if (!clientId || !preparateurId) return
-    let annule = false
-    const minuteur = setTimeout(async () => {
-      setCherche(true)
-      try {
-        const q = new URLSearchParams({ client_id: clientId, service_id: preparateurId, q: recherche.trim() })
-        const d = await appelApiRequisitions(`/api/requisitions/catalogue?${q}`)
-        if (!annule) setResultats(d.produits || [])
-      } catch (e) {
-        if (!annule) { setResultats([]); setErreur(e.message) }
-      } finally {
-        if (!annule) setCherche(false)
-      }
-    }, 250)
-    return () => { annule = true; clearTimeout(minuteur) }
-  }, [clientId, preparateurId, recherche])
+  const surErreur = useCallback((m) => setErreur(m), [])
 
   const changerDestinataire = (id) => {
     if (id === preparateurId) return
     if (lignes.length > 0 && !window.confirm(t('requisitions.nouvelle.confirmChangeTarget'))) return
     setPreparateurId(id)
     setLignes([])
-    setRecherche('')
-    setResultats([])
   }
 
   const ajouter = (p) => {
@@ -190,27 +169,8 @@ export default function NouvelleRequisitionPage() {
             {preparateur && (
               <div style={carte}>
                 <div style={titreCarte}>{t('requisitions.nouvelle.products', { service: preparateur.nom })}</div>
-                <input type="search" value={recherche} onChange={(e) => setRecherche(e.target.value)} autoFocus
-                  placeholder={t('requisitions.nouvelle.searchPlaceholder')} aria-label={t('requisitions.nouvelle.searchPlaceholder')} style={champ} />
-                <div style={{ marginTop: '8px', maxHeight: '220px', overflowY: 'auto', border: `0.5px solid ${c.bordure}`, borderRadius: '8px' }}>
-                  {cherche && resultats.length === 0 ? (
-                    <div style={{ padding: '10px 12px', fontSize: '13px', color: c.texteMuted }}>…</div>
-                  ) : resultats.length === 0 ? (
-                    <div style={{ padding: '10px 12px', fontSize: '13px', color: c.texteMuted, fontStyle: 'italic' }}>{t('requisitions.nouvelle.noResult')}</div>
-                  ) : resultats.map((p) => {
-                    const deja = lignes.some((l) => l.produit_id === p.id)
-                    return (
-                      <button key={p.id} onClick={() => ajouter(p)} disabled={deja} style={{
-                        display: 'flex', width: '100%', justifyContent: 'space-between', gap: '10px', textAlign: 'left',
-                        padding: '9px 12px', border: 'none', borderBottom: `0.5px solid ${c.bordure}`, background: deja ? c.fond : 'transparent',
-                        color: deja ? c.texteMuted : c.texte, fontSize: '13px', cursor: deja ? 'default' : 'pointer',
-                      }}>
-                        <span>{p.nom}{p.categorie ? <span style={{ color: c.texteMuted }}> · {p.categorie}</span> : null}</span>
-                        <span style={{ color: c.texteMuted }}>{deja ? '✓' : `+ ${p.unite || 'u'}`}</span>
-                      </button>
-                    )
-                  })}
-                </div>
+                <RechercheProduits key={preparateurId} clientId={clientId} serviceId={preparateurId} autoFocus onErreur={surErreur}
+                  dejaIds={new Set(lignes.map((l) => l.produit_id))} onAjouter={ajouter} />
 
                 {/* Lignes du bon */}
                 <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>

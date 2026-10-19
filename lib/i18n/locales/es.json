@@ -1185,7 +1185,12 @@
       "lines_one": "{{count}} línea",
       "lines_other": "{{count}} líneas",
       "toValidate": "Por validar",
-      "emptyToValidate": "Ningún pedido pendiente de validación."
+      "emptyToValidate": "Ningún pedido pendiente de validación.",
+      "toPrepare": "Por preparar",
+      "emptyToPrepare": "Ningún pedido por preparar.",
+      "directExit": "Salida directa",
+      "directExitBadge": "Salida directa",
+      "wantedOn": "para el {{date}}"
     },
     "nouvelle": {
       "title": "Nuevo pedido",
@@ -1238,7 +1243,36 @@
       "validated": "Pedido validado: pasa a preparación en {{service}}.",
       "refused": "Pedido rechazado.",
       "validatedBy": "Validada por",
-      "refusedBy": "Rechazada por"
+      "refusedBy": "Rechazada por",
+      "type": "Tipo",
+      "exitFrom": "Salida de",
+      "exitTo": "Hacia"
+    },
+    "preparation": {
+      "title": "Preparación",
+      "help": "Introduzca las cantidades realmente servidas (0 si falta el producto). Añada los productos pedidos de palabra.",
+      "take": "Hacerse cargo",
+      "taken": "Pedido en curso: el solicitante ya no puede anularlo.",
+      "deliveredQty": "Cantidad entregada de {{nom}}",
+      "added": "añadido",
+      "addProduct": "Añadir un producto pedido de palabra",
+      "deliver": "Validar la entrega",
+      "deliverHelp": "La entrega fija las cantidades y los precios, y saca los productos del stock.",
+      "confirmDeliver": "¿Validar la entrega de R-{{numero}}? Las cantidades ya no podrán modificarse.",
+      "delivered": "Entrega registrada.",
+      "preparedBy": "Preparada por"
+    },
+    "sortie": {
+      "title": "Salida directa",
+      "subtitle": "Salida de stock sin pedido, hacia un servicio (p. ej. fruta para las bienvenidas en habitación). Se registra como entregada.",
+      "noSource": "No pertenece a ningún servicio que tenga stock.",
+      "from": "Salida del stock de",
+      "to": "Para el servicio",
+      "noLine": "Haga clic en un producto para añadirlo a la salida.",
+      "commentPlaceholder": "Ej.: bienvenidas VIP del día",
+      "confirmChangeSource": "Cambiar de stock vacía la lista de productos. ¿Continuar?",
+      "save_one": "Registrar la salida ({{count}} producto)",
+      "save_other": "Registrar la salida ({{count}} productos)"
     }
   }
 }

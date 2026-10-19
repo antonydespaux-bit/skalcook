@@ -1185,7 +1185,12 @@
       "lines_one": "{{count}} riga",
       "lines_other": "{{count}} righe",
       "toValidate": "Da approvare",
-      "emptyToValidate": "Nessuna richiesta in attesa di approvazione."
+      "emptyToValidate": "Nessuna richiesta in attesa di approvazione.",
+      "toPrepare": "Da preparare",
+      "emptyToPrepare": "Nessun ordine da preparare.",
+      "directExit": "Uscita diretta",
+      "directExitBadge": "Uscita diretta",
+      "wantedOn": "per il {{date}}"
     },
     "nouvelle": {
       "title": "Nuova richiesta",
@@ -1238,7 +1243,36 @@
       "validated": "Richiesta approvata: passa in preparazione presso {{service}}.",
       "refused": "Richiesta rifiutata.",
       "validatedBy": "Approvata da",
-      "refusedBy": "Rifiutata da"
+      "refusedBy": "Rifiutata da",
+      "type": "Tipo",
+      "exitFrom": "Uscita da",
+      "exitTo": "Verso"
+    },
+    "preparation": {
+      "title": "Preparazione",
+      "help": "Inserite le quantità effettivamente servite (0 se il prodotto manca). Aggiungete i prodotti richiesti a voce.",
+      "take": "Prendi in carico",
+      "taken": "Ordine preso in carico: il richiedente non può più annullarlo.",
+      "deliveredQty": "Quantità consegnata di {{nom}}",
+      "added": "aggiunto",
+      "addProduct": "Aggiungi un prodotto richiesto a voce",
+      "deliver": "Conferma la consegna",
+      "deliverHelp": "La consegna fissa quantità e prezzi, e scarica i prodotti dallo stock.",
+      "confirmDeliver": "Confermare la consegna di R-{{numero}}? Le quantità non potranno più essere modificate.",
+      "delivered": "Consegna registrata.",
+      "preparedBy": "Preparata da"
+    },
+    "sortie": {
+      "title": "Uscita diretta",
+      "subtitle": "Uscita di stock senza ordine, verso un reparto (es. frutta per l'accoglienza in camera). Viene registrata come consegnata.",
+      "noSource": "Non fate parte di alcun reparto che gestisce uno stock.",
+      "from": "Uscita dallo stock di",
+      "to": "Per il reparto",
+      "noLine": "Cliccate su un prodotto per aggiungerlo all'uscita.",
+      "commentPlaceholder": "Es.: accoglienze VIP del giorno",
+      "confirmChangeSource": "Cambiare stock svuota l'elenco dei prodotti. Continuare?",
+      "save_one": "Registra l'uscita ({{count}} prodotto)",
+      "save_other": "Registra l'uscita ({{count}} prodotti)"
     }
   }
 }
