@@ -1273,6 +1273,40 @@
       "confirmChangeSource": "Changing stock clears the product list. Continue?",
       "save_one": "Record the issue ({{count}} product)",
       "save_other": "Record the issue ({{count}} products)"
+    },
+    "notifications": {
+      "title": "Requisitions",
+      "summary_one": "{{count}} new notification",
+      "summary_other": "{{count}} new notifications",
+      "types": {
+        "requisition_a_preparer": "R-{{numero}} to prepare — requested by {{de}}",
+        "requisition_a_valider": "R-{{numero}} to approve — {{de}} → {{vers}}",
+        "requisition_validee": "R-{{numero}} approved, to prepare — requested by {{de}}",
+        "requisition_livree": "R-{{numero}} delivered by {{vers}}",
+        "requisition_refusee": "R-{{numero}} refused"
+      },
+      "markAllRead": "Mark all as read",
+      "close": "Close",
+      "show": "Show notifications",
+      "empty": "No notifications."
+    },
+    "emails": {
+      "subjects": {
+        "a_preparer": "Requisition R-{{numero}} to prepare ({{de}})",
+        "a_valider": "Requisition R-{{numero}} to approve ({{de}})",
+        "validee": "Requisition R-{{numero}} approved, to prepare ({{de}})",
+        "livree": "Your requisition R-{{numero}} has been delivered",
+        "refusee": "Your requisition R-{{numero}} has been refused"
+      },
+      "bodies": {
+        "a_preparer": "The {{de}} department sent you requisition R-{{numero}}. It is waiting for you in Skalcook.",
+        "a_valider": "The {{de}} department placed requisition R-{{numero}} for {{vers}}. It is awaiting your approval.",
+        "validee": "Requisition R-{{numero}} from the {{de}} department has been approved. It is waiting for you in Skalcook.",
+        "livree": "The {{vers}} department delivered your requisition R-{{numero}}.",
+        "refusee": "Your requisition R-{{numero}} for {{vers}} has been refused."
+      },
+      "reason": "Reason: {{motif}}",
+      "open": "Open the requisition"
     }
   }
 }

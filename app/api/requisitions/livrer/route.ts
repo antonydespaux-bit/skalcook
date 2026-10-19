@@ -3,6 +3,7 @@ import { logServeur } from '../../../../lib/serverLog'
 import { niveauxRequisitions } from '../../../../lib/requisitions/droits'
 import { livraisonSchema } from '../../../../lib/validators/requisitions.schema'
 import { livrerRequisition } from '../../../../lib/services/requisitionsPreparation.service'
+import { notifierRequisition } from '../../../../lib/services/requisitionsNotifications.service'
 
 // POST : livraison par le service préparateur — quantités servies (0 si le
 // stock manque), produits ajoutés « à la voix », prix HT figés.
@@ -20,6 +21,7 @@ export const POST = apiHandler({
       entiteId: r.id, entiteNom: `R-${r.numero}`,
       details: { statut: 'livree', lignes: r.lignes, ajouts: r.ajouts, valeur_ht: r.valeur }, request,
     })
+    await notifierRequisition(db, { clientId: data.client_id, requisitionId: r.id, acteurId: u.id, evenement: 'livree' })
     return Response.json({ ok: true, valeur: r.valeur })
   },
 })

@@ -1273,6 +1273,40 @@
       "confirmChangeSource": "Cambiare stock svuota l'elenco dei prodotti. Continuare?",
       "save_one": "Registra l'uscita ({{count}} prodotto)",
       "save_other": "Registra l'uscita ({{count}} prodotti)"
+    },
+    "notifications": {
+      "title": "Requisizioni",
+      "summary_one": "{{count}} nuova notifica",
+      "summary_other": "{{count}} nuove notifiche",
+      "types": {
+        "requisition_a_preparer": "R-{{numero}} da preparare — richiesta di {{de}}",
+        "requisition_a_valider": "R-{{numero}} da approvare — {{de}} → {{vers}}",
+        "requisition_validee": "R-{{numero}} approvata, da preparare — richiesta di {{de}}",
+        "requisition_livree": "R-{{numero}} consegnata da {{vers}}",
+        "requisition_refusee": "R-{{numero}} rifiutata"
+      },
+      "markAllRead": "Segna tutto come letto",
+      "close": "Chiudi",
+      "show": "Mostra le notifiche",
+      "empty": "Nessuna notifica."
+    },
+    "emails": {
+      "subjects": {
+        "a_preparer": "Requisizione R-{{numero}} da preparare ({{de}})",
+        "a_valider": "Requisizione R-{{numero}} da approvare ({{de}})",
+        "validee": "Requisizione R-{{numero}} approvata, da preparare ({{de}})",
+        "livree": "La vostra requisizione R-{{numero}} è stata consegnata",
+        "refusee": "La vostra requisizione R-{{numero}} è stata rifiutata"
+      },
+      "bodies": {
+        "a_preparer": "Il reparto {{de}} vi ha inviato la requisizione R-{{numero}}. Vi aspetta in Skalcook.",
+        "a_valider": "Il reparto {{de}} ha effettuato la requisizione R-{{numero}} per {{vers}}. Attende la vostra approvazione.",
+        "validee": "La requisizione R-{{numero}} del reparto {{de}} è stata approvata. Vi aspetta in Skalcook.",
+        "livree": "Il reparto {{vers}} ha consegnato la vostra requisizione R-{{numero}}.",
+        "refusee": "La vostra requisizione R-{{numero}} per {{vers}} è stata rifiutata."
+      },
+      "reason": "Motivo: {{motif}}",
+      "open": "Apri la requisizione"
     }
   }
 }

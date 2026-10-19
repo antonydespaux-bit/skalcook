@@ -3,6 +3,7 @@ import { logServeur } from '../../../../lib/serverLog'
 import { niveauxRequisitions } from '../../../../lib/requisitions/droits'
 import { refusRequisitionSchema } from '../../../../lib/validators/requisitions.schema'
 import { refuserRequisition } from '../../../../lib/services/requisitionsDemandes.service'
+import { notifierRequisition } from '../../../../lib/services/requisitionsNotifications.service'
 
 // POST : refus motivé d'une demande en attente de validation.
 export const POST = apiHandler({
@@ -18,6 +19,7 @@ export const POST = apiHandler({
       user, clientId: data.client_id, action: 'MODIFICATION', entite: 'requisitions',
       entiteId: r.id, entiteNom: `R-${r.numero}`, details: { statut: 'refusee', motif: data.motif }, request,
     })
+    await notifierRequisition(db, { clientId: data.client_id, requisitionId: r.id, acteurId: u.id, evenement: 'refusee', motif: data.motif })
     return Response.json({ ok: true })
   },
 })

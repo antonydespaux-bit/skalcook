@@ -1273,6 +1273,40 @@
       "confirmChangeSource": "Cambiar de stock vacía la lista de productos. ¿Continuar?",
       "save_one": "Registrar la salida ({{count}} producto)",
       "save_other": "Registrar la salida ({{count}} productos)"
+    },
+    "notifications": {
+      "title": "Requisiciones",
+      "summary_one": "{{count}} notificación nueva",
+      "summary_other": "{{count}} notificaciones nuevas",
+      "types": {
+        "requisition_a_preparer": "R-{{numero}} por preparar — pedido de {{de}}",
+        "requisition_a_valider": "R-{{numero}} por validar — {{de}} → {{vers}}",
+        "requisition_validee": "R-{{numero}} validada, por preparar — pedido de {{de}}",
+        "requisition_livree": "R-{{numero}} entregada por {{vers}}",
+        "requisition_refusee": "R-{{numero}} rechazada"
+      },
+      "markAllRead": "Marcar todo como leído",
+      "close": "Cerrar",
+      "show": "Ver las notificaciones",
+      "empty": "No hay notificaciones."
+    },
+    "emails": {
+      "subjects": {
+        "a_preparer": "Requisición R-{{numero}} por preparar ({{de}})",
+        "a_valider": "Requisición R-{{numero}} por validar ({{de}})",
+        "validee": "Requisición R-{{numero}} validada, por preparar ({{de}})",
+        "livree": "Su requisición R-{{numero}} ha sido entregada",
+        "refusee": "Su requisición R-{{numero}} ha sido rechazada"
+      },
+      "bodies": {
+        "a_preparer": "El servicio {{de}} le ha enviado la requisición R-{{numero}}. Le espera en Skalcook.",
+        "a_valider": "El servicio {{de}} ha hecho la requisición R-{{numero}} para {{vers}}. Espera su validación.",
+        "validee": "La requisición R-{{numero}} del servicio {{de}} ha sido validada. Le espera en Skalcook.",
+        "livree": "El servicio {{vers}} ha entregado su requisición R-{{numero}}.",
+        "refusee": "Su requisición R-{{numero}} para {{vers}} ha sido rechazada."
+      },
+      "reason": "Motivo: {{motif}}",
+      "open": "Abrir la requisición"
     }
   }
 }

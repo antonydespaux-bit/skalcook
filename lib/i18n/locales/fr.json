@@ -1273,6 +1273,40 @@
       "confirmChangeSource": "Changer de stock vide la liste des produits. Continuer ?",
       "save_one": "Enregistrer la sortie ({{count}} produit)",
       "save_other": "Enregistrer la sortie ({{count}} produits)"
+    },
+    "notifications": {
+      "title": "Réquisitions",
+      "summary_one": "{{count}} nouvelle notification",
+      "summary_other": "{{count}} nouvelles notifications",
+      "types": {
+        "requisition_a_preparer": "R-{{numero}} à préparer — demande de {{de}}",
+        "requisition_a_valider": "R-{{numero}} à valider — {{de}} → {{vers}}",
+        "requisition_validee": "R-{{numero}} validée, à préparer — demande de {{de}}",
+        "requisition_livree": "R-{{numero}} livrée par {{vers}}",
+        "requisition_refusee": "R-{{numero}} refusée"
+      },
+      "markAllRead": "Tout marquer comme lu",
+      "close": "Fermer",
+      "show": "Voir les notifications",
+      "empty": "Aucune notification."
+    },
+    "emails": {
+      "subjects": {
+        "a_preparer": "Réquisition R-{{numero}} à préparer ({{de}})",
+        "a_valider": "Réquisition R-{{numero}} à valider ({{de}})",
+        "validee": "Réquisition R-{{numero}} validée, à préparer ({{de}})",
+        "livree": "Votre réquisition R-{{numero}} est livrée",
+        "refusee": "Votre réquisition R-{{numero}} est refusée"
+      },
+      "bodies": {
+        "a_preparer": "Le service {{de}} vous a envoyé la réquisition R-{{numero}}. Elle vous attend dans Skalcook.",
+        "a_valider": "Le service {{de}} a passé la réquisition R-{{numero}} pour {{vers}}. Elle attend votre validation.",
+        "validee": "La réquisition R-{{numero}} du service {{de}} a été validée. Elle vous attend dans Skalcook.",
+        "livree": "Le service {{vers}} a livré votre réquisition R-{{numero}}.",
+        "refusee": "Votre réquisition R-{{numero}} pour {{vers}} a été refusée."
+      },
+      "reason": "Motif : {{motif}}",
+      "open": "Ouvrir la réquisition"
     }
   }
 }

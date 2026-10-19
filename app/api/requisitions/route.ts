@@ -3,6 +3,7 @@ import { logServeur } from '../../../lib/serverLog'
 import { niveauxRequisitions } from '../../../lib/requisitions/droits'
 import { createRequisitionSchema, listRequisitionsQuerySchema } from '../../../lib/validators/requisitions.schema'
 import { creerDemande, listerRequisitions } from '../../../lib/services/requisitionsDemandes.service'
+import { notifierRequisition } from '../../../lib/services/requisitionsNotifications.service'
 
 // GET  : liste des réquisitions (vue « mes_demandes » ou « toutes »).
 // POST : nouvelle demande, envoyée au service préparateur (ou au responsable
@@ -36,6 +37,10 @@ export const POST = apiHandler({
       entiteId: cree.id, entiteNom: `R-${cree.numero}`,
       details: { de: cree.demandeur.nom, vers: cree.preparateur.nom, lignes: demande.lignes.length, statut: cree.statut },
       request,
+    })
+    await notifierRequisition(db, {
+      clientId: client_id, requisitionId: cree.id, acteurId: u.id,
+      evenement: cree.statut === 'a_valider' ? 'a_valider' : 'a_preparer',
     })
     return Response.json({ id: cree.id, numero: cree.numero, statut: cree.statut })
   },
