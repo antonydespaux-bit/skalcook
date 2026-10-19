@@ -1,7 +1,8 @@
 'use client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { supabase, getClientId } from '../../lib/supabase'
+import { getClientId } from '../../lib/supabase'
+import { appelApiRequisitions as appelApi } from '../../lib/requisitions/apiClient'
 import { useTheme } from '../../lib/useTheme'
 import { usePermissions } from '../../lib/usePermissions'
 import { texteSurAccent } from '../../lib/theme.jsx'
@@ -13,19 +14,6 @@ import ChefLoader from '../ChefLoader'
 // Lecture et écriture via /api/requisitions/services* (guard administration).
 
 const STOCKS = ['cuisine', 'bar', 'articles', 'aucun']
-
-async function appelApi(chemin, { method = 'GET', body } = {}) {
-  const { data } = await supabase.auth.getSession()
-  const token = data?.session?.access_token
-  const res = await fetch(chemin, {
-    method,
-    headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
-  })
-  const json = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`)
-  return json
-}
 
 const SERVICE_VIDE = { nom: '', emoji: '🛎️', peut_demander: true, peut_preparer: false, stock: 'aucun' }
 

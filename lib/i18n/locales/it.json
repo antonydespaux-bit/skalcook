@@ -34,7 +34,8 @@
       "content": "Contenuti",
       "management": "Gestione",
       "admin": "Admin",
-      "crm": "CRM"
+      "crm": "CRM",
+      "requisitions": "Requisizioni"
     },
     "items": {
       "allSheets": "Tutte le schede",
@@ -49,6 +50,7 @@
       "clients": "Clienti",
       "events": "Eventi",
       "quotes": "Preventivi",
+      "articlesCatalog": "Catalogo articoli",
       "settings": "Impostazioni",
       "users": "Utenti",
       "activity": "Attività",
@@ -1126,6 +1128,41 @@
       "activated": "Reparto «{{nom}}» riattivato.",
       "deactivated": "Reparto «{{nom}}» disattivato.",
       "deleted": "Reparto «{{nom}}» eliminato."
+    },
+    "articles": {
+      "title": "Catalogo articoli",
+      "subtitle": "Prodotti non food (economato, pulizia…) serviti dai reparti con stock «Articoli». Il prezzo unitario IVA esclusa valorizza le uscite.",
+      "loadError": "Errore durante il caricamento del catalogo.",
+      "noCatalog": "Nessun reparto offre un catalogo articoli. In Impostazioni › Reparti, create un reparto (es. Economato) con lo stock «Articoli (economato, pulizia)».",
+      "newTitle": "Nuovo articolo — {{service}}",
+      "name": "Nome",
+      "namePlaceholder": "Es.: Carta igienica, Bagnoschiuma 30 ml…",
+      "category": "Categoria",
+      "categoryPlaceholder": "Es.: Accoglienza, Pulizia…",
+      "reference": "Riferimento",
+      "unit": "Unità",
+      "unitPrice": "Prezzo unitario IVA escl. (€)",
+      "add": "Aggiungi l'articolo",
+      "count_one": "{{count}} articolo attivo",
+      "count_other": "{{count}} articoli attivi",
+      "search": "Cerca un articolo",
+      "showInactive": "Mostra i disattivati",
+      "readOnly": "Sola lettura: solo i membri di questo reparto e gli amministratori modificano il catalogo.",
+      "empty": "Nessun articolo in questo catalogo.",
+      "noMatch": "Nessun articolo corrisponde alla ricerca.",
+      "inactive": "Disattivato",
+      "edit": "Modifica",
+      "save": "Salva",
+      "cancel": "Annulla",
+      "activate": "Riattiva",
+      "deactivate": "Disattiva",
+      "delete": "Elimina",
+      "confirmDelete": "Eliminare l'articolo «{{nom}}»?",
+      "created": "Articolo «{{nom}}» aggiunto.",
+      "updated": "Articolo aggiornato.",
+      "activated": "Articolo «{{nom}}» riattivato.",
+      "deactivated": "Articolo «{{nom}}» disattivato.",
+      "deleted": "Articolo «{{nom}}» eliminato."
     }
   }
 }

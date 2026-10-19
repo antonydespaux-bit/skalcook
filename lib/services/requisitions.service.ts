@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { ConflictError, NotFoundError, ValidationError } from '../errors'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../errors'
 import { listClientUsers } from './admin.service'
+import { normUnite } from '../constants'
 
 // Réquisitions — services internes et leurs membres (Paramètres › Services).
 // Appelé par les routes /api/requisitions/* en service_role : chaque fonction
@@ -60,7 +61,7 @@ export function membresHorsEtablissement(demandes: string[], accesUserIds: strin
 
 function traduireErreurDb(error: { code?: string; message: string }): never {
   if (error.code === '23505') throw new ConflictError('Un service porte déjà ce nom.')
-  if (error.code === '23503') throw new ConflictError('Ce service est utilisé par des réquisitions : désactivez-le plutôt que de le supprimer.')
+  if (error.code === '23503') throw new ConflictError('Ce service a un catalogue d\'articles ou des réquisitions : désactivez-le plutôt que de le supprimer.')
   if (error.code === '23514') throw new ValidationError('Service invalide : il doit pouvoir demander ou préparer, et un service qui prépare doit avoir un stock.')
   throw new Error(error.message)
 }
@@ -190,4 +191,158 @@ export async function setMembres(
 export async function setValidationRequisitions(db: SupabaseClient, clientId: string, validation: boolean) {
   const { error } = await db.from('clients').update({ requisitions_validation: validation }).eq('id', clientId)
   if (error) throw new Error(error.message)
+}
+
+// ── Catalogue d'articles ───────────────────────────────────────────────────
+
+export interface Article {
+  id: string
+  client_id: string
+  service_id: string
+  nom: string
+  categorie: string | null
+  reference: string | null
+  unite: string
+  prix_unitaire: number | null
+  actif: boolean
+}
+
+export interface ArticleChamps {
+  nom?: string
+  categorie?: string | null
+  reference?: string | null
+  unite?: string
+  prix_unitaire?: number | null
+  actif?: boolean
+}
+
+const COLONNES_ARTICLE = 'id, client_id, service_id, nom, categorie, reference, unite, prix_unitaire, actif'
+
+/**
+ * Qui peut modifier le catalogue d'un service : « administration » en
+ * modification, ou membre du service avec « requisitions » en modification
+ * (miroir des policies de public.articles).
+ */
+export function peutGererCatalogue(
+  niveaux: { administration: string; requisitions: string },
+  estMembre: boolean,
+): boolean {
+  if (niveaux.administration === 'modification') return true
+  return estMembre && niveaux.requisitions === 'modification'
+}
+
+function traduireErreurArticle(error: { code?: string; message: string }): never {
+  if (error.code === '23505') throw new ConflictError('Un article porte déjà ce nom dans ce catalogue.')
+  if (error.code === '23514') throw new ValidationError('Article invalide.')
+  throw new Error(error.message)
+}
+
+/** Services au stock « articles » de l'établissement (catalogues possibles). */
+async function servicesCatalogue(db: SupabaseClient, clientId: string): Promise<ServiceInterne[]> {
+  const { data, error } = await db.from('services_internes').select(COLONNES)
+    .eq('client_id', clientId).eq('stock', 'articles').order('ordre').order('nom')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as ServiceInterne[]
+}
+
+async function servicesDuMembre(db: SupabaseClient, clientId: string, userId: string): Promise<Set<string>> {
+  const { data, error } = await db.from('service_membres').select('service_id')
+    .eq('client_id', clientId).eq('user_id', userId)
+  if (error) throw new Error(error.message)
+  return new Set((data ?? []).map((m) => m.service_id as string))
+}
+
+/**
+ * Catalogues d'articles : services au stock « articles », avec pour chacun
+ * le droit de modification de l'utilisateur, et les articles demandés.
+ */
+export async function listCatalogues(
+  db: SupabaseClient,
+  clientId: string,
+  userId: string,
+  niveaux: { administration: string; requisitions: string },
+  serviceId?: string,
+) {
+  const [services, membreDe] = await Promise.all([
+    servicesCatalogue(db, clientId),
+    servicesDuMembre(db, clientId, userId),
+  ])
+  let q = db.from('articles').select(COLONNES_ARTICLE).eq('client_id', clientId)
+  if (serviceId) q = q.eq('service_id', serviceId)
+  const { data: articles, error } = await q.order('categorie', { nullsFirst: false }).order('nom')
+  if (error) throw new Error(error.message)
+  return {
+    services: services.map((s) => ({ ...s, peut_modifier: peutGererCatalogue(niveaux, membreDe.has(s.id)) })),
+    articles: (articles ?? []) as Article[],
+  }
+}
+
+/** Vérifie le service cible (stock « articles ») et le droit de l'utilisateur. */
+export async function verifierCatalogue(
+  db: SupabaseClient,
+  clientId: string,
+  serviceId: string,
+  userId: string,
+  niveaux: { administration: string; requisitions: string },
+): Promise<ServiceInterne> {
+  const service = await chargerService(db, clientId, serviceId)
+  if (service.stock !== 'articles') throw new ValidationError('Ce service ne sert pas de catalogue d\'articles.')
+  const membreDe = await servicesDuMembre(db, clientId, userId)
+  if (!peutGererCatalogue(niveaux, membreDe.has(serviceId))) {
+    throw new ForbiddenError('Seuls les membres du service (ou un administrateur) modifient ce catalogue.')
+  }
+  return service
+}
+
+export async function chargerArticle(db: SupabaseClient, clientId: string, id: string): Promise<Article> {
+  const { data, error } = await db.from('articles').select(COLONNES_ARTICLE)
+    .eq('client_id', clientId).eq('id', id).maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data) throw new NotFoundError('Article introuvable.')
+  return data as Article
+}
+
+/** Champs normalisés avant écriture (nom trimé, unité canonique). */
+export function normaliserArticle<T extends ArticleChamps>(champs: T): T {
+  const out = { ...champs }
+  if (typeof out.nom === 'string') out.nom = out.nom.trim()
+  if (typeof out.unite === 'string') out.unite = normUnite(out.unite) || 'u'
+  return out
+}
+
+export async function createArticle(
+  db: SupabaseClient,
+  clientId: string,
+  serviceId: string,
+  champs: Required<Pick<ArticleChamps, 'nom' | 'unite'>> & ArticleChamps,
+): Promise<Article> {
+  const c = normaliserArticle(champs)
+  const { data, error } = await db.from('articles').insert({
+    client_id: clientId,
+    service_id: serviceId,
+    nom: c.nom,
+    categorie: c.categorie ?? null,
+    reference: c.reference ?? null,
+    unite: c.unite,
+    prix_unitaire: c.prix_unitaire ?? null,
+  }).select(COLONNES_ARTICLE).single()
+  if (error) traduireErreurArticle(error)
+  return data as Article
+}
+
+export async function updateArticle(db: SupabaseClient, clientId: string, id: string, patch: ArticleChamps): Promise<Article> {
+  const c = normaliserArticle(patch)
+  const maj = Object.fromEntries(Object.entries(c).filter(([, v]) => v !== undefined))
+  const { data, error } = await db.from('articles').update(maj)
+    .eq('client_id', clientId).eq('id', id).select(COLONNES_ARTICLE).single()
+  if (error) traduireErreurArticle(error)
+  return data as Article
+}
+
+export async function deleteArticle(db: SupabaseClient, clientId: string, id: string) {
+  const { error } = await db.from('articles').delete().eq('client_id', clientId).eq('id', id)
+  if (error) {
+    if (error.code === '23503') throw new ConflictError('Cet article figure dans des réquisitions : désactivez-le plutôt que de le supprimer.')
+    throw new Error(error.message)
+  }
 }

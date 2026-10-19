@@ -11,14 +11,20 @@ import {
   membresHorsEtablissement,
   setMembres,
   updateService,
+  peutGererCatalogue,
+  normaliserArticle,
+  verifierCatalogue,
   type ServiceInterne,
 } from '../services/requisitions.service'
 import {
   createServiceSchema,
   setMembresSchema,
   updateServiceSchema,
+  createArticleSchema,
+  updateArticleSchema,
 } from '../validators/requisitions.schema'
-import { ValidationError, NotFoundError } from '../errors'
+import { ValidationError, NotFoundError, ForbiddenError } from '../errors'
+import { normUnite } from '../constants'
 
 const CLIENT = '11111111-1111-4111-8111-111111111111'
 const AUTRE = '22222222-2222-4222-8222-222222222222'
@@ -199,5 +205,103 @@ describe('migration services internes', () => {
     const ecritures = [...sql.matchAll(/FOR (INSERT|UPDATE|DELETE) TO authenticated[\s\S]*?;/g)].map((m) => m[0])
     expect(ecritures).toHaveLength(6)
     for (const e of ecritures) expect(e).toMatch(/my_client_ids_for\('administration', 'modification'\)/)
+  })
+})
+
+// ── Catalogue d'articles ─────────────────────────────────────────────────────
+
+describe('peutGererCatalogue', () => {
+  const N = (administration: string, requisitions: string) => ({ administration, requisitions })
+  it("l'administration en modification gère tous les catalogues", () => {
+    expect(peutGererCatalogue(N('modification', 'aucun'), false)).toBe(true)
+  })
+  it('un membre du service avec les réquisitions en modification gère le sien', () => {
+    expect(peutGererCatalogue(N('aucun', 'modification'), true)).toBe(true)
+  })
+  it('ni un non-membre, ni un membre en lecture seule', () => {
+    expect(peutGererCatalogue(N('lecture', 'modification'), false)).toBe(false)
+    expect(peutGererCatalogue(N('aucun', 'lecture'), true)).toBe(false)
+  })
+})
+
+describe('articles : normalisation et validateurs', () => {
+  it('trime le nom et ramène l’unité à sa forme canonique', () => {
+    expect(normaliserArticle({ nom: '  Gel douche ', unite: 'Cartons' })).toEqual({ nom: 'Gel douche', unite: 'carton' })
+    expect(normaliserArticle({ unite: '  ' }).unite).toBe('u')
+  })
+  it('reconnaît les unités des articles', () => {
+    expect(normUnite('rouleaux')).toBe('rouleau')
+    expect(normUnite('Boites')).toBe('boîte')
+    expect(normUnite('pqt')).toBe('paquet')
+  })
+  it('createArticleSchema : catégorie vide → null, prix négatif refusé', () => {
+    const base = { client_id: CLIENT, service_id: SERVICE, nom: 'Savon', unite: 'u' }
+    const r = createArticleSchema.safeParse({ ...base, categorie: '', prix_unitaire: '0.35' })
+    expect(r.success && r.data.categorie).toBeNull()
+    expect(r.success && r.data.prix_unitaire).toBe(0.35)
+    expect(createArticleSchema.safeParse({ ...base, prix_unitaire: -1 }).success).toBe(false)
+  })
+  it('updateArticleSchema laisse les champs absents inchangés', () => {
+    const r = updateArticleSchema.safeParse({ client_id: CLIENT, id: SERVICE, actif: false })
+    expect(r.success).toBe(true)
+    if (r.success) {
+      expect(r.data.categorie).toBeUndefined()
+      expect(r.data.reference).toBeUndefined()
+    }
+  })
+})
+
+describe('verifierCatalogue', () => {
+  const economat = service({ nom: 'Économat', peut_demander: false, peut_preparer: true, stock: 'articles' })
+  const tables = (stock: ServiceInterne['stock'] = 'articles') => ({
+    services_internes: [{ ...economat, stock } as unknown as Row],
+    service_membres: [{ client_id: CLIENT, service_id: SERVICE, user_id: U1 }],
+  })
+  const membre = { administration: 'aucun', requisitions: 'modification' }
+
+  it('accepte un membre du service', async () => {
+    const { db } = fakeDb(tables())
+    await expect(verifierCatalogue(db, CLIENT, SERVICE, U1, membre)).resolves.toMatchObject({ id: SERVICE })
+  })
+  it('refuse un non-membre sans administration', async () => {
+    const { db } = fakeDb(tables())
+    await expect(verifierCatalogue(db, CLIENT, SERVICE, U2, membre)).rejects.toThrow(ForbiddenError)
+  })
+  it('accepte un administrateur non membre', async () => {
+    const { db } = fakeDb(tables())
+    await expect(verifierCatalogue(db, CLIENT, SERVICE, U2, { administration: 'modification', requisitions: 'aucun' })).resolves.toBeTruthy()
+  })
+  it("refuse un service qui ne sert pas d'articles", async () => {
+    const { db } = fakeDb(tables('cuisine'))
+    await expect(verifierCatalogue(db, CLIENT, SERVICE, U1, membre)).rejects.toThrow(ValidationError)
+  })
+})
+
+describe('migration articles', () => {
+  const sql = readFileSync(path.resolve(__dirname, '../../supabase/migrations/20261019140000_requisitions_articles.sql'), 'utf8')
+
+  it('active la RLS et couvre les 4 commandes', () => {
+    expect(sql).toMatch(/ALTER TABLE public\.articles ENABLE ROW LEVEL SECURITY/)
+    for (const cmd of ['SELECT', 'INSERT', 'UPDATE', 'DELETE']) {
+      expect(sql, cmd).toMatch(new RegExp(`CREATE POLICY articles_${cmd.toLowerCase()} ON public\\.articles FOR ${cmd}`))
+    }
+  })
+
+  it("n'appelle les fonctions d'accès que dans des sous-requêtes (initplan)", () => {
+    const policies = sql.slice(sql.indexOf('-- ── RLS'))
+    for (const m of policies.matchAll(/(auth\.uid\(\)|public\.my_(?:client|service)_ids(?:_for)?\(|public\.get_my_is_superadmin\(\))/g)) {
+      const avant = policies.slice(Math.max(0, m.index! - 16), m.index!)
+      expect(avant, m[0]).toMatch(/SELECT\s+(public\.)?$/)
+    }
+  })
+
+  it('lecture par « requisitions », écriture par administration ou membre du service', () => {
+    const select = sql.match(/CREATE POLICY articles_select[\s\S]*?;/)![0]
+    expect(select).toMatch(/my_client_ids_for\('requisitions', 'lecture'\)/)
+    for (const cmd of ['insert', 'update', 'delete']) {
+      const p = sql.match(new RegExp(`CREATE POLICY articles_${cmd}[\\s\\S]*?;`))![0]
+      expect(p, cmd).toMatch(/my_client_ids_for\('administration', 'modification'\)/)
+      expect(p, cmd).toMatch(/my_service_ids\(\)/)
+    }
   })
 })

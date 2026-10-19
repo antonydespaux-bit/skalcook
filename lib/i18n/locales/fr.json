@@ -34,7 +34,8 @@
       "content": "Contenus",
       "management": "Gestion",
       "admin": "Admin",
-      "crm": "CRM"
+      "crm": "CRM",
+      "requisitions": "Réquisitions"
     },
     "items": {
       "allSheets": "Toutes les fiches",
@@ -49,6 +50,7 @@
       "clients": "Clients",
       "events": "Événements",
       "quotes": "Devis",
+      "articlesCatalog": "Catalogue d'articles",
       "settings": "Paramètres",
       "users": "Utilisateurs",
       "activity": "Activité",
@@ -1126,6 +1128,41 @@
       "activated": "Service « {{nom}} » réactivé.",
       "deactivated": "Service « {{nom}} » désactivé.",
       "deleted": "Service « {{nom}} » supprimé."
+    },
+    "articles": {
+      "title": "Catalogue d'articles",
+      "subtitle": "Produits hors cuisine et bar (économat, entretien…) servis par les services au stock « Articles ». Le prix unitaire HT valorise les sorties.",
+      "loadError": "Erreur lors du chargement du catalogue.",
+      "noCatalog": "Aucun service ne sert de catalogue d'articles. Dans Paramètres › Services, créez un service (ex. Économat) avec le stock « Articles (économat, entretien) ».",
+      "newTitle": "Nouvel article — {{service}}",
+      "name": "Nom",
+      "namePlaceholder": "Ex : Papier toilette, Gel douche 30 ml…",
+      "category": "Catégorie",
+      "categoryPlaceholder": "Ex : Accueil, Entretien…",
+      "reference": "Référence",
+      "unit": "Unité",
+      "unitPrice": "Prix unitaire HT (€)",
+      "add": "Ajouter l'article",
+      "count_one": "{{count}} article actif",
+      "count_other": "{{count}} articles actifs",
+      "search": "Rechercher un article",
+      "showInactive": "Voir les désactivés",
+      "readOnly": "Lecture seule : seuls les membres de ce service et les administrateurs modifient le catalogue.",
+      "empty": "Aucun article dans ce catalogue.",
+      "noMatch": "Aucun article ne correspond à la recherche.",
+      "inactive": "Désactivé",
+      "edit": "Modifier",
+      "save": "Enregistrer",
+      "cancel": "Annuler",
+      "activate": "Réactiver",
+      "deactivate": "Désactiver",
+      "delete": "Supprimer",
+      "confirmDelete": "Supprimer l'article « {{nom}} » ?",
+      "created": "Article « {{nom}} » ajouté.",
+      "updated": "Article mis à jour.",
+      "activated": "Article « {{nom}} » réactivé.",
+      "deactivated": "Article « {{nom}} » désactivé.",
+      "deleted": "Article « {{nom}} » supprimé."
     }
   }
 }

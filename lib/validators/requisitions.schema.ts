@@ -74,3 +74,44 @@ export const parametresRequisitionsSchema = z.object({
   validation: z.boolean(),
 })
 
+
+// ── Catalogue d'articles (services au stock « articles ») ──────────────────
+
+const texteOptionnel = (max: number) => z.string().trim().max(max).nullable().optional()
+  // Absent → undefined (champ inchangé en PATCH) ; vide → null (effacé).
+  .transform((v) => (v === undefined ? undefined : v || null))
+
+const champsArticle = {
+  nom:           z.string().trim().min(1, 'Nom requis').max(120, '120 caractères maximum'),
+  categorie:     texteOptionnel(60),
+  reference:     texteOptionnel(60),
+  unite:         z.string().trim().min(1).max(20),
+  prix_unitaire: z.coerce.number().min(0).max(1_000_000).nullable().optional(),
+}
+
+export const listArticlesQuerySchema = z.object({
+  client_id:  clientIdSchema,
+  service_id: uuidSchema.optional(),
+})
+
+export const createArticleSchema = z.object({
+  client_id:  clientIdSchema,
+  service_id: uuidSchema,
+  ...champsArticle,
+})
+
+export const updateArticleSchema = z.object({
+  client_id:     clientIdSchema,
+  id:            uuidSchema,
+  nom:           champsArticle.nom.optional(),
+  categorie:     champsArticle.categorie,
+  reference:     champsArticle.reference,
+  unite:         champsArticle.unite.optional(),
+  prix_unitaire: champsArticle.prix_unitaire,
+  actif:         z.boolean().optional(),
+})
+
+export const deleteArticleSchema = z.object({
+  client_id: clientIdSchema,
+  id:        uuidSchema,
+})

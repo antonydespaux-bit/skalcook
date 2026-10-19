@@ -139,6 +139,16 @@ export default function Navbar({ section = 'cuisine' }) {
   }
 
   // ─── Navigation items ────────────────────────────────────────────────────────
+  // Réquisitions : module à part, même entrée en cuisine et au bar.
+  const groupeRequisitions = hasModule('requisitions') && peutVoir('requisitions') ? [{
+    id: 'requisitions',
+    label: t('nav.groups.requisitions'),
+    paths: ['/requisitions'],
+    items: [
+      { label: t('nav.items.articlesCatalog'), path: '/requisitions/articles' },
+    ],
+  }] : []
+
   const groupes = isBar
     ? [
         {
@@ -169,6 +179,7 @@ export default function Navbar({ section = 'cuisine' }) {
             ...(peutVoir('achats') ? [{ label: t('nav.items.purchases'), path: '/bar/achats' }] : []),
           ]
         }] : []),
+        ...groupeRequisitions,
       ].filter(g => g.items.length > 0)
     : [
         {
@@ -194,6 +205,7 @@ export default function Navbar({ section = 'cuisine' }) {
             ...(hasModule('avis') && peutVoir('avis')               ? [{ label: t('nav.items.reviews'),    path: '/avis' }]         : []),
           ]
         },
+        ...groupeRequisitions,
         ...(hasModule('crm') && peutVoir('crm') ? [{
           id: 'crm',
           label: t('nav.groups.crm'),

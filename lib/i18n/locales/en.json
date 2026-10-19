@@ -34,7 +34,8 @@
       "content": "Content",
       "management": "Management",
       "admin": "Admin",
-      "crm": "CRM"
+      "crm": "CRM",
+      "requisitions": "Requisitions"
     },
     "items": {
       "allSheets": "All sheets",
@@ -49,6 +50,7 @@
       "clients": "Clients",
       "events": "Events",
       "quotes": "Quotes",
+      "articlesCatalog": "Item catalogue",
       "settings": "Settings",
       "users": "Users",
       "activity": "Activity",
@@ -1126,6 +1128,41 @@
       "activated": "Department \"{{nom}}\" re-enabled.",
       "deactivated": "Department \"{{nom}}\" disabled.",
       "deleted": "Department \"{{nom}}\" deleted."
+    },
+    "articles": {
+      "title": "Item catalogue",
+      "subtitle": "Non-food items (storeroom, cleaning…) served by departments with the \"Items\" stock. The unit price excl. VAT values what goes out.",
+      "loadError": "Error loading the catalogue.",
+      "noCatalog": "No department serves an item catalogue. In Settings › Departments, create a department (e.g. Storeroom) with the \"Items (storeroom, cleaning)\" stock.",
+      "newTitle": "New item — {{service}}",
+      "name": "Name",
+      "namePlaceholder": "E.g. Toilet paper, 30 ml shower gel…",
+      "category": "Category",
+      "categoryPlaceholder": "E.g. Guest amenities, Cleaning…",
+      "reference": "Reference",
+      "unit": "Unit",
+      "unitPrice": "Unit price excl. VAT (€)",
+      "add": "Add item",
+      "count_one": "{{count}} active item",
+      "count_other": "{{count}} active items",
+      "search": "Search an item",
+      "showInactive": "Show disabled",
+      "readOnly": "Read only: only this department's members and administrators edit the catalogue.",
+      "empty": "No items in this catalogue.",
+      "noMatch": "No item matches the search.",
+      "inactive": "Disabled",
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel",
+      "activate": "Re-enable",
+      "deactivate": "Disable",
+      "delete": "Delete",
+      "confirmDelete": "Delete the item \"{{nom}}\"?",
+      "created": "Item \"{{nom}}\" added.",
+      "updated": "Item updated.",
+      "activated": "Item \"{{nom}}\" re-enabled.",
+      "deactivated": "Item \"{{nom}}\" disabled.",
+      "deleted": "Item \"{{nom}}\" deleted."
     }
   }
 }
