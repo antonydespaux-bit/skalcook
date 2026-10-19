@@ -1074,5 +1074,58 @@
       "prix": "Precios comparados",
       "fournisseurs": "Proveedores"
     }
+  },
+  "requisitions": {
+    "services": {
+      "tab": "Servicios",
+      "intro": "Los servicios crean y preparan las requisiciones (pedidos internos). Cree los suyos (Pisos, Economato, Room service…), indique quién pide y quién prepara, y asigne a los usuarios: cada uno pide en nombre de sus servicios.",
+      "loadError": "Error al cargar los servicios.",
+      "validationTitle": "Validación de pedidos",
+      "validationLabel": "Los pedidos deben ser validados por el responsable del servicio solicitante antes de prepararse",
+      "validationHelp": "Desactivado: un pedido enviado pasa directamente a preparación.",
+      "validationOn": "Validación de pedidos activada.",
+      "validationOff": "Validación de pedidos desactivada.",
+      "newTitle": "Nuevo servicio",
+      "emoji": "Emoji",
+      "name": "Nombre",
+      "namePlaceholder": "Ej.: Pisos, Economato, Room service…",
+      "stock": "Stock servido al preparar",
+      "stocks": {
+        "cuisine": "Stock de cocina",
+        "bar": "Stock de bar",
+        "articles": "Artículos (economato, limpieza)",
+        "aucun": "Sin stock"
+      },
+      "canRequest": "Hace pedidos",
+      "canPrepare": "Prepara pedidos",
+      "needRole": "El servicio debe poder pedir, preparar, o ambos.",
+      "add": "Añadir el servicio",
+      "listTitle": "Servicios ({{count}})",
+      "empty": "Todavía no hay servicios.",
+      "badgeRequests": "Pide",
+      "badgePrepares": "Prepara",
+      "inactive": "Desactivado",
+      "members_one": "{{count}} miembro",
+      "members_other": "{{count}} miembros",
+      "membersHelp": "Marque los usuarios del servicio. El responsable valida los pedidos del servicio cuando la validación está activada.",
+      "noUsers": "No hay usuarios en el establecimiento.",
+      "manager": "Responsable",
+      "saveMembers": "Guardar los miembros",
+      "membersSaved": "Miembros guardados.",
+      "moveUp": "Subir",
+      "moveDown": "Bajar",
+      "edit": "Editar",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "activate": "Reactivar",
+      "deactivate": "Desactivar",
+      "delete": "Eliminar",
+      "confirmDelete": "¿Eliminar el servicio «{{nom}}»? Sus miembros serán retirados.",
+      "created": "Servicio «{{nom}}» creado.",
+      "updated": "Servicio actualizado.",
+      "activated": "Servicio «{{nom}}» reactivado.",
+      "deactivated": "Servicio «{{nom}}» desactivado.",
+      "deleted": "Servicio «{{nom}}» eliminado."
+    }
   }
 }

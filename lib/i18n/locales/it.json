@@ -1074,5 +1074,58 @@
       "prix": "Prezzi a confronto",
       "fournisseurs": "Fornitori"
     }
+  },
+  "requisitions": {
+    "services": {
+      "tab": "Reparti",
+      "intro": "I reparti creano e preparano le requisizioni (ordini interni). Create i vostri (Piani, Economato, Room service…), indicate chi richiede e chi prepara, poi assegnate gli utenti: ognuno ordina a nome dei propri reparti.",
+      "loadError": "Errore durante il caricamento dei reparti.",
+      "validationTitle": "Approvazione delle richieste",
+      "validationLabel": "Le richieste devono essere approvate dal responsabile del reparto richiedente prima della preparazione",
+      "validationHelp": "Disattivato: una richiesta inviata passa direttamente in preparazione.",
+      "validationOn": "Approvazione delle richieste attivata.",
+      "validationOff": "Approvazione delle richieste disattivata.",
+      "newTitle": "Nuovo reparto",
+      "emoji": "Emoji",
+      "name": "Nome",
+      "namePlaceholder": "Es.: Piani, Economato, Room service…",
+      "stock": "Stock servito quando prepara",
+      "stocks": {
+        "cuisine": "Stock cucina",
+        "bar": "Stock bar",
+        "articles": "Articoli (economato, pulizia)",
+        "aucun": "Nessuno stock"
+      },
+      "canRequest": "Effettua ordini",
+      "canPrepare": "Prepara ordini",
+      "needRole": "Il reparto deve poter richiedere, preparare, o entrambi.",
+      "add": "Aggiungi il reparto",
+      "listTitle": "Reparti ({{count}})",
+      "empty": "Nessun reparto per ora.",
+      "badgeRequests": "Richiede",
+      "badgePrepares": "Prepara",
+      "inactive": "Disattivato",
+      "members_one": "{{count}} membro",
+      "members_other": "{{count}} membri",
+      "membersHelp": "Selezionate gli utenti del reparto. Il responsabile approva le richieste del reparto quando l'approvazione è attiva.",
+      "noUsers": "Nessun utente nella struttura.",
+      "manager": "Responsabile",
+      "saveMembers": "Salva i membri",
+      "membersSaved": "Membri salvati.",
+      "moveUp": "Sposta su",
+      "moveDown": "Sposta giù",
+      "edit": "Modifica",
+      "save": "Salva",
+      "cancel": "Annulla",
+      "activate": "Riattiva",
+      "deactivate": "Disattiva",
+      "delete": "Elimina",
+      "confirmDelete": "Eliminare il reparto «{{nom}}»? I suoi membri verranno rimossi.",
+      "created": "Reparto «{{nom}}» creato.",
+      "updated": "Reparto aggiornato.",
+      "activated": "Reparto «{{nom}}» riattivato.",
+      "deactivated": "Reparto «{{nom}}» disattivato.",
+      "deleted": "Reparto «{{nom}}» eliminato."
+    }
   }
 }

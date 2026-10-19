@@ -1074,5 +1074,58 @@
       "prix": "Compared prices",
       "fournisseurs": "Suppliers"
     }
+  },
+  "requisitions": {
+    "services": {
+      "tab": "Departments",
+      "intro": "Departments place and prepare requisitions (internal orders). Create your own (Housekeeping, Storeroom, Room service…), choose who requests and who prepares, then assign users: each person orders on behalf of their departments.",
+      "loadError": "Error loading departments.",
+      "validationTitle": "Request approval",
+      "validationLabel": "Requests must be approved by the requesting department's manager before preparation",
+      "validationHelp": "Off: a sent request goes straight to preparation.",
+      "validationOn": "Request approval enabled.",
+      "validationOff": "Request approval disabled.",
+      "newTitle": "New department",
+      "emoji": "Emoji",
+      "name": "Name",
+      "namePlaceholder": "E.g. Housekeeping, Storeroom, Room service…",
+      "stock": "Stock served when preparing",
+      "stocks": {
+        "cuisine": "Kitchen stock",
+        "bar": "Bar stock",
+        "articles": "Items (storeroom, cleaning)",
+        "aucun": "No stock"
+      },
+      "canRequest": "Places orders",
+      "canPrepare": "Prepares orders",
+      "needRole": "The department must be able to request, prepare, or both.",
+      "add": "Add department",
+      "listTitle": "Departments ({{count}})",
+      "empty": "No departments yet.",
+      "badgeRequests": "Requests",
+      "badgePrepares": "Prepares",
+      "inactive": "Disabled",
+      "members_one": "{{count}} member",
+      "members_other": "{{count}} members",
+      "membersHelp": "Tick the department's users. The manager approves the department's requests when approval is enabled.",
+      "noUsers": "No users in this venue.",
+      "manager": "Manager",
+      "saveMembers": "Save members",
+      "membersSaved": "Members saved.",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel",
+      "activate": "Re-enable",
+      "deactivate": "Disable",
+      "delete": "Delete",
+      "confirmDelete": "Delete the department \"{{nom}}\"? Its members will be removed from it.",
+      "created": "Department \"{{nom}}\" created.",
+      "updated": "Department updated.",
+      "activated": "Department \"{{nom}}\" re-enabled.",
+      "deactivated": "Department \"{{nom}}\" disabled.",
+      "deleted": "Department \"{{nom}}\" deleted."
+    }
   }
 }

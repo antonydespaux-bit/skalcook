@@ -1074,5 +1074,58 @@
       "prix": "Prix comparés",
       "fournisseurs": "Fournisseurs"
     }
+  },
+  "requisitions": {
+    "services": {
+      "tab": "Services",
+      "intro": "Les services passent et préparent les réquisitions (commandes internes). Créez les vôtres (Étages, Économat, Room service…), dites qui demande et qui prépare, puis rattachez les utilisateurs : chacun commande au nom de ses services.",
+      "loadError": "Erreur lors du chargement des services.",
+      "validationTitle": "Validation des demandes",
+      "validationLabel": "Les demandes doivent être validées par le responsable du service demandeur avant préparation",
+      "validationHelp": "Désactivé : une demande envoyée part directement en préparation.",
+      "validationOn": "Validation des demandes activée.",
+      "validationOff": "Validation des demandes désactivée.",
+      "newTitle": "Nouveau service",
+      "emoji": "Emoji",
+      "name": "Nom",
+      "namePlaceholder": "Ex : Étages, Économat, Room service…",
+      "stock": "Stock servi quand il prépare",
+      "stocks": {
+        "cuisine": "Stock cuisine",
+        "bar": "Stock bar",
+        "articles": "Articles (économat, entretien)",
+        "aucun": "Aucun stock"
+      },
+      "canRequest": "Passe des commandes",
+      "canPrepare": "Prépare des commandes",
+      "needRole": "Le service doit pouvoir demander, préparer, ou les deux.",
+      "add": "Ajouter le service",
+      "listTitle": "Services ({{count}})",
+      "empty": "Aucun service pour l'instant.",
+      "badgeRequests": "Demande",
+      "badgePrepares": "Prépare",
+      "inactive": "Désactivé",
+      "members_one": "{{count}} membre",
+      "members_other": "{{count}} membres",
+      "membersHelp": "Cochez les utilisateurs du service. Le responsable valide les demandes du service quand la validation est activée.",
+      "noUsers": "Aucun utilisateur dans l'établissement.",
+      "manager": "Responsable",
+      "saveMembers": "Enregistrer les membres",
+      "membersSaved": "Membres enregistrés.",
+      "moveUp": "Monter",
+      "moveDown": "Descendre",
+      "edit": "Modifier",
+      "save": "Enregistrer",
+      "cancel": "Annuler",
+      "activate": "Réactiver",
+      "deactivate": "Désactiver",
+      "delete": "Supprimer",
+      "confirmDelete": "Supprimer le service « {{nom}} » ? Ses membres en seront retirés.",
+      "created": "Service « {{nom}} » créé.",
+      "updated": "Service mis à jour.",
+      "activated": "Service « {{nom}} » réactivé.",
+      "deactivated": "Service « {{nom}} » désactivé.",
+      "deleted": "Service « {{nom}} » supprimé."
+    }
   }
 }
