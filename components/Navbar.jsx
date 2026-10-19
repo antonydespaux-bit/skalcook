@@ -147,6 +147,7 @@ export default function Navbar({ section = 'cuisine' }) {
     items: [
       { label: t('nav.items.requisitionsList'), path: '/requisitions' },
       { label: t('nav.items.articlesCatalog'), path: '/requisitions/articles' },
+      ...(peutVoir('requisitions_analyses') ? [{ label: t('nav.items.requisitionsAnalyses'), path: '/requisitions/analyses' }] : []),
     ],
   }] : []
 

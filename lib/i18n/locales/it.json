@@ -52,6 +52,7 @@
       "quotes": "Preventivi",
       "requisitionsList": "Requisizioni",
       "articlesCatalog": "Catalogo articoli",
+      "requisitionsAnalyses": "Analisi",
       "settings": "Impostazioni",
       "users": "Utenti",
       "activity": "Attività",
@@ -1310,6 +1311,43 @@
     },
     "foodCost": {
       "cessions": "− cessioni interne (requisizioni): {{montant}}"
+    },
+    "analyses": {
+      "title": "Analisi delle requisizioni",
+      "subtitle": "Consumo dei reparti sui buoni consegnati nel periodo, valorizzato al prezzo IVA esclusa fissato alla consegna.",
+      "exportExcel": "Esporta Excel",
+      "from": "Dal",
+      "to": "Al",
+      "service": "Reparto",
+      "allServices": "Tutti i reparti",
+      "presets": {
+        "mois-en-cours": "Mese corrente",
+        "mois-precedent": "Mese precedente",
+        "30j": "30 giorni",
+        "trimestre": "Trimestre",
+        "annee": "Anno"
+      },
+      "totalValue": "Valore consumato IVA escl.",
+      "deliveredSlips": "Buoni consegnati",
+      "lines": "Righe",
+      "byService": "Per reparto consumatore",
+      "byPreparer": "Per reparto fornitore",
+      "byProduct": "Per prodotto",
+      "slips_one": "{{count}} buono",
+      "slips_other": "{{count}} buoni",
+      "empty": "Nessuna requisizione consegnata nel periodo.",
+      "product": "Prodotto",
+      "unit": "Unità",
+      "quantity": "Quantità",
+      "value": "Valore IVA escl.",
+      "share": "Quota",
+      "mainService": "Principale consumatore",
+      "showAll": "Mostra i {{count}} prodotti",
+      "showLess": "Mostra meno",
+      "export": {
+        "summary": "Sintesi",
+        "period": "Periodo"
+      }
     }
   }
 }

@@ -52,6 +52,7 @@
       "quotes": "Quotes",
       "requisitionsList": "Requisitions",
       "articlesCatalog": "Item catalogue",
+      "requisitionsAnalyses": "Analytics",
       "settings": "Settings",
       "users": "Users",
       "activity": "Activity",
@@ -1310,6 +1311,43 @@
     },
     "foodCost": {
       "cessions": "− internal transfers (requisitions): {{montant}}"
+    },
+    "analyses": {
+      "title": "Requisition analytics",
+      "subtitle": "Departments' consumption from slips delivered in the period, valued at the price excl. VAT locked at delivery.",
+      "exportExcel": "Excel export",
+      "from": "From",
+      "to": "To",
+      "service": "Department",
+      "allServices": "All departments",
+      "presets": {
+        "mois-en-cours": "This month",
+        "mois-precedent": "Last month",
+        "30j": "30 days",
+        "trimestre": "Quarter",
+        "annee": "Year"
+      },
+      "totalValue": "Value consumed excl. VAT",
+      "deliveredSlips": "Delivered slips",
+      "lines": "Lines",
+      "byService": "By consuming department",
+      "byPreparer": "By supplying department",
+      "byProduct": "By product",
+      "slips_one": "{{count}} slip",
+      "slips_other": "{{count}} slips",
+      "empty": "No requisition delivered in this period.",
+      "product": "Product",
+      "unit": "Unit",
+      "quantity": "Quantity",
+      "value": "Value excl. VAT",
+      "share": "Share",
+      "mainService": "Main consumer",
+      "showAll": "Show all {{count}} products",
+      "showLess": "Show less",
+      "export": {
+        "summary": "Summary",
+        "period": "Period"
+      }
     }
   }
 }

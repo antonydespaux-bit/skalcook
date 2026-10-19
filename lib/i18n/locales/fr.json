@@ -52,6 +52,7 @@
       "quotes": "Devis",
       "requisitionsList": "Réquisitions",
       "articlesCatalog": "Catalogue d'articles",
+      "requisitionsAnalyses": "Analyses",
       "settings": "Paramètres",
       "users": "Utilisateurs",
       "activity": "Activité",
@@ -1310,6 +1311,43 @@
     },
     "foodCost": {
       "cessions": "− cessions internes (réquisitions) : {{montant}}"
+    },
+    "analyses": {
+      "title": "Analyses des réquisitions",
+      "subtitle": "Consommation des services sur les bons livrés de la période, valorisée au prix HT figé à la livraison.",
+      "exportExcel": "Export Excel",
+      "from": "Du",
+      "to": "Au",
+      "service": "Service",
+      "allServices": "Tous les services",
+      "presets": {
+        "mois-en-cours": "Mois en cours",
+        "mois-precedent": "Mois précédent",
+        "30j": "30 jours",
+        "trimestre": "Trimestre",
+        "annee": "Année"
+      },
+      "totalValue": "Valeur HT consommée",
+      "deliveredSlips": "Bons livrés",
+      "lines": "Lignes",
+      "byService": "Par service consommateur",
+      "byPreparer": "Par service fournisseur",
+      "byProduct": "Par produit",
+      "slips_one": "{{count}} bon",
+      "slips_other": "{{count}} bons",
+      "empty": "Aucune réquisition livrée sur la période.",
+      "product": "Produit",
+      "unit": "Unité",
+      "quantity": "Quantité",
+      "value": "Valeur HT",
+      "share": "Part",
+      "mainService": "Principal consommateur",
+      "showAll": "Voir les {{count}} produits",
+      "showLess": "Voir moins",
+      "export": {
+        "summary": "Synthèse",
+        "period": "Période"
+      }
     }
   }
 }

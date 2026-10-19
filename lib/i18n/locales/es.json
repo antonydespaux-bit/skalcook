@@ -52,6 +52,7 @@
       "quotes": "Presupuestos",
       "requisitionsList": "Requisiciones",
       "articlesCatalog": "Catálogo de artículos",
+      "requisitionsAnalyses": "Análisis",
       "settings": "Ajustes",
       "users": "Usuarios",
       "activity": "Actividad",
@@ -1310,6 +1311,43 @@
     },
     "foodCost": {
       "cessions": "− cesiones internas (requisiciones): {{montant}}"
+    },
+    "analyses": {
+      "title": "Análisis de requisiciones",
+      "subtitle": "Consumo de los servicios en los vales entregados del periodo, valorado al precio sin IVA fijado en la entrega.",
+      "exportExcel": "Exportar a Excel",
+      "from": "Del",
+      "to": "Al",
+      "service": "Servicio",
+      "allServices": "Todos los servicios",
+      "presets": {
+        "mois-en-cours": "Mes en curso",
+        "mois-precedent": "Mes anterior",
+        "30j": "30 días",
+        "trimestre": "Trimestre",
+        "annee": "Año"
+      },
+      "totalValue": "Valor consumido sin IVA",
+      "deliveredSlips": "Vales entregados",
+      "lines": "Líneas",
+      "byService": "Por servicio consumidor",
+      "byPreparer": "Por servicio proveedor",
+      "byProduct": "Por producto",
+      "slips_one": "{{count}} vale",
+      "slips_other": "{{count}} vales",
+      "empty": "Ninguna requisición entregada en el periodo.",
+      "product": "Producto",
+      "unit": "Unidad",
+      "quantity": "Cantidad",
+      "value": "Valor sin IVA",
+      "share": "Parte",
+      "mainService": "Principal consumidor",
+      "showAll": "Ver los {{count}} productos",
+      "showLess": "Ver menos",
+      "export": {
+        "summary": "Resumen",
+        "period": "Periodo"
+      }
     }
   }
 }

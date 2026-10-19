@@ -205,3 +205,15 @@ export const sortieDirecteSchema = z.object({
   message: 'Le service receveur doit être différent du service qui sort le stock.',
   path: ['service_receveur_id'],
 })
+
+// ── Analyses ───────────────────────────────────────────────────────────────
+
+export const analysesQuerySchema = z.object({
+  client_id:  clientIdSchema,
+  debut:      dateIso,
+  fin:        dateIso,
+  service_id: uuidSchema.optional(),
+}).refine((d) => d.fin >= d.debut, { message: 'La fin doit suivre le début.', path: ['fin'] })
+  .refine((d) => (Date.parse(d.fin) - Date.parse(d.debut)) / 86_400_000 <= 400, {
+    message: 'Période limitée à 400 jours.', path: ['debut'],
+  })
