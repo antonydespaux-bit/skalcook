@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { apiHandler } from '../../../../lib/apiHandler'
 import { z } from 'zod'
+import { normaliserFactures } from '../../../../lib/services/parseFacture'
 
 // Étend le timeout de la function Vercel à 60s (par défaut: 10s sur Hobby,
 // 60s déjà max sur Pro sans cette directive). L'OCR Claude peut prendre
@@ -116,31 +117,12 @@ Comment distinguer plusieurs factures :
 Extrais les informations et retourne UNIQUEMENT du JSON valide, sans markdown,
 sans texte avant ou après.
 
-Format attendu (toujours un array "factures", même s'il n'y en a qu'une) :
-{
-  "factures": [
-    {
-      "fournisseur": "Nom du fournisseur (string ou null)",
-      "date_facture": "YYYY-MM-DD (string ou null)",
-      "numero_facture": "Numéro ou référence de la facture (string ou null)",
-      "type": "facture" | "avoir",
-      "total_ht_facture": 726.74,
-      "total_ttc_facture": 784.15,
-      "montant_tva_total": 42.88,
-      "montant_taxes_hors_tva": 14.53,
-      "lignes": [
-        {
-          "designation": "Nom du produit tel qu'il apparaît sur la facture",
-          "quantite": 5.0,
-          "unite": "kg",
-          "prix_unitaire_ht": 2.50,
-          "montant_ht": 12.50,
-          "taux_tva": 5.5
-        }
-      ]
-    }
-  ]
-}
+Format attendu (toujours un array "factures", même s'il n'y en a qu'une).
+Pour aller vite, chaque ligne est un TABLEAU compact (pas un objet), dans cet ordre :
+[designation, quantite, unite, prix_unitaire_ht, montant_ht, taux_tva]
+{"factures":[{"fournisseur":"…","date_facture":"YYYY-MM-DD","numero_facture":"…","type":"facture","total_ht_facture":726.74,"total_ttc_facture":784.15,"montant_tva_total":42.88,"montant_taxes_hors_tva":null,
+"lignes":[["MARJOLAINE EN BOTTE (FRANCE)",5,"pièce",2.5,12.5,5.5],["OIGNON BLANC / KG",3.06,"kg",2.23,6.82,5.5]]}]}
+JSON sur une seule ligne, sans indentation ni espaces superflus.
 
 Règles CRITIQUES :
 
@@ -195,11 +177,14 @@ export const POST = apiHandler({
     let message
     try {
       message = await callAnthropicWithRetry(() => getAnthropic().messages.create({
-        // Sonnet 4.6 : ~5× moins cher qu'Opus pour une qualité OCR quasi-équivalente
-        // sur des factures fournisseur (PDF tabulaire, scans).
-        model: 'claude-sonnet-4-6',
-        // 8192 : marge pour un PDF multi-factures (1 facture ~ 500-1500 tokens en sortie).
-        max_tokens: 8192,
+        // Sonnet 5.5 + lignes en tableaux compacts : mesuré le 2026-10-20 sur
+        // une facture de 33 lignes (Vergers Saint-Eustache), 10 s au lieu de
+        // 43 s avec Sonnet 4.6 et des lignes en objets, pour des montants
+        // identiques à la ligne près. Le temps est dominé par les tokens de
+        // sortie : le format compact les divise par ~2.
+        model: 'claude-sonnet-5-5',
+        // Marge pour un PDF multi-factures (une facture ≈ 200 à 2 000 tokens en sortie).
+        max_tokens: 16000,
         messages: [
           {
             role: 'user',
@@ -240,100 +225,7 @@ export const POST = apiHandler({
       )
     }
 
-    // Décide du prix unitaire HT à partir de ce que Claude a renvoyé :
-    //   - prix_unitaire_ht (P.U.) ET/OU montant_ht (total ligne)
-    //
-    // Stratégie :
-    //   1. Si on a montant_ht et quantite > 0, calcule le PU "vérité" = montant_ht / quantite.
-    //   2. Si on a aussi un PU IA :
-    //      - les deux sont cohérents (écart < 5%) → on prend le PU IA (plus précis sur les centimes).
-    //      - sinon (ex: l'IA a lu "1,610" comme 1610 au lieu de 1.61) → on prend le PU "vérité".
-    //   3. Si on n'a que le PU IA → on l'utilise tel quel.
-    //   4. Si on n'a rien → 0.
-    const resolvePrixUnitaire = (puIA: number | null, montantHt: number | null, qte: number) => {
-      // On raisonne en valeur absolue pour gérer les avoirs (montants négatifs)
-      // sans rejeter les lignes valides.
-      const puVerite = montantHt != null && qte !== 0 ? montantHt / qte : null
-      const puIAAbs = puIA != null ? Math.abs(puIA) : null
-      const puVeriteAbs = puVerite != null ? Math.abs(puVerite) : null
-      if (puIAAbs != null && puVeriteAbs != null) {
-        const ecart = Math.abs(puIAAbs - puVeriteAbs) / Math.max(puVeriteAbs, 0.01)
-        return ecart < 0.05 ? puIAAbs : puVeriteAbs
-      }
-      return puIAAbs ?? puVeriteAbs ?? 0
-    }
-
-    const sanitizeMontant = (v: unknown): number | null => {
-      if (v == null) return null
-      const n = Number(v)
-      // On accepte les négatifs pour les avoirs ; le signe est porté par "type".
-      return Number.isFinite(n) ? n : null
-    }
-
-    type FactureRaw = Record<string, unknown>
-    const processFacture = (raw: FactureRaw) => {
-      const lignes = ((raw.lignes as Array<Record<string, unknown>>) || [])
-        .filter((l) => l && l.designation)
-        .map((l) => {
-          const tauxRaw = l.taux_tva
-          const taux = tauxRaw == null ? null : Number(tauxRaw)
-          const quantite = Math.abs(Number(l.quantite) || 1)
-          const puRaw = Number(l.prix_unitaire_ht)
-          const montantHtRaw = Number(l.montant_ht)
-          const puIA = Number.isFinite(puRaw) && puRaw !== 0 ? puRaw : null
-          const montantHt = Number.isFinite(montantHtRaw) && montantHtRaw !== 0 ? montantHtRaw : null
-          const prixUnitaire = resolvePrixUnitaire(puIA, montantHt, quantite)
-          return {
-            designation: String(l.designation ?? '').trim(),
-            quantite,
-            unite: String(l.unite ?? '').trim() || null,
-            prix_unitaire_ht: prixUnitaire,
-            taux_tva: taux != null && Number.isFinite(taux) && taux >= 0 && taux <= 100 ? taux : null,
-          }
-        })
-
-      // Filtre date_facture : on n'accepte que YYYY-MM-DD valide, sinon null
-      // (évite que Claude renvoie "hier" ou "2024-13-45" et fasse péter l'insert)
-      const rawDate = (raw.date_facture as string) ?? null
-      const dateFactureValide = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) && !Number.isNaN(Date.parse(rawDate))
-        ? rawDate
-        : null
-
-      // statut métier côté UI : 'avoir' si Claude a marqué le doc comme avoir,
-      // ou si tous les totaux sont négatifs. Sinon 'facture'.
-      const typeRaw = String(raw.type ?? '').toLowerCase()
-      const totalHtRaw = sanitizeMontant(raw.total_ht_facture)
-      const isAvoir = typeRaw === 'avoir' || (totalHtRaw != null && totalHtRaw < 0)
-
-      return {
-        fournisseur: (raw.fournisseur as string) ?? null,
-        date_facture: dateFactureValide,
-        numero_facture: (raw.numero_facture as string) ?? null,
-        statut: (isAvoir ? 'avoir' : 'facture') as 'avoir' | 'facture',
-        // Les montants sont retournés en valeur absolue : le statut 'avoir'
-        // suffit côté save-facture pour appliquer le signe négatif.
-        montant_tva_total: totalHtRaw != null ? Math.abs(sanitizeMontant(raw.montant_tva_total) ?? 0) || null : sanitizeMontant(raw.montant_tva_total),
-        total_ht_facture: totalHtRaw != null ? Math.abs(totalHtRaw) : null,
-        total_ttc_facture: (() => {
-          const v = sanitizeMontant(raw.total_ttc_facture)
-          return v != null ? Math.abs(v) : null
-        })(),
-        montant_taxes_hors_tva: (() => {
-          const v = sanitizeMontant(raw.montant_taxes_hors_tva)
-          return v != null ? Math.abs(v) : null
-        })(),
-        lignes,
-      }
-    }
-
-    // L'IA peut renvoyer soit { factures: [...] } (nouveau format multi-factures),
-    // soit l'ancien format à plat { fournisseur, lignes, ... }. On normalise vers
-    // un array dans tous les cas pour que le client n'ait qu'un code à gérer.
-    const rawFactures: FactureRaw[] = Array.isArray(parsed.factures)
-      ? (parsed.factures as FactureRaw[])
-      : [parsed as FactureRaw]
-
-    const factures = rawFactures.map(processFacture)
+    const factures = normaliserFactures(parsed)
 
     // Diagnostic : aide à comprendre les régressions OCR (lignes sans prix).
     const totalLignes = factures.reduce((s, f) => s + f.lignes.length, 0)
