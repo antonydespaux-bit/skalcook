@@ -102,4 +102,12 @@ CREATE POLICY articles_delete ON public.articles FOR DELETE TO authenticated
          OR ((client_id IN (SELECT public.my_client_ids_for('requisitions', 'modification')))
              AND (service_id IN (SELECT public.my_service_ids()))));
 
+-- ── Droits d'accès à la Data API ───────────────────────────────────────────
+-- À partir du 2026-10-30, Supabase n'accorde plus automatiquement l'accès
+-- aux nouvelles tables de « public » : chaque table créée ici reçoit ses
+-- GRANT explicites (sans eux, même les routes API en service_role
+-- reçoivent « permission denied »). anon : aucun accès ; la RLS filtre
+-- ensuite ce qu'authenticated voit et modifie.
 REVOKE ALL ON public.articles FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.articles TO authenticated;
+GRANT ALL ON public.articles TO service_role;

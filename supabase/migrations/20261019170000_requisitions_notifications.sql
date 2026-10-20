@@ -44,5 +44,14 @@ CREATE POLICY notifications_select ON public.notifications FOR SELECT TO authent
   USING ((user_id = (SELECT auth.uid()))
          AND (client_id IN (SELECT public.my_client_ids())));
 
+-- ── Droits d'accès à la Data API ───────────────────────────────────────────
+-- À partir du 2026-10-30, Supabase n'accorde plus automatiquement l'accès
+-- aux nouvelles tables de « public » : chaque table créée ici reçoit ses
+-- GRANT explicites (sans eux, même les routes API en service_role
+-- reçoivent « permission denied »). anon : aucun accès ; la RLS filtre
+-- ensuite ce qu'authenticated voit et modifie.
+-- Écriture réservée à l'API : authenticated n'a que la lecture.
 REVOKE ALL ON public.notifications FROM anon;
 REVOKE INSERT, UPDATE, DELETE ON public.notifications FROM authenticated;
+GRANT SELECT ON public.notifications TO authenticated;
+GRANT ALL ON public.notifications TO service_role;

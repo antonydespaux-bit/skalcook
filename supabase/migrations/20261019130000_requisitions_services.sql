@@ -167,5 +167,15 @@ CREATE POLICY service_membres_delete ON public.service_membres FOR DELETE TO aut
   USING (((SELECT public.get_my_is_superadmin()) IS TRUE)
          OR (client_id IN (SELECT public.my_client_ids_for('administration', 'modification'))));
 
+-- ── Droits d'accès à la Data API ───────────────────────────────────────────
+-- À partir du 2026-10-30, Supabase n'accorde plus automatiquement l'accès
+-- aux nouvelles tables de « public » : chaque table créée ici reçoit ses
+-- GRANT explicites (sans eux, même les routes API en service_role
+-- reçoivent « permission denied »). anon : aucun accès ; la RLS filtre
+-- ensuite ce qu'authenticated voit et modifie.
 REVOKE ALL ON public.services_internes FROM anon;
 REVOKE ALL ON public.service_membres FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.services_internes TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.service_membres TO authenticated;
+GRANT ALL ON public.services_internes TO service_role;
+GRANT ALL ON public.service_membres TO service_role;
