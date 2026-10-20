@@ -799,7 +799,11 @@
       "errExtraction": "Error de extracción",
       "errSaveGeneric": "Error al guardar.",
       "errInvalidData": "Datos no válidos",
-      "fileNotStored": "Factura guardada, pero no se pudo almacenar el archivo de origen. Podrás consultarla sin vista previa de PDF/imagen."
+      "fileNotStored": "Factura guardada, pero no se pudo almacenar el archivo de origen. Podrás consultarla sin vista previa de PDF/imagen.",
+      "supplierMatched": "Proveedor reconocido (leído en la factura: «{{lu}}»)",
+      "supplierExists": "Este proveedor ya existe con el nombre «{{nom}}».",
+      "supplierUse": "Usar",
+      "suggestionTitle": "Vincular a «{{nom}}» (sugerencia)"
     },
     "importExcel": {
       "title": "Importar un Excel de facturas",

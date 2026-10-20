@@ -6,6 +6,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { SaveFactureInput, CreateIngredientInput, BulkImportHeadersInput, FusionnerBlsInput } from '../validators/achats.schema'
 import { ConflictError, ValidationError, NotFoundError } from '../errors'
+import { cleFournisseurSouple } from '../rapprochement'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -58,14 +59,17 @@ export async function upsertFournisseur(
   nomFournisseur: string
 ): Promise<string | null> {
   const nom = nomFournisseur.trim()
-  const { data: existing } = await db
+  // Même fournisseur malgré l'écriture (casse, accents, « Les », « Saint » /
+  // « St », forme juridique) : on rattache au fournisseur existant plutôt que
+  // d'en créer un doublon. Peu de fournisseurs par établissement : lecture complète.
+  const { data: existants } = await db
     .from('fournisseurs')
-    .select('id')
+    .select('id, nom')
     .eq('client_id', clientId)
-    .ilike('nom', nom)
-    .maybeSingle()
+  const cle = cleFournisseurSouple(nom)
+  const existing = (existants ?? []).find((f) => cleFournisseurSouple(f.nom as string) === cle)
 
-  if (existing) return existing.id
+  if (existing) return existing.id as string
 
   const { data: created } = await db
     .from('fournisseurs')

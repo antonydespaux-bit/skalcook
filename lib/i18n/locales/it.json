@@ -799,7 +799,11 @@
       "errExtraction": "Errore di estrazione",
       "errSaveGeneric": "Errore durante il salvataggio.",
       "errInvalidData": "Dati non validi",
-      "fileNotStored": "Fattura salvata, ma il file di origine non è stato archiviato. Potrai consultarla senza anteprima PDF/immagine."
+      "fileNotStored": "Fattura salvata, ma il file di origine non è stato archiviato. Potrai consultarla senza anteprima PDF/immagine.",
+      "supplierMatched": "Fornitore riconosciuto (letto in fattura: «{{lu}}»)",
+      "supplierExists": "Questo fornitore esiste già con il nome «{{nom}}».",
+      "supplierUse": "Usa",
+      "suggestionTitle": "Collega a «{{nom}}» (suggerimento)"
     },
     "importExcel": {
       "title": "Importa un Excel di fatture",
