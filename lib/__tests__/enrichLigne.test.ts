@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { enrichLigne, normDesig } from '../achatsHelpers.js'
+import { enrichLigne, normDesig, ligneDepuisFacture } from '../achatsHelpers.js'
 
 const jambonCourt = { id: 'ing-court', nom: 'JAMBON 50% IBERIQUE', prix_kg: 30 }
 const jambonOs = { id: 'ing-os', nom: 'JAMBON 50% IBERIQUE AVEC OS', prix_kg: 25 }
@@ -51,5 +51,37 @@ describe('enrichLigne — réconciliation ingrédient', () => {
     )
     expect(res.reconnu).toBe(true)
     expect(res.ingredient_id).toBe('ing-court')
+  })
+})
+
+describe('ligneDepuisFacture — prix lus sur la facture', () => {
+  const ocr = { designation: 'CREME FLEURETTE 5L PAMPLIE', quantite: 5, unite: 'L', prix_unitaire_ht: 5.978, taux_tva: 5.5 }
+
+  it("garde le prix de la facture pour un produit non reconnu (régression : il tombait à 0)", () => {
+    const res = enrichLigne(ligneDepuisFacture(ocr), {}, {}, {})
+    expect(res.reconnu).toBe(false)
+    expect(res.prix_unitaire_ht).toBe(5.978)
+    expect(res.taux_tva).toBe(5.5)
+  })
+
+  it("garde le prix de la facture pour un produit reconnu, avec l'écart et la mise à jour du prix", () => {
+    const creme = { id: 'ing-creme', nom: 'CREME FLEURETTE 5L PAMPLIE', prix_kg: 5.5 }
+    const res = enrichLigne(ligneDepuisFacture(ocr), {}, byId([creme]), byNorm([creme]))
+    expect(res.reconnu).toBe(true)
+    expect(res.prix_unitaire_ht).toBe(5.978)
+    expect(res.deltaPrix).toBeCloseTo(8.69, 1)
+    expect(res.updatePrice).toBe(true)
+  })
+
+  it('sans prix lu, le prix de la mercuriale reste proposé', () => {
+    const creme = { id: 'ing-creme', nom: 'CREME FLEURETTE 5L PAMPLIE', prix_kg: 5.5 }
+    const res = enrichLigne(ligneDepuisFacture({ ...ocr, prix_unitaire_ht: null }), {}, byId([creme]), byNorm([creme]))
+    expect(res.prix_unitaire_ht).toBe(5.5)
+    expect(res.prix_auto).toBe(true)
+  })
+
+  it("un instantané garde ses drapeaux (navigation entre factures d'un même PDF)", () => {
+    const l = ligneDepuisFacture({ ...ocr, prix_unitaire_ht: 5.5, prix_auto: true })
+    expect(l.prix_auto).toBe(true)
   })
 })

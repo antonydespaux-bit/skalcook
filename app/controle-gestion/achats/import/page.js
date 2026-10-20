@@ -13,7 +13,7 @@ import BackButton from '../../../../components/BackButton'
 import IngredientAutocomplete from '../../../../components/IngredientAutocomplete'
 import FournisseurAutocomplete from '../../../../components/FournisseurAutocomplete'
 import { useFournisseursConnus } from '../../../../lib/useFournisseursConnus'
-import { normDesig, todayIso, yesterdayIso, fmtPrix, fmtDelta, fileToBase64, makeLigneId, enrichLigne } from '../../../../lib/achatsHelpers'
+import { normDesig, todayIso, yesterdayIso, fmtPrix, fmtDelta, fileToBase64, makeLigneId, enrichLigne, ligneDepuisFacture } from '../../../../lib/achatsHelpers'
 import { unitesParSection, normUnite } from '../../../../lib/constants'
 
 // ─── Sélecteur d'unité (liste fermée) ───────────────────────────────────────
@@ -244,17 +244,7 @@ export default function AchatsImportPage() {
     setTotalHtSaisi(facture.total_ht_facture != null ? Number(facture.total_ht_facture) : null)
     setMontantTvaSaisi(facture.montant_tva_total != null ? Number(facture.montant_tva_total) : null)
     setTotalTtcSaisi(facture.total_ttc_facture != null ? Number(facture.total_ttc_facture) : null)
-    const enriched = (facture.lignes || []).map(l =>
-      enrichLigneLocal({
-        _id:              makeLigneId(),
-        designation:      l.designation || '',
-        quantite:         Number(l.quantite) || 1,
-        unite:            l.unite || '',
-        conditionnement:  Number(l.conditionnement) > 0 ? Number(l.conditionnement) : 1,
-        prix_unitaire_ht: Number(l.prix_unitaire_ht) || 0,
-        taux_tva:         l.taux_tva != null ? Number(l.taux_tva) : null,
-      })
-    )
+    const enriched = (facture.lignes || []).map(l => enrichLigneLocal(ligneDepuisFacture(l)))
     setLignes(enriched)
     setError('')
     setDuplicateWarning(null)
@@ -298,6 +288,8 @@ export default function AchatsImportPage() {
       conditionnement:  l.conditionnement,
       prix_unitaire_ht: l.prix_unitaire_ht,
       taux_tva:         l.taux_tva,
+      prix_auto:        l.prix_auto,
+      tva_auto:         l.tva_auto,
     })),
   }), [fournisseur, dateFacture, numeroFacture, statut, totalHtSaisi, montantTvaSaisi, totalTtcSaisi, lignes])
 
