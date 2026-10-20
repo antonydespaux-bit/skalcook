@@ -12,6 +12,7 @@ import Navbar from '../../../../components/Navbar'
 import BackButton from '../../../../components/BackButton'
 import IngredientAutocomplete from '../../../../components/IngredientAutocomplete'
 import FournisseurAutocomplete from '../../../../components/FournisseurAutocomplete'
+import { indexerIngredients, suggererDepuisIndex, rapprocherFournisseur } from '../../../../lib/rapprochement'
 import { useFournisseursConnus } from '../../../../lib/useFournisseursConnus'
 import { normDesig, todayIso, yesterdayIso, fmtPrix, fmtDelta, fileToBase64, makeLigneId, enrichLigne, ligneDepuisFacture } from '../../../../lib/achatsHelpers'
 import { unitesParSection, normUnite } from '../../../../lib/constants'
@@ -74,6 +75,9 @@ export default function AchatsImportPage() {
 
   // ── Métadonnées facture ───────────────────────────────────────────────────
   const [fournisseur, setFournisseur] = useState('')
+  // Nom lu sur la facture quand il a été remplacé par un fournisseur déjà
+  // connu (« LES VERGERS SAINT EUSTACHE » → « Vergers St Eustache »).
+  const [fournisseurLu, setFournisseurLu] = useState(null)
   const [dateFacture, setDateFacture] = useState(yesterdayIso())
   const [numeroFacture, setNumeroFacture] = useState('')
   const [statut, setStatut] = useState('facture')
@@ -104,6 +108,23 @@ export default function AchatsImportPage() {
       Object.values(ingredientsById).map(i => [normDesig(i.nom), i])
     ),
     [ingredientsById]
+  )
+
+  // Suggestions de liaison (à valider d'un clic) pour les lignes non reconnues :
+  // ingrédients dont tous les mots figurent dans la désignation.
+  const indexIngredients = useMemo(() => indexerIngredients(Object.values(ingredientsById)), [ingredientsById])
+  const suggestionsParLigne = useMemo(() => {
+    const m = new Map()
+    for (const l of lignes) {
+      if (!l.reconnu && l.designation) m.set(l._id, suggererDepuisIndex(l.designation, indexIngredients, 2))
+    }
+    return m
+  }, [lignes, indexIngredients])
+
+  // Fournisseur déjà connu sous une autre écriture.
+  const suggestionFournisseur = useMemo(
+    () => rapprocherFournisseur(fournisseur, fournisseursConnus),
+    [fournisseur, fournisseursConnus],
   )
 
   // ── Totaux facture (HT / TVA / TTC) ──────────────────────────────────────
@@ -237,7 +258,12 @@ export default function AchatsImportPage() {
   // Pousse une facture brute (telle que renvoyée par l'OCR ou snapshotée) dans
   // le state d'édition courant. Reset aussi les warnings/erreurs liés au save.
   const loadFactureIntoState = useCallback((facture) => {
-    setFournisseur(facture.fournisseur || '')
+    // Même fournisseur sous une autre écriture : on reprend le nom existant
+    // (évite un doublon « Les Vergers Saint Eustache » / « Vergers St Eustache »).
+    const lu = facture.fournisseur || ''
+    const connu = rapprocherFournisseur(lu, fournisseursConnus)
+    setFournisseur(connu?.exact ? connu.nom : lu)
+    setFournisseurLu(connu?.exact ? lu : null)
     setDateFacture(facture.date_facture || yesterdayIso())
     setNumeroFacture(facture.numero_facture || '')
     setStatut(facture.statut || 'facture')
@@ -248,7 +274,7 @@ export default function AchatsImportPage() {
     setLignes(enriched)
     setError('')
     setDuplicateWarning(null)
-  }, [enrichLigneLocal])
+  }, [enrichLigneLocal, fournisseursConnus])
 
   // Vérification doublon par numéro de facture (réutilisé après extraction
   // et après chaque navigation entre factures d'un même PDF).
@@ -1166,10 +1192,24 @@ export default function AchatsImportPage() {
                     {t('cgAchats.import.supplierRequired')}
                     <FournisseurAutocomplete
                       value={fournisseur}
-                      onChange={setFournisseur}
+                      onChange={(v) => { setFournisseur(v); setFournisseurLu(null) }}
                       options={fournisseursConnus}
                       style={inputS}
                     />
+                    {fournisseurLu && (
+                      <span style={{ fontSize: 11, color: '#15803D' }}>
+                        ✓ {t('cgAchats.import.supplierMatched', { lu: fournisseurLu })}
+                      </span>
+                    )}
+                    {!fournisseurLu && suggestionFournisseur && (
+                      <span style={{ fontSize: 11, color: c.texteMuted, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+                        {t('cgAchats.import.supplierExists', { nom: suggestionFournisseur.nom })}
+                        <button type="button" onClick={() => { setFournisseurLu(fournisseur); setFournisseur(suggestionFournisseur.nom) }}
+                          style={{ fontSize: 11, padding: '1px 8px', background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1D4ED8', borderRadius: 4, cursor: 'pointer' }}>
+                          {t('cgAchats.import.supplierUse')}
+                        </button>
+                      </span>
+                    )}
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: c.texteMuted }}>
                     {t('cgAchats.import.dateRequired')}
@@ -1401,6 +1441,11 @@ export default function AchatsImportPage() {
                                 ) : (
                                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
                                     <span style={badgeGris}>{t('cgAchats.import.unknown')}</span>
+                                    {(suggestionsParLigne.get(l._id) || []).map(ing => (
+                                      <button key={ing.id} onClick={() => handleLinkIngredient(l, ing)} title={t('cgAchats.import.suggestionTitle', { nom: ing.nom })}
+                                        style={{ fontSize: 10, padding: '2px 6px', background: '#F0FDF4', border: '1px solid #86EFAC', color: '#15803D', borderRadius: 4, cursor: 'pointer', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                      >✓ {ing.nom}</button>
+                                    ))}
                                     <button
                                       onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }}
                                       style={{ fontSize: 10, padding: '2px 6px', background: '#EFF6FF', border: `1px solid #BFDBFE`, color: '#1D4ED8', borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap' }}
@@ -1511,7 +1556,12 @@ export default function AchatsImportPage() {
                               <button onClick={() => { setLinkingIngFor(null); setLinkSearch('') }} style={{ alignSelf: 'flex-start', padding: '5px 10px', fontSize: 12, background: 'transparent', border: `1px solid ${c.bordure}`, borderRadius: 6, cursor: 'pointer' }}>{t('cgAchats.import.cancelLink')}</button>
                             </div>
                           ) : !l.reconnu ? (
-                            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                              {(suggestionsParLigne.get(l._id) || []).map(ing => (
+                                <button key={ing.id} onClick={() => handleLinkIngredient(l, ing)} title={t('cgAchats.import.suggestionTitle', { nom: ing.nom })}
+                                  style={{ fontSize: 12, padding: '5px 10px', background: '#F0FDF4', border: '1px solid #86EFAC', color: '#15803D', borderRadius: 6, cursor: 'pointer' }}
+                                >✓ {ing.nom}</button>
+                              ))}
                               <button
                                 onClick={() => { setLinkingIngFor(l._id); setLinkSearch(''); setCreatingIngFor(null) }}
                                 style={{ fontSize: 12, padding: '5px 10px', background: '#EFF6FF', border: `1px solid #BFDBFE`, color: '#1D4ED8', borderRadius: 6, cursor: 'pointer' }}

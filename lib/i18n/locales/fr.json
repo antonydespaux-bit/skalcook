@@ -799,7 +799,11 @@
       "errExtraction": "Erreur extraction",
       "errSaveGeneric": "Erreur lors de l'enregistrement.",
       "errInvalidData": "Données invalides",
-      "fileNotStored": "Facture enregistrée, mais le fichier source n'a pas pu être stocké. Vous pourrez la consulter sans aperçu PDF/image."
+      "fileNotStored": "Facture enregistrée, mais le fichier source n'a pas pu être stocké. Vous pourrez la consulter sans aperçu PDF/image.",
+      "supplierMatched": "Fournisseur reconnu (lu sur la facture : « {{lu}} »)",
+      "supplierExists": "Ce fournisseur existe déjà sous le nom « {{nom}} ».",
+      "supplierUse": "Utiliser",
+      "suggestionTitle": "Lier à « {{nom}} » (suggestion)"
     },
     "importExcel": {
       "title": "Importer un Excel de factures",

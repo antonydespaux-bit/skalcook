@@ -799,7 +799,11 @@
       "errExtraction": "Extraction error",
       "errSaveGeneric": "Error while saving.",
       "errInvalidData": "Invalid data",
-      "fileNotStored": "Invoice saved, but the source file could not be stored. You will be able to view it without a PDF/image preview."
+      "fileNotStored": "Invoice saved, but the source file could not be stored. You will be able to view it without a PDF/image preview.",
+      "supplierMatched": "Supplier recognised (read on the invoice: \"{{lu}}\")",
+      "supplierExists": "This supplier already exists as \"{{nom}}\".",
+      "supplierUse": "Use",
+      "suggestionTitle": "Link to \"{{nom}}\" (suggestion)"
     },
     "importExcel": {
       "title": "Import an Excel file of invoices",
