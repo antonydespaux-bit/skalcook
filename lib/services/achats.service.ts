@@ -56,20 +56,26 @@ export async function checkDuplicateFacture(
 export async function upsertFournisseur(
   db: SupabaseClient,
   clientId: string,
-  nomFournisseur: string
+  nomFournisseur: string,
+  existantsPrecharges?: Array<{ id: string; nom: string }> | null,
 ): Promise<string | null> {
   const nom = nomFournisseur.trim()
   // Même fournisseur malgré l'écriture (casse, accents, « Les », « Saint » /
   // « St », forme juridique) : on rattache au fournisseur existant plutôt que
-  // d'en créer un doublon. Peu de fournisseurs par établissement : lecture complète.
-  const { data: existants } = await db
-    .from('fournisseurs')
-    .select('id, nom')
-    .eq('client_id', clientId)
+  // d'en créer un doublon. Peu de fournisseurs par établissement : lecture
+  // complète (ou liste déjà lue par l'appelant).
+  let existants = existantsPrecharges
+  if (!existants) {
+    const { data } = await db
+      .from('fournisseurs')
+      .select('id, nom')
+      .eq('client_id', clientId)
+    existants = (data ?? []) as Array<{ id: string; nom: string }>
+  }
   const cle = cleFournisseurSouple(nom)
-  const existing = (existants ?? []).find((f) => cleFournisseurSouple(f.nom as string) === cle)
+  const existing = existants.find((f) => cleFournisseurSouple(f.nom) === cle)
 
-  if (existing) return existing.id as string
+  if (existing) return existing.id
 
   const { data: created } = await db
     .from('fournisseurs')
@@ -117,72 +123,101 @@ export async function saveFacture(
   const signe: 1 | -1 = statut === 'avoir' ? -1 : 1
   const ingredientTable = section === 'bar' ? 'ingredients_bar' : 'ingredients'
 
-  // 1. Check duplicate
-  if (numeroFacture?.trim() && !forceInsert) {
-    const existing = await checkDuplicateFacture(db, clientId, numeroFacture)
-    if (existing) {
-      throw new ConflictError('DUPLICATE_FACTURE')
-    }
-  }
+  // Chaque aller-retour vers Supabase peut prendre plusieurs secondes quand
+  // l'instance ralentit : on lit tout ce qui ne dépend de rien en parallèle,
+  // puis on n'écrit qu'ensuite (rien n'est écrit si la facture est un doublon).
+  const aCreer = autoCreateMissing
+    && lignesInput.some((l) => !l.ingredient_id && l.designation?.trim())
+  const idsPrix = [...new Set(lignesInput.filter((l) => l.updatePrice && l.ingredient_id).map((l) => l.ingredient_id!))]
 
-  // 2. Upsert fournisseur + upload file in parallel
-  const [fournisseurId, fichierUrl] = await Promise.all([
-    upsertFournisseur(db, clientId, nomFournisseur),
-    fileBase64 && fileMime
-      ? uploadFactureFile(db, clientId, fileBase64, fileMime)
+  // 1. Lectures : doublon, fournisseurs connus, ingrédients (création auto),
+  //    conditionnement des ingrédients dont le prix sera mis à jour.
+  const [existing, fournisseursRes, ingredientsRes, condRes] = await Promise.all([
+    numeroFacture?.trim() && !forceInsert
+      ? checkDuplicateFacture(db, clientId, numeroFacture)
+      : Promise.resolve(null),
+    db.from('fournisseurs').select('id, nom').eq('client_id', clientId),
+    aCreer
+      // limit explicite : sans ça, PostgREST plafonne à 1000 lignes et un client
+      // avec plus d'ingrédients verrait des doublons recréés à tort.
+      ? db.from(ingredientTable).select('id, nom').eq('client_id', clientId).limit(10000)
+      : Promise.resolve(null),
+    idsPrix.length
+      ? db.from(ingredientTable).select('id, conditionnement').in('id', idsPrix).eq('client_id', clientId)
       : Promise.resolve(null),
   ])
-
-  // 2bis. Création auto des ingrédients manquants (avant insert lignes).
-  // Voir autoCreateMissingIngredients : matche par nom normalisé, sinon crée
-  // dans la catégorie « À classer ». Idempotent sur les désignations dupliquées.
-  let lignes = lignesInput
-  let autoCreatedCount = 0
-  if (autoCreateMissing) {
-    const r = await autoCreateMissingIngredients(db, clientId, section, lignesInput)
-    lignes = r.lignes
-    autoCreatedCount = r.autoCreatedCount
+  if (existing) {
+    throw new ConflictError('DUPLICATE_FACTURE')
   }
 
-  // 3. Calculate total HT (négatif pour un avoir)
-  const totalHt = lignes.reduce((sum, l) => {
-    const { montantHt } = computeLigneEffective(l, signe)
-    return sum + montantHt
-  }, 0)
+  // 2. En parallèle :
+  //    a. fournisseur (création seulement s'il est nouveau) + fichier source,
+  //       puis en-tête de facture ;
+  //    b. création des ingrédients manquants (« À classer »).
+  const enTete = (async () => {
+    const [fournisseurId, fichierUrl] = await Promise.all([
+      // Liste illisible (erreur réseau) : upsertFournisseur la relit plutôt que
+      // de créer un doublon.
+      upsertFournisseur(db, clientId, nomFournisseur, fournisseursRes.error ? null : (fournisseursRes.data ?? []) as Array<{ id: string; nom: string }>),
+      fileBase64 && fileMime
+        ? uploadFactureFile(db, clientId, fileBase64, fileMime)
+        : Promise.resolve(null),
+    ])
+    return { fournisseurId, fichierUrl }
+  })()
+  const ingredientsAuto = aCreer
+    ? autoCreateMissingIngredients(db, clientId, section, lignesInput,
+      ingredientsRes?.error ? null : (ingredientsRes?.data ?? []) as Array<{ id: string; nom: string }>)
+    : Promise.resolve({ lignes: lignesInput, autoCreatedCount: 0 })
 
-  // 4. Insert facture header
-  const { data: facture, error: fErr } = await db
-    .from('achats_factures')
-    .insert({
-      client_id: clientId,
-      fournisseur: nomFournisseur,
-      fournisseur_id: fournisseurId,
-      numero_facture: numeroFacture?.trim() || null,
-      date_facture: dateFacture,
-      total_ht: totalHt,
-      taux_tva: tauxTva ?? null,
-      // Pour un avoir, le montant TVA suit naturellement le signe (négatif).
-      montant_tva: montantTva != null ? montantTva * signe : null,
-      statut,
-      section,
-      fichier_url: fichierUrl,
-    })
-    .select()
-    .single()
+  // Total HT (négatif pour un avoir) : ne dépend pas des ingrédients créés.
+  const totalHt = lignesInput.reduce((sum, l) => sum + computeLigneEffective(l, signe).montantHt, 0)
 
-  if (fErr) {
-    // La DB a une contrainte UNIQUE (client_id, numero_facture) qui rejette
-    // même les inserts forceInsert. On remonte un message clair plutôt qu'un
-    // 500 opaque pour que l'UI puisse aiguiller l'utilisateur.
-    if (fErr.code === '23505' || /duplicate key/i.test(fErr.message)) {
-      throw new ConflictError(
-        `Une facture avec le numéro "${numeroFacture}" existe déjà en base pour ce client. Modifiez le numéro de facture ou supprimez l'ancienne avant de réimporter.`
-      )
+  const facturePromise = enTete.then(async ({ fournisseurId, fichierUrl }) => {
+    const { data: facture, error: fErr } = await db
+      .from('achats_factures')
+      .insert({
+        client_id: clientId,
+        fournisseur: nomFournisseur,
+        fournisseur_id: fournisseurId,
+        numero_facture: numeroFacture?.trim() || null,
+        date_facture: dateFacture,
+        total_ht: totalHt,
+        taux_tva: tauxTva ?? null,
+        // Pour un avoir, le montant TVA suit naturellement le signe (négatif).
+        montant_tva: montantTva != null ? montantTva * signe : null,
+        statut,
+        section,
+        fichier_url: fichierUrl,
+      })
+      .select()
+      .single()
+
+    if (fErr) {
+      // La DB a une contrainte UNIQUE (client_id, numero_facture) qui rejette
+      // même les inserts forceInsert. On remonte un message clair plutôt qu'un
+      // 500 opaque pour que l'UI puisse aiguiller l'utilisateur.
+      if (fErr.code === '23505' || /duplicate key/i.test(fErr.message)) {
+        throw new ConflictError(
+          `Une facture avec le numéro "${numeroFacture}" existe déjà en base pour ce client. Modifiez le numéro de facture ou supprimez l'ancienne avant de réimporter.`
+        )
+      }
+      throw new Error(fErr.message)
     }
-    throw new Error(fErr.message)
-  }
+    return facture
+  })
 
-  // 5. Insert lines
+  const [factureRes, autoRes] = await Promise.allSettled([facturePromise, ingredientsAuto])
+  if (factureRes.status === 'rejected') throw factureRes.reason
+  const facture = factureRes.value
+  if (autoRes.status === 'rejected') {
+    // Rollback header
+    await db.from('achats_factures').delete().eq('id', facture.id)
+    throw autoRes.reason
+  }
+  const { lignes, autoCreatedCount } = autoRes.value
+
+  // 3. Insert lines
   const lignesInsert = lignes.map((l) => {
     const { prixEffectif, montantHt, remise } = computeLigneEffective(l, signe)
     return {
@@ -206,23 +241,22 @@ export async function saveFacture(
     throw new Error(lErr.message)
   }
 
-  // 6. Update ingredient prices (for checked lines) + audit log + mapping — in parallel
+  // 4. Update ingredient prices (for checked lines) + audit log + mapping — in parallel
   const toUpdate = lignes.filter((l) => l.updatePrice && l.ingredient_id)
 
   // Conditionnement de chaque ingrédient concerné : le prix de référence stocké
   // (prix_kg) est le prix PAR unité d'utilisation = prix de la ligne (qui porte
-  // le prix de l'achat entier) divisé par le conditionnement.
+  // le prix de l'achat entier) divisé par le conditionnement. Lu à l'étape 1 ;
+  // les ingrédients créés à l'instant ont le conditionnement de leur ligne.
   const condById: Record<string, number> = {}
-  if (toUpdate.length) {
-    const ids = [...new Set(toUpdate.map((l) => l.ingredient_id!))]
-    const { data: condRows } = await db
-      .from(ingredientTable)
-      .select('id, conditionnement')
-      .in('id', ids)
-      .eq('client_id', clientId)
-    for (const r of condRows ?? []) {
-      const c = Number((r as { conditionnement?: number }).conditionnement)
-      condById[(r as { id: string }).id] = Number.isFinite(c) && c > 0 ? c : 1
+  for (const r of condRes?.data ?? []) {
+    const c = Number((r as { conditionnement?: number }).conditionnement)
+    condById[(r as { id: string }).id] = Number.isFinite(c) && c > 0 ? c : 1
+  }
+  for (const l of toUpdate) {
+    if (condById[l.ingredient_id!] == null) {
+      const c = Number(l.conditionnement)
+      condById[l.ingredient_id!] = Number.isFinite(c) && c > 0 ? c : 1
     }
   }
 
@@ -279,7 +313,7 @@ export async function saveFacture(
     facture_id: facture.id,
     prix_maj: toUpdate.length,
     auto_created: autoCreatedCount,
-    file_uploaded: fileExpected ? !!fichierUrl : null,
+    file_uploaded: fileExpected ? !!facture.fichier_url : null,
   }
 }
 
@@ -705,51 +739,96 @@ async function autoCreateMissingIngredients<T extends {
   clientId: string,
   section: 'cuisine' | 'bar',
   lignesInput: T[],
+  existantsPrecharges?: Array<{ id: string; nom: string }> | null,
 ): Promise<{ lignes: T[]; autoCreatedCount: number }> {
   const ingredientTable = section === 'bar' ? 'ingredients_bar' : 'ingredients'
   const missing = lignesInput.filter((l) => !l.ingredient_id && l.designation?.trim())
   if (missing.length === 0) return { lignes: lignesInput, autoCreatedCount: 0 }
 
   const norms = [...new Set(missing.map((l) => normDesignation(l.designation)))].filter(Boolean)
-  // limit explicite : sans ça, PostgREST plafonne à 1000 lignes et un client
-  // avec plus d'ingrédients verrait des doublons recréés à tort.
-  const { data: existingIngs } = await db
-    .from(ingredientTable)
-    .select('id, nom')
-    .eq('client_id', clientId)
-    .limit(10000)
+  let existingIngs = existantsPrecharges
+  if (!existingIngs) {
+    // limit explicite : sans ça, PostgREST plafonne à 1000 lignes et un client
+    // avec plus d'ingrédients verrait des doublons recréés à tort.
+    const { data } = await db
+      .from(ingredientTable)
+      .select('id, nom')
+      .eq('client_id', clientId)
+      .limit(10000)
+    existingIngs = (data ?? []) as Array<{ id: string; nom: string }>
+  }
   const ingByNorm: Record<string, { id: string }> = {}
-  for (const ing of existingIngs ?? []) {
-    ingByNorm[normDesignation((ing as { nom: string }).nom)] = ing as { id: string }
+  for (const ing of existingIngs) {
+    ingByNorm[normDesignation(ing.nom)] = ing
   }
 
   const idByNorm: Record<string, string> = {}
-  // Catégorie « À classer » résolue paresseusement : créée seulement si au
-  // moins un nouvel article doit effectivement être créé.
-  let aClasserCatId: string | null = null
-  let autoCreatedCount = 0
+  const aCreer: Array<{ norm: string; src: T }> = []
   for (const norm of norms) {
     if (ingByNorm[norm]) {
       idByNorm[norm] = ingByNorm[norm].id
       continue
     }
     const src = missing.find((l) => normDesignation(l.designation) === norm)
-    if (!src) continue
-    if (!aClasserCatId) {
-      aClasserCatId = await findOrCreateCategorie(db, clientId, section, 'À classer')
+    if (src) aCreer.push({ norm, src })
+  }
+
+  let autoCreatedCount = 0
+  if (aCreer.length > 0) {
+    // Catégorie « À classer » résolue seulement si au moins un nouvel article
+    // doit effectivement être créé.
+    const aClasserCatId = await findOrCreateCategorie(db, clientId, section, 'À classer')
+    const defaultUnite = section === 'bar' ? 'cl' : 'kg'
+    // Une seule insertion pour tous les nouveaux articles (au lieu d'une
+    // recherche + une insertion par ligne). Même ligne que findOrCreateIngredient.
+    const rows = aCreer.map(({ src }) => {
+      const cond = Number(src.conditionnement) > 0 ? Number(src.conditionnement) : 1
+      return {
+        client_id: clientId,
+        nom: src.designation.trim().toUpperCase(),
+        unite: src.unite || defaultUnite,
+        prix_kg: (Number(src.prix_unitaire_ht) || 0) / cond,
+        conditionnement: cond,
+        est_sous_fiche: false,
+        categorie_id: aClasserCatId,
+      }
+    })
+    // Deux désignations peuvent donner le même nom en majuscules sans avoir la
+    // même forme normalisée : on ne garde qu'une ligne par nom (contrainte
+    // UNIQUE (client_id, nom)).
+    const vus = new Set<string>()
+    const rowsUniques = rows.filter((r) => (vus.has(r.nom) ? false : (vus.add(r.nom), true)))
+    const { data: crees, error } = await db
+      .from(ingredientTable)
+      .insert(rowsUniques)
+      .select('id, nom')
+
+    if (!error && crees) {
+      const idParNom: Record<string, string> = {}
+      for (const c of crees as Array<{ id: string; nom: string }>) idParNom[c.nom] = c.id
+      aCreer.forEach(({ norm }, i) => {
+        const id = idParNom[rows[i].nom]
+        if (id) idByNorm[norm] = id
+      })
+      autoCreatedCount = crees.length
+    } else {
+      // Conflit (un article créé entre-temps, ou un nom déjà pris sous une
+      // autre écriture) : repli ligne par ligne, qui retrouve l'existant.
+      for (const { norm, src } of aCreer) {
+        const ing = await findOrCreateIngredient(
+          db,
+          clientId,
+          src.designation,
+          src.unite,
+          Number(src.prix_unitaire_ht) || 0,
+          section,
+          aClasserCatId,
+          Number(src.conditionnement) > 0 ? Number(src.conditionnement) : 1,
+        )
+        idByNorm[norm] = ing.id
+        autoCreatedCount++
+      }
     }
-    const ing = await findOrCreateIngredient(
-      db,
-      clientId,
-      src.designation,
-      src.unite,
-      Number(src.prix_unitaire_ht) || 0,
-      section,
-      aClasserCatId,
-      Number(src.conditionnement) > 0 ? Number(src.conditionnement) : 1,
-    )
-    idByNorm[norm] = ing.id
-    autoCreatedCount++
   }
 
   const lignes = lignesInput.map((l) => {
