@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import { supabase, getClientId } from '../../lib/supabase'
+import { viderCacheLectures } from '../../lib/requeteCache'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
@@ -227,6 +228,7 @@ export default function SettingsPage() {
         inventaire_tournant_heure: parseInt(params.inventaire_tournant_heure),
       }).eq('id', clientId)
       if (error) throw error
+      viderCacheLectures()
       showMessage('Paramètres sauvegardés !')
     } catch (err) {
       showMessage('Erreur lors de la sauvegarde', 'error')

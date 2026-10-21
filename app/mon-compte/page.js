@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase, getClientId } from '../../lib/supabase'
+import { viderCacheLectures } from '../../lib/requeteCache'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '../../lib/useTheme'
 import { useRole } from '../../lib/useRole'
@@ -102,6 +103,7 @@ export default function MonCompte() {
         .update({ nom: editProfil.nom.trim(), telephone: editProfil.telephone.trim() })
         .eq('id', session.user.id)
       if (error) throw error
+      viderCacheLectures()
       setProfil({ ...profil, nom: editProfil.nom.trim(), telephone: editProfil.telephone.trim() })
       showToast('ok', 'Profil mis à jour.')
     } catch (err) {
@@ -216,6 +218,7 @@ export default function MonCompte() {
         .update({ demande_resiliation: true })
         .eq('id', clientId)
       if (error) throw error
+      viderCacheLectures()
       setClient({ ...client, demande_resiliation: true })
       setShowResil(false)
       showToast('ok', 'Demande de résiliation enregistrée. Notre équipe vous contactera sous 48h.')
