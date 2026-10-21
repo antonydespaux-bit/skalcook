@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { supabase, getClientId } from '../../lib/supabase'
 import { viderCacheLectures } from '../../lib/requeteCache'
 import { useRouter } from 'next/navigation'
@@ -12,6 +13,8 @@ import { INVENTAIRE_FREQUENCES, JOURS_SEMAINE } from '../../lib/constants'
 import Navbar from '../../components/Navbar'
 import ChefLoader from '../../components/ChefLoader'
 import EmojiPicker from '../../components/EmojiPicker'
+import ServicesEditor from '../../components/requisitions/ServicesEditor'
+import { useTenant } from '../../lib/useTenant'
 
 export default function SettingsPage() {
   const [onglet, setOnglet] = useState('lieux')
@@ -36,8 +39,11 @@ export default function SettingsPage() {
   const [editingLieu, setEditingLieu] = useState(null)
   const [editingCat, setEditingCat] = useState(null)
 
+  const { t } = useTranslation()
   const { c } = useTheme()
   const { role } = useRole()
+  const tenantCtx = useTenant()
+  const moduleRequisitions = (tenantCtx?.tenant?.modules_actifs || []).includes('requisitions')
   const { loading: permLoading, peutVoir } = usePermissions()
   const isMobile = useIsMobile()
   const router = useRouter()
@@ -333,6 +339,7 @@ export default function SettingsPage() {
             { id: 'lieux', label: '🏠 Lieux de service' },
             { id: 'categories', label: '🍽 Catégories' },
             { id: 'params', label: '⚙️ Paramètres' },
+            ...(moduleRequisitions ? [{ id: 'services', label: `🛎️ ${t('requisitions.services.tab')}` }] : []),
           ].map(tab => (
             <button key={tab.id} onClick={() => setOnglet(tab.id)} style={{
               padding: '8px 16px', borderRadius: '7px', fontSize: '13px', border: 'none',
@@ -411,6 +418,9 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
+
+        {/* ── ONGLET SERVICES (réquisitions) ── */}
+        {onglet === 'services' && moduleRequisitions && <ServicesEditor />}
 
         {/* ── ONGLET CATÉGORIES ── */}
         {onglet === 'categories' && (

@@ -13,6 +13,7 @@ const MODULES_DISPONIBLES = [
   { id: 'gestion', label: 'Gestion', emoji: '📦' },
   { id: 'crm', label: 'CRM traiteur', emoji: '👥' },
   { id: 'groupe', label: 'Vue groupe', emoji: '🏢' },
+  { id: 'requisitions', label: 'Réquisitions', emoji: '🛎️' },
 ]
 
 export default function ClientsList({

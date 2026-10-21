@@ -22,6 +22,7 @@ export default function ChoixPage() {
       if (!role) { router.push('/'); return }
       if (role === 'cuisine') { router.push('/dashboard'); return }
       if (role === 'bar') { router.push('/bar/dashboard'); return }
+      if (role === 'service') { router.push('/requisitions'); return }
     }
   }, [role, loading])
 

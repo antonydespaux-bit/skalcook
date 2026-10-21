@@ -4,6 +4,7 @@ import NavigationTracker from './NavigationTracker'
 import I18nProvider from './I18nProvider'
 import PermissionGate from './PermissionGate'
 import { PermissionsProvider } from '../lib/usePermissions'
+import NotificationsRequisitions from './requisitions/NotificationsRequisitions'
 
 export default function Providers({ children }) {
   return (
@@ -13,6 +14,7 @@ export default function Providers({ children }) {
           <NavigationTracker />
           <PermissionGate />
           {children}
+          <NotificationsRequisitions />
         </PermissionsProvider>
       </TenantProvider>
     </I18nProvider>

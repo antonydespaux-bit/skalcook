@@ -679,7 +679,7 @@ export default function SuperadminUsersPage() {
                     background: 'white'
                   }}
                 >
-                  {['admin', 'consultant', 'directeur', 'cuisine', 'bar'].map((r) => (
+                  {['admin', 'consultant', 'directeur', 'cuisine', 'bar', 'service'].map((r) => (
                     <option key={r} value={r}>{r}</option>
                   ))}
                 </select>

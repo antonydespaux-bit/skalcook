@@ -11,7 +11,9 @@
  * d'une période non sauvegardée.
  *
  * Le CA Food HT et la somme des achats sur la période sont calculés à la
- * volée depuis ca_journalier et achats_factures (non persistés).
+ * volée depuis ca_journalier et achats_factures (non persistés), comme les
+ * cessions internes : réquisitions livrées depuis le stock cuisine vers un
+ * autre service, retirées du coût matière (cf. requisitionsStock.service).
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -26,6 +28,7 @@ import type {
   PatchAjustementInput,
   DeleteAjustementInput,
 } from '../validators/foodCost.schema'
+import { cessionsInternesHt } from './requisitionsStock.service'
 
 // TVA Food 10% (cohérent avec lib/caAnalyses.js / TVA_FOOD)
 const TVA_FOOD = 1.10
@@ -140,10 +143,11 @@ export async function getRapport(db: SupabaseClient, input: GetRapportInput) {
   if (error) throw new Error(error.message)
   if (!rapport) return null
 
-  const [ajustements, caFoodHt, achatsHt] = await Promise.all([
+  const [ajustements, caFoodHt, achatsHt, cessionsHt] = await Promise.all([
     fetchAjustementsForPeriode(db, clientId, rapport.periode_debut, rapport.periode_fin),
     computeCaFoodHt(db, clientId, rapport.periode_debut, rapport.periode_fin),
     computeAchatsHt(db, clientId, rapport.periode_debut, rapport.periode_fin),
+    cessionsInternesHt(db, clientId, rapport.periode_debut, rapport.periode_fin),
   ])
 
   return {
@@ -152,6 +156,7 @@ export async function getRapport(db: SupabaseClient, input: GetRapportInput) {
     totaux: {
       ca_food_ht: caFoodHt,
       achats_ht: achatsHt,
+      cessions_ht: cessionsHt,
     },
   }
 }
@@ -203,29 +208,31 @@ async function fetchFacturesForPeriode(
 
 export async function getExportData(db: SupabaseClient, input: PreviewPeriodeInput) {
   const { clientId, periodeDebut, periodeFin } = input
-  const [factures, ajustements, caFoodHt, achatsHt] = await Promise.all([
+  const [factures, ajustements, caFoodHt, achatsHt, cessionsHt] = await Promise.all([
     fetchFacturesForPeriode(db, clientId, periodeDebut, periodeFin),
     fetchAjustementsForPeriode(db, clientId, periodeDebut, periodeFin),
     computeCaFoodHt(db, clientId, periodeDebut, periodeFin),
     computeAchatsHt(db, clientId, periodeDebut, periodeFin),
+    cessionsInternesHt(db, clientId, periodeDebut, periodeFin),
   ])
   return {
     factures,
     ajustements,
-    totaux: { ca_food_ht: caFoodHt, achats_ht: achatsHt },
+    totaux: { ca_food_ht: caFoodHt, achats_ht: achatsHt, cessions_ht: cessionsHt },
   }
 }
 
 export async function previewPeriode(db: SupabaseClient, input: PreviewPeriodeInput) {
   const { clientId, periodeDebut, periodeFin } = input
-  const [ajustements, caFoodHt, achatsHt] = await Promise.all([
+  const [ajustements, caFoodHt, achatsHt, cessionsHt] = await Promise.all([
     fetchAjustementsForPeriode(db, clientId, periodeDebut, periodeFin),
     computeCaFoodHt(db, clientId, periodeDebut, periodeFin),
     computeAchatsHt(db, clientId, periodeDebut, periodeFin),
+    cessionsInternesHt(db, clientId, periodeDebut, periodeFin),
   ])
   return {
     ajustements,
-    totaux: { ca_food_ht: caFoodHt, achats_ht: achatsHt },
+    totaux: { ca_food_ht: caFoodHt, achats_ht: achatsHt, cessions_ht: cessionsHt },
   }
 }
 
