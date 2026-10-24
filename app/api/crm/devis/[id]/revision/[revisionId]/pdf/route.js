@@ -5,6 +5,7 @@
 
 import { z } from 'zod'
 import { apiHandler } from '../../../../../../../../lib/apiHandler'
+import { perimetreCrmServeur } from '../../../../../../../../lib/crmPerimetreServeur'
 
 export const runtime = 'nodejs'
 
@@ -26,12 +27,13 @@ export const GET = apiHandler({
       return Response.json({ error: 'id ou revisionId manquant' }, { status: 400 })
     }
 
+    const perimetre = await perimetreCrmServeur(db, clientId)
     const { data: rev, error: revErr } = await db
       .from('crm_devis_revisions')
       .select('id, devis_id, client_id, version, pdf_url, sent_at')
       .eq('id', revisionId)
       .eq('devis_id', devisId)
-      .eq('client_id', clientId)
+      .in('client_id', perimetre)
       .maybeSingle()
     if (revErr || !rev) {
       return Response.json({ error: 'Révision introuvable' }, { status: 404 })

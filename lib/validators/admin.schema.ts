@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { uuidSchema, clientIdSchema } from './achats.schema'
 
 // ── Roles ──────────────────────────────────────────────────────────────────
-const roleSchema = z.enum(['admin', 'cuisine', 'bar', 'directeur', 'consultant'])
+const roleSchema = z.enum(['admin', 'cuisine', 'bar', 'directeur', 'consultant', 'commercial'])
 
 // Helper: transform empty strings to null (frontend sends "" for optional fields)
 const emptyToNull = z.string().transform(v => v.trim() === '' ? null : v.trim())

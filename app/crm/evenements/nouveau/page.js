@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, getClientId } from '../../../../lib/supabase'
+import { crmPerimetre } from '../../../../lib/crmPerimetre'
 import { useTheme } from '../../../../lib/useTheme'
-import { useRole } from '../../../../lib/useRole'
+import { usePermissions } from '../../../../lib/usePermissions'
 import Navbar from '../../../../components/Navbar'
 import EvenementForm from '../../../../components/crm/EvenementForm'
 
@@ -13,10 +14,11 @@ export default function NouvelEvenementPage() {
   const searchParams = useSearchParams()
   const preselectedClientId = searchParams?.get('client_id') || ''
   const { c } = useTheme()
-  const { role, loading: roleLoading } = useRole()
+  const { peutVoir, loading: permLoading } = usePermissions()
 
   const [authReady, setAuthReady] = useState(false)
   const [clients, setClients] = useState([])
+  const [lieux, setLieux] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -31,27 +33,29 @@ export default function NouvelEvenementPage() {
   }, [router])
 
   useEffect(() => {
-    if (!roleLoading && role && !['admin', 'directeur'].includes(role)) {
+    if (!permLoading && !peutVoir('crm')) {
       router.replace('/dashboard')
     }
-  }, [role, roleLoading, router])
+  }, [peutVoir, permLoading, router])
 
   const loadClients = useCallback(async () => {
     const cid = await getClientId()
     if (!cid) { setLoading(false); return }
+    const { ids, lieux: lieuxGroupe } = await crmPerimetre(cid)
+    setLieux(lieuxGroupe)
     const { data } = await supabase
       .from('crm_clients')
       .select('id, type, nom, prenom, raison_sociale')
-      .eq('client_id', cid)
+      .in('client_id', ids)
       .order('created_at', { ascending: false })
     setClients(data || [])
     setLoading(false)
   }, [])
 
   useEffect(() => {
-    if (!authReady || !['admin', 'directeur'].includes(role || '')) return
+    if (!authReady || !peutVoir('crm')) return
     loadClients()
-  }, [authReady, role, loadClients])
+  }, [authReady, peutVoir, loadClients])
 
   async function handleSubmit(values) {
     const cid = await getClientId()
@@ -68,7 +72,7 @@ export default function NouvelEvenementPage() {
     router.push(`/crm/evenements/${data.id}`)
   }
 
-  if (!authReady || roleLoading) {
+  if (!authReady || permLoading) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
         Chargement…
@@ -101,6 +105,7 @@ export default function NouvelEvenementPage() {
           <EvenementForm
             c={c}
             clientsDispo={clients}
+            lieux={lieux}
             initial={preselectedClientId ? { crm_client_id: preselectedClientId } : {}}
             lockClient={!!preselectedClientId}
             submitLabel="Créer l’événement"

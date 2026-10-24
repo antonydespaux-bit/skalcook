@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, getClientId } from '../../lib/supabase'
+import { crmPerimetre } from '../../lib/crmPerimetre'
 import { useTheme } from '../../lib/useTheme'
-import { useRole } from '../../lib/useRole'
+import { usePermissions } from '../../lib/usePermissions'
 import { useIsMobile } from '../../lib/useIsMobile'
 import Navbar from '../../components/Navbar'
 import { Card, Button, Badge, Alert } from '../../components/ui'
@@ -17,7 +18,7 @@ import {
 export default function CrmDashboardPage() {
   const router = useRouter()
   const { c } = useTheme()
-  const { role, loading: roleLoading } = useRole()
+  const { peutVoir, loading: permLoading } = usePermissions()
   const isMobile = useIsMobile()
 
   const [authReady, setAuthReady] = useState(false)
@@ -40,16 +41,17 @@ export default function CrmDashboardPage() {
   }, [router])
 
   useEffect(() => {
-    if (!roleLoading && role && !['admin', 'directeur'].includes(role)) {
+    if (!permLoading && !peutVoir('crm')) {
       router.replace('/dashboard')
     }
-  }, [role, roleLoading, router])
+  }, [peutVoir, permLoading, router])
 
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
     const cid = await getClientId()
     if (!cid) { setLoading(false); return }
+    const { ids } = await crmPerimetre(cid)
     setClientId(cid)
 
     const [
@@ -59,13 +61,13 @@ export default function CrmDashboardPage() {
     ] = await Promise.all([
       supabase.from('crm_clients')
         .select('id, type, nom, prenom, raison_sociale')
-        .eq('client_id', cid),
+        .in('client_id', ids),
       supabase.from('crm_evenements')
         .select('id, crm_client_id, titre, date_evenement, statut, type_prestation, nb_convives, montant_devis, montant_final, budget_estime, created_at')
-        .eq('client_id', cid),
+        .in('client_id', ids),
       supabase.from('crm_devis')
         .select('id, numero, crm_client_id, statut, total_ttc, date_emission, sent_at, created_at')
-        .eq('client_id', cid),
+        .in('client_id', ids),
     ])
 
     if (cErr || eErr || dErr) { setError((cErr || eErr || dErr).message); setLoading(false); return }
@@ -76,9 +78,9 @@ export default function CrmDashboardPage() {
   }, [])
 
   useEffect(() => {
-    if (!authReady || !['admin', 'directeur'].includes(role || '')) return
+    if (!authReady || !peutVoir('crm')) return
     load()
-  }, [authReady, role, load])
+  }, [authReady, peutVoir, load])
 
   const clientById = useMemo(() => Object.fromEntries(clients.map((c) => [c.id, c])), [clients])
 
@@ -152,7 +154,7 @@ export default function CrmDashboardPage() {
     }
   }, [evenements, clients, devis])
 
-  if (!authReady || roleLoading) {
+  if (!authReady || permLoading) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
         Chargement…

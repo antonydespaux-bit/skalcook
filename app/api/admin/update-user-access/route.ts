@@ -10,7 +10,7 @@ import { z } from 'zod'
 const schema = z.object({
   client_id: z.string().uuid(),
   user_id:   z.string().uuid(),
-  role:      z.enum(['admin', 'cuisine', 'bar', 'directeur', 'consultant']),
+  role:      z.enum(['admin', 'cuisine', 'bar', 'directeur', 'consultant', 'commercial']),
 })
 
 export const POST = apiHandler({

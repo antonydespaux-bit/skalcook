@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, getClientId } from '../../../lib/supabase'
+import { crmPerimetre } from '../../../lib/crmPerimetre'
 import { useTheme } from '../../../lib/useTheme'
-import { useRole } from '../../../lib/useRole'
+import { usePermissions } from '../../../lib/usePermissions'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import Navbar from '../../../components/Navbar'
 import { Card, Button, Badge, Alert } from '../../../components/ui'
@@ -13,11 +14,12 @@ import { clientDisplayName, hexToRgba, formatDateFr } from '../../../lib/crmCons
 export default function CrmClientsPage() {
   const router = useRouter()
   const { c } = useTheme()
-  const { role, loading: roleLoading } = useRole()
+  const { peutVoir, loading: permLoading } = usePermissions()
   const isMobile = useIsMobile()
 
   const [authReady, setAuthReady] = useState(false)
   const [clients, setClients] = useState([])
+  const [maisons, setMaisons] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [recherche, setRecherche] = useState('')
@@ -36,21 +38,23 @@ export default function CrmClientsPage() {
   }, [router])
 
   useEffect(() => {
-    if (!roleLoading && role && !['admin', 'directeur'].includes(role)) {
+    if (!permLoading && !peutVoir('crm')) {
       router.replace('/dashboard')
     }
-  }, [role, roleLoading, router])
+  }, [peutVoir, permLoading, router])
 
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
     const cid = await getClientId()
     if (!cid) { setLoading(false); return }
+    const { ids, maisons: maisonsGroupe, partage } = await crmPerimetre(cid)
+    setMaisons(partage ? maisonsGroupe : {})
 
     const { data, error: err } = await supabase
       .from('crm_clients')
-      .select('id, type, nom, prenom, raison_sociale, email, telephone, ville, tags, created_at')
-      .eq('client_id', cid)
+      .select('id, client_id, type, nom, prenom, raison_sociale, email, telephone, ville, tags, created_at')
+      .in('client_id', ids)
       .order('created_at', { ascending: false })
 
     if (err) { setError(err.message); setLoading(false); return }
@@ -59,9 +63,9 @@ export default function CrmClientsPage() {
   }, [])
 
   useEffect(() => {
-    if (!authReady || !['admin', 'directeur'].includes(role || '')) return
+    if (!authReady || !peutVoir('crm')) return
     load()
-  }, [authReady, role, load])
+  }, [authReady, peutVoir, load])
 
   const tagsDispo = useMemo(() => {
     const set = new Set()
@@ -80,7 +84,7 @@ export default function CrmClientsPage() {
     })
   }, [clients, recherche, filtreType, filtreTag])
 
-  if (!authReady || roleLoading) {
+  if (!authReady || permLoading) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
         Chargement…
@@ -173,6 +177,9 @@ export default function CrmClientsPage() {
                   </div>
                 </div>
                 <div className="crm-row__meta">
+                  {maisons[cl.client_id] && (
+                    <Badge bg={hexToRgba('#71717A', 0.10)} color={c.texteMuted} size="sm">{maisons[cl.client_id]}</Badge>
+                  )}
                   <Badge
                     bg={cl.type === 'entreprise' ? hexToRgba('#6366F1', 0.12) : hexToRgba('#10B981', 0.12)}
                     color={cl.type === 'entreprise' ? '#6366F1' : '#10B981'}

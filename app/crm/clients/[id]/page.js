@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase, getClientId } from '../../../../lib/supabase'
+import { crmPerimetre } from '../../../../lib/crmPerimetre'
 import { useTheme } from '../../../../lib/useTheme'
-import { useRole } from '../../../../lib/useRole'
+import { usePermissions } from '../../../../lib/usePermissions'
 import Navbar from '../../../../components/Navbar'
 import { Card, Button, Badge, Alert } from '../../../../components/ui'
 import ClientForm from '../../../../components/crm/ClientForm'
@@ -18,10 +19,12 @@ export default function CrmClientDetailPage() {
   const params = useParams()
   const id = params?.id
   const { c } = useTheme()
-  const { role, loading: roleLoading } = useRole()
+  const { peutVoir, loading: permLoading } = usePermissions()
 
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
+  const [perimetre, setPerimetre] = useState([])
+  const [lieux, setLieux] = useState([])
   const [client, setClient] = useState(null)
   const [evenements, setEvenements] = useState([])
   const [devis, setDevis] = useState([])
@@ -46,10 +49,10 @@ export default function CrmClientDetailPage() {
   }, [router])
 
   useEffect(() => {
-    if (!roleLoading && role && !['admin', 'directeur'].includes(role)) {
+    if (!permLoading && !peutVoir('crm')) {
       router.replace('/dashboard')
     }
-  }, [role, roleLoading, router])
+  }, [peutVoir, permLoading, router])
 
   const load = useCallback(async () => {
     if (!id) return
@@ -58,6 +61,9 @@ export default function CrmClientDetailPage() {
     const cid = await getClientId()
     if (!cid) { setLoading(false); return }
     setClientId(cid)
+    const { ids, lieux: lieuxGroupe } = await crmPerimetre(cid)
+    setPerimetre(ids)
+    setLieux(lieuxGroupe)
 
     const { data: { user } } = await supabase.auth.getUser()
     setCurrentUserId(user?.id || null)
@@ -68,14 +74,14 @@ export default function CrmClientDetailPage() {
       { data: devs, error: dErr },
       { data: acts, error: aErr },
     ] = await Promise.all([
-      supabase.from('crm_clients').select('*').eq('id', id).eq('client_id', cid).maybeSingle(),
+      supabase.from('crm_clients').select('*').eq('id', id).in('client_id', ids).maybeSingle(),
       supabase.from('crm_evenements')
         .select('id, titre, date_evenement, statut, type_prestation, nb_convives, montant_devis, montant_final, budget_estime, created_at')
-        .eq('crm_client_id', id).eq('client_id', cid)
+        .eq('crm_client_id', id).in('client_id', ids)
         .order('date_evenement', { ascending: false, nullsFirst: false }),
       supabase.from('crm_devis')
         .select('id, numero, crm_evenement_id, statut, date_emission, date_validite, total_ttc, sent_at, sent_to_email')
-        .eq('crm_client_id', id).eq('client_id', cid)
+        .eq('crm_client_id', id).in('client_id', ids)
         .order('date_emission', { ascending: false }),
       supabase.from('crm_client_activities')
         .select('id, type, titre, description, occurred_at, crm_devis_id, crm_evenement_id, created_by, created_at')
@@ -92,16 +98,16 @@ export default function CrmClientDetailPage() {
   }, [id])
 
   useEffect(() => {
-    if (!authReady || !['admin', 'directeur'].includes(role || '')) return
+    if (!authReady || !peutVoir('crm')) return
     load()
-  }, [authReady, role, load])
+  }, [authReady, peutVoir, load])
 
   async function handleSave(values) {
     const { error: err } = await supabase
       .from('crm_clients')
       .update(values)
       .eq('id', id)
-      .eq('client_id', clientId)
+      .in('client_id', perimetre)
     if (err) throw err
     setMode('view')
     await load()
@@ -112,7 +118,7 @@ export default function CrmClientDetailPage() {
       .from('crm_clients')
       .delete()
       .eq('id', id)
-      .eq('client_id', clientId)
+      .in('client_id', perimetre)
     if (err) { setError(err.message); return }
     router.push('/crm/clients')
   }
@@ -146,7 +152,7 @@ export default function CrmClientDetailPage() {
     await load()
   }
 
-  if (!authReady || roleLoading) {
+  if (!authReady || permLoading) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
         Chargement…

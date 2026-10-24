@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase, getClientId } from '../../../../lib/supabase'
+import { crmPerimetre } from '../../../../lib/crmPerimetre'
 import { useTheme } from '../../../../lib/useTheme'
-import { useRole } from '../../../../lib/useRole'
+import { usePermissions } from '../../../../lib/usePermissions'
 import Navbar from '../../../../components/Navbar'
 import { Card, Button, Badge, Alert } from '../../../../components/ui'
 import EvenementForm from '../../../../components/crm/EvenementForm'
@@ -19,10 +20,12 @@ export default function CrmEvenementDetailPage() {
   const params = useParams()
   const id = params?.id
   const { c } = useTheme()
-  const { role, loading: roleLoading } = useRole()
+  const { peutVoir, loading: permLoading } = usePermissions()
 
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
+  const [perimetre, setPerimetre] = useState([])
+  const [lieux, setLieux] = useState([])
   const [evenement, setEvenement] = useState(null)
   const [clientCrm, setClientCrm] = useState(null)
   const [clientsDispo, setClientsDispo] = useState([])
@@ -48,10 +51,10 @@ export default function CrmEvenementDetailPage() {
   }, [router])
 
   useEffect(() => {
-    if (!roleLoading && role && !['admin', 'directeur'].includes(role)) {
+    if (!permLoading && !peutVoir('crm')) {
       router.replace('/dashboard')
     }
-  }, [role, roleLoading, router])
+  }, [peutVoir, permLoading, router])
 
   const load = useCallback(async () => {
     if (!id) return
@@ -60,11 +63,14 @@ export default function CrmEvenementDetailPage() {
     const cid = await getClientId()
     if (!cid) { setLoading(false); return }
     setClientId(cid)
+    const { ids, lieux: lieuxGroupe } = await crmPerimetre(cid)
+    setPerimetre(ids)
+    setLieux(lieuxGroupe)
 
     const { data: ev, error: eErr } = await supabase
       .from('crm_evenements')
       .select('*')
-      .eq('id', id).eq('client_id', cid)
+      .eq('id', id).in('client_id', ids)
       .maybeSingle()
 
     if (eErr) { setError(eErr.message); setLoading(false); return }
@@ -74,7 +80,7 @@ export default function CrmEvenementDetailPage() {
       const { data: cli } = await supabase
         .from('crm_clients')
         .select('id, type, nom, prenom, raison_sociale, email, telephone')
-        .eq('id', ev.crm_client_id).eq('client_id', cid)
+        .eq('id', ev.crm_client_id).in('client_id', ids)
         .maybeSingle()
       setClientCrm(cli)
     }
@@ -83,14 +89,14 @@ export default function CrmEvenementDetailPage() {
     const { data: allClients } = await supabase
       .from('crm_clients')
       .select('id, type, nom, prenom, raison_sociale')
-      .eq('client_id', cid)
+      .in('client_id', ids)
     setClientsDispo(allClients || [])
 
     // Devis du tenant (filtrés après en mémoire : liés vs détachables du client courant)
     const { data: allDevis } = await supabase
       .from('crm_devis')
       .select('id, numero, crm_client_id, crm_evenement_id, statut, total_ttc, date_emission, sent_at')
-      .eq('client_id', cid)
+      .in('client_id', ids)
       .order('date_emission', { ascending: false })
     const devAll = allDevis || []
     setDevisLies(devAll.filter((d) => d.crm_evenement_id === id))
@@ -100,16 +106,16 @@ export default function CrmEvenementDetailPage() {
   }, [id])
 
   useEffect(() => {
-    if (!authReady || !['admin', 'directeur'].includes(role || '')) return
+    if (!authReady || !peutVoir('crm')) return
     load()
-  }, [authReady, role, load])
+  }, [authReady, peutVoir, load])
 
   async function handleSave(values) {
     const { error: err } = await supabase
       .from('crm_evenements')
       .update(values)
       .eq('id', id)
-      .eq('client_id', clientId)
+      .in('client_id', perimetre)
     if (err) throw err
     setMode('view')
     await load()
@@ -121,7 +127,7 @@ export default function CrmEvenementDetailPage() {
       .from('crm_evenements')
       .update({ statut: newStatut })
       .eq('id', id)
-      .eq('client_id', clientId)
+      .in('client_id', perimetre)
     if (!err) setEvenement((ev) => ({ ...ev, statut: newStatut }))
     else setError(err.message)
     setStatutSaving(false)
@@ -135,7 +141,7 @@ export default function CrmEvenementDetailPage() {
       .from('crm_devis')
       .update({ crm_evenement_id: id })
       .eq('id', devisId)
-      .eq('client_id', clientId)
+      .in('client_id', perimetre)
     setLinkSaving(false)
     if (err) { setError(err.message); return }
     setShowDevisPicker(false)
@@ -149,7 +155,7 @@ export default function CrmEvenementDetailPage() {
       .from('crm_devis')
       .update({ crm_evenement_id: null })
       .eq('id', devisId)
-      .eq('client_id', clientId)
+      .in('client_id', perimetre)
     setLinkSaving(false)
     if (err) { setError(err.message); return }
     await load()
@@ -160,7 +166,7 @@ export default function CrmEvenementDetailPage() {
       .from('crm_evenements')
       .delete()
       .eq('id', id)
-      .eq('client_id', clientId)
+      .in('client_id', perimetre)
     if (err) { setError(err.message); return }
     router.push('/crm/evenements')
   }
@@ -169,7 +175,7 @@ export default function CrmEvenementDetailPage() {
   const typePresta = useMemo(() => TYPES_PRESTATION_MAP[evenement?.type_prestation], [evenement])
   const lieu = useMemo(() => LIEUX_TYPES_MAP[evenement?.lieu_type], [evenement])
 
-  if (!authReady || roleLoading) {
+  if (!authReady || permLoading) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
         Chargement…
@@ -202,6 +208,7 @@ export default function CrmEvenementDetailPage() {
               c={c}
               initial={evenement}
               clientsDispo={clientsDispo}
+              lieux={lieux}
               submitLabel="Enregistrer"
               onSubmit={handleSave}
               onCancel={() => setMode('view')}
@@ -260,6 +267,12 @@ export default function CrmEvenementDetailPage() {
                 <Kv c={c} label="Heure" value={evenement.heure_debut ? evenement.heure_debut.slice(0, 5) : '—'} />
                 <Kv c={c} label="Convives" value={evenement.nb_convives || '—'} />
                 <Kv c={c} label="Type" value={typePresta?.label || '—'} />
+                {lieux.length > 0 && (
+                  <>
+                    <Kv c={c} label="Maison / salle" value={lieux.find((l) => l.id === evenement.lieu_id)?.nom || '—'} />
+                    <Kv c={c} label="CA pour" value={lieux.find((l) => l.client_id && l.client_id === evenement.etablissement_ca_id)?.nom || 'À choisir'} />
+                  </>
+                )}
                 <Kv c={c} label="Lieu" value={lieu?.label || '—'} />
                 <Kv c={c} label="Adresse du lieu" value={evenement.lieu_adresse || '—'} />
                 <Kv c={c} label="Budget estimé" value={formatMontant(evenement.budget_estime)} />

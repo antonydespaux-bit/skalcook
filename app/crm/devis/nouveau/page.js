@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, getClientId } from '../../../../lib/supabase'
+import { crmPerimetre } from '../../../../lib/crmPerimetre'
 import { useTheme } from '../../../../lib/useTheme'
-import { useRole } from '../../../../lib/useRole'
+import { usePermissions } from '../../../../lib/usePermissions'
 import Navbar from '../../../../components/Navbar'
 import { Alert } from '../../../../components/ui'
 import DevisForm from '../../../../components/crm/DevisForm'
@@ -16,7 +17,7 @@ export default function NouveauDevisPage() {
   const preselectedEvenementId = searchParams?.get('evenement') || ''
   const preselectedClientId = searchParams?.get('client_id') || ''
   const { c } = useTheme()
-  const { role, loading: roleLoading } = useRole()
+  const { peutVoir, loading: permLoading } = usePermissions()
 
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
@@ -24,6 +25,7 @@ export default function NouveauDevisPage() {
   const [crmClients, setCrmClients] = useState([])
   const [crmEvenements, setCrmEvenements] = useState([])
   const [fiches, setFiches] = useState([])
+  const [lieux, setLieux] = useState([])
   const [initial, setInitial] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -40,16 +42,18 @@ export default function NouveauDevisPage() {
   }, [router])
 
   useEffect(() => {
-    if (!roleLoading && role && !['admin', 'directeur'].includes(role)) {
+    if (!permLoading && !peutVoir('crm')) {
       router.replace('/dashboard')
     }
-  }, [role, roleLoading, router])
+  }, [peutVoir, permLoading, router])
 
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
     const cid = await getClientId()
     if (!cid) { setLoading(false); return }
+    const { ids, lieux: lieuxGroupe } = await crmPerimetre(cid)
+    setLieux(lieuxGroupe)
     setClientId(cid)
 
     const [
@@ -61,11 +65,11 @@ export default function NouveauDevisPage() {
       supabase.from('clients').select('devis_prefix').eq('id', cid).maybeSingle(),
       supabase.from('crm_clients')
         .select('id, type, nom, prenom, raison_sociale')
-        .eq('client_id', cid)
+        .in('client_id', ids)
         .order('created_at', { ascending: false }),
       supabase.from('crm_evenements')
-        .select('id, crm_client_id, titre, date_evenement')
-        .eq('client_id', cid),
+        .select('id, crm_client_id, titre, date_evenement, lieu_id, etablissement_ca_id')
+        .in('client_id', ids),
       supabase.from('fiches')
         .select('id, nom, cout_portion, prix_ttc, allergenes')
         .eq('client_id', cid)
@@ -86,7 +90,7 @@ export default function NouveauDevisPage() {
     // Pré-remplissage depuis l'URL
     if (preselectedEvenementId) {
       const ev = (evenementsData || []).find((e) => e.id === preselectedEvenementId)
-      if (ev) setInitial({ crm_client_id: ev.crm_client_id, crm_evenement_id: ev.id })
+      if (ev) setInitial({ crm_client_id: ev.crm_client_id, crm_evenement_id: ev.id, lieu_id: ev.lieu_id, etablissement_ca_id: ev.etablissement_ca_id })
     } else if (preselectedClientId) {
       setInitial({ crm_client_id: preselectedClientId })
     }
@@ -95,9 +99,9 @@ export default function NouveauDevisPage() {
   }, [preselectedEvenementId, preselectedClientId])
 
   useEffect(() => {
-    if (!authReady || !['admin', 'directeur'].includes(role || '')) return
+    if (!authReady || !peutVoir('crm')) return
     load()
-  }, [authReady, role, load])
+  }, [authReady, peutVoir, load])
 
   async function handleSubmit({ header, lignes }) {
     if (!clientId) throw new Error('Établissement introuvable.')
@@ -140,7 +144,7 @@ export default function NouveauDevisPage() {
     router.push(`/crm/devis/${devisRow.id}`)
   }
 
-  if (!authReady || roleLoading) {
+  if (!authReady || permLoading) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
         Chargement…
@@ -178,6 +182,7 @@ export default function NouveauDevisPage() {
             clientsDispo={crmClients}
             evenementsDispo={crmEvenements}
             fichesDispo={fiches}
+            lieux={lieux}
             lockClient={!!preselectedEvenementId}
             lockEvenement={!!preselectedEvenementId}
             submitLabel="Créer le devis"
