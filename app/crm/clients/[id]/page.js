@@ -1,9 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase, getClientId } from '../../../../lib/supabase'
 import { crmPerimetre } from '../../../../lib/crmPerimetre'
+import { statsVisites, LIBELLES_STATUT_RESA } from '../../../../lib/crmVisites'
 import { useTheme } from '../../../../lib/useTheme'
 import { usePermissions } from '../../../../lib/usePermissions'
 import Navbar from '../../../../components/Navbar'
@@ -29,6 +30,9 @@ export default function CrmClientDetailPage() {
   const [evenements, setEvenements] = useState([])
   const [devis, setDevis] = useState([])
   const [activities, setActivities] = useState([])
+  const [reservations, setReservations] = useState([])
+  const [maisons, setMaisons] = useState({})
+  const [seuils, setSeuils] = useState({})
   const [currentUserId, setCurrentUserId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -61,9 +65,11 @@ export default function CrmClientDetailPage() {
     const cid = await getClientId()
     if (!cid) { setLoading(false); return }
     setClientId(cid)
-    const { ids, lieux: lieuxGroupe } = await crmPerimetre(cid)
+    const { ids, lieux: lieuxGroupe, maisons: maisonsGroupe, seuils: seuilsGroupe } = await crmPerimetre(cid)
     setPerimetre(ids)
     setLieux(lieuxGroupe)
+    setMaisons(maisonsGroupe)
+    setSeuils(seuilsGroupe)
 
     const { data: { user } } = await supabase.auth.getUser()
     setCurrentUserId(user?.id || null)
@@ -73,6 +79,7 @@ export default function CrmClientDetailPage() {
       { data: evts, error: eErr },
       { data: devs, error: dErr },
       { data: acts, error: aErr },
+      { data: resas },
     ] = await Promise.all([
       supabase.from('crm_clients').select('*').eq('id', id).in('client_id', ids).maybeSingle(),
       supabase.from('crm_evenements')
@@ -87,6 +94,10 @@ export default function CrmClientDetailPage() {
         .select('id, type, titre, description, occurred_at, crm_devis_id, crm_evenement_id, created_by, created_at')
         .eq('crm_client_id', id)
         .order('occurred_at', { ascending: false }),
+      supabase.from('crm_reservations')
+        .select('id, client_id, date_repas, couverts, statut, canal, note_client')
+        .eq('crm_client_id', id).in('client_id', ids)
+        .order('date_repas', { ascending: false }),
     ])
 
     if (cErr || eErr || dErr || aErr) { setError((cErr || eErr || dErr || aErr).message); setLoading(false); return }
@@ -94,6 +105,7 @@ export default function CrmClientDetailPage() {
     setEvenements(evts || [])
     setDevis(devs || [])
     setActivities(acts || [])
+    setReservations(resas || [])
     setLoading(false)
   }, [id])
 
@@ -152,6 +164,11 @@ export default function CrmClientDetailPage() {
     await load()
   }
 
+  const visites = useMemo(
+    () => (client ? statsVisites(reservations, seuils, client.vip_thefork) : null),
+    [client, reservations, seuils],
+  )
+
   if (!authReady || permLoading) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
@@ -203,8 +220,19 @@ export default function CrmClientDetailPage() {
                     {client.type === 'entreprise' ? 'Entreprise' : 'Particulier'}
                   </Badge>
                   {client.source && (
-                    <span style={{ marginLeft: 8 }}>Source : {client.source}</span>
+                    <span style={{ marginLeft: 8 }}>Source : {client.source === 'thefork' ? 'TheFork' : client.source}</span>
                   )}
+                  {visites?.vip && (
+                    <Badge bg={hexToRgba('#D97706', 0.14)} color="#B45309" size="sm" style={{ marginLeft: 8 }}>★ VIP</Badge>
+                  )}
+                  {visites?.perdu && (
+                    <Badge bg={hexToRgba('#DC2626', 0.12)} color="#B91C1C" size="sm" style={{ marginLeft: 8 }}>À relancer</Badge>
+                  )}
+                  {(client.contactable || client.type === 'entreprise') ? (
+                    <Badge bg={hexToRgba('#10B981', 0.12)} color="#047857" size="sm" style={{ marginLeft: 8 }}>Contactable</Badge>
+                  ) : client.thefork_customer_uuid ? (
+                    <Badge bg={hexToRgba('#71717A', 0.12)} color={c.texteMuted} size="sm" style={{ marginLeft: 8 }}>Ne pas démarcher</Badge>
+                  ) : null}
                 </p>
               </div>
               <div className="crm-actions">
@@ -227,6 +255,15 @@ export default function CrmClientDetailPage() {
                 <Kv c={c} label="Téléphone" value={client.telephone ? <a href={`tel:${client.telephone}`} style={{ color: c.accent }}>{client.telephone}</a> : '—'} />
                 <Kv c={c} label="Adresse" value={[client.adresse, [client.code_postal, client.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ') || '—'} />
                 <Kv c={c} label="Créé le" value={formatDateFr(client.created_at)} />
+                {client.langue && <Kv c={c} label="Langue" value={client.langue} />}
+                {reservations.length > 0 && (
+                  <>
+                    <Kv c={c} label={`Visites (${visites.seuils.vipMois} mois)`} value={`${visites.visitesPeriode} · ${visites.visites} au total`} />
+                    <Kv c={c} label="Dernière visite" value={visites.derniereVisite ? formatDateFr(visites.derniereVisite.toISOString()) : '—'} />
+                  </>
+                )}
+                {client.allergies && <Kv c={c} label="Allergies" value={client.allergies} />}
+                {client.preferences && <Kv c={c} label="Préférences" value={client.preferences} />}
               </div>
 
               {(client.tags || []).length > 0 && (
@@ -247,6 +284,38 @@ export default function CrmClientDetailPage() {
                 </div>
               )}
             </Card>
+
+            {/* Réservations (TheFork), toutes maisons du groupe */}
+            {reservations.length > 0 && (
+              <div className="crm-section">
+                <h2 className="crm-section__title" style={{ color: c.texte }}>
+                  Réservations <span style={{ color: c.texteMuted, fontWeight: 400 }}>· {reservations.length}</span>
+                </h2>
+                <div className="crm-list">
+                  {reservations.slice(0, 20).map((r) => {
+                    const annulee = ['CANCELED', 'NO_SHOW', 'REFUSED'].includes(String(r.statut || '').toUpperCase())
+                    return (
+                      <div key={r.id} className="crm-row" style={{ background: c.blanc, borderColor: c.bordure, color: c.texte, cursor: 'default' }}>
+                        <div>
+                          <div className="crm-row__primary" style={{ color: c.texte, textDecoration: annulee ? 'line-through' : 'none' }}>
+                            {r.date_repas ? new Date(r.date_repas).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Paris' }) : '—'}
+                          </div>
+                          <div className="crm-row__secondary" style={{ color: c.texteMuted }}>
+                            {[maisons[r.client_id], r.couverts ? `${r.couverts} couverts` : null, r.canal].filter(Boolean).join(' · ')}
+                          </div>
+                        </div>
+                        <div className="crm-row__secondary" style={{ color: c.texteMuted }}>{r.note_client || ''}</div>
+                        <div className="crm-row__meta">
+                          <Badge bg={hexToRgba(annulee ? '#DC2626' : '#10B981', 0.12)} color={annulee ? '#B91C1C' : '#047857'} size="sm">
+                            {LIBELLES_STATUT_RESA[String(r.statut || '').toUpperCase()] || r.statut || '—'}
+                          </Badge>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Historique des activités */}
             <div className="crm-section">
