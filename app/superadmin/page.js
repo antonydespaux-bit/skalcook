@@ -414,6 +414,7 @@ export default function SuperAdminPage() {
             )}
             <button onClick={() => handleNavigation('/superadmin/prospects')} style={{ background: 'rgba(99,102,241,0.2)', color: '#A5B4FC', border: '0.5px solid rgba(99,102,241,0.3)', borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>👥 Prospects</button>
             <button onClick={() => handleNavigation('/superadmin/utilisateurs')} style={{ background: 'rgba(14,165,233,0.2)', color: '#BAE6FD', border: '0.5px solid rgba(14,165,233,0.35)', borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>🧑‍💼 Utilisateurs</button>
+            <button onClick={() => handleNavigation('/superadmin/thefork')} style={{ background: 'rgba(16,185,129,0.2)', color: '#A7F3D0', border: '0.5px solid rgba(16,185,129,0.35)', borderRadius: '8px', padding: '7px 12px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>🍴 TheFork</button>
             <button onClick={handleLogout} style={{ background: 'transparent', color: '#E11D48', border: '0.5px solid #FDA4AF', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>🚪 Déconnexion</button>
           </div>
         )}
