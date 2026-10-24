@@ -17,11 +17,115 @@ const STATUTS = [
 
 const LANGUES = { fr: '🇫🇷', en: '🇬🇧', es: '🇪🇸', it: '🇮🇹' }
 
+const SOURCES = [
+  { id: 'formulaire', label: 'Formulaire', color: '#0891B2', bg: '#CFFAFE' },
+  { id: 'prospection', label: 'Prospection', color: '#9333EA', bg: '#F3E8FF' },
+]
+
+const aujourdhui = () => new Date().toISOString().slice(0, 10)
+
+// Relance due : date passée ou du jour, sur un prospect encore ouvert.
+const relanceDue = (p) =>
+  !!p.date_relance && p.date_relance <= aujourdhui() && !['signe', 'perdu'].includes(p.statut)
+
+const nomAffiche = (p) => p.nom_etablissement || p.nom || p.contact_nom || 'Prospect'
+
+const labelStyle = { fontSize: '11px', fontWeight: '600', color: '#71717A', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }
+const champStyle = { width: '100%', padding: '9px 12px', borderRadius: '8px', border: '0.5px solid #E4E4E7', fontSize: '13px', outline: 'none', fontFamily: 'inherit', color: '#18181B', background: '#FAFAFA' }
+
+function BadgeSource({ source }) {
+  const s = SOURCES.find(x => x.id === source) || SOURCES[0]
+  return (
+    <span style={{ background: s.bg, color: s.color, borderRadius: '999px', padding: '2px 8px', fontSize: '11px', fontWeight: 600 }}>{s.label}</span>
+  )
+}
+
+// Accroche + brouillon d'e-mail + date de relance : les champs remplis par la
+// prospection. Le brouillon est éditable et sauvegardé à la sortie du champ.
+// Monté avec key={prospect.id} : l'état local repart à zéro à chaque prospect.
+function BlocProspection({ prospect, onUpdate }) {
+  const [objet, setObjet] = useState(prospect.brouillon_objet || '')
+  const [corps, setCorps] = useState(prospect.brouillon_email || '')
+  const [copie, setCopie] = useState(false)
+
+  const copier = async () => {
+    try {
+      await navigator.clipboard.writeText(objet ? `Objet : ${objet}\n\n${corps}` : corps)
+      setCopie(true)
+      setTimeout(() => setCopie(false), 2000)
+    } catch {}
+  }
+
+  const mailto = prospect.email
+    ? `mailto:${prospect.email}?subject=${encodeURIComponent(objet)}&body=${encodeURIComponent(corps)}`
+    : null
+
+  return (
+    <>
+      {prospect.accroche && (
+        <div style={{ marginBottom: '20px' }}>
+          <div style={labelStyle}>Accroche</div>
+          <div style={{ padding: '12px', background: '#F3E8FF', borderRadius: '8px', fontSize: '13px', color: '#18181B', lineHeight: '1.6' }}>
+            {prospect.accroche}
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginBottom: '20px' }}>
+        <div style={labelStyle}>Prochaine relance</div>
+        <input
+          type="date"
+          value={prospect.date_relance || ''}
+          onChange={e => onUpdate(prospect.id, { date_relance: e.target.value || null })}
+          style={{ ...champStyle, borderColor: relanceDue(prospect) ? '#F59E0B' : '#E4E4E7' }}
+        />
+      </div>
+
+      {(prospect.source === 'prospection' || corps) && (
+        <div style={{ marginBottom: '20px' }}>
+          <div style={labelStyle}>Brouillon d’e-mail</div>
+          <input
+            value={objet}
+            onChange={e => setObjet(e.target.value)}
+            onBlur={() => objet !== (prospect.brouillon_objet || '') && onUpdate(prospect.id, { brouillon_objet: objet })}
+            placeholder="Objet"
+            style={{ ...champStyle, marginBottom: '6px', fontWeight: 500 }}
+          />
+          <textarea
+            value={corps}
+            onChange={e => setCorps(e.target.value)}
+            onBlur={() => corps !== (prospect.brouillon_email || '') && onUpdate(prospect.id, { brouillon_email: corps })}
+            placeholder="Texte de l'e-mail..."
+            style={{ ...champStyle, resize: 'vertical', minHeight: '180px', lineHeight: '1.5' }}
+          />
+          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+            <button onClick={copier} disabled={!corps} style={{
+              flex: 1, padding: '9px', borderRadius: '8px', border: '0.5px solid #D8B4FE',
+              background: copie ? '#9333EA' : '#F3E8FF', color: copie ? 'white' : '#7E22CE',
+              fontSize: '12px', fontWeight: 600, cursor: corps ? 'pointer' : 'not-allowed', fontFamily: 'inherit'
+            }}>
+              {copie ? '✓ Copié' : '📋 Copier'}
+            </button>
+            {mailto && (
+              <a href={mailto} style={{
+                flex: 1, padding: '9px', borderRadius: '8px', border: '0.5px solid #E4E4E7',
+                background: '#F4F4F5', color: '#18181B', fontSize: '12px', fontWeight: 600,
+                textAlign: 'center', textDecoration: 'none'
+              }}>📧 Ouvrir dans ma messagerie</a>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 export default function ProspectsPage() {
   const [prospects, setProspects] = useState([])
   const [loading, setLoading] = useState(true)
   const [authorized, setAuthorized] = useState(false)
   const [filtre, setFiltre] = useState('tous')
+  const [filtreSource, setFiltreSource] = useState('toutes')
   const [recherche, setRecherche] = useState('')
   const [selected, setSelected] = useState(null)
   const [notes, setNotes] = useState('')
@@ -87,6 +191,12 @@ export default function ProspectsPage() {
     if (selected?.id === id) setSelected(prev => ({ ...prev, statut }))
   }
 
+  const updateChamps = async (id, champs) => {
+    await supabase.from('prospects').update(champs).eq('id', id)
+    setProspects(prev => prev.map(p => p.id === id ? { ...p, ...champs } : p))
+    if (selected?.id === id) setSelected(prev => ({ ...prev, ...champs }))
+  }
+
   const saveNotes = async () => {
     if (!selected) return
     setSavingNotes(true)
@@ -140,14 +250,25 @@ export default function ProspectsPage() {
     return acc
   }, {})
 
+  const sources = prospects.reduce((acc, p) => {
+    const s = p.source || 'formulaire'
+    acc[s] = (acc[s] || 0) + 1
+    return acc
+  }, {})
+  const nbRelances = prospects.filter(relanceDue).length
+
+  const q = recherche.toLowerCase()
   const prospectsFiltres = prospects.filter(p => {
-    const matchFiltre = filtre === 'tous' || p.statut === filtre
+    const matchFiltre = filtre === 'tous'
+      || (filtre === 'a_relancer' ? relanceDue(p) : p.statut === filtre)
+    const matchSource = filtreSource === 'toutes' || (p.source || 'formulaire') === filtreSource
     const matchRecherche = !recherche ||
-      p.nom?.toLowerCase().includes(recherche.toLowerCase()) ||
-      p.email?.toLowerCase().includes(recherche.toLowerCase()) ||
-      p.nom_etablissement?.toLowerCase().includes(recherche.toLowerCase())
-    return matchFiltre && matchRecherche
+      [p.nom, p.email, p.nom_etablissement, p.contact_nom, p.arrondissement, p.type_cuisine]
+        .some(v => v?.toLowerCase().includes(q))
+    return matchFiltre && matchSource && matchRecherche
   })
+    // Relances dues en tête, le reste garde l'ordre d'arrivée.
+    .sort((a, b) => Number(relanceDue(b)) - Number(relanceDue(a)))
 
   const statutInfo = (id) => STATUTS.find(s => s.id === id) || STATUTS[0]
   const handleNavigation = (url) => {
@@ -219,9 +340,15 @@ export default function ProspectsPage() {
                     padding: '14px'
                   }}
                 >
-                  <div style={{ fontSize: '15px', fontWeight: 700, color: '#18181B', marginBottom: '6px' }}>
-                    {p.nom_etablissement || p.nom || 'Prospect'}
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: '#18181B', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {nomAffiche(p)} <BadgeSource source={p.source} />
+                    {relanceDue(p) && <span style={{ fontSize: '11px', color: '#B45309', fontWeight: 600 }}>⏰ À relancer</span>}
                   </div>
+                  {(p.arrondissement || p.type_cuisine) && (
+                    <div style={{ fontSize: '12px', color: '#71717A', marginBottom: '4px' }}>
+                      {[p.arrondissement, p.type_cuisine].filter(Boolean).join(' · ')}
+                    </div>
+                  )}
                   <div style={{ fontSize: '13px', color: '#334155', marginBottom: '4px' }}>
                     📧 {p.email || '-'}
                   </div>
@@ -266,6 +393,8 @@ export default function ProspectsPage() {
 
           {selected && (
             <div style={{ marginTop: '12px', background: 'white', borderRadius: '12px', border: '0.5px solid #E4E4E7', padding: '14px' }}>
+              <div style={{ fontSize: '15px', fontWeight: 700, color: '#18181B', marginBottom: '14px' }}>{nomAffiche(selected)}</div>
+              <BlocProspection key={selected.id} prospect={selected} onUpdate={updateChamps} />
               <div style={{ fontSize: '13px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', marginBottom: '8px' }}>
                 Notes internes
               </div>
@@ -340,6 +469,35 @@ export default function ProspectsPage() {
                 <span style={{ fontSize: '11px', background: s.bg, color: s.color, padding: '2px 7px', borderRadius: '20px' }}>{filtres[s.id] || 0}</span>
               </button>
             ))}
+            <button onClick={() => setFiltre('a_relancer')} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              width: '100%', padding: '9px 12px', border: 'none', borderRadius: '8px',
+              background: filtre === 'a_relancer' ? '#FEF3C7' : 'transparent',
+              cursor: 'pointer', marginBottom: '4px', fontSize: '13px',
+              fontWeight: filtre === 'a_relancer' ? '500' : '400', color: filtre === 'a_relancer' ? '#B45309' : '#18181B'
+            }}>
+              <span>⏰ À relancer</span>
+              <span style={{ fontSize: '11px', background: '#FEF3C7', color: '#B45309', padding: '2px 7px', borderRadius: '20px' }}>{nbRelances}</span>
+            </button>
+          </div>
+
+          {/* Filtres par source */}
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ fontSize: '11px', fontWeight: '600', color: '#71717A', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px' }}>Source</div>
+            {[{ id: 'toutes', label: 'Toutes', color: '#18181B', bg: '#F4F4F5' }, ...SOURCES].map(s => (
+              <button key={s.id} onClick={() => setFiltreSource(s.id)} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                width: '100%', padding: '9px 12px', border: 'none', borderRadius: '8px',
+                background: filtreSource === s.id ? s.bg : 'transparent',
+                cursor: 'pointer', marginBottom: '4px', fontSize: '13px',
+                fontWeight: filtreSource === s.id ? '500' : '400', color: filtreSource === s.id ? s.color : '#18181B'
+              }}>
+                <span>{s.label}</span>
+                <span style={{ fontSize: '11px', background: s.bg, color: s.color, padding: '2px 7px', borderRadius: '20px' }}>
+                  {s.id === 'toutes' ? prospects.length : (sources[s.id] || 0)}
+                </span>
+              </button>
+            ))}
           </div>
 
           {/* Taux de conversion */}
@@ -387,10 +545,17 @@ export default function ProspectsPage() {
                     return (
                       <tr key={p.id} onClick={() => ouvrirDetail(p)} style={{ borderBottom: '0.5px solid #E4E4E7', cursor: 'pointer', background: isSelected ? '#EEF2FF44' : 'white' }}>
                         <td style={{ padding: '12px' }}>
-                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#18181B' }}>{p.nom_etablissement || p.nom || '-'}</div>
-                          <div style={{ fontSize: '12px', color: '#71717A', marginTop: '3px' }}>{p.nb_etablissements === 11 ? '10+' : p.nb_etablissements === 6 ? '6-10' : p.nb_etablissements === 2 ? '2-5' : '1'} établissement{p.nb_etablissements > 1 ? 's' : ''}</div>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#18181B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {nomAffiche(p)} <BadgeSource source={p.source} />
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#71717A', marginTop: '3px' }}>
+                            {p.source === 'prospection'
+                              ? [p.arrondissement, p.type_cuisine].filter(Boolean).join(' · ') || '-'
+                              : `${p.nb_etablissements === 11 ? '10+' : p.nb_etablissements === 6 ? '6-10' : p.nb_etablissements === 2 ? '2-5' : '1'} établissement${p.nb_etablissements > 1 ? 's' : ''}`}
+                          </div>
                         </td>
                         <td style={{ padding: '12px' }}>
+                          {p.contact_nom && <div style={{ fontSize: '13px', color: '#18181B', fontWeight: 500, marginBottom: '3px' }}>{p.contact_nom}{p.contact_role ? ` — ${p.contact_role}` : ''}</div>}
                           <div style={{ fontSize: '13px', color: '#334155' }}>{p.email || '-'}</div>
                           <div style={{ fontSize: '13px', color: '#334155', marginTop: '3px' }}>
                             {p.telephone ? <a href={`tel:${p.telephone}`} style={{ color: '#334155', textDecoration: 'underline' }}>{p.telephone}</a> : '-'}
@@ -401,6 +566,11 @@ export default function ProspectsPage() {
                         </td>
                         <td style={{ padding: '12px', fontSize: '12px', color: '#71717A' }}>
                           {new Date(p.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          {p.date_relance && (
+                            <div style={{ marginTop: '3px', color: relanceDue(p) ? '#B45309' : '#71717A', fontWeight: relanceDue(p) ? 600 : 400 }}>
+                              ⏰ {new Date(p.date_relance + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                            </div>
+                          )}
                         </td>
                         <td style={{ padding: '12px', textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
                           <div style={{ display: 'inline-flex', gap: '8px' }}>
@@ -436,21 +606,28 @@ export default function ProspectsPage() {
             {/* Avatar + nom */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px', padding: '16px', background: '#F4F4F5', borderRadius: '10px' }}>
               <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: '600', color: '#6366F1', flexShrink: 0 }}>
-                {selected.nom?.charAt(0)?.toUpperCase() || '?'}
+                {(selected.nom || selected.contact_nom || selected.nom_etablissement)?.charAt(0)?.toUpperCase() || '?'}
               </div>
               <div>
-                <div style={{ fontSize: '15px', fontWeight: '500', color: '#18181B' }}>{selected.nom}</div>
-                <div style={{ fontSize: '12px', color: '#71717A' }}>{LANGUES[selected.langue] || '🌍'} {selected.langue?.toUpperCase()}</div>
+                <div style={{ fontSize: '15px', fontWeight: '500', color: '#18181B' }}>{selected.nom || selected.contact_nom || selected.nom_etablissement}</div>
+                <div style={{ fontSize: '12px', color: '#71717A', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                  <BadgeSource source={selected.source} />
+                  {selected.source !== 'prospection' && <span>{LANGUES[selected.langue] || '🌍'} {selected.langue?.toUpperCase()}</span>}
+                </div>
               </div>
             </div>
 
             {/* Infos */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
               {[
+                { label: 'Contact', value: selected.contact_nom && `${selected.contact_nom}${selected.contact_role ? ` — ${selected.contact_role}` : ''}`, icon: '👤' },
                 { label: 'Email', value: selected.email, icon: '📧' },
                 { label: 'Téléphone', value: selected.telephone, icon: '📞' },
                 { label: 'Établissement', value: selected.nom_etablissement, icon: '🏨' },
-                { label: 'Nb établissements', value: selected.nb_etablissements === 11 ? '10+' : selected.nb_etablissements === 6 ? '6-10' : selected.nb_etablissements === 2 ? '2-5' : '1', icon: '🏢' },
+                { label: 'Adresse', value: selected.adresse, icon: '📍' },
+                { label: 'Cuisine', value: selected.type_cuisine, icon: '🍽️' },
+                { label: 'Site web', value: selected.site_web && <a href={selected.site_web} target="_blank" rel="noopener noreferrer" style={{ color: '#6366F1' }}>{selected.site_web.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</a>, icon: '🌐' },
+                { label: 'Nb établissements', value: selected.source === 'prospection' ? null : selected.nb_etablissements === 11 ? '10+' : selected.nb_etablissements === 6 ? '6-10' : selected.nb_etablissements === 2 ? '2-5' : '1', icon: '🏢' },
                 { label: 'Date', value: new Date(selected.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }), icon: '📅' },
               ].filter(item => item.value).map((item, i) => (
                 <div key={i} style={{ display: 'flex', gap: '10px', padding: '10px 12px', background: '#F4F4F5', borderRadius: '8px' }}>
@@ -489,6 +666,8 @@ export default function ProspectsPage() {
               </div>
             </div>
 
+            <BlocProspection key={selected.id} prospect={selected} onUpdate={updateChamps} />
+
             {/* Notes */}
             <div>
               <div style={{ fontSize: '11px', fontWeight: '600', color: '#71717A', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Notes internes</div>
@@ -509,12 +688,14 @@ export default function ProspectsPage() {
 
             {/* Actions rapides */}
             <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-              <a href={`mailto:${selected.email}`} style={{
-                flex: 1, padding: '10px', borderRadius: '8px',
-                background: '#F4F4F5', color: '#18181B', textDecoration: 'none',
-                fontSize: '13px', fontWeight: '500', textAlign: 'center',
-                border: '0.5px solid #E4E4E7', display: 'block'
-              }}>📧 Email</a>
+              {selected.email && (
+                <a href={`mailto:${selected.email}`} style={{
+                  flex: 1, padding: '10px', borderRadius: '8px',
+                  background: '#F4F4F5', color: '#18181B', textDecoration: 'none',
+                  fontSize: '13px', fontWeight: '500', textAlign: 'center',
+                  border: '0.5px solid #E4E4E7', display: 'block'
+                }}>📧 Email</a>
+              )}
               {selected.telephone && (
                 <a href={`tel:${selected.telephone}`} style={{
                   flex: 1, padding: '10px', borderRadius: '8px',
