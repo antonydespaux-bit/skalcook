@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { apiHandler } from '../../../../../../lib/apiHandler'
 import { DevisPdf } from '../../../../../../lib/devisPdf'
+import { perimetreCrmServeur } from '../../../../../../lib/crmPerimetreServeur'
 
 export const runtime = 'nodejs'
 
@@ -28,15 +29,16 @@ export const GET = apiHandler({
       return Response.json({ error: 'devis id manquant' }, { status: 400 })
     }
 
-    const [{ data: devis }, { data: tenant }] = await Promise.all([
-      db.from('crm_devis').select('*').eq('id', devisId).eq('client_id', clientId).maybeSingle(),
-      db.from('clients')
-        .select('nom, nom_etablissement, adresse_siege, siret, num_tva, email_contact, telephone_contact')
-        .eq('id', clientId).maybeSingle(),
-    ])
+    // Devis du périmètre CRM ; l'en-tête est celui de l'établissement qui l'a créé.
+    const perimetre = await perimetreCrmServeur(db, clientId)
+    const { data: devis } = await db.from('crm_devis').select('*')
+      .eq('id', devisId).in('client_id', perimetre).maybeSingle()
     if (!devis) {
       return Response.json({ error: 'Devis introuvable' }, { status: 404 })
     }
+    const { data: tenant } = await db.from('clients')
+      .select('nom, nom_etablissement, adresse_siege, siret, num_tva, email_contact, telephone_contact')
+      .eq('id', devis.client_id).maybeSingle()
 
     const [{ data: lignes }, crmClientRes] = await Promise.all([
       db.from('crm_devis_lignes').select('*').eq('devis_id', devisId).order('ordre', { ascending: true }),

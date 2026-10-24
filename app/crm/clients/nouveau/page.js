@@ -4,14 +4,14 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, getClientId } from '../../../../lib/supabase'
 import { useTheme } from '../../../../lib/useTheme'
-import { useRole } from '../../../../lib/useRole'
+import { usePermissions } from '../../../../lib/usePermissions'
 import Navbar from '../../../../components/Navbar'
 import ClientForm from '../../../../components/crm/ClientForm'
 
 export default function NouveauClientPage() {
   const router = useRouter()
   const { c } = useTheme()
-  const { role, loading: roleLoading } = useRole()
+  const { peutVoir, loading: permLoading } = usePermissions()
   const [authReady, setAuthReady] = useState(false)
 
   useEffect(() => {
@@ -26,10 +26,10 @@ export default function NouveauClientPage() {
   }, [router])
 
   useEffect(() => {
-    if (!roleLoading && role && !['admin', 'directeur'].includes(role)) {
+    if (!permLoading && !peutVoir('crm')) {
       router.replace('/dashboard')
     }
-  }, [role, roleLoading, router])
+  }, [peutVoir, permLoading, router])
 
   async function handleSubmit(values) {
     const cid = await getClientId()
@@ -46,7 +46,7 @@ export default function NouveauClientPage() {
     router.push(`/crm/clients/${data.id}`)
   }
 
-  if (!authReady || roleLoading) {
+  if (!authReady || permLoading) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
         Chargement…

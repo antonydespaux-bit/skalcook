@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, getClientId } from '../../../lib/supabase'
+import { crmPerimetre } from '../../../lib/crmPerimetre'
 import { Badge } from '../../ui'
 
 function todayIso() {
@@ -36,10 +37,11 @@ export default function SectionCrmEvenements({ c }) {
     ;(async () => {
       const clientId = await getClientId()
       if (!clientId) { setLoading(false); return }
+      const { ids } = await crmPerimetre(clientId)
       const { data } = await supabase
         .from('crm_evenements')
         .select('id, titre, date_evenement, heure_debut, nb_convives, statut, crm_client_id')
-        .eq('client_id', clientId)
+        .in('client_id', ids)
         .gte('date_evenement', todayIso())
         .not('statut', 'in', '(annule,perdu)')
         .order('date_evenement', { ascending: true })

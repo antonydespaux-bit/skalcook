@@ -192,7 +192,7 @@ export default function DashboardPage() {
               >
                 {isMobile
                   ? (role === 'admin' ? 'Admin' : role === 'cuisine' ? 'Cuisine' : 'Dir.')
-                  : (role === 'admin' ? 'Administrateur' : role === 'cuisine' ? 'Cuisine' : 'Directeur')}
+                  : (role === 'admin' ? 'Administrateur' : role === 'cuisine' ? 'Cuisine' : role === 'commercial' ? 'Commercial' : 'Directeur')}
               </Badge>
             )}
             <button

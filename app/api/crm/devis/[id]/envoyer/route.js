@@ -10,6 +10,7 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import { Resend } from 'resend'
 import { apiHandler } from '../../../../../../lib/apiHandler'
 import { DevisPdf } from '../../../../../../lib/devisPdf'
+import { perimetreCrmServeur } from '../../../../../../lib/crmPerimetreServeur'
 
 export const runtime = 'nodejs'
 
@@ -56,15 +57,18 @@ export const POST = apiHandler({
     }
 
     // ─── 1. Charger devis + context ────────────────────────────────────
-    const [{ data: devis }, { data: tenant }] = await Promise.all([
-      db.from('crm_devis').select('*').eq('id', devisId).eq('client_id', clientId).maybeSingle(),
-      db.from('clients')
-        .select('nom, nom_etablissement, adresse_siege, siret, num_tva, email_contact, telephone_contact')
-        .eq('id', clientId).maybeSingle(),
-    ])
+    // Devis du périmètre CRM (tout le groupe si son CRM est partagé). Il reste
+    // rattaché à l'établissement qui l'a créé : en-tête, stockage, historique.
+    const perimetre = await perimetreCrmServeur(db, clientId)
+    const { data: devis } = await db.from('crm_devis').select('*')
+      .eq('id', devisId).in('client_id', perimetre).maybeSingle()
     if (!devis) {
       return Response.json({ error: 'Devis introuvable' }, { status: 404 })
     }
+    const proprietaireId = devis.client_id
+    const { data: tenant } = await db.from('clients')
+      .select('nom, nom_etablissement, adresse_siege, siret, num_tva, email_contact, telephone_contact')
+      .eq('id', proprietaireId).maybeSingle()
 
     const [{ data: lignes }, crmClientRes] = await Promise.all([
       db.from('crm_devis_lignes').select('*').eq('devis_id', devisId).order('ordre', { ascending: true }),
@@ -93,7 +97,7 @@ export const POST = apiHandler({
     const nextVersion = (lastRev?.version || 0) + 1
 
     // ─── 4. Upload dans le bucket (path versionné) ────────────────────
-    const path = `${clientId}/${devis.id}/v${nextVersion}.pdf`
+    const path = `${proprietaireId}/${devis.id}/v${nextVersion}.pdf`
     const { error: upErr } = await db.storage
       .from('devis')
       .upload(path, pdfBuffer, {
@@ -143,7 +147,7 @@ export const POST = apiHandler({
       .from('crm_devis_revisions')
       .insert({
         devis_id: devisId,
-        client_id: clientId,
+        client_id: proprietaireId,
         version: nextVersion,
         snapshot_header: devis,
         snapshot_lignes: lignes || [],
@@ -170,7 +174,7 @@ export const POST = apiHandler({
       const { error: actErr } = await db
         .from('crm_client_activities')
         .insert({
-          client_id: clientId,
+          client_id: proprietaireId,
           crm_client_id: devis.crm_client_id,
           type: 'devis_envoye',
           titre: `Devis ${devis.numero} envoyé${nextVersion > 1 ? ` (V${nextVersion})` : ''}`,
@@ -197,7 +201,7 @@ export const POST = apiHandler({
         statut: nextStatut,
       })
       .eq('id', devisId)
-      .eq('client_id', clientId)
+      .eq('client_id', proprietaireId)
     if (updErr) {
       return Response.json({ error: `Mise à jour du devis échouée : ${updErr.message}` }, { status: 500 })
     }

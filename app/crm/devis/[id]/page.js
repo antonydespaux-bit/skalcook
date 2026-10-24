@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase, getClientId } from '../../../../lib/supabase'
+import { crmPerimetre } from '../../../../lib/crmPerimetre'
 import { useTheme } from '../../../../lib/useTheme'
-import { useRole } from '../../../../lib/useRole'
+import { usePermissions } from '../../../../lib/usePermissions'
 import Navbar from '../../../../components/Navbar'
 import { Card, Button, Badge, Alert } from '../../../../components/ui'
 import DevisForm from '../../../../components/crm/DevisForm'
@@ -18,10 +19,12 @@ export default function CrmDevisDetailPage() {
   const params = useParams()
   const id = params?.id
   const { c } = useTheme()
-  const { role, loading: roleLoading } = useRole()
+  const { peutVoir, loading: permLoading } = usePermissions()
 
   const [authReady, setAuthReady] = useState(false)
   const [clientId, setClientId] = useState(null)
+  const [perimetre, setPerimetre] = useState([])
+  const [lieux, setLieux] = useState([])
   const [devis, setDevis] = useState(null)
   const [lignes, setLignes] = useState([])
   const [clientCrm, setClientCrm] = useState(null)
@@ -55,10 +58,10 @@ export default function CrmDevisDetailPage() {
   }, [router])
 
   useEffect(() => {
-    if (!roleLoading && role && !['admin', 'directeur'].includes(role)) {
+    if (!permLoading && !peutVoir('crm')) {
       router.replace('/dashboard')
     }
-  }, [role, roleLoading, router])
+  }, [peutVoir, permLoading, router])
 
   const load = useCallback(async () => {
     if (!id) return
@@ -67,11 +70,14 @@ export default function CrmDevisDetailPage() {
     const cid = await getClientId()
     if (!cid) { setLoading(false); return }
     setClientId(cid)
+    const { ids, lieux: lieuxGroupe } = await crmPerimetre(cid)
+    setPerimetre(ids)
+    setLieux(lieuxGroupe)
 
     const { data: dev, error: dErr } = await supabase
       .from('crm_devis')
       .select('*')
-      .eq('id', id).eq('client_id', cid)
+      .eq('id', id).in('client_id', ids)
       .maybeSingle()
     if (dErr) { setError(dErr.message); setLoading(false); return }
     setDevis(dev)
@@ -94,22 +100,22 @@ export default function CrmDevisDetailPage() {
       dev.crm_client_id
         ? supabase.from('crm_clients')
             .select('id, type, nom, prenom, raison_sociale, email, telephone')
-            .eq('id', dev.crm_client_id).eq('client_id', cid).maybeSingle()
+            .eq('id', dev.crm_client_id).in('client_id', ids).maybeSingle()
         : Promise.resolve({ data: null }),
       dev.crm_evenement_id
         ? supabase.from('crm_evenements')
             .select('id, titre, date_evenement')
-            .eq('id', dev.crm_evenement_id).eq('client_id', cid).maybeSingle()
+            .eq('id', dev.crm_evenement_id).in('client_id', ids).maybeSingle()
         : Promise.resolve({ data: null }),
       supabase.from('crm_clients')
         .select('id, type, nom, prenom, raison_sociale')
-        .eq('client_id', cid),
+        .in('client_id', ids),
       supabase.from('crm_evenements')
-        .select('id, crm_client_id, titre, date_evenement')
-        .eq('client_id', cid),
+        .select('id, crm_client_id, titre, date_evenement, lieu_id, etablissement_ca_id')
+        .in('client_id', ids),
       supabase.from('fiches')
         .select('id, nom, cout_portion, prix_ttc, allergenes')
-        .eq('client_id', cid)
+        .eq('client_id', dev.client_id)
         .eq('archive', false)
         .eq('is_sub_fiche', false)
         .order('nom', { ascending: true }),
@@ -130,9 +136,9 @@ export default function CrmDevisDetailPage() {
   }, [id])
 
   useEffect(() => {
-    if (!authReady || !['admin', 'directeur'].includes(role || '')) return
+    if (!authReady || !peutVoir('crm')) return
     load()
-  }, [authReady, role, load])
+  }, [authReady, peutVoir, load])
 
   async function handleSave({ header, lignes: newLignes }) {
     // UPDATE header (on ne touche pas à numero/annee/sequence)
@@ -140,7 +146,7 @@ export default function CrmDevisDetailPage() {
       .from('crm_devis')
       .update(header)
       .eq('id', id)
-      .eq('client_id', clientId)
+      .in('client_id', perimetre)
     if (hErr) throw hErr
 
     // Replace lignes : delete all + insert new (plus simple que de differ)
@@ -148,13 +154,13 @@ export default function CrmDevisDetailPage() {
       .from('crm_devis_lignes')
       .delete()
       .eq('devis_id', id)
-      .eq('client_id', clientId)
+      .in('client_id', perimetre)
     if (dLErr) throw dLErr
 
     if (newLignes.length > 0) {
       const { error: iLErr } = await supabase
         .from('crm_devis_lignes')
-        .insert(newLignes.map((l) => ({ ...l, devis_id: id, client_id: clientId })))
+        .insert(newLignes.map((l) => ({ ...l, devis_id: id, client_id: devis.client_id })))
       if (iLErr) throw iLErr
     }
 
@@ -168,7 +174,7 @@ export default function CrmDevisDetailPage() {
       .from('crm_devis')
       .update({ statut: newStatut })
       .eq('id', id)
-      .eq('client_id', clientId)
+      .in('client_id', perimetre)
     if (!err) setDevis((d) => ({ ...d, statut: newStatut }))
     else setError(err.message)
     setStatutSaving(false)
@@ -179,7 +185,7 @@ export default function CrmDevisDetailPage() {
       .from('crm_devis')
       .delete()
       .eq('id', id)
-      .eq('client_id', clientId)
+      .in('client_id', perimetre)
     if (err) { setError(err.message); return }
     router.push('/crm/devis')
   }
@@ -272,7 +278,7 @@ export default function CrmDevisDetailPage() {
       .from('crm_devis')
       .update({ crm_evenement_id: evenementId || null })
       .eq('id', id)
-      .eq('client_id', clientId)
+      .in('client_id', perimetre)
     setLinkSaving(false)
     if (err) { setError(err.message); return }
     setShowEvenementPicker(false)
@@ -287,8 +293,10 @@ export default function CrmDevisDetailPage() {
     const { data: newEv, error: eErr } = await supabase
       .from('crm_evenements')
       .insert({
-        client_id: clientId,
+        client_id: devis.client_id,
         crm_client_id: devis.crm_client_id,
+        lieu_id: devis.lieu_id,
+        etablissement_ca_id: devis.etablissement_ca_id,
         titre: `Événement ${devis.numero}`,
         statut: 'devis_envoye',
         montant_devis: devis.total_ttc,
@@ -301,7 +309,7 @@ export default function CrmDevisDetailPage() {
       .from('crm_devis')
       .update({ crm_evenement_id: newEv.id })
       .eq('id', id)
-      .eq('client_id', clientId)
+      .in('client_id', perimetre)
     setLinkSaving(false)
     if (uErr) { setError(uErr.message); return }
     router.push(`/crm/evenements/${newEv.id}`)
@@ -321,7 +329,7 @@ export default function CrmDevisDetailPage() {
     [evenementsDispo, devis?.crm_client_id]
   )
 
-  if (!authReady || roleLoading) {
+  if (!authReady || permLoading) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
         Chargement…
@@ -355,6 +363,7 @@ export default function CrmDevisDetailPage() {
               initial={devis}
               initialLignes={lignes.map((l) => ({ ...l, _cout_portion: 0 }))}
               clientsDispo={clientsDispo}
+              lieux={lieux}
               evenementsDispo={evenementsDispo}
               fichesDispo={fichesDispo}
               submitLabel="Enregistrer"
@@ -514,6 +523,12 @@ export default function CrmDevisDetailPage() {
             {/* Dates */}
             <Card c={c} padding="responsive" style={{ marginBottom: 20 }}>
               <div className="crm-kv">
+                {lieux.length > 0 && (
+                  <>
+                    <Kv c={c} label="Maison / salle" value={lieux.find((l) => l.id === devis.lieu_id)?.nom || '—'} />
+                    <Kv c={c} label="CA pour" value={lieux.find((l) => l.client_id && l.client_id === devis.etablissement_ca_id)?.nom || 'À choisir'} />
+                  </>
+                )}
                 <Kv c={c} label="Date d’émission" value={formatDateFr(devis.date_emission)} />
                 <Kv c={c} label="Validité jusqu’au" value={formatDateFr(devis.date_validite)} />
                 <Kv c={c} label="Conditions de paiement" value={devis.conditions_paiement || '—'} />

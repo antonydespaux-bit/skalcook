@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, getClientId } from '../../../lib/supabase'
+import { crmPerimetre } from '../../../lib/crmPerimetre'
 import { useTheme } from '../../../lib/useTheme'
-import { useRole } from '../../../lib/useRole'
+import { usePermissions } from '../../../lib/usePermissions'
 import Navbar from '../../../components/Navbar'
 import { Card, Button, Badge, Alert } from '../../../components/ui'
 import {
@@ -15,11 +16,12 @@ import {
 export default function CrmDevisListPage() {
   const router = useRouter()
   const { c } = useTheme()
-  const { role, loading: roleLoading } = useRole()
+  const { peutVoir, loading: permLoading } = usePermissions()
 
   const [authReady, setAuthReady] = useState(false)
   const [devis, setDevis] = useState([])
   const [clients, setClients] = useState([])
+  const [lieuxById, setLieuxById] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [recherche, setRecherche] = useState('')
@@ -37,25 +39,27 @@ export default function CrmDevisListPage() {
   }, [router])
 
   useEffect(() => {
-    if (!roleLoading && role && !['admin', 'directeur'].includes(role)) {
+    if (!permLoading && !peutVoir('crm')) {
       router.replace('/dashboard')
     }
-  }, [role, roleLoading, router])
+  }, [peutVoir, permLoading, router])
 
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
     const cid = await getClientId()
     if (!cid) { setLoading(false); return }
+    const { ids, lieux } = await crmPerimetre(cid)
+    setLieuxById(Object.fromEntries(lieux.map((l) => [l.id, l.nom])))
 
     const [{ data: dData, error: dErr }, { data: cData, error: cErr }] = await Promise.all([
       supabase.from('crm_devis')
-        .select('id, numero, crm_client_id, crm_evenement_id, statut, date_emission, date_validite, total_ttc')
-        .eq('client_id', cid)
+        .select('id, numero, crm_client_id, crm_evenement_id, lieu_id, statut, date_emission, date_validite, total_ttc')
+        .in('client_id', ids)
         .order('date_emission', { ascending: false }),
       supabase.from('crm_clients')
         .select('id, type, nom, prenom, raison_sociale')
-        .eq('client_id', cid),
+        .in('client_id', ids),
     ])
     if (dErr || cErr) { setError((dErr || cErr).message); setLoading(false); return }
     setDevis(dData || [])
@@ -64,9 +68,9 @@ export default function CrmDevisListPage() {
   }, [])
 
   useEffect(() => {
-    if (!authReady || !['admin', 'directeur'].includes(role || '')) return
+    if (!authReady || !peutVoir('crm')) return
     load()
-  }, [authReady, role, load])
+  }, [authReady, peutVoir, load])
 
   const clientById = useMemo(() => Object.fromEntries(clients.map((cl) => [cl.id, cl])), [clients])
 
@@ -80,7 +84,7 @@ export default function CrmDevisListPage() {
     })
   }, [devis, recherche, filtreStatut, clientById])
 
-  if (!authReady || roleLoading) {
+  if (!authReady || permLoading) {
     return (
       <div style={{ minHeight: '100vh', background: c.fond, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.texteMuted, fontSize: 14 }}>
         Chargement…
@@ -163,6 +167,7 @@ export default function CrmDevisListPage() {
                     <div>{formatMontant(d.total_ttc)} TTC</div>
                   </div>
                   <div className="crm-row__meta">
+                    {lieuxById[d.lieu_id] && <Badge bg={hexToRgba('#71717A', 0.10)} color={c.texteMuted} size="sm">{lieuxById[d.lieu_id]}</Badge>}
                     {st && <Badge bg={hexToRgba(st.couleur, 0.12)} color={st.couleur} size="sm">{st.label}</Badge>}
                   </div>
                 </button>

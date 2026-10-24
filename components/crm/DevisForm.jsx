@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { Button, Badge } from '../ui'
+import ChampsLieuCa from './ChampsLieuCa'
 import {
   STATUTS_DEVIS, TAUX_TVA, CONDITIONS_PAIEMENT,
   calcLigneTotaux, calcDevisTotaux, formatMontant, clientDisplayName, hexToRgba,
@@ -17,6 +18,7 @@ import {
  *   clientsDispo      : crm_clients de l'établissement
  *   evenementsDispo   : crm_evenements de l'établissement
  *   fichesDispo       : fiches techniques {id, nom, cout_portion, prix_ttc, allergenes, ...}
+ *   lieux             : maisons / salles du groupe (crm_lieux), optionnel
  *   lockClient        : désactive le select client
  *   lockEvenement     : désactive le select événement
  *   submitLabel       : texte bouton principal
@@ -33,6 +35,7 @@ export default function DevisForm({
   clientsDispo = [],
   evenementsDispo = [],
   fichesDispo = [],
+  lieux = [],
   lockClient = false,
   lockEvenement = false,
   submitLabel = 'Enregistrer le devis',
@@ -42,6 +45,8 @@ export default function DevisForm({
   const [form, setForm] = useState({
     crm_client_id:       initial.crm_client_id || '',
     crm_evenement_id:    initial.crm_evenement_id || '',
+    lieu_id:             initial.lieu_id || '',
+    etablissement_ca_id: initial.etablissement_ca_id || '',
     date_emission:       initial.date_emission || isoToday(),
     date_validite:       initial.date_validite || '',
     statut:              initial.statut || 'brouillon',
@@ -130,6 +135,9 @@ export default function DevisForm({
     setError('')
     if (!form.crm_client_id) { setError('Sélectionnez un client.'); return }
     if (lignes.length === 0) { setError('Ajoutez au moins une ligne.'); return }
+    if (lieux.length && form.statut === 'accepte' && !form.etablissement_ca_id) {
+      setError('Devis accepté : choisissez la maison qui reçoit le CA.'); return
+    }
     for (const [i, l] of lignes.entries()) {
       if (!l.designation || !l.designation.trim()) {
         setError(`Ligne ${i + 1} : désignation obligatoire.`); return
@@ -139,6 +147,8 @@ export default function DevisForm({
     const header = {
       crm_client_id:       form.crm_client_id,
       crm_evenement_id:    form.crm_evenement_id || null,
+      lieu_id:             form.lieu_id || null,
+      etablissement_ca_id: form.etablissement_ca_id || null,
       date_emission:       form.date_emission || null,
       date_validite:       form.date_validite || null,
       statut:              form.statut || 'brouillon',
@@ -212,7 +222,16 @@ export default function DevisForm({
             className="crm-field__select"
             style={inputStyle}
             value={form.crm_evenement_id}
-            onChange={updForm('crm_evenement_id')}
+            onChange={(e) => {
+              // Le devis reprend la maison de l'événement si elle n'est pas encore choisie
+              const ev = evenementsDispo.find((x) => x.id === e.target.value)
+              setForm((f) => ({
+                ...f,
+                crm_evenement_id: e.target.value,
+                lieu_id: f.lieu_id || ev?.lieu_id || '',
+                etablissement_ca_id: f.etablissement_ca_id || ev?.etablissement_ca_id || '',
+              }))
+            }}
             disabled={lockEvenement || !form.crm_client_id}
           >
             <option value="">Aucun (devis standalone)</option>
@@ -235,6 +254,12 @@ export default function DevisForm({
           </select>
         </div>
       </div>
+
+      <ChampsLieuCa
+        c={c} inputStyle={inputStyle} labelStyle={labelStyle} lieux={lieux}
+        lieuId={form.lieu_id} etablissementCaId={form.etablissement_ca_id}
+        onChange={(v) => setForm((f) => ({ ...f, ...v }))}
+      />
 
       <div className="crm-form__grid crm-form__grid--2">
         <div className="crm-field">

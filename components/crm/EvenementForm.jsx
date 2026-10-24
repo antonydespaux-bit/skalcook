@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '../ui'
+import ChampsLieuCa from './ChampsLieuCa'
 import { TYPES_PRESTATION, LIEUX_TYPES, STATUTS, clientDisplayName } from '../../lib/crmConstants'
 
 /**
@@ -12,11 +13,12 @@ import { TYPES_PRESTATION, LIEUX_TYPES, STATUTS, clientDisplayName } from '../..
  *   initial           : valeurs initiales ({} en création)
  *   clientsDispo      : liste des clients CRM (pour le select)
  *   lockClient        : si true, le select client est désactivé (pré-rempli)
+ *   lieux             : maisons / salles du groupe (crm_lieux), optionnel
  *   submitLabel       : texte du bouton principal
  *   onSubmit(vals)    : async handler
  *   onCancel          : optionnel
  */
-export default function EvenementForm({ c, initial = {}, clientsDispo = [], lockClient = false, submitLabel = 'Enregistrer', onSubmit, onCancel }) {
+export default function EvenementForm({ c, initial = {}, clientsDispo = [], lieux = [], lockClient = false, submitLabel = 'Enregistrer', onSubmit, onCancel }) {
   const [form, setForm] = useState({
     crm_client_id:   initial.crm_client_id || '',
     titre:           initial.titre || '',
@@ -26,6 +28,8 @@ export default function EvenementForm({ c, initial = {}, clientsDispo = [], lock
     nb_convives:     initial.nb_convives ?? '',
     lieu_type:       initial.lieu_type || 'sur_place',
     lieu_adresse:    initial.lieu_adresse || '',
+    lieu_id:         initial.lieu_id || '',
+    etablissement_ca_id: initial.etablissement_ca_id || '',
     statut:          initial.statut || 'demande',
     budget_estime:   initial.budget_estime ?? '',
     montant_devis:   initial.montant_devis ?? '',
@@ -53,6 +57,8 @@ export default function EvenementForm({ c, initial = {}, clientsDispo = [], lock
       nb_convives:     form.nb_convives === '' ? null : Number(form.nb_convives),
       lieu_type:       form.lieu_type || 'sur_place',
       lieu_adresse:    form.lieu_adresse.trim() || null,
+      lieu_id:         form.lieu_id || null,
+      etablissement_ca_id: form.etablissement_ca_id || null,
       statut:          form.statut || 'demande',
       budget_estime:   form.budget_estime === '' ? null : Number(form.budget_estime),
       montant_devis:   form.montant_devis === '' ? null : Number(form.montant_devis),
@@ -136,6 +142,13 @@ export default function EvenementForm({ c, initial = {}, clientsDispo = [], lock
           <input type="number" min="0" className="crm-field__input" style={inputStyle} value={form.nb_convives} onChange={upd('nb_convives')} placeholder="80" />
         </div>
       </div>
+
+      {/* Maison du groupe + établissement qui encaisse */}
+      <ChampsLieuCa
+        c={c} inputStyle={inputStyle} labelStyle={labelStyle} lieux={lieux}
+        lieuId={form.lieu_id} etablissementCaId={form.etablissement_ca_id}
+        onChange={(v) => setForm((f) => ({ ...f, ...v }))}
+      />
 
       {/* Lieu */}
       <div className="crm-form__grid crm-form__grid--2">
