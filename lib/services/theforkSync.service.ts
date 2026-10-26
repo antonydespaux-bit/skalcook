@@ -409,7 +409,7 @@ export async function synchroniserTheFork(
   if (!sync) return { ...res, erreur: 'Synchronisation TheFork non configurée pour ce groupe.' }
   if (!sync.thefork_group_uuid) return { ...res, erreur: 'Identifiant de groupe TheFork manquant.' }
 
-  const client = api || await clientTheForkPourGroupe(db, groupeId, { finAt, debitParSeconde: Number(sync.debit_par_seconde) || 5 })
+  const client = api || await clientTheForkPourGroupe(db, groupeId, { finAt, debitParSeconde: Number(sync.debit_par_seconde) || undefined })
   if (!client) return { ...res, erreur: 'Identifiants API TheFork manquants pour ce groupe.' }
 
   const [{ data: etabs }, { data: restos }] = await Promise.all([

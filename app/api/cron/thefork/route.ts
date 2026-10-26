@@ -17,11 +17,17 @@ export async function GET(request: Request) {
   }
 
   const db = getServiceClient()
-  const { data: groupes } = await db.from('crm_thefork_sync').select('groupe_id')
+  const { data: groupes } = await db.from('crm_thefork_sync').select('groupe_id, derniere_execution')
     .eq('actif', true).not('vault_secret_id', 'is', null).not('thefork_group_uuid', 'is', null)
   const fin = Date.now() + 45_000
   const resultats: Record<string, unknown> = {}
-  for (const { groupe_id } of groupes || []) {
+  for (const { groupe_id, derniere_execution } of groupes || []) {
+    // Import lancé à la main depuis Superadmin (passes enchaînées) : ne pas
+    // ajouter une passe en parallèle, le débit TheFork serait doublé.
+    if (derniere_execution && Date.now() - new Date(derniere_execution).getTime() < 3 * 60_000) {
+      resultats[groupe_id] = { ignore: 'import en cours' }
+      continue
+    }
     const reste = fin - Date.now()
     if (reste < 5_000) break
     resultats[groupe_id] = await synchroniserTheFork(db, groupe_id, { budgetMs: reste - 5_000 })

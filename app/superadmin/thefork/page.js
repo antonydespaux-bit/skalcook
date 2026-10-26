@@ -40,7 +40,7 @@ export default function TheForkSuperadminPage() {
   const [groupes, setGroupes] = useState([])
   const [groupeId, setGroupeId] = useState('')
   const [etat, setEtat] = useState(null)
-  const [form, setForm] = useState({ thefork_group_uuid: '', import_depuis: '', actif: true, debit_par_seconde: 5, crm_vip_visites: 5, crm_vip_mois: 12, crm_perdu_mois: 6 })
+  const [form, setForm] = useState({ thefork_group_uuid: '', import_depuis: '', actif: true, debit_par_seconde: 2.5, crm_vip_visites: 5, crm_vip_mois: 12, crm_perdu_mois: 6 })
   const [ident, setIdent] = useState({ client_id: '', client_secret: '' })
   const [restos, setRestos] = useState([])
   const [message, setMessage] = useState('')
@@ -74,7 +74,7 @@ export default function TheForkSuperadminPage() {
         thefork_group_uuid: e.sync?.thefork_group_uuid || '',
         import_depuis: e.sync?.import_depuis || '2024-01-01',
         actif: e.sync?.actif ?? true,
-        debit_par_seconde: Number(e.sync?.debit_par_seconde) || 5,
+        debit_par_seconde: Math.min(Number(e.sync?.debit_par_seconde) || 2.5, 2.5),
         crm_vip_visites: e.groupe?.crm_vip_visites ?? 5,
         crm_vip_mois: e.groupe?.crm_vip_mois ?? 12,
         crm_perdu_mois: e.groupe?.crm_perdu_mois ?? 6,
@@ -216,8 +216,8 @@ export default function TheForkSuperadminPage() {
                   <input type="date" value={form.import_depuis} onChange={(e) => setForm({ ...form, import_depuis: e.target.value })} style={champ} />
                 </div>
                 <div>
-                  <label style={label}>Débit (requêtes / seconde)</label>
-                  <input type="number" min="0.5" max="50" step="0.5" value={form.debit_par_seconde} onChange={(e) => setForm({ ...form, debit_par_seconde: e.target.value })} style={champ} />
+                  <label style={label}>Débit (requêtes / seconde, 2,5 max)</label>
+                  <input type="number" min="0.5" max="2.5" step="0.5" value={form.debit_par_seconde} onChange={(e) => setForm({ ...form, debit_par_seconde: e.target.value })} style={champ} />
                 </div>
                 <div>
                   <label style={label}>Synchro de nuit</label>
