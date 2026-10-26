@@ -126,7 +126,8 @@ export default function TheForkSuperadminPage() {
         const r = await appel('POST', { groupe_id: groupeId })
         if (r.erreur) { setErreur(r.erreur); break }
         const incident = r.incident ? ` Dernière réponse de TheFork : ${r.incident.statut} (${r.incident.chemin}).` : ''
-        setMessage(`Passe ${passe} : ${r.listes_clients} client(s) et ${r.listes_reservations} réservation(s) listés ; ${r.clients_crees} créé(s), ${r.clients_fusionnes} fusionné(s), ${r.clients_maj} mis à jour, ${r.clients_supprimes} supprimé(s), ${r.reservations_ecrites} réservation(s). Reste en file : ${r.file_restante.clients} client(s), ${r.file_restante.reservations} réservation(s).${r.termine ? ' À jour.' : r.interrompu ? ' Passe interrompue, à relancer.' : ''}${incident}`)
+        const diag = r.pages_listees ? ` [${r.pages_listees} page(s) de liste lue(s), ${r.taille_page} par page, total annoncé ${r.dernier_total}]` : ''
+        setMessage(`Passe ${passe}${diag} : ${r.listes_clients} client(s) et ${r.listes_reservations} réservation(s) listés ; ${r.clients_crees} créé(s), ${r.clients_fusionnes} fusionné(s), ${r.clients_maj} mis à jour, ${r.clients_supprimes} supprimé(s), ${r.reservations_ecrites} réservation(s). Reste en file : ${r.file_restante.clients} client(s), ${r.file_restante.reservations} réservation(s).${r.termine ? ' À jour.' : r.interrompu ? ' Passe interrompue, à relancer.' : ''}${incident}`)
         if (r.termine) break
       }
       await charger()
@@ -221,7 +222,7 @@ export default function TheForkSuperadminPage() {
                   {r && <> — {r.erreur ? <span style={{ color: '#B91C1C' }}>erreur : {r.erreur}</span> : r.termine ? 'à jour' : r.interrompu ? 'interrompue, à relancer' : 'import en cours'}</>}
                   {r?.incident && <span style={{ color: '#B45309' }}> (TheFork : {String(r.incident.statut)})</span>}
                 </div>
-                {etat.sync && <div>Listes relues jusqu’au : clients {etat.sync.curseur_clients || '—'}, réservations {etat.sync.curseur_reservations || '—'}</div>}
+                {etat.sync && <div>Lecture des listes : clients {etat.sync.curseur_clients || '—'}{etat.sync.page_clients > 1 ? ` (page ${etat.sync.page_clients})` : ''}, réservations {etat.sync.curseur_reservations || '—'}{etat.sync.page_reservations > 1 ? ` (page ${etat.sync.page_reservations})` : ''}</div>}
                 {etat.file.length > 0 && (
                   <div>File d’attente : {['client', 'reservation'].map((t) => {
                     const n = (st) => etat.file.find((f) => f.type === t && f.statut === st)?.nombre || 0

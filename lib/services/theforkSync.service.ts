@@ -192,6 +192,10 @@ export interface ResultatSync {
   erreurs: number
   file_restante: { clients: number; reservations: number }
   termine: boolean
+  /** Diagnostic des listes : pages lues, total et taille de page annoncés par TheFork. */
+  pages_listees: number
+  dernier_total?: number
+  taille_page?: number
   /** Passe arrêtée faute de temps (TheFork lent ou demandant d'attendre) : relancer. */
   interrompu: boolean
   /** Dernière réponse anormale de TheFork pendant la passe. */
@@ -386,7 +390,7 @@ export async function synchroniserTheFork(
     listes_clients: 0, listes_reservations: 0,
     clients_crees: 0, clients_fusionnes: 0, clients_maj: 0, clients_supprimes: 0,
     reservations_ecrites: 0, reservations_sans_maison: 0, erreurs: 0,
-    file_restante: { clients: 0, reservations: 0 }, termine: false, interrompu: false,
+    file_restante: { clients: 0, reservations: 0 }, termine: false, interrompu: false, pages_listees: 0,
   }
 
   const { data: sync } = await db.from('crm_thefork_sync').select('*').eq('groupe_id', groupeId).maybeSingle()
@@ -408,31 +412,48 @@ export async function synchroniserTheFork(
   const ctx: Contexte = { db, api: client, groupeId, etablissements, maisons, maisonParDefaut, ficheParUuid: new Map(), maintenant, res }
   const aujourdhui = iso(maintenant)
   const veille = iso(jours(maintenant, -1))
-  const curseurs = { curseur_clients: sync.curseur_clients, curseur_reservations: sync.curseur_reservations }
+  const curseurs = {
+    curseur_clients: sync.curseur_clients as string | null,
+    curseur_reservations: sync.curseur_reservations as string | null,
+    page_clients: (sync.page_clients as number) || 1,
+    page_reservations: (sync.page_reservations as number) || 1,
+  }
 
   try {
     // 1. Listes (créés ou modifiés depuis le dernier passage) → file, une
-    //    année à la fois : chaque tranche lue fait avancer le curseur, une
-    //    passe interrompue reprend à la tranche suivante. Une fois à jour, la
-    //    liste n'est relue qu'une fois par jour (depuis la veille).
-    const lister = async (cle: 'curseur_clients' | 'curseur_reservations', type: 'client' | 'reservation') => {
+    //    année à la fois et une page à la fois : chaque page lue part dans la
+    //    file et la position (tranche + page) est gardée, une passe
+    //    interrompue reprend à la page suivante. Une fois à jour, la liste
+    //    n'est relue qu'une fois par jour (depuis la veille).
+    const lister = async (type: 'client' | 'reservation') => {
+      const cle = type === 'client' ? 'curseur_clients' : 'curseur_reservations'
+      const clePage = type === 'client' ? 'page_clients' : 'page_reservations'
       if (curseurs[cle] && curseurs[cle] >= veille) return
       for (let debut = curseurs[cle] || sync.import_depuis; debut <= aujourdhui;) {
-        if (Date.now() > finAt) throw new TempsEcoule()
         const finTranche = iso(jours(new Date(`${debut}T00:00:00Z`), TRANCHE_LISTE_JOURS - 1))
         const fin = finTranche < aujourdhui ? finTranche : aujourdhui
-        const ids = type === 'client'
-          ? await client.clients(sync.thefork_group_uuid, debut, fin)
-          : await client.reservations(sync.thefork_group_uuid, debut, fin)
-        await enfiler(db, groupeId, type, ids)
-        if (type === 'client') res.listes_clients += ids.length
-        else res.listes_reservations += ids.length
+        curseurs[cle] = debut
+        for (let page = curseurs[clePage] || 1; ; page++) {
+          if (Date.now() > finAt) throw new TempsEcoule()
+          const lot = type === 'client'
+            ? await client.pageClients(sync.thefork_group_uuid, debut, fin, page)
+            : await client.pageReservations(sync.thefork_group_uuid, debut, fin, page)
+          await enfiler(db, groupeId, type, lot.ids)
+          res.pages_listees++
+          res.dernier_total = lot.total
+          res.taille_page = lot.taille
+          if (type === 'client') res.listes_clients += lot.ids.length
+          else res.listes_reservations += lot.ids.length
+          if (!lot.suivante) break
+          curseurs[clePage] = page + 1
+        }
+        curseurs[clePage] = 1
         debut = iso(jours(new Date(`${fin}T00:00:00Z`), 1))
         curseurs[cle] = fin >= aujourdhui ? veille : debut
       }
     }
-    await lister('curseur_clients', 'client')
-    await lister('curseur_reservations', 'reservation')
+    await lister('client')
+    await lister('reservation')
 
     // 2. Détail des fiches, clients d'abord (les réservations s'y rattachent)
     await traiterFile(ctx, 'client')
