@@ -21,7 +21,6 @@ import {
   devinerLieu,
   lireDepartements,
   lireTickets,
-  partsParTaux,
   periodeDuNomFichier,
   regrouperTickets,
 } from '../../../../lib/caImportLightspeed'
@@ -35,6 +34,7 @@ const LIBELLES_CHAMPS = {
   ca_autre: 'cgVentes.saisie.caOther',
 }
 const OPTIONS_COLONNES = [...COLONNES_CA, 'ignorer']
+const CHAMP_COMPENSE = { ca_bev_10: 'ca_food', ca_autre: 'ca_bev_20' }
 
 async function empreinte(buf) {
   const h = await crypto.subtle.digest('SHA-256', buf)
@@ -181,14 +181,10 @@ export default function ImportCaLightspeedPage() {
     return out
   }, [groupes, reglages.lieux, choix])
 
-  const partsParJour = useMemo(() => {
-    const corr = Object.fromEntries(Object.entries(reglages.departements).map(([k, v]) => [k, v.colonne]))
-    const out = {}
-    for (const [jour, deps] of Object.entries(departementsParJour)) out[jour] = partsParTaux(deps, corr)
-    return out
-  }, [departementsParJour, reglages.departements])
-
-  const cellules = useMemo(() => construireCellules(groupes, destinations, partsParJour), [groupes, destinations, partsParJour])
+  const cellules = useMemo(
+    () => construireCellules(groupes, destinations, departementsParJour, reglages.departements),
+    [groupes, destinations, departementsParJour, reglages.departements]
+  )
 
   const jours = useMemo(() => [...new Set(groupes.map((g) => g.jour))].sort(), [groupes])
 
@@ -238,13 +234,24 @@ export default function ImportCaLightspeedPage() {
     return ligne.calcul ? Number(ligne.calcul[champ] || 0) : 0
   }, [corrections])
 
-  const corriger = (cleLigne, champ, v) => setCorrections((p) => ({ ...p, [cleLigne]: { ...p[cleLigne], [champ]: v } }))
+  // Corriger Soft ou Autres retire la même somme du Food ou de l'Alcool de
+  // la ligne (même taux de TVA) : le total de la ligne ne bouge pas.
+  const corriger = (ligne, champ, v) => {
+    const maj = { [champ]: v }
+    const paire = CHAMP_COMPENSE[champ]
+    if (paire) {
+      const avant = valeur(ligne, champ)
+      const apres = v === '' ? Number(ligne.calcul?.[champ] || 0) : Number(v)
+      if (Number.isFinite(apres)) maj[paire] = (Math.round((valeur(ligne, paire) - (apres - avant)) * 100) / 100).toFixed(2)
+    }
+    setCorrections((p) => ({ ...p, [ligne.cle]: { ...p[ligne.cle], ...maj } }))
+  }
 
   const groupesSansLieu = groupes.filter((g) => !destinations[g.cle])
 
   // ── Réglages ──────────────────────────────────────────────────────────────
   const majLieuReglage = (k, patch) => setReglages((r) => ({ ...r, lieux: { ...r.lieux, [k]: { ...r.lieux[k], ...patch } } }))
-  const majDepartement = (k, colonne) => setReglages((r) => ({ ...r, departements: { ...r.departements, [k]: { ...r.departements[k], colonne } } }))
+  const majDepartement = (k, patch) => setReglages((r) => ({ ...r, departements: { ...r.departements, [k]: { ...r.departements[k], ...patch } } }))
 
   const reglagesAEnregistrer = () => {
     const propre = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => {
@@ -428,11 +435,17 @@ export default function ImportCaLightspeedPage() {
                     <span style={{ minWidth: 150, fontWeight: 500 }}>{d.libelle}</span>
                     {d.nouveau && <span style={etiquette(c.orangeClair, c.orange)}>{t('cgVentes.importTickets.nouveau')}</span>}
                     <span style={{ color: c.texteMuted }}>→</span>
-                    <select value={d.colonne} onChange={(e) => majDepartement(k, e.target.value)} style={champ}>
+                    <select value={d.colonne} onChange={(e) => majDepartement(k, { colonne: e.target.value })} style={champ}>
                       {OPTIONS_COLONNES.map((col) => (
                         <option key={col} value={col}>{col === 'ignorer' ? t('cgVentes.importTickets.ignorer') : t(LIBELLES_CHAMPS[col])}</option>
                       ))}
                     </select>
+                    {d.colonne !== 'ignorer' && (
+                      <select value={d.lieu || ''} onChange={(e) => majDepartement(k, { lieu: e.target.value || null })} style={champ}>
+                        <option value="">{t('cgVentes.importTickets.reparti')}</option>
+                        {lieux.map((l) => <option key={l.id} value={l.id}>{t('cgVentes.importTickets.surLieu', { lieu: l.nom })}</option>)}
+                      </select>
+                    )}
                   </div>
                 ))}
               </div>
@@ -549,7 +562,7 @@ export default function ImportCaLightspeedPage() {
                                 <input
                                   type="number" step={ch === 'couverts' ? '1' : '0.01'} inputMode="decimal" disabled={exclu}
                                   value={corrections[l.cle]?.[ch] ?? (ch === 'couverts' ? String(v) : v.toFixed(2))}
-                                  onChange={(e) => corriger(l.cle, ch, e.target.value)}
+                                  onChange={(e) => corriger(l, ch, e.target.value)}
                                   style={{ ...champ, width: ch === 'couverts' ? 60 : 92, textAlign: 'right', fontWeight: change ? 600 : 400 }}
                                 />
                                 {change && <div style={{ fontSize: 11, color: c.texteMuted, marginTop: 2 }}>{t('cgVentes.importTickets.avant', { valeur: ch === 'couverts' ? avant : eur(avant) })}</div>}
@@ -567,7 +580,9 @@ export default function ImportCaLightspeedPage() {
                   </tbody>
                 </table>
               </div>
-              {deps && <div style={{ marginTop: 8, fontSize: 12, color: c.texteMuted }}>{t('cgVentes.importTickets.estimation')}</div>}
+              <div style={{ marginTop: 8, fontSize: 12, color: c.texteMuted }}>
+                {deps ? `${t('cgVentes.importTickets.estimation')} ` : ''}{t('cgVentes.importTickets.astuceAjustement')}
+              </div>
             </div>
           )
         })}
