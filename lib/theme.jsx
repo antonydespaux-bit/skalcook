@@ -159,3 +159,17 @@ export function IconBar({ size = 16, color = 'currentColor' }) {
 }
 export const c = theme.couleurs
 
+
+// Texte lisible sur un fond `c.accent` : l'accent est configurable par
+// établissement (clair chez Marsan/Commaraine, foncé chez Joia). Du blanc en
+// dur tombe à 1,8:1 sur les accents clairs — on tranche selon la luminance
+// pour rester au-dessus du seuil AA (4,5:1) dans les deux cas.
+export function texteSurAccent(c) {
+  const hex = String(c?.accent || '').replace('#', '')
+  if (hex.length !== 6) return 'white'
+  const lin = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
+  const L = 0.2126 * lin(parseInt(hex.slice(0, 2), 16))
+    + 0.7152 * lin(parseInt(hex.slice(2, 4), 16))
+    + 0.0722 * lin(parseInt(hex.slice(4, 6), 16))
+  return L > 0.28 ? c.texte : 'white'
+}
