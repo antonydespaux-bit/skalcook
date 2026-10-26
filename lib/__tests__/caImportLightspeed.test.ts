@@ -112,6 +112,14 @@ describe('regroupement et cellules', () => {
     expect(construireCellules(groupes, {})).toEqual([])
   })
 
+  const DEPTS = [
+    ['Cuisine', '761', '19342', '1758.36', '17583.64', '19342.0', '17583.64'],
+    ['Boissons avec alcool', '117', '8347', '1374.5', '6972.5', '8247.0', '6872.5'],
+    ['Boissons sans alcool', '64', '692', '62.91', '629.09', '692.0', '629.09'],
+    ['Divers 20%', '12', '700', '116.67', '583.33', '700.0', '583.33'],
+    ['Pâtisserie & Chaud', '0', '0', '0', '0', '0.0', '0.0'],
+  ]
+
   it('répartit selon l’export Départements sans perdre un centime', () => {
     const deps = lireDepartements(ENTETE_DEPTS, [
       ['Cuisine', '761', '19342', '1758.36', '17583.64', '19342.0', '17583.64'],
@@ -126,12 +134,51 @@ describe('regroupement et cellules', () => {
     expect(parts['10']).toEqual({ ca_food: 1934200, ca_bev_10: 69200 })
     expect(parts['20']).toEqual({ ca_bev_20: 824700, ca_autre: 70000 })
     const dest = Object.fromEntries(groupes.map((g) => [g.cle, 'salle']))
-    const cellules = construireCellules(groupes, dest, { '2026-10-24': parts })
+    const regl = Object.fromEntries(Object.entries(corr).map(([k, colonne]) => [k, { colonne }]))
+    const cellules = construireCellules(groupes, dest, { '2026-10-24': deps }, regl)
     for (const c of cellules) {
       const g = groupes.filter((x) => x.service === c.service).reduce((s, x) => s + x.total, 0)
       expect(Math.round((c.ca_food + c.ca_bev_20 + c.ca_bev_10 + c.ca_autre) * 100)).toBe(g)
       expect(c.ca_bev_10).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('département rattaché à un lieu', () => {
+  const { tickets } = lireTickets(ENTETE_TICKETS, [
+    ticket('1', '2630.0', 'TVA 20%:263.33|TVA 10%:95.45', '8.0', 'Table de Partage', '24/10/26 11:58'),
+    ticket('2', '5898.0', 'TVA 20%:275.67|TVA 10%:385.82', '27.0', 'Salle à Manger', '24/10/26 12:19'),
+  ])
+  const groupes = regrouperTickets(tickets)
+  const dest = Object.fromEntries(groupes.map((g) => [g.cle, g.profil === 'Table de Partage' ? 'privat' : 'salle']))
+  const deps = lireDepartements(ENTETE_DEPTS, [
+    ['Cuisine', '', '', '', '', '4920.0', '4472.73'],
+    ['Boissons sans alcool', '', '', '', '', '374.0', '340.0'],
+    ['Boissons avec alcool', '', '', '', '', '2534.0', '2111.67'],
+    ['Divers 20%', '', '', '', '', '700.0', '583.33'],
+  ])
+  const regl = {
+    cuisine: { colonne: 'ca_food' },
+    'boissons sans alcool': { colonne: 'ca_bev_10' },
+    'boissons avec alcool': { colonne: 'ca_bev_20' },
+    'divers 20%': { colonne: 'ca_autre', lieu: 'privat' },
+  }
+
+  it('met tout le Divers sur le lieu choisi, les totaux restent exacts', () => {
+    const cellules = construireCellules(groupes, dest, { '2026-10-24': deps }, regl)
+    const privat = cellules.find((c) => c.lieu_service_id === 'privat')!
+    const salle = cellules.find((c) => c.lieu_service_id === 'salle')!
+    expect(privat.ca_autre).toBe(700)
+    expect(salle.ca_autre).toBe(0)
+    expect(privat.ca_bev_20).toBe(880)
+    expect(privat.ca_food + privat.ca_bev_20 + privat.ca_bev_10 + privat.ca_autre).toBeCloseTo(2630, 2)
+    expect(salle.ca_food + salle.ca_bev_20 + salle.ca_bev_10 + salle.ca_autre).toBeCloseTo(5898, 2)
+  })
+
+  it('lieu absent ce jour-là : le département est réparti normalement', () => {
+    const toutSalle = Object.fromEntries(groupes.map((g) => [g.cle, 'salle']))
+    const cellules = construireCellules(groupes, toutSalle, { '2026-10-24': deps }, regl)
+    expect(cellules.reduce((s, c) => s + c.ca_autre, 0)).toBeCloseTo(700, 2)
   })
 })
 
