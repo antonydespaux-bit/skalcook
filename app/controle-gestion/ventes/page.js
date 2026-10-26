@@ -674,6 +674,21 @@ export default function VentesMensuelPage() {
           >
             {t('cgVentes.dashboard.addDayLink')}
           </Link>
+          <Link
+            href="/controle-gestion/ventes/import"
+            style={{
+              padding: '8px 14px',
+              borderRadius: 8,
+              fontSize: 13,
+              border: `1px solid ${c.bordure}`,
+              background: c.blanc,
+              color: c.texte,
+              textDecoration: 'none',
+              fontWeight: 500,
+            }}
+          >
+            {t('cgVentes.dashboard.importLink')}
+          </Link>
         </div>
 
         {error && <p style={{ color: '#B91C1C', fontSize: 14, marginBottom: 16 }}>{error}</p>}
