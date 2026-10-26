@@ -74,7 +74,7 @@ const reglagesSchema = z.object({
   thefork_group_uuid: z.string().uuid().optional(),
   actif: z.boolean().optional(),
   import_depuis: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  debit_par_seconde: z.number().positive().max(50).optional(),
+  debit_par_seconde: z.number().positive().max(2.5, 'TheFork limite à moins de 3 requêtes par seconde').optional(),
   // Repartir de zéro : relire l'historique des réservations depuis import_depuis
   reinitialiser: z.boolean().optional(),
   // Remettre en file les fiches en erreur (ex. restaurant relié entre-temps)

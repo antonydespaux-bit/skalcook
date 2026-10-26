@@ -105,6 +105,9 @@ export class TempsEcoule extends Error {
 
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+/** Limite de TheFork (Integrations, 26/10/2026) : rester sous 3 requêtes / s. */
+export const DEBIT_MAX = 2.5
+
 export class TheForkClient {
   private readonly baseUrl: string
   private readonly intervalle: number
@@ -115,7 +118,7 @@ export class TheForkClient {
 
   constructor(private readonly cfg: TheForkClientConfig) {
     this.baseUrl = (cfg.baseUrl || THEFORK_API).replace(/\/$/, '')
-    this.intervalle = 1000 / (cfg.debitParSeconde || 5)
+    this.intervalle = 1000 / Math.min(cfg.debitParSeconde || DEBIT_MAX, DEBIT_MAX)
   }
 
   private async attendre(ms: number) {
