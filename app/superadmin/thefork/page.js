@@ -72,7 +72,7 @@ export default function TheForkSuperadminPage() {
       setEtat(e)
       setForm({
         thefork_group_uuid: e.sync?.thefork_group_uuid || '',
-        import_depuis: e.sync?.import_depuis || '2015-01-01',
+        import_depuis: e.sync?.import_depuis || '2005-01-01',
         actif: e.sync?.actif ?? true,
         debit_par_seconde: Number(e.sync?.debit_par_seconde) || 5,
         crm_vip_visites: e.groupe?.crm_vip_visites ?? 5,

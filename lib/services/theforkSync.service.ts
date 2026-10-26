@@ -38,7 +38,10 @@ const LOT_FILE = 200
 const VERIFICATIONS_PAR_PASSE = 100
 const REVERIFIER_APRES_JOURS = 30
 const TENTATIVES_MAX = 3
-const TRANCHE_LISTE_JOURS = 365
+// Une seule tranche de l'import initial à aujourd'hui : la position est gardée
+// à la page près, découper par année ferait relire presque toute la base à
+// chaque tranche (constaté : 2010 → 54 798, 2015 → 118 639, 2016 → 132 247).
+const TRANCHE_LISTE_JOURS = 36_500
 // Une page de liste (10 000 identifiants à lire puis ranger) peut prendre
 // 15 à 20 s : on ne la commence pas s'il reste moins que cette marge.
 const MARGE_PAGE_LISTE_MS = 25_000
