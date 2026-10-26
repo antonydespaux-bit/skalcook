@@ -130,7 +130,8 @@ export const POST = apiHandler({
   schema,
   guard: 'superadmin',
   handler: async ({ data, db }) => {
-    const resultat = await synchroniserTheFork(db, data.groupe_id, { budgetMs: 45_000 })
+    // Vercel coupe à 60 s : la passe s'arrête à 40 s pour finir proprement
+    const resultat = await synchroniserTheFork(db, data.groupe_id, { budgetMs: 40_000 })
     return Response.json(resultat, { status: resultat.erreur ? 502 : 200 })
   },
 })

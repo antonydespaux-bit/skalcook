@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   const db = getServiceClient()
   const { data: groupes } = await db.from('crm_thefork_sync').select('groupe_id')
     .eq('actif', true).not('vault_secret_id', 'is', null).not('thefork_group_uuid', 'is', null)
-  const fin = Date.now() + 50_000
+  const fin = Date.now() + 45_000
   const resultats: Record<string, unknown> = {}
   for (const { groupe_id } of groupes || []) {
     const reste = fin - Date.now()

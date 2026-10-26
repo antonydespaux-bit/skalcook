@@ -39,6 +39,9 @@ const VERIFICATIONS_PAR_PASSE = 100
 const REVERIFIER_APRES_JOURS = 30
 const TENTATIVES_MAX = 3
 const TRANCHE_LISTE_JOURS = 365
+// Une page de liste (10 000 identifiants à lire puis ranger) peut prendre
+// 15 à 20 s : on ne la commence pas s'il reste moins que cette marge.
+const MARGE_PAGE_LISTE_MS = 25_000
 
 // ─── Normalisation (miroir des colonnes générées de crm_clients) ────────────
 
@@ -439,7 +442,7 @@ export async function synchroniserTheFork(
         const fin = finTranche < aujourdhui ? finTranche : aujourdhui
         curseurs[cle] = debut
         for (let page = curseurs[clePage] || 1; ; page++) {
-          if (Date.now() > finAt) throw new TempsEcoule()
+          if (Date.now() > finAt - MARGE_PAGE_LISTE_MS) throw new TempsEcoule()
           const lot = type === 'client'
             ? await client.pageClients(sync.thefork_group_uuid, debut, fin, page)
             : await client.pageReservations(sync.thefork_group_uuid, debut, fin, page)
