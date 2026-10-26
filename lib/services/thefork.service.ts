@@ -1,22 +1,50 @@
 /**
  * Client de l'API B2B TheFork (https://docs.thefork.io/B2B-API/introduction).
  *
- * Authentification OAuth2 client_credentials (auth.thefork.io), jeton gardé
- * en mémoire jusqu'à son expiration. Les listes (`/customers`, `/reservations`)
- * ne renvoient que des identifiants, paginés par 100 : le détail se lit
- * ensuite fiche par fiche, en parallèle limité.
+ * Chaque groupe de restaurants reçoit ses propres identifiants de TheFork :
+ * ils sont rangés chiffrés dans le Vault Supabase (fonction
+ * thefork_identifiants, service_role uniquement), jamais dans le code ni dans
+ * les variables d'environnement.
  *
- * Identifiants dans les variables d'environnement (THEFORK_CLIENT_ID,
- * THEFORK_CLIENT_SECRET), jamais en base ni dans le code.
+ * Jeton OAuth2 client_credentials gardé en base (crm_thefork_jetons) jusqu'à
+ * son expiration : consigne TheFork, ne pas en redemander un tant que le
+ * précédent est valide, y compris d'une exécution à l'autre.
+ *
+ * Les listes (`/customers`, `/reservations`) ne renvoient que des
+ * identifiants (jusqu'à 10 000 par page) ; le détail se lit fiche par fiche,
+ * une requête à la fois au débit autorisé par le contrat, avec attente
+ * croissante sur 429.
  */
+
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const THEFORK_API = 'https://api.thefork.io'
 const THEFORK_AUTH = 'https://auth.thefork.io/oauth/token'
+const LIMITE_LISTE = 10_000
+
+export interface JetonStock {
+  lire(): Promise<{ valeur: string; expire: number } | null>
+  ecrire(jeton: { valeur: string; expire: number }): Promise<void>
+}
 
 export interface TheForkClientConfig {
   clientId: string
   clientSecret: string
   baseUrl?: string
+  /** Cache du jeton partagé entre exécutions ; en mémoire si absent. */
+  jetons?: JetonStock
+  /** Requêtes par seconde autorisées (contrat TheFork). */
+  debitParSeconde?: number
+  /** Heure (ms) à ne pas dépasser : une attente qui la franchirait arrête l'exécution. */
+  finAt?: number
+}
+
+export interface TheForkCustomField {
+  labelUuid: string
+  label: string
+  type: string
+  value: string | number | boolean | null
+  valueUuid: string | null
 }
 
 export interface TheForkCustomer {
@@ -27,18 +55,20 @@ export interface TheForkCustomer {
   phone: string | null
   secondaryPhone?: string | null
   locale: string | null
+  civility?: string | null
+  rank?: string | null
   isVip: boolean | null
+  isPromoter?: boolean | null
   address?: string | null
   city?: string | null
   zipcode?: string | null
   favFood?: string | null
   favDrinks?: string | null
-  notes?: string | null
-  allergiesAndIntolerances?: string | null
-  dietaryRestrictions?: string | null
+  favSeating?: string | null
   originRestaurantUuid: string | null
   originRestaurantName: string | null
   optins?: { restaurantNewsletter?: boolean | null } | null
+  customFields?: TheForkCustomField[] | null
   creationDate?: string | null
   lastUpdateDate?: string | null
 }
@@ -68,18 +98,36 @@ export class TheForkError extends Error {
   }
 }
 
+/** Levée quand le temps imparti à l'exécution est écoulé : on reprendra plus tard. */
+export class TempsEcoule extends Error {
+  constructor() { super('Temps imparti écoulé') }
+}
+
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 export class TheForkClient {
   private readonly baseUrl: string
-  private jeton: { valeur: string; expire: number } | null = null
+  private readonly intervalle: number
+  private derniereRequete = 0
+  private jetonMemoire: { valeur: string; expire: number } | null = null
 
   constructor(private readonly cfg: TheForkClientConfig) {
     this.baseUrl = (cfg.baseUrl || THEFORK_API).replace(/\/$/, '')
+    this.intervalle = 1000 / (cfg.debitParSeconde || 5)
   }
 
-  private async token(): Promise<string> {
-    if (this.jeton && Date.now() < this.jeton.expire) return this.jeton.valeur
+  private async attendre(ms: number) {
+    if (this.cfg.finAt && Date.now() + ms > this.cfg.finAt) throw new TempsEcoule()
+    if (ms > 0) await pause(ms)
+  }
+
+  private async token(force = false): Promise<string> {
+    const valide = (j: { expire: number } | null) => j && Date.now() < j.expire
+    if (!force && valide(this.jetonMemoire)) return this.jetonMemoire!.valeur
+    if (!force && this.cfg.jetons) {
+      const stocke = await this.cfg.jetons.lire()
+      if (stocke && valide(stocke)) { this.jetonMemoire = stocke; return stocke.valeur }
+    }
     const res = await fetch(THEFORK_AUTH, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -92,24 +140,37 @@ export class TheForkClient {
     })
     if (!res.ok) throw new TheForkError(`Authentification TheFork refusée (${res.status})`, res.status)
     const json = await res.json() as { access_token: string; expires_in: number }
-    // Marge d'une minute avant l'expiration annoncée
-    this.jeton = { valeur: json.access_token, expire: Date.now() + (json.expires_in - 60) * 1000 }
-    return this.jeton.valeur
+    // Marge de 2 minutes avant l'expiration annoncée (8 600 s)
+    this.jetonMemoire = { valeur: json.access_token, expire: Date.now() + (json.expires_in - 120) * 1000 }
+    await this.cfg.jetons?.ecrire(this.jetonMemoire)
+    return this.jetonMemoire.valeur
   }
 
-  /** GET avec 3 essais sur 429 / 5xx. Renvoie null sur 404. */
+  /**
+   * GET au débit autorisé. Renvoie null sur 404. Sur 429 / 5xx, attend
+   * (Retry-After sinon 2, 4, 8, 16, 32 s) puis réessaie.
+   */
   async get<T>(chemin: string, query: Record<string, string | number> = {}): Promise<T | null> {
     const url = new URL(this.baseUrl + chemin)
     for (const [k, v] of Object.entries(query)) url.searchParams.set(k, String(v))
+    let jetonRenouvele = false
     for (let essai = 0; ; essai++) {
+      await this.attendre(this.derniereRequete + this.intervalle - Date.now())
+      this.derniereRequete = Date.now()
       const res = await fetch(url, { headers: { Authorization: `Bearer ${await this.token()}` } })
       if (res.status === 404) return null
       if (res.ok) return await res.json() as T
-      if ((res.status === 429 || res.status >= 500) && essai < 2) {
-        await pause(1000 * (essai + 1))
+      if (res.status === 401 && !jetonRenouvele) {
+        // Jeton révoqué ou expiré plus tôt qu'annoncé : un seul renouvellement
+        jetonRenouvele = true
+        await this.token(true)
         continue
       }
-      if (res.status === 401 && essai < 1) { this.jeton = null; continue }
+      if ((res.status === 429 || res.status >= 500) && essai < 5) {
+        const retry = Number(res.headers.get('retry-after'))
+        await this.attendre(Number.isFinite(retry) && retry > 0 ? retry * 1000 : 2000 * 2 ** essai)
+        continue
+      }
       throw new TheForkError(`TheFork ${chemin} : ${res.status}`, res.status)
     }
   }
@@ -118,49 +179,64 @@ export class TheForkClient {
   async listerIds(chemin: string, query: Record<string, string | number>): Promise<string[]> {
     const ids: string[] = []
     for (let page = 1; ; page++) {
-      const lot = await this.get<ListePage>(chemin, { ...query, page, limit: 100 })
+      const lot = await this.get<ListePage>(chemin, { ...query, page, limit: LIMITE_LISTE })
       if (!lot || !lot.data?.length) break
       ids.push(...lot.data)
-      if (ids.length >= lot.totalCount || lot.data.length < (lot.limit || 100)) break
+      if (ids.length >= lot.totalCount || lot.data.length < (lot.limit || LIMITE_LISTE)) break
     }
     return ids
   }
 
-  /** Détail de chaque identifiant (fiches introuvables ignorées). */
-  async details<T>(chemin: (id: string) => string, ids: string[], concurrence = 8): Promise<T[]> {
-    const out: T[] = []
-    for (let i = 0; i < ids.length; i += concurrence) {
-      const lot = await Promise.all(ids.slice(i, i + concurrence).map((id) => this.get<T>(chemin(id))))
-      for (const x of lot) if (x) out.push(x)
-    }
-    return out
-  }
-
+  /** Clients créés ou modifiés entre deux dates (incluses). */
   clients(groupUuid: string, debut: string, fin: string) {
     return this.listerIds('/manager/v1/customers', { groupUuid, startDate: debut, endDate: fin })
   }
 
+  /** Réservations créées ou modifiées entre deux dates (incluses). */
   reservations(groupUuid: string, debut: string, fin: string) {
-    return this.listerIds('/manager/v1/reservations', { groupUuid, startDate: debut, endDate: fin })
+    return this.listerIds('/manager/v1/reservations', { groupUuid, startDate: debut, endDate: fin, filterBy: 'updatedDate' })
   }
 
   client(uuid: string) {
     return this.get<TheForkCustomer>(`/manager/v1/customers/${encodeURIComponent(uuid)}`)
   }
 
-  detailsClients(ids: string[]) {
-    return this.details<TheForkCustomer>((id) => `/manager/v1/customers/${encodeURIComponent(id)}`, ids)
-  }
-
-  detailsReservations(ids: string[]) {
-    return this.details<TheForkReservation>((id) => `/manager/v1/reservations/${encodeURIComponent(id)}`, ids)
+  reservation(uuid: string) {
+    return this.get<TheForkReservation>(`/manager/v1/reservations/${encodeURIComponent(uuid)}`)
   }
 }
 
-/** Client configuré depuis l'environnement, ou null si les identifiants manquent. */
-export function clientTheForkDepuisEnv(): TheForkClient | null {
-  const clientId = process.env.THEFORK_CLIENT_ID
-  const clientSecret = process.env.THEFORK_CLIENT_SECRET
-  if (!clientId || !clientSecret) return null
-  return new TheForkClient({ clientId, clientSecret, baseUrl: process.env.THEFORK_API_URL || THEFORK_API })
+/** Cache du jeton d'un groupe dans crm_thefork_jetons. */
+export function jetonsEnBase(db: SupabaseClient, groupeId: string): JetonStock {
+  return {
+    async lire() {
+      const { data } = await db.from('crm_thefork_jetons').select('jeton, expire_at').eq('groupe_id', groupeId).maybeSingle()
+      return data ? { valeur: data.jeton, expire: new Date(data.expire_at).getTime() } : null
+    },
+    async ecrire(j) {
+      await db.from('crm_thefork_jetons').upsert({ groupe_id: groupeId, jeton: j.valeur, expire_at: new Date(j.expire).toISOString() })
+    },
+  }
+}
+
+/**
+ * Client configuré pour un groupe : identifiants lus dans le Vault, débit et
+ * jeton partagés. Null si le groupe n'a pas encore d'identifiants.
+ */
+export async function clientTheForkPourGroupe(
+  db: SupabaseClient,
+  groupeId: string,
+  { finAt, debitParSeconde }: { finAt?: number; debitParSeconde?: number } = {},
+): Promise<TheForkClient | null> {
+  const { data, error } = await db.rpc('thefork_identifiants', { p_groupe_id: groupeId })
+  const ident = Array.isArray(data) ? data[0] : data
+  if (error || !ident?.client_id || !ident?.client_secret) return null
+  return new TheForkClient({
+    clientId: ident.client_id,
+    clientSecret: ident.client_secret,
+    baseUrl: process.env.THEFORK_API_URL || THEFORK_API,
+    jetons: jetonsEnBase(db, groupeId),
+    debitParSeconde,
+    finAt,
+  })
 }

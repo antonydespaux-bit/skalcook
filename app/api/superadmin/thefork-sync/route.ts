@@ -1,15 +1,18 @@
-// POST /api/superadmin/thefork-sync { groupe_id }
+// Superadmin › TheFork : réglages et synchronisation du CRM d'un groupe.
 //
-// Lance une passe de synchronisation TheFork pour un groupe (bouton du
-// superadmin). L'import initial demande plusieurs passes : la réponse dit si
-// la synchronisation est terminée (`termine`) ou s'il faut relancer.
-//
-// GET /api/superadmin/thefork-sync?groupe_id=… : état de la synchronisation
-// et restaurants TheFork à relier à un établissement.
+// GET    ?groupe_id=…  état (sans jamais renvoyer les identifiants), file
+//                       d'attente, restaurants à relier, compteurs.
+// PATCH  { groupe_id, … } identifiants API (rangés chiffrés dans le Vault,
+//                       jamais relus ici), identifiant de groupe TheFork,
+//                       débit, seuils VIP / perdu, rattachement des
+//                       restaurants, reprise des erreurs ou de zéro.
+// POST   { groupe_id }  une passe de synchronisation (≈ 45 s). L'import
+//                       initial en demande plusieurs : `termine` dit s'il
+//                       reste des fiches dans la file.
 
 import { z } from 'zod'
 import { apiHandler } from '../../../../lib/apiHandler'
-import { clientTheForkDepuisEnv } from '../../../../lib/services/thefork.service'
+import { logServeur } from '../../../../lib/serverLog'
 import { synchroniserTheFork } from '../../../../lib/services/theforkSync.service'
 
 export const maxDuration = 60
@@ -20,11 +23,12 @@ export const GET = apiHandler({
   schema,
   guard: 'superadmin',
   handler: async ({ data, db }) => {
-    const [{ data: sync }, { data: restaurants }, { data: groupe }, { data: etablissements }] = await Promise.all([
+    const [{ data: sync }, { data: restaurants }, { data: groupe }, { data: etablissements }, { data: file }] = await Promise.all([
       db.from('crm_thefork_sync').select('*').eq('groupe_id', data.groupe_id).maybeSingle(),
       db.from('crm_thefork_restaurants').select('restaurant_uuid, client_id, nom').eq('groupe_id', data.groupe_id).order('nom'),
       db.from('groupes').select('id, nom, crm_partage, crm_vip_visites, crm_vip_mois, crm_perdu_mois').eq('id', data.groupe_id).maybeSingle(),
       db.from('clients').select('id, nom, nom_etablissement').eq('groupe_id', data.groupe_id).order('nom'),
+      db.rpc('thefork_file_compteurs', { p_groupe_id: data.groupe_id }),
     ])
     const ids = (etablissements || []).map((e: { id: string }) => e.id)
     const [{ count: nbClients }, { count: nbResas }] = ids.length
@@ -33,21 +37,29 @@ export const GET = apiHandler({
         db.from('crm_reservations').select('id', { count: 'exact', head: true }).in('client_id', ids),
       ])
       : [{ count: 0 }, { count: 0 }]
+    const { vault_secret_id, ...syncPublic } = sync || {}
     return Response.json({
-      sync, groupe, etablissements: etablissements || [], restaurants: restaurants || [],
+      sync: sync ? syncPublic : null,
+      identifiants: { enregistres: !!vault_secret_id, maj: sync?.identifiants_maj || null },
+      groupe, etablissements: etablissements || [], restaurants: restaurants || [],
       compteurs: { clients: nbClients || 0, reservations: nbResas || 0 },
-      identifiants: !!clientTheForkDepuisEnv(),
+      file: file || [],
     })
   },
 })
 
 const reglagesSchema = z.object({
   groupe_id: z.string().uuid(),
+  client_id: z.string().trim().min(1).max(500).optional(),
+  client_secret: z.string().trim().min(1).max(500).optional(),
   thefork_group_uuid: z.string().uuid().optional(),
   actif: z.boolean().optional(),
   import_depuis: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  // Repartir de zéro (relire tout depuis import_depuis)
+  debit_par_seconde: z.number().positive().max(50).optional(),
+  // Repartir de zéro : relire toutes les listes depuis import_depuis
   reinitialiser: z.boolean().optional(),
+  // Remettre en file les fiches en erreur (ex. restaurant relié entre-temps)
+  relancer_erreurs: z.boolean().optional(),
   crm_vip_visites: z.number().int().min(1).max(365).optional(),
   crm_vip_mois: z.number().int().min(1).max(60).optional(),
   crm_perdu_mois: z.number().int().min(1).max(60).optional(),
@@ -56,15 +68,27 @@ const reglagesSchema = z.object({
     client_id: z.string().uuid().nullable(),
     nom: z.string().max(200).nullable().optional(),
   })).max(50).optional(),
-})
+}).refine((d) => !!d.client_id === !!d.client_secret, { message: 'client_id et client_secret vont ensemble.' })
 
-// PATCH : réglages du groupe (identifiant de groupe TheFork, seuils VIP /
-// client perdu) et rattachement des restaurants TheFork aux établissements.
 export const PATCH = apiHandler({
   schema: reglagesSchema,
   guard: 'superadmin',
-  handler: async ({ data, db }) => {
-    const { groupe_id, restaurants, crm_vip_visites, crm_vip_mois, crm_perdu_mois, reinitialiser, ...sync } = data
+  handler: async ({ data, db, user, request }) => {
+    const {
+      groupe_id, client_id, client_secret, restaurants, crm_vip_visites, crm_vip_mois, crm_perdu_mois,
+      reinitialiser, relancer_erreurs, ...sync
+    } = data
+
+    if (client_id && client_secret) {
+      const { error } = await db.rpc('thefork_enregistrer_identifiants', {
+        p_groupe_id: groupe_id, p_client_id: client_id, p_client_secret: client_secret,
+      })
+      if (error) throw new Error(error.message)
+      await logServeur(db, {
+        user, clientId: null, sansEtablissement: true, action: 'MODIFICATION', entite: 'crm_thefork_sync', request,
+        entiteId: groupe_id, entiteNom: 'Identifiants API TheFork',
+      })
+    }
 
     const seuils = Object.fromEntries(Object.entries({ crm_vip_visites, crm_vip_mois, crm_perdu_mois }).filter(([, v]) => v !== undefined))
     if (Object.keys(seuils).length) {
@@ -72,16 +96,16 @@ export const PATCH = apiHandler({
       if (error) throw new Error(error.message)
     }
 
-    if (sync.thefork_group_uuid || sync.actif !== undefined || sync.import_depuis || reinitialiser) {
-      const ligne: Record<string, unknown> = { groupe_id, ...sync }
-      if (reinitialiser) Object.assign(ligne, { curseur_clients: null, curseur_reservations: null })
-      const { data: existant } = await db.from('crm_thefork_sync').select('groupe_id').eq('groupe_id', groupe_id).maybeSingle()
-      if (!existant && !sync.thefork_group_uuid) {
-        return Response.json({ error: 'Identifiant de groupe TheFork requis pour activer la synchronisation.' }, { status: 400 })
-      }
-      const { error } = existant
-        ? await db.from('crm_thefork_sync').update(ligne).eq('groupe_id', groupe_id)
-        : await db.from('crm_thefork_sync').insert(ligne)
+    const ligne: Record<string, unknown> = Object.fromEntries(Object.entries(sync).filter(([, v]) => v !== undefined))
+    if (reinitialiser) Object.assign(ligne, { curseur_clients: null, curseur_reservations: null })
+    if (Object.keys(ligne).length) {
+      const { error } = await db.from('crm_thefork_sync').upsert({ groupe_id, ...ligne }, { onConflict: 'groupe_id' })
+      if (error) throw new Error(error.message)
+    }
+
+    if (relancer_erreurs) {
+      const { error } = await db.from('crm_thefork_file').update({ statut: 'a_traiter', tentatives: 0, erreur: null })
+        .eq('groupe_id', groupe_id).eq('statut', 'erreur')
       if (error) throw new Error(error.message)
     }
 
@@ -104,9 +128,7 @@ export const POST = apiHandler({
   schema,
   guard: 'superadmin',
   handler: async ({ data, db }) => {
-    const api = clientTheForkDepuisEnv()
-    if (!api) return Response.json({ error: 'Identifiants TheFork absents (THEFORK_CLIENT_ID / THEFORK_CLIENT_SECRET).' }, { status: 503 })
-    const resultat = await synchroniserTheFork(db, api, data.groupe_id, { budgetMs: 45_000 })
+    const resultat = await synchroniserTheFork(db, data.groupe_id, { budgetMs: 45_000 })
     return Response.json(resultat, { status: resultat.erreur ? 502 : 200 })
   },
 })
