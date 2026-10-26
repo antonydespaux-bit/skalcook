@@ -121,9 +121,20 @@ export default function TheForkSuperadminPage() {
     try {
       // ≈ 45 s par passe ; l'import initial de 30 000 fiches en demande plusieurs
       // dizaines. Garder la page ouverte ; une coupure reprend au clic suivant.
-      for (let passe = 1; passe <= (jusquauBout ? 400 : 1); passe++) {
+      let echecs = 0
+      for (let passe = 1; passe <= (jusquauBout ? 2000 : 1); passe++) {
         setMessage(`Synchronisation en cours… (passe ${passe})`)
-        const r = await appel('POST', { groupe_id: groupeId })
+        let r
+        try {
+          r = await appel('POST', { groupe_id: groupeId })
+          echecs = 0
+        } catch (err) {
+          // Passe coupée par l'hébergeur (504) ou réseau : on attend puis on relance
+          if (!jusquauBout || ++echecs > 5) throw err
+          setMessage(`Passe ${passe} coupée (${err.message}), nouvelle tentative dans 10 s…`)
+          await new Promise((ok) => setTimeout(ok, 10_000))
+          continue
+        }
         if (r.erreur) { setErreur(r.erreur); break }
         const incident = r.incident ? ` Dernière réponse de TheFork : ${r.incident.statut} (${r.incident.chemin}).` : ''
         const diag = r.pages_listees ? ` [${r.pages_listees} page(s) de liste lue(s), ${r.taille_page} par page, total annoncé ${r.dernier_total}]` : ''
