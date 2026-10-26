@@ -95,7 +95,7 @@ export default function CrmClientDetailPage() {
         .eq('crm_client_id', id)
         .order('occurred_at', { ascending: false }),
       supabase.from('crm_reservations')
-        .select('id, client_id, date_repas, couverts, statut, canal, note_client')
+        .select('id, client_id, date_repas, couverts, statut, canal')
         .eq('crm_client_id', id).in('client_id', ids)
         .order('date_repas', { ascending: false }),
     ])
@@ -152,6 +152,18 @@ export default function CrmClientDetailPage() {
     setActivitySaving(false)
     if (err) { setError(err.message); return }
     setShowActivityForm(false)
+    await load()
+  }
+
+  // Désinscription du démarchage : prime sur l'accord newsletter TheFork, que
+  // la synchronisation ne peut plus réactiver.
+  async function handleDesinscription(desinscrire) {
+    const { error: err } = await supabase
+      .from('crm_clients')
+      .update(desinscrire ? { desinscrit_at: new Date().toISOString(), contactable: false } : { desinscrit_at: null })
+      .eq('id', id)
+      .in('client_id', perimetre)
+    if (err) { setError(err.message); return }
     await load()
   }
 
@@ -228,7 +240,12 @@ export default function CrmClientDetailPage() {
                   {visites?.perdu && (
                     <Badge bg={hexToRgba('#DC2626', 0.12)} color="#B91C1C" size="sm" style={{ marginLeft: 8 }}>À relancer</Badge>
                   )}
-                  {(client.contactable || client.type === 'entreprise') ? (
+                  {client.prescripteur && (
+                    <Badge bg={hexToRgba('#6366F1', 0.12)} color="#4338CA" size="sm" style={{ marginLeft: 8 }}>Prescripteur</Badge>
+                  )}
+                  {client.desinscrit_at ? (
+                    <Badge bg={hexToRgba('#71717A', 0.12)} color={c.texteMuted} size="sm" style={{ marginLeft: 8 }}>Désinscrit</Badge>
+                  ) : (client.contactable || client.type === 'entreprise') ? (
                     <Badge bg={hexToRgba('#10B981', 0.12)} color="#047857" size="sm" style={{ marginLeft: 8 }}>Contactable</Badge>
                   ) : client.thefork_customer_uuid ? (
                     <Badge bg={hexToRgba('#71717A', 0.12)} color={c.texteMuted} size="sm" style={{ marginLeft: 8 }}>Ne pas démarcher</Badge>
@@ -262,8 +279,11 @@ export default function CrmClientDetailPage() {
                     <Kv c={c} label="Dernière visite" value={visites.derniereVisite ? formatDateFr(visites.derniereVisite.toISOString()) : '—'} />
                   </>
                 )}
-                {client.allergies && <Kv c={c} label="Allergies" value={client.allergies} />}
+                {client.rang && <Kv c={c} label="Rang TheFork" value={client.rang} />}
                 {client.preferences && <Kv c={c} label="Préférences" value={client.preferences} />}
+                {client.champs_thefork && Object.entries(client.champs_thefork).map(([k, v]) => (
+                  <Kv key={k} c={c} label={k} value={typeof v === 'boolean' ? (v ? 'Oui' : 'Non') : String(v)} />
+                ))}
               </div>
 
               {(client.tags || []).length > 0 && (
@@ -276,6 +296,21 @@ export default function CrmClientDetailPage() {
                   </div>
                 </div>
               )}
+
+              <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                {client.desinscrit_at ? (
+                  <>
+                    <span style={{ color: c.texteMuted, fontSize: 13 }}>Ne plus démarcher depuis le {formatDateFr(client.desinscrit_at)}.</span>
+                    <Button c={c} variant="ghost" size="sm" onClick={() => {
+                      if (window.confirm('Annuler la désinscription ? À faire seulement si le client a de nouveau donné son accord.')) handleDesinscription(false)
+                    }}>Annuler la désinscription</Button>
+                  </>
+                ) : (
+                  <Button c={c} variant="ghost" size="sm" onClick={() => {
+                    if (window.confirm('Ce client ne sera plus démarché, même s’il reste abonné chez TheFork. Continuer ?')) handleDesinscription(true)
+                  }}>Ne plus démarcher</Button>
+                )}
+              </div>
 
               {client.notes && (
                 <div style={{ marginTop: 16 }}>
@@ -304,7 +339,7 @@ export default function CrmClientDetailPage() {
                             {[maisons[r.client_id], r.couverts ? `${r.couverts} couverts` : null, r.canal].filter(Boolean).join(' · ')}
                           </div>
                         </div>
-                        <div className="crm-row__secondary" style={{ color: c.texteMuted }}>{r.note_client || ''}</div>
+                        <div />
                         <div className="crm-row__meta">
                           <Badge bg={hexToRgba(annulee ? '#DC2626' : '#10B981', 0.12)} color={annulee ? '#B91C1C' : '#047857'} size="sm">
                             {LIBELLES_STATUT_RESA[String(r.statut || '').toUpperCase()] || r.statut || '—'}

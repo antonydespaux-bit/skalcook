@@ -9,8 +9,8 @@ import ChefLoader from '../../../components/ChefLoader'
 // Superadmin › TheFork : réglages du CRM de groupe alimenté par TheFork
 // (identifiant de groupe TheFork, rattachement des restaurants aux
 // établissements, seuils VIP / client perdu) et lancement de la
-// synchronisation. Les identifiants API restent dans Vercel
-// (THEFORK_CLIENT_ID / THEFORK_CLIENT_SECRET).
+// synchronisation. Chaque groupe a ses propres identifiants API TheFork :
+// saisis ici, rangés chiffrés dans le Vault Supabase, jamais réaffichés.
 
 const carte = { background: 'white', borderRadius: '12px', border: '0.5px solid #E4E4E7', padding: '20px', marginBottom: '16px' }
 const titre = { fontSize: '15px', fontWeight: 600, color: '#18181B', marginBottom: '14px' }
@@ -40,7 +40,8 @@ export default function TheForkSuperadminPage() {
   const [groupes, setGroupes] = useState([])
   const [groupeId, setGroupeId] = useState('')
   const [etat, setEtat] = useState(null)
-  const [form, setForm] = useState({ thefork_group_uuid: '', import_depuis: '', actif: true, crm_vip_visites: 5, crm_vip_mois: 12, crm_perdu_mois: 6 })
+  const [form, setForm] = useState({ thefork_group_uuid: '', import_depuis: '', actif: true, debit_par_seconde: 5, crm_vip_visites: 5, crm_vip_mois: 12, crm_perdu_mois: 6 })
+  const [ident, setIdent] = useState({ client_id: '', client_secret: '' })
   const [restos, setRestos] = useState([])
   const [message, setMessage] = useState('')
   const [erreur, setErreur] = useState('')
@@ -71,8 +72,9 @@ export default function TheForkSuperadminPage() {
       setEtat(e)
       setForm({
         thefork_group_uuid: e.sync?.thefork_group_uuid || '',
-        import_depuis: e.sync?.import_depuis || '',
+        import_depuis: e.sync?.import_depuis || '2015-01-01',
         actif: e.sync?.actif ?? true,
+        debit_par_seconde: Number(e.sync?.debit_par_seconde) || 5,
         crm_vip_visites: e.groupe?.crm_vip_visites ?? 5,
         crm_vip_mois: e.groupe?.crm_vip_mois ?? 12,
         crm_perdu_mois: e.groupe?.crm_perdu_mois ?? 6,
@@ -91,6 +93,7 @@ export default function TheForkSuperadminPage() {
         thefork_group_uuid: form.thefork_group_uuid || undefined,
         import_depuis: form.import_depuis || undefined,
         actif: form.actif,
+        debit_par_seconde: Number(form.debit_par_seconde) || undefined,
         crm_vip_visites: Number(form.crm_vip_visites),
         crm_vip_mois: Number(form.crm_vip_mois),
         crm_perdu_mois: Number(form.crm_perdu_mois),
@@ -102,15 +105,27 @@ export default function TheForkSuperadminPage() {
     } catch (err) { setErreur(err.message) } finally { setOccupe(false) }
   }
 
+  const enregistrerIdentifiants = async () => {
+    setOccupe(true); setErreur(''); setMessage('')
+    try {
+      await appel('PATCH', { groupe_id: groupeId, client_id: ident.client_id.trim(), client_secret: ident.client_secret.trim() })
+      setIdent({ client_id: '', client_secret: '' })
+      setMessage('Identifiants enregistrés (chiffrés).')
+      await charger()
+    } catch (err) { setErreur(err.message) } finally { setOccupe(false) }
+  }
+
   // Une passe, ou des passes successives jusqu'à la fin de l'import
   const synchroniser = async (jusquauBout) => {
     setOccupe(true); setErreur(''); setMessage('')
     try {
-      for (let passe = 1; passe <= (jusquauBout ? 40 : 1); passe++) {
+      // ≈ 45 s par passe ; l'import initial de 30 000 fiches en demande plusieurs
+      // dizaines. Garder la page ouverte ; une coupure reprend au clic suivant.
+      for (let passe = 1; passe <= (jusquauBout ? 400 : 1); passe++) {
         setMessage(`Synchronisation en cours… (passe ${passe})`)
         const r = await appel('POST', { groupe_id: groupeId })
         if (r.erreur) { setErreur(r.erreur); break }
-        setMessage(`Passe ${passe} : ${r.clients_crees} client(s) créé(s), ${r.clients_fusionnes} fusionné(s), ${r.reservations_ecrites} réservation(s). ${r.termine ? 'À jour.' : 'Il reste des données à importer.'}`)
+        setMessage(`Passe ${passe} : ${r.clients_crees} créé(s), ${r.clients_fusionnes} fusionné(s), ${r.clients_maj} mis à jour, ${r.clients_supprimes} supprimé(s), ${r.reservations_ecrites} réservation(s). Reste en file : ${r.file_restante.clients} client(s), ${r.file_restante.reservations} réservation(s).${r.termine ? ' À jour.' : ''}`)
         if (r.termine) break
       }
       await charger()
@@ -122,6 +137,7 @@ export default function TheForkSuperadminPage() {
   )
 
   const r = etat?.sync?.dernier_resultat
+  const pret = !!etat?.identifiants?.enregistres && !!etat?.sync?.thefork_group_uuid
   const nomEtab = (id) => {
     const e = etat?.etablissements?.find((x) => x.id === id)
     return e ? (e.nom_etablissement || e.nom) : ''
@@ -145,11 +161,7 @@ export default function TheForkSuperadminPage() {
             <option value="">Choisir un groupe…</option>
             {groupes.map((g) => <option key={g.id} value={g.id}>{g.nom}</option>)}
           </select>
-          {etat && !etat.identifiants && (
-            <div style={{ marginTop: '12px', padding: '10px 12px', borderRadius: '8px', background: '#FEF3C7', color: '#92400E', fontSize: '13px' }}>
-              Identifiants TheFork absents : ajouter THEFORK_CLIENT_ID et THEFORK_CLIENT_SECRET dans Vercel.
-            </div>
-          )}
+
         </div>
 
         {erreur && <div style={{ ...carte, background: '#FEE2E2', color: '#B91C1C', fontSize: '13px' }}>{erreur}</div>}
@@ -157,6 +169,28 @@ export default function TheForkSuperadminPage() {
 
         {groupeId && etat && (
           <>
+            <div style={carte}>
+              <div style={titre}>Identifiants API TheFork</div>
+              <div style={{ fontSize: '13px', color: etat.identifiants.enregistres ? '#15803D' : '#B45309', marginBottom: '12px' }}>
+                {etat.identifiants.enregistres
+                  ? `Enregistrés le ${new Date(etat.identifiants.maj).toLocaleString('fr-FR')} (chiffrés, jamais réaffichés).`
+                  : 'Aucun identifiant : collez le client_id et le client_secret envoyés par TheFork à ce groupe.'}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <label style={label}>client_id</label>
+                  <input value={ident.client_id} onChange={(e) => setIdent({ ...ident, client_id: e.target.value })} autoComplete="off" spellCheck={false} style={champ} />
+                </div>
+                <div>
+                  <label style={label}>client_secret</label>
+                  <input type="password" value={ident.client_secret} onChange={(e) => setIdent({ ...ident, client_secret: e.target.value })} autoComplete="new-password" spellCheck={false} style={champ} />
+                </div>
+              </div>
+              <button onClick={enregistrerIdentifiants} disabled={occupe || !ident.client_id.trim() || !ident.client_secret.trim()} style={bouton('#18181B', !occupe && !!ident.client_id.trim() && !!ident.client_secret.trim())}>
+                {etat.identifiants.enregistres ? 'Remplacer les identifiants' : 'Enregistrer les identifiants'}
+              </button>
+            </div>
+
             <div style={carte}>
               <div style={titre}>Synchronisation</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '14px' }}>
@@ -167,6 +201,10 @@ export default function TheForkSuperadminPage() {
                 <div>
                   <label style={label}>Importer depuis</label>
                   <input type="date" value={form.import_depuis} onChange={(e) => setForm({ ...form, import_depuis: e.target.value })} style={champ} />
+                </div>
+                <div>
+                  <label style={label}>Débit (requêtes / seconde)</label>
+                  <input type="number" min="0.5" max="50" step="0.5" value={form.debit_par_seconde} onChange={(e) => setForm({ ...form, debit_par_seconde: e.target.value })} style={champ} />
                 </div>
                 <div>
                   <label style={label}>Synchro de nuit</label>
@@ -181,12 +219,19 @@ export default function TheForkSuperadminPage() {
                 <div>Dernière exécution : {etat.sync?.derniere_execution ? new Date(etat.sync.derniere_execution).toLocaleString('fr-FR') : 'jamais'}
                   {r && <> — {r.erreur ? <span style={{ color: '#B91C1C' }}>erreur : {r.erreur}</span> : r.termine ? 'à jour' : 'import en cours'}</>}
                 </div>
-                {etat.sync && <div>Avancement : clients jusqu’au {etat.sync.curseur_clients || '—'}, réservations jusqu’au {etat.sync.curseur_reservations || '—'}</div>}
+                {etat.sync && <div>Listes relues jusqu’au : clients {etat.sync.curseur_clients || '—'}, réservations {etat.sync.curseur_reservations || '—'}</div>}
+                {etat.file.length > 0 && (
+                  <div>File d’attente : {['client', 'reservation'].map((t) => {
+                    const n = (st) => etat.file.find((f) => f.type === t && f.statut === st)?.nombre || 0
+                    return `${t === 'client' ? 'clients' : 'réservations'} ${n('a_traiter')} à traiter · ${n('traite')} traités · ${n('introuvable')} introuvables · ${n('erreur')} en erreur`
+                  }).join(' — ')}</div>
+                )}
               </div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <button onClick={() => enregistrer()} disabled={occupe} style={bouton('#18181B', !occupe)}>Enregistrer</button>
-                <button onClick={() => synchroniser(false)} disabled={occupe || !etat.sync || !etat.identifiants} style={bouton('#6366F1', !occupe && !!etat.sync && etat.identifiants)}>Synchroniser maintenant</button>
-                <button onClick={() => synchroniser(true)} disabled={occupe || !etat.sync || !etat.identifiants} style={bouton('#16A34A', !occupe && !!etat.sync && etat.identifiants)}>Tout importer</button>
+                <button onClick={() => synchroniser(false)} disabled={occupe || !pret} style={bouton('#6366F1', !occupe && pret)}>Synchroniser maintenant</button>
+                <button onClick={() => synchroniser(true)} disabled={occupe || !pret} style={bouton('#16A34A', !occupe && pret)}>Tout importer</button>
+                <button onClick={() => enregistrer({ relancer_erreurs: true })} disabled={occupe || !etat.sync} style={bouton('#D97706', !occupe && !!etat.sync)}>Relancer les erreurs</button>
                 <button onClick={() => { if (window.confirm('Relire tout depuis la date d’import ? Les fiches existantes sont mises à jour, rien n’est supprimé.')) enregistrer({ reinitialiser: true }) }} disabled={occupe || !etat.sync} style={bouton('#A1A1AA', !occupe && !!etat.sync)}>Repartir du début</button>
               </div>
             </div>

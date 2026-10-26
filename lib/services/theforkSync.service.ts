@@ -1,37 +1,43 @@
 /**
  * Synchronisation TheFork → CRM du groupe (crm_clients + crm_reservations).
  *
- * Avance par fenêtres de dates, avec un budget de temps par exécution (une
- * fonction Vercel ne doit pas dépasser sa durée max) : la position est gardée
- * dans crm_thefork_sync (curseur_clients, curseur_reservations). La tâche de
- * nuit reprend où elle s'est arrêtée ; l'import initial (2 ans) se fait donc
- * en plusieurs passes.
+ * Fonctionne en deux temps, par une file d'attente reprenable
+ * (crm_thefork_file) :
+ *  1. Liste : identifiants des clients et réservations créés ou modifiés
+ *     depuis le dernier passage (depuis import_depuis au premier). Peu
+ *     d'appels (10 000 identifiants par page) ; tout part dans la file.
+ *  2. Détail : chaque fiche de la file est lue au débit du contrat
+ *     (crm_thefork_sync.debit_par_seconde) jusqu'à épuisement du temps
+ *     imparti. Une coupure reprend au passage suivant, sans rien refaire.
+ *
+ * Les dates de liste sont incluses des deux côtés : le curseur repart de la
+ * veille pour ne rien rater (chevauchement voulu).
  *
  * Fusion d'un client TheFork avec une fiche existante du groupe : même
- * identifiant TheFork, sinon même e-mail, sinon même téléphone (clés
- * normalisées comme les colonnes générées email_norm / telephone_norm).
- * Les champs propres à TheFork (VIP, accord newsletter, langue, allergies,
- * préférences) sont mis à jour ; l'identité (nom, e-mail, téléphone,
- * adresse) ne fait que compléter une case vide : une saisie d'un commercial
- * n'est jamais écrasée.
+ * identifiant TheFork, sinon même e-mail, sinon même téléphone. L'identité
+ * (nom, e-mail, téléphone, adresse) ne fait que compléter une case vide : une
+ * saisie d'un commercial n'est jamais écrasée.
  *
- * Les curseurs reculent volontairement de quelques jours pour relire les
- * modifications récentes (annulations, fiches mises à jour). Constaté sur le
- * bac à sable : le filtre de dates de /reservations porte sur la création de
- * la réservation, pas sur la date du repas (une fenêtre d'octobre renvoie des
- * repas de mars). HORIZON_FUTUR_JOURS est une marge de sécurité si le filtre
- * portait sur la date du repas.
+ * RGPD : ni allergies, ni régime, ni notes, ni niveau de risque ne sont
+ * importés (données de santé ou inutiles au démarchage). « Contactable » =
+ * accord newsletter TheFork ET pas de désinscription dans skalcook : une
+ * désinscription locale n'est jamais annulée par la synchro. Un client que
+ * TheFork ne connaît plus (404) est supprimé, ou anonymisé s'il a des devis
+ * ou événements à conserver.
+ *
+ * Une fois l'import terminé, chaque passage revérifie les fiches les plus
+ * anciennement contrôlées (VERIFICATIONS_PAR_PASSE) pour repérer les
+ * suppressions, que TheFork ne signale pas.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { TheForkClient, TheForkCustomer, TheForkReservation } from './thefork.service'
+import { TempsEcoule, clientTheForkPourGroupe, type TheForkClient, type TheForkCustomer, type TheForkReservation } from './thefork.service'
 
 export const SOURCE = 'thefork'
-const FENETRE_CLIENTS_JOURS = 7
-const FENETRE_RESAS_JOURS = 3
-const RELECTURE_CLIENTS_JOURS = 2
-const RELECTURE_RESAS_JOURS = 7
-const HORIZON_FUTUR_JOURS = 60
+const LOT_FILE = 200
+const VERIFICATIONS_PAR_PASSE = 100
+const REVERIFIER_APRES_JOURS = 30
+const TENTATIVES_MAX = 3
 
 // ─── Normalisation (miroir des colonnes générées de crm_clients) ────────────
 
@@ -51,33 +57,52 @@ export function normTelephone(tel: string | null | undefined): string | null {
 export interface CrmClientLigne {
   id: string
   client_id: string
+  type: string | null
+  source: string | null
   nom: string | null
   prenom: string | null
+  raison_sociale: string | null
   email: string | null
   telephone: string | null
   adresse: string | null
   code_postal: string | null
   ville: string | null
   thefork_customer_uuid: string | null
+  desinscrit_at: string | null
 }
 
 const vide = (v: unknown) => v === null || v === undefined || (typeof v === 'string' && v.trim() === '')
 
-function texte(...parts: Array<string | null | undefined>): string | null {
-  const t = parts.map((p) => (p || '').trim()).filter(Boolean).join(' · ')
+function texte(...parts: Array<string | null | undefined | false>): string | null {
+  const t = parts.map((p) => (typeof p === 'string' ? p.trim() : '')).filter(Boolean).join(' · ')
   return t || null
 }
 
-/** Champs que TheFork fait foi : toujours recopiés. */
-export function champsTheFork(tf: TheForkCustomer) {
+export const estEntreprise = (tf: TheForkCustomer) => tf.civility === 'company'
+
+/** Champs propres à TheFork, recopiés à chaque passage (hors données de santé). */
+export function champsTheFork(tf: TheForkCustomer, maintenant = new Date()) {
+  const champs = (tf.customFields || [])
+    .filter((f) => f && f.label && f.value !== '' && f.value !== null && f.value !== undefined)
   return {
     thefork_customer_uuid: tf.customerUuid,
     langue: tf.locale || null,
     vip_thefork: !!tf.isVip,
-    contactable: !!tf.optins?.restaurantNewsletter,
-    allergies: texte(tf.allergiesAndIntolerances, tf.dietaryRestrictions),
-    preferences: texte(tf.favFood && `Plats : ${tf.favFood}`, tf.favDrinks && `Boissons : ${tf.favDrinks}`),
+    prescripteur: !!tf.isPromoter,
+    rang: tf.rank || null,
+    champs_thefork: champs.length ? Object.fromEntries(champs.map((f) => [f.label, f.value])) : null,
+    preferences: texte(
+      tf.favFood && `Plats : ${tf.favFood}`,
+      tf.favDrinks && `Boissons : ${tf.favDrinks}`,
+      tf.favSeating && `Table : ${tf.favSeating}`,
+    ),
+    thefork_verifie_at: maintenant.toISOString(),
   }
+}
+
+/** Accord de prospection : opt-in TheFork, jamais réactivé après une désinscription locale. */
+export function contactable(tf: TheForkCustomer, existant?: Pick<CrmClientLigne, 'desinscrit_at'> | null): boolean {
+  return !!tf.optins?.restaurantNewsletter && !existant?.desinscrit_at
 }
 
 /** Identité lue chez TheFork (ne sert qu'à remplir les cases vides). */
@@ -93,11 +118,30 @@ export function identiteTheFork(tf: TheForkCustomer) {
   }
 }
 
+/** Fiche à créer pour un client TheFork inconnu. */
+export function nouvelleFiche(tf: TheForkCustomer, maison: string, maintenant = new Date()) {
+  const entreprise = estEntreprise(tf)
+  return {
+    client_id: maison,
+    type: entreprise ? 'entreprise' : 'particulier',
+    raison_sociale: entreprise ? texte(tf.lastName, tf.firstName) : null,
+    source: SOURCE,
+    ...identiteTheFork(tf),
+    ...champsTheFork(tf, maintenant),
+    contactable: contactable(tf),
+  }
+}
+
 /** Modifications à appliquer à une fiche existante. */
-export function patchFusion(existant: CrmClientLigne, tf: TheForkCustomer): Record<string, unknown> {
-  const patch: Record<string, unknown> = { ...champsTheFork(tf) }
+export function patchFusion(existant: CrmClientLigne, tf: TheForkCustomer, maintenant = new Date()): Record<string, unknown> {
+  const patch: Record<string, unknown> = { ...champsTheFork(tf, maintenant), contactable: contactable(tf, existant) }
   for (const [k, v] of Object.entries(identiteTheFork(tf))) {
     if (v && vide(existant[k as keyof CrmClientLigne])) patch[k] = v
+  }
+  // Une fiche créée par la synchro suit TheFork pour le type ; une fiche saisie à la main garde le sien
+  if (existant.source === SOURCE && estEntreprise(tf) && existant.type !== 'entreprise') {
+    patch.type = 'entreprise'
+    if (vide(existant.raison_sociale)) patch.raison_sociale = texte(tf.lastName, tf.firstName)
   }
   return patch
 }
@@ -114,35 +158,39 @@ export function choisirFiche(candidats: CrmClientLigne[], tf: TheForkCustomer): 
   return parTel || null
 }
 
-// ─── Fenêtres de dates ──────────────────────────────────────────────────────
-
-const iso = (d: Date) => d.toISOString().slice(0, 10)
-const jours = (d: Date, n: number) => new Date(d.getTime() + n * 86_400_000)
-const date = (s: string) => new Date(`${s}T00:00:00Z`)
-
-/** Découpe [debut, fin] en fenêtres de `taille` jours (bornes incluses). */
-export function fenetres(debut: string, fin: string, taille: number): Array<[string, string]> {
-  const out: Array<[string, string]> = []
-  for (let d = date(debut); d <= date(fin); d = jours(d, taille)) {
-    const f = jours(d, taille - 1)
-    out.push([iso(d), iso(f > date(fin) ? date(fin) : f)])
+/** Ligne crm_reservations pour une réservation TheFork (sans la note du client : texte libre). */
+export function ligneReservation(r: TheForkReservation, maison: string, crmClientId: string | null) {
+  return {
+    client_id: maison,
+    crm_client_id: crmClientId,
+    source: SOURCE,
+    externe_id: r.reservationUuid,
+    date_repas: r.mealDate,
+    couverts: r.partySize,
+    statut: r.status,
+    canal: r.reservationChannel,
+    montant: r.billAmount,
+    note_client: null,
   }
-  return out
 }
 
 // ─── Synchronisation ────────────────────────────────────────────────────────
 
+const iso = (d: Date) => d.toISOString().slice(0, 10)
+const jours = (d: Date, n: number) => new Date(d.getTime() + n * 86_400_000)
+
 export interface ResultatSync {
-  clients_lus: number
+  listes_clients: number
+  listes_reservations: number
   clients_crees: number
   clients_fusionnes: number
-  reservations_lues: number
+  clients_maj: number
+  clients_supprimes: number
   reservations_ecrites: number
   reservations_sans_maison: number
-  restaurants_inconnus: string[]
+  erreurs: number
+  file_restante: { clients: number; reservations: number }
   termine: boolean
-  curseur_clients: string | null
-  curseur_reservations: string | null
   erreur?: string
 }
 
@@ -154,176 +202,242 @@ interface Contexte {
   maisons: Map<string, string | null>
   maisonParDefaut: string
   ficheParUuid: Map<string, string>
+  maintenant: Date
   res: ResultatSync
 }
 
-const CHAMPS_FICHE = 'id, client_id, nom, prenom, email, telephone, adresse, code_postal, ville, thefork_customer_uuid'
+const CHAMPS_FICHE = 'id, client_id, type, source, nom, prenom, raison_sociale, email, telephone, adresse, code_postal, ville, thefork_customer_uuid, desinscrit_at'
 
 async function candidats(ctx: Contexte, tf: TheForkCustomer): Promise<CrmClientLigne[]> {
   const { db, etablissements } = ctx
-  const out: CrmClientLigne[] = []
   const { data: parUuid } = await db.from('crm_clients').select(CHAMPS_FICHE)
-    .eq('thefork_customer_uuid', tf.customerUuid).limit(1)
-  out.push(...(parUuid || []))
-  if (out.length) return out
+    .eq('thefork_customer_uuid', tf.customerUuid).in('client_id', etablissements).limit(1)
+  if (parUuid?.length) return parUuid
   const e = normEmail(tf.email)
   if (e) {
     const { data } = await db.from('crm_clients').select(CHAMPS_FICHE)
       .in('client_id', etablissements).eq('email_norm', e).is('thefork_customer_uuid', null).limit(5)
-    out.push(...(data || []))
+    if (data?.length) return data
   }
   const t = normTelephone(tf.phone)
-  if (!out.length && t) {
+  if (t) {
     const { data } = await db.from('crm_clients').select(CHAMPS_FICHE)
       .in('client_id', etablissements).eq('telephone_norm', t).is('thefork_customer_uuid', null).limit(5)
-    out.push(...(data || []))
+    if (data?.length) return data
   }
-  return out
+  return []
 }
 
 /** Crée ou fusionne la fiche CRM d'un client TheFork ; renvoie son id. */
 async function enregistrerClient(ctx: Contexte, tf: TheForkCustomer): Promise<string> {
-  const deja = ctx.ficheParUuid.get(tf.customerUuid)
-  if (deja) return deja
   const existant = choisirFiche(await candidats(ctx, tf), tf)
   if (existant) {
-    const { error } = await ctx.db.from('crm_clients').update(patchFusion(existant, tf)).eq('id', existant.id)
+    const { error } = await ctx.db.from('crm_clients').update(patchFusion(existant, tf, ctx.maintenant)).eq('id', existant.id)
     if (error) throw new Error(`Fusion client : ${error.message}`)
-    if (!existant.thefork_customer_uuid) ctx.res.clients_fusionnes++
+    if (existant.thefork_customer_uuid) ctx.res.clients_maj++
+    else ctx.res.clients_fusionnes++
     ctx.ficheParUuid.set(tf.customerUuid, existant.id)
     return existant.id
   }
   const maison = (tf.originRestaurantUuid && ctx.maisons.get(tf.originRestaurantUuid)) || ctx.maisonParDefaut
-  const { data, error } = await ctx.db.from('crm_clients').insert({
-    client_id: maison,
-    type: 'particulier',
-    source: SOURCE,
-    ...identiteTheFork(tf),
-    ...champsTheFork(tf),
-  }).select('id').single()
+  const { data, error } = await ctx.db.from('crm_clients').insert(nouvelleFiche(tf, maison, ctx.maintenant)).select('id').single()
   if (error) throw new Error(`Création client : ${error.message}`)
   ctx.res.clients_crees++
   ctx.ficheParUuid.set(tf.customerUuid, data.id)
   return data.id
 }
 
-async function enregistrerReservations(ctx: Contexte, resas: TheForkReservation[], groupUuid: string) {
-  const lignes = []
-  for (const r of resas) {
-    const maison = ctx.maisons.get(r.restaurantUuid)
-    if (!maison) {
-      ctx.res.reservations_sans_maison++
-      if (!ctx.maisons.has(r.restaurantUuid)) {
-        // Restaurant pas encore relié : on le note pour que le superadmin le rattache
-        ctx.maisons.set(r.restaurantUuid, null)
-        ctx.res.restaurants_inconnus.push(r.restaurantUuid)
-        await ctx.db.from('crm_thefork_restaurants')
-          .upsert({ restaurant_uuid: r.restaurantUuid, groupe_id: ctx.groupeId }, { onConflict: 'restaurant_uuid', ignoreDuplicates: true })
-      }
-      continue
-    }
-    let crmClientId: string | null = null
-    if (r.customerUuid) {
-      crmClientId = ctx.ficheParUuid.get(r.customerUuid) || null
-      if (!crmClientId) {
-        const { data } = await ctx.db.from('crm_clients').select('id').eq('thefork_customer_uuid', r.customerUuid).maybeSingle()
-        crmClientId = data?.id || null
-      }
-      if (!crmClientId) {
-        const tf = await ctx.api.client(r.customerUuid)
-        if (tf) crmClientId = await enregistrerClient(ctx, tf)
-      }
-    }
-    lignes.push({
-      client_id: maison,
-      crm_client_id: crmClientId,
-      source: SOURCE,
-      externe_id: r.reservationUuid,
-      date_repas: r.mealDate,
-      couverts: r.partySize,
-      statut: r.status,
-      canal: r.reservationChannel,
-      montant: r.billAmount,
-      note_client: r.customerNote?.trim() || null,
-    })
+/**
+ * Client supprimé chez TheFork : on supprime la fiche (et ses réservations),
+ * ou on l'anonymise si des devis ou événements en dépendent.
+ */
+async function supprimerFiche(ctx: Contexte, uuid: string) {
+  const { db } = ctx
+  const { data: fiche } = await db.from('crm_clients').select('id').eq('thefork_customer_uuid', uuid)
+    .in('client_id', ctx.etablissements).maybeSingle()
+  if (!fiche) return
+  const [{ count: nbDevis }, { count: nbEvts }] = await Promise.all([
+    db.from('crm_devis').select('id', { count: 'exact', head: true }).eq('crm_client_id', fiche.id),
+    db.from('crm_evenements').select('id', { count: 'exact', head: true }).eq('crm_client_id', fiche.id),
+  ])
+  if ((nbDevis || 0) + (nbEvts || 0) > 0) {
+    await db.from('crm_clients').update({
+      nom: 'Client supprimé', prenom: null, email: null, telephone: null, adresse: null, code_postal: null, ville: null,
+      langue: null, preferences: null, champs_thefork: null, contactable: false, thefork_customer_uuid: null,
+    }).eq('id', fiche.id)
+  } else {
+    await db.from('crm_clients').delete().eq('id', fiche.id)
   }
-  if (lignes.length) {
-    const { error } = await ctx.db.from('crm_reservations').upsert(lignes, { onConflict: 'source,externe_id' })
-    if (error) throw new Error(`Réservations : ${error.message} (groupe TheFork ${groupUuid})`)
-    ctx.res.reservations_ecrites += lignes.length
+  ctx.res.clients_supprimes++
+}
+
+async function enregistrerReservation(ctx: Contexte, r: TheForkReservation): Promise<'ok' | 'sans_maison'> {
+  const maison = ctx.maisons.get(r.restaurantUuid)
+  if (!maison) {
+    if (!ctx.maisons.has(r.restaurantUuid)) {
+      // Restaurant pas encore relié : on le note pour que le superadmin le rattache
+      ctx.maisons.set(r.restaurantUuid, null)
+      await ctx.db.from('crm_thefork_restaurants')
+        .upsert({ restaurant_uuid: r.restaurantUuid, groupe_id: ctx.groupeId }, { onConflict: 'restaurant_uuid', ignoreDuplicates: true })
+    }
+    ctx.res.reservations_sans_maison++
+    return 'sans_maison'
+  }
+  let crmClientId: string | null = null
+  if (r.customerUuid) {
+    crmClientId = ctx.ficheParUuid.get(r.customerUuid) || null
+    if (!crmClientId) {
+      const { data } = await ctx.db.from('crm_clients').select('id').eq('thefork_customer_uuid', r.customerUuid)
+        .in('client_id', ctx.etablissements).maybeSingle()
+      crmClientId = data?.id || null
+    }
+    if (!crmClientId) {
+      const tf = await ctx.api.client(r.customerUuid)
+      if (tf) crmClientId = await enregistrerClient(ctx, tf)
+    }
+  }
+  const { error } = await ctx.db.from('crm_reservations').upsert(ligneReservation(r, maison, crmClientId), { onConflict: 'source,externe_id' })
+  if (error) throw new Error(`Réservation : ${error.message}`)
+  ctx.res.reservations_ecrites++
+  return 'ok'
+}
+
+async function enfiler(db: SupabaseClient, groupeId: string, type: 'client' | 'reservation', uuids: string[]) {
+  const maj_at = new Date().toISOString()
+  for (let i = 0; i < uuids.length; i += 1000) {
+    const { error } = await db.from('crm_thefork_file').upsert(
+      uuids.slice(i, i + 1000).map((uuid) => ({ groupe_id: groupeId, type, uuid, statut: 'a_traiter', tentatives: 0, erreur: null, maj_at })),
+      { onConflict: 'groupe_id,type,uuid' },
+    )
+    if (error) throw new Error(`File d'attente : ${error.message}`)
   }
 }
 
+async function marquer(db: SupabaseClient, groupeId: string, type: string, uuid: string, statut: string, erreur: string | null = null, tentatives?: number) {
+  await db.from('crm_thefork_file').update({ statut, erreur, maj_at: new Date().toISOString(), ...(tentatives !== undefined ? { tentatives } : {}) })
+    .eq('groupe_id', groupeId).eq('type', type).eq('uuid', uuid)
+}
+
+async function compterFile(db: SupabaseClient, groupeId: string, type: string) {
+  const { count } = await db.from('crm_thefork_file').select('uuid', { count: 'exact', head: true })
+    .eq('groupe_id', groupeId).eq('type', type).eq('statut', 'a_traiter')
+  return count || 0
+}
+
+/** Traite la file d'un type jusqu'à épuisement ou fin du temps imparti. */
+async function traiterFile(ctx: Contexte, type: 'client' | 'reservation') {
+  const { db, api, groupeId } = ctx
+  for (;;) {
+    const { data: lot } = await db.from('crm_thefork_file').select('uuid, tentatives')
+      .eq('groupe_id', groupeId).eq('type', type).eq('statut', 'a_traiter').order('maj_at').limit(LOT_FILE)
+    if (!lot?.length) return
+    for (const { uuid, tentatives } of lot) {
+      try {
+        if (type === 'client') {
+          const tf = await api.client(uuid)
+          if (!tf) { await supprimerFiche(ctx, uuid); await marquer(db, groupeId, type, uuid, 'introuvable'); continue }
+          await enregistrerClient(ctx, tf)
+          await marquer(db, groupeId, type, uuid, 'traite')
+        } else {
+          const r = await api.reservation(uuid)
+          if (!r) { await marquer(db, groupeId, type, uuid, 'introuvable'); continue }
+          const etat = await enregistrerReservation(ctx, r)
+          await marquer(db, groupeId, type, uuid, etat === 'ok' ? 'traite' : 'erreur', etat === 'ok' ? null : 'Restaurant non relié')
+        }
+      } catch (err) {
+        if (err instanceof TempsEcoule) throw err
+        ctx.res.erreurs++
+        const n = tentatives + 1
+        await marquer(db, groupeId, type, uuid, n >= TENTATIVES_MAX ? 'erreur' : 'a_traiter',
+          err instanceof Error ? err.message.slice(0, 300) : String(err), n)
+      }
+    }
+  }
+}
+
+/** Remet en file les fiches le plus anciennement vérifiées (repère les suppressions). */
+async function planifierVerifications(ctx: Contexte) {
+  const limite = jours(ctx.maintenant, -REVERIFIER_APRES_JOURS).toISOString()
+  const { data } = await ctx.db.from('crm_clients').select('thefork_customer_uuid')
+    .in('client_id', ctx.etablissements).not('thefork_customer_uuid', 'is', null)
+    .or(`thefork_verifie_at.is.null,thefork_verifie_at.lt.${limite}`)
+    .order('thefork_verifie_at', { ascending: true, nullsFirst: true }).limit(VERIFICATIONS_PAR_PASSE)
+  const uuids = (data || []).map((d) => d.thefork_customer_uuid as string)
+  if (uuids.length) await enfiler(ctx.db, ctx.groupeId, 'client', uuids)
+}
+
 /**
- * Une passe de synchronisation pour un groupe skalcook, dans la limite de
- * `budgetMs`. Sauvegarde les curseurs et le résultat dans crm_thefork_sync.
+ * Une passe de synchronisation pour un groupe, dans la limite de `budgetMs`.
+ * `api` permet d'injecter un client (essais) ; sinon il est construit avec les
+ * identifiants du groupe rangés dans le Vault.
  */
 export async function synchroniserTheFork(
   db: SupabaseClient,
-  api: TheForkClient,
   groupeId: string,
-  { budgetMs = 45_000, maintenant = new Date() }: { budgetMs?: number; maintenant?: Date } = {},
+  { budgetMs = 45_000, maintenant = new Date(), api }: { budgetMs?: number; maintenant?: Date; api?: TheForkClient } = {},
 ): Promise<ResultatSync> {
-  const fin = Date.now() + budgetMs
-  const temps = () => Date.now() < fin
+  const finAt = Date.now() + budgetMs
+  const res: ResultatSync = {
+    listes_clients: 0, listes_reservations: 0,
+    clients_crees: 0, clients_fusionnes: 0, clients_maj: 0, clients_supprimes: 0,
+    reservations_ecrites: 0, reservations_sans_maison: 0, erreurs: 0,
+    file_restante: { clients: 0, reservations: 0 }, termine: false,
+  }
 
-  const { data: sync, error: sErr } = await db.from('crm_thefork_sync').select('*').eq('groupe_id', groupeId).maybeSingle()
-  if (sErr || !sync) throw new Error('Synchronisation TheFork non configurée pour ce groupe.')
+  const { data: sync } = await db.from('crm_thefork_sync').select('*').eq('groupe_id', groupeId).maybeSingle()
+  if (!sync) return { ...res, erreur: 'Synchronisation TheFork non configurée pour ce groupe.' }
+  if (!sync.thefork_group_uuid) return { ...res, erreur: 'Identifiant de groupe TheFork manquant.' }
+
+  const client = api || await clientTheForkPourGroupe(db, groupeId, { finAt, debitParSeconde: Number(sync.debit_par_seconde) || 5 })
+  if (!client) return { ...res, erreur: 'Identifiants API TheFork manquants pour ce groupe.' }
 
   const [{ data: etabs }, { data: restos }] = await Promise.all([
     db.from('clients').select('id').eq('groupe_id', groupeId),
     db.from('crm_thefork_restaurants').select('restaurant_uuid, client_id').eq('groupe_id', groupeId),
   ])
-  const etablissements = (etabs || []).map((e) => e.id)
-  const maisons = new Map<string, string | null>((restos || []).map((r) => [r.restaurant_uuid, r.client_id]))
+  const etablissements = (etabs || []).map((e: { id: string }) => e.id)
+  const maisons = new Map<string, string | null>((restos || []).map((r: { restaurant_uuid: string; client_id: string | null }) => [r.restaurant_uuid, r.client_id]))
   const maisonParDefaut = [...maisons.values()].find(Boolean) || etablissements[0]
-  if (!maisonParDefaut) throw new Error('Aucun établissement dans ce groupe.')
+  if (!maisonParDefaut) return { ...res, erreur: 'Aucun établissement dans ce groupe.' }
 
-  const res: ResultatSync = {
-    clients_lus: 0, clients_crees: 0, clients_fusionnes: 0,
-    reservations_lues: 0, reservations_ecrites: 0, reservations_sans_maison: 0,
-    restaurants_inconnus: [], termine: false,
-    curseur_clients: sync.curseur_clients, curseur_reservations: sync.curseur_reservations,
-  }
-  const ctx: Contexte = { db, api, groupeId, etablissements, maisons, maisonParDefaut, ficheParUuid: new Map(), res }
+  const ctx: Contexte = { db, api: client, groupeId, etablissements, maisons, maisonParDefaut, ficheParUuid: new Map(), maintenant, res }
   const aujourdhui = iso(maintenant)
-  const sauver = () => db.from('crm_thefork_sync').update({
-    curseur_clients: res.curseur_clients,
-    curseur_reservations: res.curseur_reservations,
+  const veille = iso(jours(maintenant, -1))
+  const curseurs = { curseur_clients: sync.curseur_clients, curseur_reservations: sync.curseur_reservations }
+
+  try {
+    // 1. Listes (créés ou modifiés depuis le dernier passage) → file. Une fois
+    //    par jour au plus : les passes suivantes du même jour vident la file.
+    if (!curseurs.curseur_clients || curseurs.curseur_clients < veille) {
+      const ids = await client.clients(sync.thefork_group_uuid, curseurs.curseur_clients || sync.import_depuis, aujourdhui)
+      await enfiler(db, groupeId, 'client', ids)
+      res.listes_clients = ids.length
+      curseurs.curseur_clients = veille
+    }
+    if (!curseurs.curseur_reservations || curseurs.curseur_reservations < veille) {
+      const ids = await client.reservations(sync.thefork_group_uuid, curseurs.curseur_reservations || sync.import_depuis, aujourdhui)
+      await enfiler(db, groupeId, 'reservation', ids)
+      res.listes_reservations = ids.length
+      curseurs.curseur_reservations = veille
+    }
+
+    // 2. Détail des fiches, clients d'abord (les réservations s'y rattachent)
+    await traiterFile(ctx, 'client')
+    await traiterFile(ctx, 'reservation')
+
+    // 3. File vide : on revérifie quelques fiches anciennes (suppressions chez TheFork)
+    await planifierVerifications(ctx)
+    await traiterFile(ctx, 'client')
+  } catch (err) {
+    if (!(err instanceof TempsEcoule)) res.erreur = err instanceof Error ? err.message : String(err)
+  }
+
+  res.file_restante = { clients: await compterFile(db, groupeId, 'client'), reservations: await compterFile(db, groupeId, 'reservation') }
+  res.termine = !res.erreur && res.file_restante.clients === 0 && res.file_restante.reservations === 0
+  await db.from('crm_thefork_sync').update({
+    ...curseurs,
     derniere_execution: new Date().toISOString(),
     dernier_resultat: res,
   }).eq('groupe_id', groupeId)
-
-  try {
-    // 1. Clients créés ou modifiés
-    const debutClients = res.curseur_clients || sync.import_depuis
-    let clientsFinis = true
-    for (const [d, f] of fenetres(debutClients, aujourdhui, FENETRE_CLIENTS_JOURS)) {
-      if (!temps()) { clientsFinis = false; break }
-      const ids = await api.clients(sync.thefork_group_uuid, d, f)
-      res.clients_lus += ids.length
-      for (const tf of await api.detailsClients(ids)) await enregistrerClient(ctx, tf)
-      // On relira les derniers jours au prochain passage
-      const relire = iso(jours(maintenant, -RELECTURE_CLIENTS_JOURS))
-      res.curseur_clients = f < relire ? iso(jours(date(f), 1)) : relire
-    }
-
-    // 2. Réservations (passées puis à venir)
-    const horizon = iso(jours(maintenant, HORIZON_FUTUR_JOURS))
-    const debutResas = res.curseur_reservations || sync.import_depuis
-    let resasFinies = true
-    for (const [d, f] of fenetres(debutResas, horizon, FENETRE_RESAS_JOURS)) {
-      if (!temps()) { resasFinies = false; break }
-      const ids = await api.reservations(sync.thefork_group_uuid, d, f)
-      res.reservations_lues += ids.length
-      await enregistrerReservations(ctx, await api.detailsReservations(ids), sync.thefork_group_uuid)
-      const relire = iso(jours(maintenant, -RELECTURE_RESAS_JOURS))
-      res.curseur_reservations = f < relire ? iso(jours(date(f), 1)) : relire
-    }
-    res.termine = clientsFinis && resasFinies
-  } catch (err) {
-    res.erreur = err instanceof Error ? err.message : String(err)
-  }
-  await sauver()
   return res
 }
