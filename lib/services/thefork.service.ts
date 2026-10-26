@@ -203,8 +203,9 @@ export class TheForkClient {
     return this.pageIds('/manager/v1/customers', { groupUuid, startDate: debut, endDate: fin }, page)
   }
 
-  pageReservations(groupUuid: string, debut: string, fin: string, page: number) {
-    return this.pageIds('/manager/v1/reservations', { groupUuid, startDate: debut, endDate: fin, filterBy: 'updatedDate' }, page)
+  /** `filtre` : date de modification (synchro au fil de l'eau) ou date du repas (historique). */
+  pageReservations(groupUuid: string, debut: string, fin: string, page: number, filtre: 'updatedDate' | 'mealDate' = 'updatedDate') {
+    return this.pageIds('/manager/v1/reservations', { groupUuid, startDate: debut, endDate: fin, filterBy: filtre }, page)
   }
 
   /** Tous les identifiants d'une liste paginée. */

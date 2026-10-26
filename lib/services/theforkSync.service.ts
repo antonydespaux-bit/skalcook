@@ -42,6 +42,9 @@ const TENTATIVES_MAX = 3
 // à la page près, découper par année ferait relire presque toute la base à
 // chaque tranche (constaté : 2010 → 54 798, 2015 → 118 639, 2016 → 132 247).
 const TRANCHE_LISTE_JOURS = 36_500
+const TRANCHE_RESAS_INITIALES_JOURS = 31
+// Réservations à venir reprises par l'import initial
+const HORIZON_RESAS_JOURS = 365
 // Une page de liste (10 000 identifiants à lire puis ranger) peut prendre
 // 15 à 20 s : on ne la commence pas s'il reste moins que cette marge.
 const MARGE_PAGE_LISTE_MS = 25_000
@@ -423,6 +426,7 @@ export async function synchroniserTheFork(
   const ctx: Contexte = { db, api: client, groupeId, etablissements, maisons, lieux, maisonParDefaut, ficheParUuid: new Map(), maintenant, res }
   const aujourdhui = iso(maintenant)
   const veille = iso(jours(maintenant, -1))
+  let importInitialFait = !!sync.import_initial_fait
   const curseurs = {
     curseur_clients: sync.curseur_clients as string | null,
     curseur_reservations: sync.curseur_reservations as string | null,
@@ -431,24 +435,25 @@ export async function synchroniserTheFork(
   }
 
   try {
-    // 1. Listes (créés ou modifiés depuis le dernier passage) → file, une
-    //    année à la fois et une page à la fois : chaque page lue part dans la
-    //    file et la position (tranche + page) est gardée, une passe
-    //    interrompue reprend à la page suivante. Une fois à jour, la liste
-    //    n'est relue qu'une fois par jour (depuis la veille).
-    const lister = async (type: 'client' | 'reservation') => {
+    // 1. Listes → file, une page à la fois : chaque page lue part dans la file
+    //    et la position (tranche + page) est gardée, une passe interrompue
+    //    reprend à la page suivante.
+    const lister = async (
+      type: 'client' | 'reservation',
+      depart: string,
+      finMax: string,
+      trancheJours: number,
+      page: (debut: string, fin: string, p: number) => Promise<{ ids: string[]; total: number; taille: number; suivante: boolean }>,
+    ) => {
       const cle = type === 'client' ? 'curseur_clients' : 'curseur_reservations'
       const clePage = type === 'client' ? 'page_clients' : 'page_reservations'
-      if (curseurs[cle] && curseurs[cle] >= veille) return
-      for (let debut = curseurs[cle] || sync.import_depuis; debut <= aujourdhui;) {
-        const finTranche = iso(jours(new Date(`${debut}T00:00:00Z`), TRANCHE_LISTE_JOURS - 1))
-        const fin = finTranche < aujourdhui ? finTranche : aujourdhui
+      for (let debut = depart; debut <= finMax;) {
+        const finTranche = iso(jours(new Date(`${debut}T00:00:00Z`), trancheJours - 1))
+        const fin = finTranche < finMax ? finTranche : finMax
         curseurs[cle] = debut
-        for (let page = curseurs[clePage] || 1; ; page++) {
+        for (let p = curseurs[clePage] || 1; ; p++) {
           if (Date.now() > finAt - MARGE_PAGE_LISTE_MS) throw new TempsEcoule()
-          const lot = type === 'client'
-            ? await client.pageClients(sync.thefork_group_uuid, debut, fin, page)
-            : await client.pageReservations(sync.thefork_group_uuid, debut, fin, page)
+          const lot = await page(debut, fin, p)
           await enfiler(db, groupeId, type, lot.ids)
           res.pages_listees++
           res.dernier_total = lot.total
@@ -456,15 +461,37 @@ export async function synchroniserTheFork(
           if (type === 'client') res.listes_clients += lot.ids.length
           else res.listes_reservations += lot.ids.length
           if (!lot.suivante) break
-          curseurs[clePage] = page + 1
+          curseurs[clePage] = p + 1
         }
         curseurs[clePage] = 1
         debut = iso(jours(new Date(`${fin}T00:00:00Z`), 1))
-        curseurs[cle] = fin >= aujourdhui ? veille : debut
+        curseurs[cle] = debut
       }
+      curseurs[cle] = veille
     }
-    await lister('client')
-    await lister('reservation')
+    const g = sync.thefork_group_uuid
+
+    // Clients : pas d'historique global (TheFork annonce des centaines de
+    // milliers de profils « modifiés », la plupart jamais venus) ; les clients
+    // de l'historique arrivent par leurs réservations. Ensuite, chaque jour,
+    // les profils créés ou modifiés depuis la veille.
+    if (!curseurs.curseur_clients) curseurs.curseur_clients = veille
+    else if (curseurs.curseur_clients < veille) {
+      await lister('client', curseurs.curseur_clients, aujourdhui, TRANCHE_LISTE_JOURS,
+        (d, f, p) => client.pageClients(g, d, f, p))
+    }
+
+    // Réservations : import initial par date de repas, mois par mois (TheFork
+    // plafonne ses totaux à 10 000), de import_depuis jusqu'aux repas à venir ;
+    // ensuite, chaque jour, les réservations modifiées depuis la veille.
+    if (!sync.import_initial_fait) {
+      await lister('reservation', curseurs.curseur_reservations || sync.import_depuis, iso(jours(maintenant, HORIZON_RESAS_JOURS)),
+        TRANCHE_RESAS_INITIALES_JOURS, (d, f, p) => client.pageReservations(g, d, f, p, 'mealDate'))
+      importInitialFait = true
+    } else if (!curseurs.curseur_reservations || curseurs.curseur_reservations < veille) {
+      await lister('reservation', curseurs.curseur_reservations || veille, aujourdhui, TRANCHE_LISTE_JOURS,
+        (d, f, p) => client.pageReservations(g, d, f, p, 'updatedDate'))
+    }
 
     // 2. Détail des fiches, clients d'abord (les réservations s'y rattachent)
     await traiterFile(ctx, 'client')
@@ -483,6 +510,7 @@ export async function synchroniserTheFork(
   res.termine = !res.erreur && !res.interrompu && res.file_restante.clients === 0 && res.file_restante.reservations === 0
   await db.from('crm_thefork_sync').update({
     ...curseurs,
+    import_initial_fait: importInitialFait,
     derniere_execution: new Date().toISOString(),
     dernier_resultat: res,
   }).eq('groupe_id', groupeId)
