@@ -14,15 +14,33 @@ import { z } from 'zod'
 import { apiHandler } from '../../../../lib/apiHandler'
 import { logServeur } from '../../../../lib/serverLog'
 import { synchroniserTheFork } from '../../../../lib/services/theforkSync.service'
+import { clientTheForkPourGroupe } from '../../../../lib/services/thefork.service'
 
 export const maxDuration = 60
 
 const schema = z.object({ groupe_id: z.string().uuid() })
+const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+const getSchema = schema.extend({ sonde_debut: date.optional(), sonde_fin: date.optional() })
 
 export const GET = apiHandler({
-  schema,
+  schema: getSchema,
   guard: 'superadmin',
   handler: async ({ data, db }) => {
+    // Sonde : combien de clients / réservations TheFork annonce sur une période
+    // (une requête de 1 identifiant chacune, rien n'est importé).
+    if (data.sonde_debut && data.sonde_fin) {
+      const [{ data: sync }, api] = await Promise.all([
+        db.from('crm_thefork_sync').select('thefork_group_uuid').eq('groupe_id', data.groupe_id).maybeSingle(),
+        clientTheForkPourGroupe(db, data.groupe_id),
+      ])
+      if (!api || !sync?.thefork_group_uuid) return Response.json({ error: 'Synchronisation non configurée' }, { status: 400 })
+      const q = { groupUuid: sync.thefork_group_uuid, startDate: data.sonde_debut, endDate: data.sonde_fin, limit: 1, page: 1 }
+      const [c, r] = await Promise.all([
+        api.get<{ totalCount: number }>('/manager/v1/customers', q),
+        api.get<{ totalCount: number }>('/manager/v1/reservations', { ...q, filterBy: 'updatedDate' }),
+      ])
+      return Response.json({ periode: [data.sonde_debut, data.sonde_fin], clients: c?.totalCount ?? null, reservations: r?.totalCount ?? null })
+    }
     const [{ data: sync }, { data: restaurants }, { data: groupe }, { data: etablissements }, { data: file }] = await Promise.all([
       db.from('crm_thefork_sync').select('*').eq('groupe_id', data.groupe_id).maybeSingle(),
       db.from('crm_thefork_restaurants').select('restaurant_uuid, client_id, lieu_id, nom').eq('groupe_id', data.groupe_id).order('nom'),
