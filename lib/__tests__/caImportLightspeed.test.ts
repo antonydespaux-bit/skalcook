@@ -50,11 +50,17 @@ describe('jourEtService', () => {
 })
 
 describe('ttcParTaux', () => {
-  it('reconstitue le TTC de chaque taux et garde le total exact', () => {
-    // 2 630 € : TVA 20 % 263,33 → 1 579,98 ; TVA 10 % 95,45 → 1 049,95 ; écart 0,07 sur le plus gros
-    const r = ttcParTaux(263000, { '20': 26333, '10': 9545 })
-    expect(r['10'] + r['20']).toBe(263000)
-    expect(r['20']).toBe(158005)
+  it('arrondit à l’euro les parts d’un ticket en euros ronds', () => {
+    // 2 630 € : TVA 20 % 263,33 → 1 579,98 ; TVA 10 % 95,45 → 1 049,95
+    expect(ttcParTaux(263000, { '20': 26333, '10': 9545 })).toEqual({ '20': 158000, '10': 105000 })
+    // 160 € : 10 % 0,91 → 10,01 ; 20 % 25 → 150
+    expect(ttcParTaux(16000, { '10': 91, '20': 2500 })).toEqual({ '10': 1000, '20': 15000 })
+  })
+  it('garde les centimes quand les prix ne sont pas ronds', () => {
+    // 10 € = café 4,50 € (10 %) + 5,50 € (20 %)
+    const r = ttcParTaux(1000, { '10': 41, '20': 92 })
+    expect(r['10'] + r['20']).toBe(1000)
+    expect(r['10'] % 100).not.toBe(0)
   })
   it('ticket sans taxe → taux 0', () => {
     expect(ttcParTaux(5000, {})).toEqual({ '0': 5000 })
