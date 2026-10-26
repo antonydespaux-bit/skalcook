@@ -187,6 +187,26 @@ export class TheForkClient {
     }
   }
 
+  /**
+   * Une page de liste : identifiants, total annoncé, taille de page réellement
+   * appliquée par TheFork, et s'il reste une page après celle-ci.
+   */
+  async pageIds(chemin: string, query: Record<string, string | number>, page: number) {
+    const lot = await this.get<ListePage>(chemin, { ...query, page, limit: LIMITE_LISTE })
+    const ids = lot?.data || []
+    const taille = lot?.limit || ids.length || LIMITE_LISTE
+    const total = lot?.totalCount ?? ids.length
+    return { ids, total, taille, suivante: ids.length > 0 && (page - 1) * taille + ids.length < total }
+  }
+
+  pageClients(groupUuid: string, debut: string, fin: string, page: number) {
+    return this.pageIds('/manager/v1/customers', { groupUuid, startDate: debut, endDate: fin }, page)
+  }
+
+  pageReservations(groupUuid: string, debut: string, fin: string, page: number) {
+    return this.pageIds('/manager/v1/reservations', { groupUuid, startDate: debut, endDate: fin, filterBy: 'updatedDate' }, page)
+  }
+
   /** Tous les identifiants d'une liste paginée. */
   async listerIds(chemin: string, query: Record<string, string | number>): Promise<string[]> {
     const ids: string[] = []
