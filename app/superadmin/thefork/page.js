@@ -97,7 +97,7 @@ export default function TheForkSuperadminPage() {
         crm_vip_visites: Number(form.crm_vip_visites),
         crm_vip_mois: Number(form.crm_vip_mois),
         crm_perdu_mois: Number(form.crm_perdu_mois),
-        restaurants: restos.map((r) => ({ restaurant_uuid: r.restaurant_uuid, client_id: r.client_id || null, nom: r.nom || null })),
+        restaurants: restos.map((r) => ({ restaurant_uuid: r.restaurant_uuid, client_id: r.client_id || null, lieu_id: r.lieu_id || null, nom: r.nom || null })),
         ...extra,
       })
       setMessage('Réglages enregistrés.')
@@ -244,7 +244,7 @@ export default function TheForkSuperadminPage() {
               {restos.length === 0 ? (
                 <div style={{ fontSize: '13px', color: '#71717A' }}>Les restaurants apparaissent ici après une première synchronisation. Rattachez chacun à son établissement.</div>
               ) : restos.map((resto, i) => (
-                <div key={resto.restaurant_uuid} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', padding: '10px 0', borderTop: i ? '0.5px solid #F4F4F5' : 'none' }}>
+                <div key={resto.restaurant_uuid} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', padding: '10px 0', borderTop: i ? '0.5px solid #F4F4F5' : 'none' }}>
                   <div>
                     <input value={resto.nom || ''} placeholder="Nom (pour s’y retrouver)" onChange={(e) => setRestos(restos.map((x) => x.restaurant_uuid === resto.restaurant_uuid ? { ...x, nom: e.target.value } : x))} style={champ} />
                     <div style={{ fontSize: '11px', color: '#A1A1AA', marginTop: '4px' }}>{resto.restaurant_uuid}</div>
@@ -252,6 +252,10 @@ export default function TheForkSuperadminPage() {
                   <select value={resto.client_id || ''} onChange={(e) => setRestos(restos.map((x) => x.restaurant_uuid === resto.restaurant_uuid ? { ...x, client_id: e.target.value || null } : x))} style={{ ...champ, borderColor: resto.client_id ? '#E4E4E7' : '#F59E0B' }}>
                     <option value="">Non relié (réservations ignorées)</option>
                     {etat.etablissements.map((e) => <option key={e.id} value={e.id}>{e.nom_etablissement || e.nom}</option>)}
+                  </select>
+                  <select value={resto.lieu_id || ''} title="Lieu affiché sur les réservations (ex. une salle sans établissement)" onChange={(e) => setRestos(restos.map((x) => x.restaurant_uuid === resto.restaurant_uuid ? { ...x, lieu_id: e.target.value || null } : x))} style={champ}>
+                    <option value="">Lieu : celui de l’établissement</option>
+                    {(etat.lieux || []).map((l) => <option key={l.id} value={l.id}>Lieu : {l.nom}</option>)}
                   </select>
                 </div>
               ))}

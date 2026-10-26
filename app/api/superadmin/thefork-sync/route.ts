@@ -25,11 +25,12 @@ export const GET = apiHandler({
   handler: async ({ data, db }) => {
     const [{ data: sync }, { data: restaurants }, { data: groupe }, { data: etablissements }, { data: file }] = await Promise.all([
       db.from('crm_thefork_sync').select('*').eq('groupe_id', data.groupe_id).maybeSingle(),
-      db.from('crm_thefork_restaurants').select('restaurant_uuid, client_id, nom').eq('groupe_id', data.groupe_id).order('nom'),
+      db.from('crm_thefork_restaurants').select('restaurant_uuid, client_id, lieu_id, nom').eq('groupe_id', data.groupe_id).order('nom'),
       db.from('groupes').select('id, nom, crm_partage, crm_vip_visites, crm_vip_mois, crm_perdu_mois').eq('id', data.groupe_id).maybeSingle(),
       db.from('clients').select('id, nom, nom_etablissement').eq('groupe_id', data.groupe_id).order('nom'),
       db.rpc('thefork_file_compteurs', { p_groupe_id: data.groupe_id }),
     ])
+    const { data: lieux } = await db.from('crm_lieux').select('id, nom, client_id').eq('groupe_id', data.groupe_id).eq('actif', true).order('nom')
     const ids = (etablissements || []).map((e: { id: string }) => e.id)
     const [{ count: nbClients }, { count: nbResas }] = ids.length
       ? await Promise.all([
@@ -41,7 +42,7 @@ export const GET = apiHandler({
     return Response.json({
       sync: sync ? syncPublic : null,
       identifiants: { enregistres: !!vault_secret_id, maj: sync?.identifiants_maj || null },
-      groupe, etablissements: etablissements || [], restaurants: restaurants || [],
+      groupe, etablissements: etablissements || [], lieux: lieux || [], restaurants: restaurants || [],
       compteurs: { clients: nbClients || 0, reservations: nbResas || 0 },
       file: file || [],
     })
@@ -66,6 +67,7 @@ const reglagesSchema = z.object({
   restaurants: z.array(z.object({
     restaurant_uuid: z.string().min(1).max(100),
     client_id: z.string().uuid().nullable(),
+    lieu_id: z.string().uuid().nullable().optional(),
     nom: z.string().max(200).nullable().optional(),
   })).max(50).optional(),
 }).refine((d) => !!d.client_id === !!d.client_secret, { message: 'client_id et client_secret vont ensemble.' })

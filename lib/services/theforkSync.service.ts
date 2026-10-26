@@ -160,9 +160,10 @@ export function choisirFiche(candidats: CrmClientLigne[], tf: TheForkCustomer): 
 }
 
 /** Ligne crm_reservations pour une réservation TheFork (sans la note du client : texte libre). */
-export function ligneReservation(r: TheForkReservation, maison: string, crmClientId: string | null) {
+export function ligneReservation(r: TheForkReservation, maison: string, crmClientId: string | null, lieuId: string | null = null) {
   return {
     client_id: maison,
+    lieu_id: lieuId,
     crm_client_id: crmClientId,
     source: SOURCE,
     externe_id: r.reservationUuid,
@@ -209,6 +210,8 @@ interface Contexte {
   groupeId: string
   etablissements: string[]
   maisons: Map<string, string | null>
+  /** Lieu du groupe d'un restaurant TheFork (ex. Maison Michodière, sans établissement). */
+  lieux: Map<string, string | null>
   maisonParDefaut: string
   ficheParUuid: Map<string, string>
   maintenant: Date
@@ -305,7 +308,7 @@ async function enregistrerReservation(ctx: Contexte, r: TheForkReservation): Pro
       if (tf) crmClientId = await enregistrerClient(ctx, tf)
     }
   }
-  const { error } = await ctx.db.from('crm_reservations').upsert(ligneReservation(r, maison, crmClientId), { onConflict: 'source,externe_id' })
+  const { error } = await ctx.db.from('crm_reservations').upsert(ligneReservation(r, maison, crmClientId, ctx.lieux.get(r.restaurantUuid) || null), { onConflict: 'source,externe_id' })
   if (error) throw new Error(`Réservation : ${error.message}`)
   ctx.res.reservations_ecrites++
   return 'ok'
@@ -402,14 +405,16 @@ export async function synchroniserTheFork(
 
   const [{ data: etabs }, { data: restos }] = await Promise.all([
     db.from('clients').select('id').eq('groupe_id', groupeId),
-    db.from('crm_thefork_restaurants').select('restaurant_uuid, client_id').eq('groupe_id', groupeId),
+    db.from('crm_thefork_restaurants').select('restaurant_uuid, client_id, lieu_id').eq('groupe_id', groupeId),
   ])
   const etablissements = (etabs || []).map((e: { id: string }) => e.id)
-  const maisons = new Map<string, string | null>((restos || []).map((r: { restaurant_uuid: string; client_id: string | null }) => [r.restaurant_uuid, r.client_id]))
+  type Resto = { restaurant_uuid: string; client_id: string | null; lieu_id: string | null }
+  const maisons = new Map<string, string | null>((restos || []).map((r: Resto) => [r.restaurant_uuid, r.client_id]))
+  const lieux = new Map<string, string | null>((restos || []).map((r: Resto) => [r.restaurant_uuid, r.lieu_id]))
   const maisonParDefaut = [...maisons.values()].find(Boolean) || etablissements[0]
   if (!maisonParDefaut) return { ...res, erreur: 'Aucun établissement dans ce groupe.' }
 
-  const ctx: Contexte = { db, api: client, groupeId, etablissements, maisons, maisonParDefaut, ficheParUuid: new Map(), maintenant, res }
+  const ctx: Contexte = { db, api: client, groupeId, etablissements, maisons, lieux, maisonParDefaut, ficheParUuid: new Map(), maintenant, res }
   const aujourdhui = iso(maintenant)
   const veille = iso(jours(maintenant, -1))
   const curseurs = {

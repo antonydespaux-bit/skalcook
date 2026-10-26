@@ -95,7 +95,7 @@ export default function CrmClientDetailPage() {
         .eq('crm_client_id', id)
         .order('occurred_at', { ascending: false }),
       supabase.from('crm_reservations')
-        .select('id, client_id, date_repas, couverts, statut, canal')
+        .select('id, client_id, lieu_id, date_repas, couverts, statut, canal')
         .eq('crm_client_id', id).in('client_id', ids)
         .order('date_repas', { ascending: false }),
     ])
@@ -336,7 +336,7 @@ export default function CrmClientDetailPage() {
                             {r.date_repas ? new Date(r.date_repas).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Paris' }) : '—'}
                           </div>
                           <div className="crm-row__secondary" style={{ color: c.texteMuted }}>
-                            {[maisons[r.client_id], r.couverts ? `${r.couverts} couverts` : null, r.canal].filter(Boolean).join(' · ')}
+                            {[lieux.find((l) => l.id === r.lieu_id)?.nom || maisons[r.client_id], r.couverts ? `${r.couverts} couverts` : null, r.canal].filter(Boolean).join(' · ')}
                           </div>
                         </div>
                         <div />
