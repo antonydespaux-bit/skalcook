@@ -38,6 +38,7 @@ const LOT_FILE = 200
 const VERIFICATIONS_PAR_PASSE = 100
 const REVERIFIER_APRES_JOURS = 30
 const TENTATIVES_MAX = 3
+const TRANCHE_LISTE_JOURS = 365
 
 // ─── Normalisation (miroir des colonnes générées de crm_clients) ────────────
 
@@ -191,6 +192,10 @@ export interface ResultatSync {
   erreurs: number
   file_restante: { clients: number; reservations: number }
   termine: boolean
+  /** Passe arrêtée faute de temps (TheFork lent ou demandant d'attendre) : relancer. */
+  interrompu: boolean
+  /** Dernière réponse anormale de TheFork pendant la passe. */
+  incident?: { statut: number | string; chemin: string } | null
   erreur?: string
 }
 
@@ -381,7 +386,7 @@ export async function synchroniserTheFork(
     listes_clients: 0, listes_reservations: 0,
     clients_crees: 0, clients_fusionnes: 0, clients_maj: 0, clients_supprimes: 0,
     reservations_ecrites: 0, reservations_sans_maison: 0, erreurs: 0,
-    file_restante: { clients: 0, reservations: 0 }, termine: false,
+    file_restante: { clients: 0, reservations: 0 }, termine: false, interrompu: false,
   }
 
   const { data: sync } = await db.from('crm_thefork_sync').select('*').eq('groupe_id', groupeId).maybeSingle()
@@ -406,20 +411,28 @@ export async function synchroniserTheFork(
   const curseurs = { curseur_clients: sync.curseur_clients, curseur_reservations: sync.curseur_reservations }
 
   try {
-    // 1. Listes (créés ou modifiés depuis le dernier passage) → file. Une fois
-    //    par jour au plus : les passes suivantes du même jour vident la file.
-    if (!curseurs.curseur_clients || curseurs.curseur_clients < veille) {
-      const ids = await client.clients(sync.thefork_group_uuid, curseurs.curseur_clients || sync.import_depuis, aujourdhui)
-      await enfiler(db, groupeId, 'client', ids)
-      res.listes_clients = ids.length
-      curseurs.curseur_clients = veille
+    // 1. Listes (créés ou modifiés depuis le dernier passage) → file, une
+    //    année à la fois : chaque tranche lue fait avancer le curseur, une
+    //    passe interrompue reprend à la tranche suivante. Une fois à jour, la
+    //    liste n'est relue qu'une fois par jour (depuis la veille).
+    const lister = async (cle: 'curseur_clients' | 'curseur_reservations', type: 'client' | 'reservation') => {
+      if (curseurs[cle] && curseurs[cle] >= veille) return
+      for (let debut = curseurs[cle] || sync.import_depuis; debut <= aujourdhui;) {
+        if (Date.now() > finAt) throw new TempsEcoule()
+        const finTranche = iso(jours(new Date(`${debut}T00:00:00Z`), TRANCHE_LISTE_JOURS - 1))
+        const fin = finTranche < aujourdhui ? finTranche : aujourdhui
+        const ids = type === 'client'
+          ? await client.clients(sync.thefork_group_uuid, debut, fin)
+          : await client.reservations(sync.thefork_group_uuid, debut, fin)
+        await enfiler(db, groupeId, type, ids)
+        if (type === 'client') res.listes_clients += ids.length
+        else res.listes_reservations += ids.length
+        debut = iso(jours(new Date(`${fin}T00:00:00Z`), 1))
+        curseurs[cle] = fin >= aujourdhui ? veille : debut
+      }
     }
-    if (!curseurs.curseur_reservations || curseurs.curseur_reservations < veille) {
-      const ids = await client.reservations(sync.thefork_group_uuid, curseurs.curseur_reservations || sync.import_depuis, aujourdhui)
-      await enfiler(db, groupeId, 'reservation', ids)
-      res.listes_reservations = ids.length
-      curseurs.curseur_reservations = veille
-    }
+    await lister('curseur_clients', 'client')
+    await lister('curseur_reservations', 'reservation')
 
     // 2. Détail des fiches, clients d'abord (les réservations s'y rattachent)
     await traiterFile(ctx, 'client')
@@ -429,11 +442,13 @@ export async function synchroniserTheFork(
     await planifierVerifications(ctx)
     await traiterFile(ctx, 'client')
   } catch (err) {
-    if (!(err instanceof TempsEcoule)) res.erreur = err instanceof Error ? err.message : String(err)
+    if (err instanceof TempsEcoule) res.interrompu = true
+    else res.erreur = err instanceof Error ? err.message : String(err)
   }
+  res.incident = client.dernierIncident
 
   res.file_restante = { clients: await compterFile(db, groupeId, 'client'), reservations: await compterFile(db, groupeId, 'reservation') }
-  res.termine = !res.erreur && res.file_restante.clients === 0 && res.file_restante.reservations === 0
+  res.termine = !res.erreur && !res.interrompu && res.file_restante.clients === 0 && res.file_restante.reservations === 0
   await db.from('crm_thefork_sync').update({
     ...curseurs,
     derniere_execution: new Date().toISOString(),

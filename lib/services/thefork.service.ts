@@ -109,6 +109,8 @@ export class TheForkClient {
   private readonly baseUrl: string
   private readonly intervalle: number
   private derniereRequete = 0
+  /** Dernière réponse anormale de TheFork (pour expliquer une passe interrompue). */
+  dernierIncident: { statut: number | string; chemin: string } | null = null
   private jetonMemoire: { valeur: string; expire: number } | null = null
 
   constructor(private readonly cfg: TheForkClientConfig) {
@@ -157,9 +159,19 @@ export class TheForkClient {
     for (let essai = 0; ; essai++) {
       await this.attendre(this.derniereRequete + this.intervalle - Date.now())
       this.derniereRequete = Date.now()
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${await this.token()}` } })
+      let res: Response
+      try {
+        // Une requête qui ne répond pas ne doit pas bloquer toute la passe
+        res = await fetch(url, { headers: { Authorization: `Bearer ${await this.token()}` }, signal: AbortSignal.timeout(20_000) })
+      } catch (err) {
+        if (err instanceof TheForkError) throw err
+        this.dernierIncident = { statut: 'délai dépassé', chemin }
+        if (essai < 5) { await this.attendre(2000 * 2 ** essai); continue }
+        throw new TheForkError(`TheFork ${chemin} : pas de réponse`)
+      }
       if (res.status === 404) return null
       if (res.ok) return await res.json() as T
+      this.dernierIncident = { statut: res.status, chemin }
       if (res.status === 401 && !jetonRenouvele) {
         // Jeton révoqué ou expiré plus tôt qu'annoncé : un seul renouvellement
         jetonRenouvele = true

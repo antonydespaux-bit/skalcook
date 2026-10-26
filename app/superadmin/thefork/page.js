@@ -125,7 +125,8 @@ export default function TheForkSuperadminPage() {
         setMessage(`Synchronisation en cours… (passe ${passe})`)
         const r = await appel('POST', { groupe_id: groupeId })
         if (r.erreur) { setErreur(r.erreur); break }
-        setMessage(`Passe ${passe} : ${r.clients_crees} créé(s), ${r.clients_fusionnes} fusionné(s), ${r.clients_maj} mis à jour, ${r.clients_supprimes} supprimé(s), ${r.reservations_ecrites} réservation(s). Reste en file : ${r.file_restante.clients} client(s), ${r.file_restante.reservations} réservation(s).${r.termine ? ' À jour.' : ''}`)
+        const incident = r.incident ? ` Dernière réponse de TheFork : ${r.incident.statut} (${r.incident.chemin}).` : ''
+        setMessage(`Passe ${passe} : ${r.listes_clients} client(s) et ${r.listes_reservations} réservation(s) listés ; ${r.clients_crees} créé(s), ${r.clients_fusionnes} fusionné(s), ${r.clients_maj} mis à jour, ${r.clients_supprimes} supprimé(s), ${r.reservations_ecrites} réservation(s). Reste en file : ${r.file_restante.clients} client(s), ${r.file_restante.reservations} réservation(s).${r.termine ? ' À jour.' : r.interrompu ? ' Passe interrompue, à relancer.' : ''}${incident}`)
         if (r.termine) break
       }
       await charger()
@@ -217,7 +218,8 @@ export default function TheForkSuperadminPage() {
               <div style={{ fontSize: '13px', color: '#3F3F46', lineHeight: 1.7, marginBottom: '14px' }}>
                 <div>Fiches TheFork : <b>{etat.compteurs.clients}</b> · Réservations : <b>{etat.compteurs.reservations}</b></div>
                 <div>Dernière exécution : {etat.sync?.derniere_execution ? new Date(etat.sync.derniere_execution).toLocaleString('fr-FR') : 'jamais'}
-                  {r && <> — {r.erreur ? <span style={{ color: '#B91C1C' }}>erreur : {r.erreur}</span> : r.termine ? 'à jour' : 'import en cours'}</>}
+                  {r && <> — {r.erreur ? <span style={{ color: '#B91C1C' }}>erreur : {r.erreur}</span> : r.termine ? 'à jour' : r.interrompu ? 'interrompue, à relancer' : 'import en cours'}</>}
+                  {r?.incident && <span style={{ color: '#B45309' }}> (TheFork : {String(r.incident.statut)})</span>}
                 </div>
                 {etat.sync && <div>Listes relues jusqu’au : clients {etat.sync.curseur_clients || '—'}, réservations {etat.sync.curseur_reservations || '—'}</div>}
                 {etat.file.length > 0 && (
