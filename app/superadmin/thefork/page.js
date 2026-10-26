@@ -72,7 +72,7 @@ export default function TheForkSuperadminPage() {
       setEtat(e)
       setForm({
         thefork_group_uuid: e.sync?.thefork_group_uuid || '',
-        import_depuis: e.sync?.import_depuis || '2005-01-01',
+        import_depuis: e.sync?.import_depuis || '2024-01-01',
         actif: e.sync?.actif ?? true,
         debit_par_seconde: Number(e.sync?.debit_par_seconde) || 5,
         crm_vip_visites: e.groupe?.crm_vip_visites ?? 5,
@@ -212,7 +212,7 @@ export default function TheForkSuperadminPage() {
                   <input value={form.thefork_group_uuid} onChange={(e) => setForm({ ...form, thefork_group_uuid: e.target.value.trim() })} placeholder="8b64e390-…" style={champ} />
                 </div>
                 <div>
-                  <label style={label}>Importer depuis</label>
+                  <label style={label}>Réservations depuis</label>
                   <input type="date" value={form.import_depuis} onChange={(e) => setForm({ ...form, import_depuis: e.target.value })} style={champ} />
                 </div>
                 <div>
@@ -246,7 +246,7 @@ export default function TheForkSuperadminPage() {
                 <button onClick={() => synchroniser(false)} disabled={occupe || !pret} style={bouton('#6366F1', !occupe && pret)}>Synchroniser maintenant</button>
                 <button onClick={() => synchroniser(true)} disabled={occupe || !pret} style={bouton('#16A34A', !occupe && pret)}>Tout importer</button>
                 <button onClick={() => enregistrer({ relancer_erreurs: true })} disabled={occupe || !etat.sync} style={bouton('#D97706', !occupe && !!etat.sync)}>Relancer les erreurs</button>
-                <button onClick={() => { if (window.confirm('Relire tout depuis la date d’import ? Les fiches existantes sont mises à jour, rien n’est supprimé.')) enregistrer({ reinitialiser: true }) }} disabled={occupe || !etat.sync} style={bouton('#A1A1AA', !occupe && !!etat.sync)}>Repartir du début</button>
+                <button onClick={() => { if (window.confirm('Relire l’historique des réservations depuis la date choisie ? Les fiches existantes sont mises à jour, rien n’est supprimé.')) enregistrer({ reinitialiser: true }) }} disabled={occupe || !etat.sync} style={bouton('#A1A1AA', !occupe && !!etat.sync)}>Repartir du début</button>
               </div>
             </div>
 

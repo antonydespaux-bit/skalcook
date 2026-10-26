@@ -20,7 +20,7 @@ export const maxDuration = 60
 
 const schema = z.object({ groupe_id: z.string().uuid() })
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
-const getSchema = schema.extend({ sonde_debut: date.optional(), sonde_fin: date.optional() })
+const getSchema = schema.extend({ sonde_debut: date.optional(), sonde_fin: date.optional(), sonde_filtre: z.enum(['updatedDate', 'mealDate']).optional() })
 
 export const GET = apiHandler({
   schema: getSchema,
@@ -37,7 +37,7 @@ export const GET = apiHandler({
       const q = { groupUuid: sync.thefork_group_uuid, startDate: data.sonde_debut, endDate: data.sonde_fin, limit: 1, page: 1 }
       const [c, r] = await Promise.all([
         api.get<{ totalCount: number }>('/manager/v1/customers', q),
-        api.get<{ totalCount: number }>('/manager/v1/reservations', { ...q, filterBy: 'updatedDate' }),
+        api.get<{ totalCount: number }>('/manager/v1/reservations', { ...q, filterBy: data.sonde_filtre || 'updatedDate' }),
       ])
       return Response.json({ periode: [data.sonde_debut, data.sonde_fin], clients: c?.totalCount ?? null, reservations: r?.totalCount ?? null })
     }
@@ -75,7 +75,7 @@ const reglagesSchema = z.object({
   actif: z.boolean().optional(),
   import_depuis: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   debit_par_seconde: z.number().positive().max(50).optional(),
-  // Repartir de zéro : relire toutes les listes depuis import_depuis
+  // Repartir de zéro : relire l'historique des réservations depuis import_depuis
   reinitialiser: z.boolean().optional(),
   // Remettre en file les fiches en erreur (ex. restaurant relié entre-temps)
   relancer_erreurs: z.boolean().optional(),
@@ -117,7 +117,7 @@ export const PATCH = apiHandler({
     }
 
     const ligne: Record<string, unknown> = Object.fromEntries(Object.entries(sync).filter(([, v]) => v !== undefined))
-    if (reinitialiser) Object.assign(ligne, { curseur_clients: null, curseur_reservations: null })
+    if (reinitialiser) Object.assign(ligne, { curseur_clients: null, curseur_reservations: null, page_clients: 1, page_reservations: 1, import_initial_fait: false })
     if (Object.keys(ligne).length) {
       const { error } = await db.from('crm_thefork_sync').upsert({ groupe_id, ...ligne }, { onConflict: 'groupe_id' })
       if (error) throw new Error(error.message)
