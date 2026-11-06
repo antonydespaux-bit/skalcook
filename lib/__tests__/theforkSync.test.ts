@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   normEmail, normTelephone, choisirFiche, patchFusion, champsTheFork, contactable,
-  nouvelleFiche, ligneReservation, type CrmClientLigne,
+  nouvelleFiche, ligneReservation, montantReservation, type CrmClientLigne,
 } from '../services/theforkSync.service'
 import type { TheForkCustomer, TheForkReservation } from '../services/thefork.service'
 
@@ -117,5 +117,12 @@ describe('réservations', () => {
       partySize: 12, status: 'RECORDED', reservationChannel: 'Booking Module', billAmount: null, customerNote: 'allergie arachide',
     }
     expect(ligneReservation(r, 'marsan', 'f-1')).toMatchObject({ couverts: 12, note_client: null, externe_id: 'r-1', client_id: 'marsan' })
+  })
+
+  it('lit le montant, ancien format (nombre) ou nouveau (objet en centimes)', () => {
+    expect(montantReservation(null)).toBeNull()
+    expect(montantReservation(245.5)).toBe(245.5)
+    expect(montantReservation({ totalPrice: 11000, currency: 'EUR' })).toBe(110)
+    expect(montantReservation({ totalPrice: null, currency: 'EUR' })).toBeNull()
   })
 })
