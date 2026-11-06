@@ -81,7 +81,8 @@ export interface TheForkReservation {
   partySize: number | null
   status: string | null
   reservationChannel: string | null
-  billAmount: number | null
+  /** Ancien format : nombre ; format actuel (oct. 2026) : { totalPrice (centimes), currency }. */
+  billAmount: number | { totalPrice?: number | null; currency?: string | null } | null
   customerNote: string | null
 }
 

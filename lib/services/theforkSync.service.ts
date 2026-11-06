@@ -169,6 +169,13 @@ export function choisirFiche(candidats: CrmClientLigne[], tf: TheForkCustomer): 
 }
 
 /** Ligne crm_reservations pour une réservation TheFork (sans la note du client : texte libre). */
+/** Montant de l'addition en euros (TheFork l'envoie désormais en centimes dans un objet). */
+export function montantReservation(b: TheForkReservation['billAmount']): number | null {
+  if (typeof b === 'number') return Number.isFinite(b) ? b : null
+  if (b && typeof b === 'object' && typeof b.totalPrice === 'number') return b.totalPrice / 100
+  return null
+}
+
 export function ligneReservation(r: TheForkReservation, maison: string, crmClientId: string | null, lieuId: string | null = null) {
   return {
     client_id: maison,
@@ -180,7 +187,7 @@ export function ligneReservation(r: TheForkReservation, maison: string, crmClien
     couverts: r.partySize,
     statut: r.status,
     canal: r.reservationChannel,
-    montant: r.billAmount,
+    montant: montantReservation(r.billAmount),
     note_client: null,
   }
 }
