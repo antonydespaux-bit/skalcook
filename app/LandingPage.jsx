@@ -21,7 +21,7 @@ function usePasswordLinkRedirect() {
     const search = window.location.search || ''
     const hasHashToken = /(^|[#&])access_token=/.test(hash)
     const hasHashType = /(^|[#&])type=(recovery|invite|signup|magiclink)/.test(hash)
-    const hasCode = /(^|[?&])code=/.test(search)
+    const hasCode = /(^|[?&])(code|token_hash)=/.test(search)
     // Supabase renvoie aussi les erreurs (otp_expired, access_denied…) dans
     // le hash. On redirige pareil pour afficher un message propre au lieu
     // de laisser l'utilisateur bloqué sur la landing.

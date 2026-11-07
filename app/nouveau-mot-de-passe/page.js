@@ -18,7 +18,47 @@ export default function NouveauMotDePassePage() {
   // redemande pas.
   const [needsCgu, setNeedsCgu] = useState(false)
   const [cguAccepted, setCguAccepted] = useState(false)
+  // Lien au format ?token_hash=…&type=… : on ne consomme le jeton qu'au clic
+  // sur « Continuer ». Les antivirus de messagerie (Microsoft Safe Links…)
+  // ouvrent les liens reçus pour les contrôler : avec l'ancien lien direct
+  // vers /auth/v1/verify, ils grillaient le jeton (usage unique) avant que
+  // la personne clique, d'où « lien expiré ». Un robot ne clique pas.
+  const [pendingVerify, setPendingVerify] = useState(null)
+  const [verifying, setVerifying] = useState(false)
   const router = useRouter()
+
+  // 1re activation (profil sans cgu_accepted_at) → case CGU obligatoire.
+  // En cas d'échec de lecture, on demande l'acceptation par prudence.
+  const chargerBesoinCgu = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: profil } = await supabase
+        .from('profils').select('cgu_accepted_at').eq('id', user.id).maybeSingle()
+      setNeedsCgu(!profil?.cgu_accepted_at)
+    }
+  }
+
+  const handleContinuer = async () => {
+    if (!pendingVerify) return
+    setVerifying(true)
+    setError('')
+    const { error: errVerify } = await supabase.auth.verifyOtp({
+      token_hash: pendingVerify.tokenHash,
+      type: pendingVerify.type,
+    })
+    if (errVerify) {
+      setError('Lien invalide ou expiré. Demandez un nouveau lien.')
+      setPendingVerify(null)
+      setVerifying(false)
+      return
+    }
+    // Retire le jeton de l'URL (historique, partage d'écran…).
+    window.history.replaceState(null, '', window.location.pathname)
+    setPendingVerify(null)
+    setVerifying(false)
+    setSessionReady(true)
+    await chargerBesoinCgu()
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -48,6 +88,14 @@ export default function NouveauMotDePassePage() {
         return
       }
 
+      const tokenHash = searchParams.get('token_hash')
+      if (tokenHash) {
+        const type = searchParams.get('type')
+        const TYPES = ['recovery', 'invite', 'signup', 'email', 'magiclink']
+        if (!cancelled) setPendingVerify({ tokenHash, type: TYPES.includes(type) ? type : 'recovery' })
+        return
+      }
+
       const accessToken = hashParams.get('access_token')
       const refreshToken = hashParams.get('refresh_token')
       const code = searchParams.get('code')
@@ -72,16 +120,7 @@ export default function NouveauMotDePassePage() {
         }
         if (cancelled) return
         setSessionReady(true)
-
-        // Le compte a-t-il déjà accepté les CGU ? Si non (1re activation), on
-        // exigera la case ci-dessous. En cas d'échec de lecture, on demande
-        // l'acceptation par prudence (mieux vaut redemander que zapper).
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          const { data: profil } = await supabase
-            .from('profils').select('cgu_accepted_at').eq('id', user.id).maybeSingle()
-          if (!cancelled) setNeedsCgu(!profil?.cgu_accepted_at)
-        }
+        await chargerBesoinCgu()
       } catch (e) {
         if (!cancelled) setError(e?.message || 'Lien invalide ou expiré. Demandez un nouveau lien.')
       }
@@ -160,6 +199,24 @@ export default function NouveauMotDePassePage() {
                     </div>
                   )}
                 </Alert>
+              )}
+
+              {pendingVerify && !sessionReady && (
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: '14px', color: theme.couleurs.texteMuted, marginBottom: '20px', lineHeight: '1.5' }}>
+                    {pendingVerify.type === 'invite'
+                      ? 'Bienvenue ! Cliquez sur « Continuer » pour activer votre compte et choisir votre mot de passe.'
+                      : 'Cliquez sur « Continuer » pour choisir votre nouveau mot de passe.'}
+                  </p>
+                  <button type="button" onClick={handleContinuer} disabled={verifying} style={{
+                    width: '100%', padding: '14px',
+                    background: verifying ? theme.couleurs.texteMuted : theme.couleurs.principal,
+                    color: theme.couleurs.accent, border: 'none', borderRadius: '8px',
+                    fontSize: '14px', fontWeight: '600', cursor: verifying ? 'not-allowed' : 'pointer'
+                  }}>
+                    {verifying ? 'Vérification...' : 'Continuer'}
+                  </button>
+                </div>
               )}
 
               {sessionReady && (
