@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { flushSync } from 'react-dom'
 import { supabase, getParametres, getClientId } from '../../../lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import { theme, Logo } from '../../../lib/theme.jsx'
@@ -11,6 +12,7 @@ import { SAISONS, getYearsRange, formatSaison, parseSaison } from '../../../lib/
 import ChefLoader from '../../../components/ChefLoader'
 import { Alert , Badge } from '../../../components/ui'
 import { useTranslation } from 'react-i18next'
+import CarteCoutsPrint from '../../../components/CarteCoutsPrint'
 
 const genId = () => crypto.randomUUID()
 
@@ -26,6 +28,8 @@ export default function CarteDetailPage() {
   const [carte, setCarte] = useState(null)
   const [editing, setEditing] = useState(false)
   const [vueSupp, setVueSupp] = useState(false)
+  // 'menu' = carte client (défaut, aussi pour Cmd+P) ; 'couts' = fiche de coûts interne
+  const [printMode, setPrintMode] = useState('menu')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -88,10 +92,15 @@ export default function CarteDetailPage() {
       }
     `
     document.head.appendChild(style)
+    const resetPrint = () => setPrintMode('menu')
+    window.addEventListener('afterprint', resetPrint)
     loadData()
     loadFiches()
     loadParams()
-    return () => document.head.removeChild(style)
+    return () => {
+      document.head.removeChild(style)
+      window.removeEventListener('afterprint', resetPrint)
+    }
   }, [])
 
   const loadParams = async () => {
@@ -178,8 +187,10 @@ export default function CarteDetailPage() {
     const secs = isSrc ? sections : (carte?.carte_sections || []).sort((a, b) => a.ordre - b.ordre)
 
     let coutMatiere = 0, totalSupp = 0
+    const parSection = {}
 
     for (const section of secs) {
+      const avantSection = coutMatiere
       const items = isSrc ? section.items : (section.carte_items || []).sort((a, b) => a.ordre - b.ordre)
       let groups = [], current = null
       for (const item of items) {
@@ -215,13 +226,14 @@ export default function CarteDetailPage() {
           }
         }
       }
+      parSection[section.id || section._id] = coutMatiere - avantSection
     }
 
     const prix = isSrc ? (parseFloat(prixBase) || 0) : (Number(carte?.prix_base) || 0)
     const prixTotal = prix + totalSupp
     const ratio = prixTotal > 0 && coutMatiere > 0 ? (coutMatiere / (prixTotal / 1.10) * 100).toFixed(1) : null
 
-    return { coutMatiere, totalSupp, ratio }
+    return { coutMatiere, totalSupp, ratio, prixTotal, parSection }
   }
 
   const seuilVert = parseFloat(params['seuil_vert_cuisine'] || 28)
@@ -233,6 +245,24 @@ export default function CarteDetailPage() {
     if (n < seuilVert) return { bg: '#EAF3DE', color: '#3B6D11' }
     if (n < seuilOrange) return { bg: '#FAEEDA', color: '#854F0B' }
     return { bg: '#FCEBEB', color: '#A32D2D' }
+  }
+
+  // ── Impression fiche de coûts ──
+  const imprimerCouts = () => {
+    flushSync(() => setPrintMode('couts'))
+    window.print()
+  }
+
+  // Statut d'un plat dans sa section : inclus, au choix (sans suppl.), ou supplément.
+  const statutItem = (items, idx) => {
+    const item = items[idx]
+    const sup = Number(item.supplement) || 0
+    if (item.relation === 'ou') return sup > 0 ? { type: 'supp', val: sup } : { type: 'choix' }
+    // "et" suivi d'alternatives sans supplément → au choix (coût moyenné)
+    const suivants = []
+    for (let j = idx + 1; j < items.length && items[j].relation === 'ou'; j++) suivants.push(items[j])
+    if (suivants.length && !suivants.some(o => Number(o.supplement) > 0)) return { type: 'choix' }
+    return { type: 'inclus' }
   }
 
   // ── Save ──
@@ -372,6 +402,11 @@ export default function CarteDetailPage() {
                 border: '0.5px solid rgba(255,255,255,0.2)', borderRadius: '8px',
                 padding: '6px 12px', fontSize: '12px', cursor: 'pointer'
               }}>{t('cartes.detail.print')}</button>
+              <button onClick={imprimerCouts} title={t('cartes.costPrint.buttonTitle')} style={{
+                background: 'transparent', color: 'rgba(255,255,255,0.7)',
+                border: '0.5px solid rgba(255,255,255,0.2)', borderRadius: '8px',
+                padding: '6px 12px', fontSize: '12px', cursor: 'pointer'
+              }}>{t('cartes.detail.printCosts')}</button>
               <button onClick={() => setEditing(true)} style={{
                 background: c.accent, color: 'white', border: 'none',
                 borderRadius: '8px', padding: '6px 16px', fontSize: '13px',
@@ -611,8 +646,15 @@ export default function CarteDetailPage() {
         )}
       </div>
 
+      {/* ── VERSION IMPRESSION : FICHE DE COÛTS ── */}
+      {printMode === 'couts' && <CarteCoutsPrint
+        carte={carte} calcBase={calcViewBase} calcFull={calcViewFull}
+        statutItem={statutItem} nomEtablissement={nomEtablissement} logoUrl={logoUrl}
+        seuilVert={seuilVert} seuilOrange={seuilOrange} t={t}
+      />}
+
       {/* ── VERSION IMPRESSION ── */}
-      <div className="print-only" style={{ fontFamily: 'Georgia, serif', color: '#2C1810', background: 'white', padding: '0', width: '100%' }}>
+      {printMode === 'menu' && <div className="print-only" style={{ fontFamily: 'Georgia, serif', color: '#2C1810', background: 'white', padding: '0', width: '100%' }}>
 
         <div className="carte-print-body">
         {/* En-tête */}
@@ -674,7 +716,7 @@ export default function CarteDetailPage() {
           <span>{nomEtablissement}</span>
           <span>{carte.nom}</span>
         </div>
-      </div>
+      </div>}
     </div>
   )
 }
