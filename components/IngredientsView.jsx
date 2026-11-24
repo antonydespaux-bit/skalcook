@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase, getClientId } from '../lib/supabase'
 import { useRouter } from 'next/navigation'
 import * as XLSX from 'xlsx'
@@ -13,6 +13,7 @@ import Pagination from './Pagination'
 import ChefLoader from './ChefLoader'
 import EmojiPicker from './EmojiPicker'
 import { Badge } from './ui'
+import DerniersAchatsModal from './DerniersAchatsModal'
 import { unitesParSection } from '../lib/constants'
 
 const PAGE_SIZE = 30
@@ -95,6 +96,10 @@ export default function IngredientsView({ section = 'cuisine' }) {
   const [editionCond, setEditionCond] = useState('1')
   const [editionPrix, setEditionPrix] = useState('')
   const [editionCategorie, setEditionCategorie] = useState('')
+
+  // ── Modale « derniers achats » ──
+  const [achatsIngredient, setAchatsIngredient] = useState(null)
+  const fermerAchats = useCallback(() => setAchatsIngredient(null), [])
 
   const router = useRouter()
   const isMobile = useIsMobile()
@@ -644,7 +649,7 @@ export default function IngredientsView({ section = 'cuisine' }) {
                     <input type="checkbox" checked={selection.includes(ing.id)} onChange={() => toggleSelection(ing.id)} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: c.accent, flexShrink: 0 }} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '14px', fontWeight: '500', color: c.texte, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <span>{ing.nom}</span>
+                        <button type="button" onClick={() => setAchatsIngredient(ing)} title="Voir les derniers achats" style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer', textAlign: 'left', textDecoration: 'underline', textDecorationColor: c.bordure, textUnderlineOffset: '3px' }}>{ing.nom}</button>
                         {Array.isArray(ing[cfg.ficheRelationField]) && ing[cfg.ficheRelationField].length > 0 && (
                           <span style={{ fontSize: '11px', color: '#166534', background: '#DCFCE7', border: '0.5px solid #86EFAC', borderRadius: '999px', padding: '1px 8px' }}>
                             🟢 Utilisé
@@ -696,7 +701,7 @@ export default function IngredientsView({ section = 'cuisine' }) {
                             />
                           ) : (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span>{ing.nom}</span>
+                              <button type="button" onClick={() => setAchatsIngredient(ing)} title="Voir les derniers achats" style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer', textAlign: 'left', textDecoration: 'underline', textDecorationColor: c.bordure, textUnderlineOffset: '3px' }}>{ing.nom}</button>
                               {Array.isArray(ing[cfg.ficheRelationField]) && ing[cfg.ficheRelationField].length > 0 && (
                                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22C55E', display: 'inline-block' }} title="Utilisé en fiche technique" />
                               )}
@@ -930,6 +935,16 @@ export default function IngredientsView({ section = 'cuisine' }) {
           </div>
         )}
       </div>
+
+      {achatsIngredient && (
+        <DerniersAchatsModal
+          ingredient={achatsIngredient}
+          onClose={fermerAchats}
+          c={c}
+          isMobile={isMobile}
+          lienFacture={peutVoir('achats')}
+        />
+      )}
     </div>
   )
 }
